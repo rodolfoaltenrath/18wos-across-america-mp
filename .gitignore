@@ -1,0 +1,56 @@
+# Deny by default: the Steam installation and all game assets stay local.
+# Only the explicitly listed project sources may be committed.
+/**
+
+!/.gitignore
+!/.gitattributes
+!/Cargo.toml
+!/Cargo.lock
+!/README.md
+!/ROADMAP.MD
+!/AGENTS.md
+!/LICENSE
+!/rust-toolchain.toml
+
+!/asset_tools/
+!/asset_tools/Cargo.toml
+!/asset_tools/src/
+!/asset_tools/src/**/
+!/asset_tools/src/**/*.rs
+
+!/multiplayer_server/
+!/multiplayer_server/Cargo.toml
+!/multiplayer_server/src/
+!/multiplayer_server/src/**/
+!/multiplayer_server/src/**/*.rs
+
+!/client_dll/
+!/client_dll/Cargo.toml
+!/client_dll/src/
+!/client_dll/src/**/
+!/client_dll/src/**/*.rs
+!/client_dll/tests/
+!/client_dll/tests/**/
+!/client_dll/tests/**/*.rs
+
+# Keep generated files, extracted assets and local settings out of Git,
+# including when they are placed inside an allowed source directory.
+**/target/
+**/extracted/
+**/generated/
+**/backups/
+**/.env
+**/.env.*
+**/*.scs
+**/*.zip
+**/*.dds
+**/*.tga
+**/*.png
+**/*.bmp
+**/*.jpg
+**/*.jpeg
+**/*.exe
+**/*.dll
+**/*.pdb
+**/*.log
+**/*.aamem

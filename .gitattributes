@@ -1,0 +1,2 @@
+# Keep tracked text consistent between Windows and Linux checkouts.
+* text=auto eol=lf

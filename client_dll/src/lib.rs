@@ -1,0 +1,307 @@
+//! Win32 DLL prototype. Call client_start AFTER LoadLibrary returns and call
+//! client_stop BEFORE FreeLibrary. DllMain deliberately performs no work.
+use multiplayer_server::protocol::{self, ClientUpdate, MAX_PACKET, Position, TICK_HZ, VERSION};
+use std::{
+    collections::BTreeMap,
+    net::{SocketAddr, UdpSocket},
+    panic::{self, AssertUnwindSafe},
+    sync::{
+        Mutex,
+        atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
+    },
+    thread::{self, JoinHandle},
+    time::{Duration, Instant},
+};
+
+pub mod addresses;
+#[cfg(windows)]
+pub mod inspection;
+mod memory;
+
+static WORKER: Mutex<Option<JoinHandle<Result<(), String>>>> = Mutex::new(None);
+static STOP: AtomicBool = AtomicBool::new(false);
+static STATUS: AtomicU32 = AtomicU32::new(0);
+static SENT: AtomicU64 = AtomicU64::new(0);
+static RECEIVED: AtomicU64 = AtomicU64::new(0);
+static REMOTES: Mutex<BTreeMap<u64, (RemoteState, Instant)>> = Mutex::new(BTreeMap::new());
+
+/// C ABI result layout. Coordinates are the most recent relayed samples;
+/// rendering and interpolation are future game integration work.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct RemoteState {
+    pub player_id: u64,
+    pub sequence: u64,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+
+enum Source {
+    Simulated { phase: f32 },
+    Memory { addresses: [addresses::Address; 3] },
+}
+
+impl Source {
+    fn sample(&self, elapsed: f32) -> Result<Position, String> {
+        match self {
+            Self::Simulated { phase } => Ok(Position {
+                x: (elapsed + phase).cos() * 100.0,
+                y: 0.0,
+                z: (elapsed + phase).sin() * 100.0,
+            }),
+            Self::Memory { addresses } => memory::position(addresses),
+        }
+    }
+}
+
+fn configuration() -> Result<(SocketAddr, Source), String> {
+    let server = std::env::var("AA_MP_SERVER")
+        .unwrap_or_else(|_| protocol::DEFAULT_SERVER.into())
+        .parse()
+        .map_err(|_| "AA_MP_SERVER must be an IP:port".to_string())?;
+    let mode = std::env::var("AA_MP_MODE").unwrap_or_else(|_| "simulated".into());
+    let source = match mode.as_str() {
+        "simulated" => {
+            let phase: f32 = std::env::var("AA_MP_SIM_PHASE")
+                .unwrap_or_else(|_| "0".into())
+                .parse()
+                .map_err(|_| "invalid simulation phase".to_string())?;
+            if !phase.is_finite() {
+                return Err("simulation phase must be finite".into());
+            }
+            Source::Simulated { phase }
+        }
+        "memory" => {
+            let parse = |key| -> Result<addresses::Address, String> {
+                let text = std::env::var(key)
+                    .map_err(|_| format!("missing {key}; no game addresses are known yet"))?;
+                text.parse().map_err(|error| format!("{key}: {error}"))
+            };
+            Source::Memory {
+                addresses: [parse("AA_MP_X")?, parse("AA_MP_Y")?, parse("AA_MP_Z")?],
+            }
+        }
+        _ => return Err("AA_MP_MODE must be simulated or memory".into()),
+    };
+    Ok((server, source))
+}
+
+fn run(socket: UdpSocket, source: Source) -> Result<(), String> {
+    let tick = Duration::from_secs_f64(1.0 / f64::from(TICK_HZ));
+    let start = Instant::now();
+    let mut next_tick = start;
+    let mut sequence = 0u64;
+    let mut buffer = [0; MAX_PACKET + 1];
+    while !STOP.load(Ordering::Acquire) {
+        let position = source.sample(start.elapsed().as_secs_f32())?;
+        if !position.is_valid() {
+            return Err("coordinate sample contains NaN/infinity".into());
+        }
+        let bytes = protocol::encode(&ClientUpdate {
+            version: VERSION,
+            sequence,
+            position,
+        })?;
+        match socket.send(&bytes) {
+            Ok(_) => {
+                SENT.fetch_add(1, Ordering::Relaxed);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
+            // Windows can report a previous ICMP port-unreachable response.
+            Err(error) if error.raw_os_error() == Some(10054) => {}
+            Err(error) => return Err(error.to_string()),
+        }
+        sequence = sequence.checked_add(1).ok_or("sequence exhausted")?;
+        // Bound work per tick so incoming traffic cannot prevent shutdown.
+        for _ in 0..256 {
+            match socket.recv(&mut buffer) {
+                Ok(size) => {
+                    let Some(update) = protocol::decode_server(&buffer[..size]) else {
+                        continue;
+                    };
+                    let mut remotes = REMOTES.lock().map_err(|_| "remote state mutex poisoned")?;
+                    let is_new = remotes
+                        .get(&update.player_id)
+                        .is_none_or(|(previous, _)| update.sequence > previous.sequence);
+                    if is_new && (remotes.contains_key(&update.player_id) || remotes.len() < 64) {
+                        remotes.insert(
+                            update.player_id,
+                            (
+                                RemoteState {
+                                    player_id: update.player_id,
+                                    sequence: update.sequence,
+                                    x: update.position.x,
+                                    y: update.position.y,
+                                    z: update.position.z,
+                                },
+                                Instant::now(),
+                            ),
+                        );
+                        RECEIVED.fetch_add(1, Ordering::Relaxed);
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => break,
+                Err(error) if matches!(error.raw_os_error(), Some(10040 | 10054)) => continue,
+                Err(error) => return Err(error.to_string()),
+            }
+        }
+        REMOTES
+            .lock()
+            .map_err(|_| "remote state mutex poisoned")?
+            .retain(|_, (_, seen)| seen.elapsed() < Duration::from_secs(5));
+        next_tick += tick;
+        let now = Instant::now();
+        if next_tick > now {
+            thread::sleep(next_tick - now);
+        } else {
+            next_tick = now;
+        } // Skip missed ticks instead of sending a burst.
+    }
+    Ok(())
+}
+
+fn start() -> Result<(), String> {
+    let mut worker = WORKER.lock().map_err(|_| "worker mutex poisoned")?;
+    if worker.as_ref().is_some_and(|handle| !handle.is_finished()) {
+        return Err("client already running".into());
+    }
+    if let Some(handle) = worker.take() {
+        let _ = handle.join();
+    }
+    let (server, source) = configuration()?;
+    let bind = if server.is_ipv4() {
+        "0.0.0.0:0"
+    } else {
+        "[::]:0"
+    };
+    let socket = UdpSocket::bind(bind).map_err(|e| e.to_string())?;
+    socket.connect(server).map_err(|e| e.to_string())?;
+    socket.set_nonblocking(true).map_err(|e| e.to_string())?;
+    REMOTES
+        .lock()
+        .map_err(|_| "remote state mutex poisoned")?
+        .clear();
+    STOP.store(false, Ordering::Release);
+    SENT.store(0, Ordering::Relaxed);
+    RECEIVED.store(0, Ordering::Relaxed);
+    STATUS.store(1, Ordering::Release);
+    *worker = Some(
+        thread::Builder::new()
+            .name("aa-multiplayer".into())
+            .spawn(move || {
+                let result = panic::catch_unwind(AssertUnwindSafe(|| run(socket, source)))
+                    .unwrap_or_else(|_| Err("worker panicked".into()));
+                STATUS.store(if result.is_ok() { 2 } else { 3 }, Ordering::Release);
+                if let Err(error) = &result {
+                    eprintln!("client_dll: {error}");
+                }
+                result
+            })
+            .map_err(|e| {
+                STATUS.store(3, Ordering::Release);
+                e.to_string()
+            })?,
+    );
+    Ok(())
+}
+
+/// Start outside DllMain/loader lock. Returns 0 on success, 1 on error.
+#[unsafe(no_mangle)]
+pub extern "system" fn client_start() -> i32 {
+    match panic::catch_unwind(start) {
+        Ok(Ok(())) => 0,
+        Ok(Err(error)) => {
+            eprintln!("client_dll: {error}");
+            1
+        }
+        Err(_) => 1,
+    }
+}
+
+/// Stop and JOIN outside DllMain. The host must call this before unloading.
+#[unsafe(no_mangle)]
+pub extern "system" fn client_stop() -> i32 {
+    panic::catch_unwind(|| {
+        let Ok(mut worker) = WORKER.lock() else {
+            return 1;
+        };
+        STOP.store(true, Ordering::Release);
+        match worker.take().map(|handle| handle.join()) {
+            None | Some(Ok(Ok(()))) => 0,
+            _ => 1,
+        }
+    })
+    .unwrap_or(1)
+}
+
+/// 0 = never started; 1 = running; 2 = stopped; 3 = worker failure.
+#[unsafe(no_mangle)]
+pub extern "system" fn client_status() -> u32 {
+    STATUS.load(Ordering::Acquire)
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn client_packets_sent() -> u64 {
+    SENT.load(Ordering::Relaxed)
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn client_packets_received() -> u64 {
+    RECEIVED.load(Ordering::Relaxed)
+}
+
+/// Copy a remote player by sorted index. Returns 1 when found, 0 otherwise.
+///
+/// # Safety
+/// `output` must point to writable, aligned storage for one RemoteState.
+/// Call only after loading the DLL and before unloading it, outside DllMain.
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn client_get_remote(index: u32, output: *mut RemoteState) -> i32 {
+    if output.is_null() {
+        return 0;
+    }
+    panic::catch_unwind(|| {
+        let Ok(remotes) = REMOTES.lock() else {
+            return 0;
+        };
+        let Some((state, _)) = remotes.values().nth(index as usize) else {
+            return 0;
+        };
+        // SAFETY: the caller guarantees valid writable storage as documented.
+        unsafe {
+            output.write(*state);
+        }
+        1
+    })
+    .unwrap_or(0)
+}
+
+/// Windows loader entry point: no sockets, allocation, waiting or threads here.
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+pub extern "system" fn DllMain(
+    _module: windows_sys::Win32::Foundation::HINSTANCE,
+    _reason: u32,
+    _reserved: *mut std::ffi::c_void,
+) -> i32 {
+    1
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn addresses_and_simulated_samples() {
+        assert!("0x1234".parse::<addresses::Address>().is_ok());
+        assert!("0".parse::<addresses::Address>().is_err());
+        assert!("not-an-address".parse::<addresses::Address>().is_err());
+        assert!(
+            Source::Simulated { phase: 0.0 }
+                .sample(1.0)
+                .unwrap()
+                .is_valid()
+        );
+    }
+}
