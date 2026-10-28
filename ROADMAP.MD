@@ -1846,6 +1846,73 @@ ferramenta. Provar qual comando real precede as liberações globais antes de
 propor automação. Nenhuma nova validação no jogo neste bloco; LAN entre dois
 PCs e sessões longas continuam pendentes. Manter o preparo manual do load.
 
+### M4 — Primeira captura real de comandos e análise após saída — 28/10/2026
+
+Executado o procedimento `transition-*` no jogo Steam original sob Proton no
+Fedora, **sem servidor, rede conectada ou visual retido**. O proprietário
+carregou a partida, dirigiu, voltou ao menu e recarregou o save existente.
+Os hashes do núcleo/jogo corresponderam ao perfil; bases e slots foram
+resolvidos no processo atual (PID Windows histórico 396, thread 400). Backup
+do prefixo antes de abrir a Steam, mais cópia/hash de um save e hashes de cinco
+originais pelo `session-backup`. Esses caminhos e artefatos ficam ignorados.
+
+O snapshot inicial tem **48 registros, 21 pares completos**, sem perdas,
+truncamento ou chamadas estrangeiras, profundidade máxima 3. Na geração 1:
+
+- Eventos 4/5: `game_menu` e `map`, ambos com nome completo, mesmo handler e
+  cena antiga legível (`handler_scene` igual à cena do último ator observado).
+  Não há fase de ator capturada entre esses dois comandos. Isso descreve este
+  intervalo; não prova que o menu não faça trabalho por caminhos não observados.
+- Depois de `map`, o primeiro init de bloco usa o processador da cena nova;
+  primeiro init do novo caminhão no evento 15. Fases `-10,-1,0,10`, seguidas
+  por done do antigo nos eventos 34–39 (`-10,0,10`). São identidades distintas.
+- No par done(0), eventos 36/37, a física passa de não nula a zero e todas as
+  entradas de modelo lidas ficam nulas. Isso não comprova liberação de todos
+  os heaps, caches ou referências do motor.
+- Primeiro draw do novo ator no evento 42, três flushes depois do retorno de
+  done(0). A solicitação de destroy de bloco capturada vem depois da troca,
+  ainda na cena nova, e continua sem representar o início global do load.
+
+O comando real desta recarga é **`map`**, não o `load` simulado na fixture.
+A leitura estática do perfil confirma o ramo comparado em `game+0xd3666`
+com a string `map` (`+0x14be44`), seguido pelo tratamento da cena antiga em
+`+0xd36be`/`+0xd36d1` e pela criação/carga nova. A captura em `+0xd3596`
+precede esse ramo. Isso torna o início do handler um candidato concreto;
+não comprova que nenhum outro callback já iniciou trabalho global, que todos
+os tipos de carga passam por ele ou que seja seguro executar `psm_free` ali.
+
+Após `session-stop --verify`, foram preservados **61 registros integrais,
+27 pares**, estado removido, flags/foreign zerados, 19 init de bloco/uma
+solicitação, quatro init/três done do ator e os mesmos dois comandos.
+Todos os retornos de bloco capturados foram true; nenhum rollback real foi
+validado. Oito slots restaurados por leitura externa, dispatcher removido,
+pump restaurado, worker parado, pending/running/inflight zerados, visual
+ausente e nenhum pacote de rede enviado/recebido. **Seis arquivos iguais**
+(cinco originais/um save), sem extrapolar o total de sete de outras sessões.
+
+O proprietário confirmou a conclusão da condução/fechamento após a limpeza,
+sem relatar falha. Enumeração posterior confirmou ausência do jogo, e
+`session-verify` pós-saída repetiu os seis hashes iguais. O analisador nativo
+releu o snapshot final após a saída e retornou a mesma estrutura sem ressalvas;
+`automation_validated` permaneceu false. Capturas/relatórios locais em
+`target/analysis/transition-command-fedora-20261028-01/` (ignorados), incluindo
+snapshots inicial/final e análises antes/depois da saída. Ao contrário do
+registro anterior de 91 eventos, os 61 desta sessão foram preservados.
+
+Esta etapa validou a captura real, sem alterações de código ou novo build.
+A bancada de 51 testes nativos/51 x86 do bloco anterior continua sendo a
+evidência automatizada; não foi necessário repeti-la para documentação.
+Não há processo do jogo com DLL residente ao concluir esta validação.
+
+**Próximo:** avaliar o contrato de liberação no início observado de `map`,
+incluindo thread, profundidade, estado da fila/render e referências da instância.
+Preparar uma política testável de recusa/recuperação antes de ligar liberação
+automática; determinar como impedir a carga se não for seguro liberar, sem
+inventar ABI de adiamento ou chamar o motor recursivamente. A captura atual é
+passiva e incompatível com visual retido. Manter `session-prepare-load` antes
+de carregar e `visual-show` depois. Não repetir a recarga retida que falhou.
+Matriz de outros menus/cargas, LAN entre dois PCs e sessões longas pendentes.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,

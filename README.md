@@ -745,9 +745,14 @@ não muda o layout da ABI v3/664 bytes.
 
 A extensão de comandos foi validada em fixture própria sob Proton, incluindo
 filtro de caller/thread, ponteiros inválidos, limites, ordem anterior ao init,
-conflito de ownership e remoção automática. Ainda falta a captura no jogo:
-o nome `load` simulado pela fixture não identifica o comando real nem comprova
-um ponto seguro para liberar recursos durante uma recarga.
+conflito de ownership e remoção automática. A primeira captura no jogo também
+passou no Fedora/Proton: `game_menu` e depois `map`, com a cena antiga ainda
+legível na entrada de `map`, antes do init novo e do done antigo. Foram salvos
+48 registros iniciais e 61 após a limpeza, sem perdas/foreign/truncamento;
+o relatório final foi analisado novamente depois da saída. O nome `load`
+continua sendo apenas a simulação da fixture. Uma observação de `map` não
+comprova todos os caminhos de carga nem a segurança de liberar o visual nesse
+callback; não repetir reload com visual retido. Ver o registro no roadmap.
 
 ### Preservar e analisar uma captura de transição
 

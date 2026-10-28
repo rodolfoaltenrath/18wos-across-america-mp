@@ -305,7 +305,24 @@ registros a partir de status. JSON cru preservado com análise; pares, fases,
 cenas, falhas de init e intervalos entre comandos são correlacionados sem
 inferir causalidade. `structurally_complete` cobre só a estrutura do snapshot;
 `automation_validated` é sempre false. Ausências/limites/perdas não comprovam
-limpeza. Próximo: captura real de comandos SEM visual retido, usando o novo
+limpeza. A captura real posterior está registrada abaixo, usando o novo
 procedimento do README. Não automatizar teardown nem repetir reload retido.
 Este bloco passou em 51 testes nativos e 51 x86 sob Proton no Fedora, builds
 release nativo/x86, Clippy nos dois alvos e rustfmt. Sem novo teste no jogo.
+
+Captura real de comandos passou no Fedora/Proton, sem visual/rede, PID Windows
+histórico 396/thread 400. `game_menu` e depois `map`, com cena antiga legível no
+handler; init novo antes de done antigo, primeiro draw novo três flushes após
+done(0). Snapshot inicial 48 eventos/21 pares e FINAL 61 eventos/27 pares foram
+preservados integralmente; sem perdas/foreign/truncamento, todos os retornos
+de bloco true. Oito slots restaurados, dispatcher/pump removidos, worker
+parado, filas zeradas, seis hashes iguais (cinco originais/um save). O
+proprietário confirmou conclusão/fechamento; enumeração e verificação pós-saída
+passaram. A análise offline também foi repetida após a saída. Artefatos em
+target/analysis/transition-command-fedora-20261028-01 (ignorado). Nenhuma DLL
+residente no jogo ao concluir; reenumerar antes de reconstruir.
+O ramo estático `map` confirma o candidato anterior ao tratamento da cena;
+isso ainda não autoriza liberar dentro dele. Próximo: avaliar estado de
+render/referências e política de recusa/recuperação antes de automatizar;
+não inventar adiamento do comando nem repetir reload com visual retido.
+Manter o preparo manual. Outras cargas/menus, LAN e sessões longas pendentes.
