@@ -61,4 +61,9 @@ menus/reloads e investigar criação/remoção de uma entidade visual remota (M4
 Usar `proton_host` com `runinprefix` para ferramentas no prefixo da partida;
 a bancada deve executar em prefixo próprio e num único runtime via `test_host`.
 Não chamar exports de registro do motor sem comprovar ABI/thread/ownership.
+`engine_report`, `memory_tool entities` e o dispatcher `mp_launcher engine`
+estão entregues. O dispatcher comprova a thread da janela, ainda não uma fase
+segura para criar objetos. Consultar o registro de validação e da saída
+indeterminada no roadmap. Remover o dispatcher e descarregar antes de reconstruir
+a DLL. Se a remoção falhar, manter a referência ao módulo e reabrir o processo.
 A criação e a movimentação de caminhões remotos ainda não foram implementadas.

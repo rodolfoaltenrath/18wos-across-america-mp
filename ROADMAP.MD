@@ -255,9 +255,51 @@ numa thread arbitrária. Relatórios e disassembly permanecem em `target/analysi
 Validação deste bloco: 16 testes nativos; Clippy nativo/x86; bancada x86 sob
 Proton com os testes de parsing e integração. Nenhum construtor foi chamado.
 
-Próximo bloco: dispatcher para a thread da janela, validado em janela Rust própria,
-com fila limitada, cancelamento e teardown; depois confrontar a fase do motor
-antes de testar a criação privada de uma entidade. Sem veículo visual nesta etapa.
+### M4 — Dispatcher para a thread da janela — 27/10/2026
+
+Entregues `engine_bridge`, ABI separada `EngineControl` de 448 bytes e comandos
+`mp_launcher engine attach/probe/registry/inspect/detach/status`. A configuração
+e a ABI de rede v1 não mudaram. O dispatcher usa mensagem registrada e subclass
+Win32; não altera instruções do motor. Seleciona uma janela do próprio processo
+ou aceita um handle explícito. Mensagens comuns seguem para o procedimento
+original com `CallWindowProcW`, incluindo janelas ANSI.
+
+A fila limitada a 16 pedidos possui IDs sem reutilização e armazenamento próprio
+por `Arc`; nenhuma mensagem contém ponteiros do chamador. Timeout de 1 segundo
+cancela o pedido se ainda não começou. Pedidos já em execução mantêm sua memória.
+Callbacks reentrantes são recusados para os comandos. Uma referência adicional
+ao módulo protege o procedimento instalado. A remoção acontece na thread da
+janela e a referência só é liberada depois do retorno síncrono e com zero
+callbacks ativos. `client_stop` remove o dispatcher; o controlador recusa
+`FreeLibrary` quando a parada não conclui. Se outra biblioteca assumir a janela,
+ou ela for destruída/travar, a referência permanece e pode exigir reabrir o jogo.
+Esse comportamento prioriza não deixar callbacks apontando para uma DLL removida.
+
+**Validação:** 16 testes nativos, 13 testes x86 sob Proton, Clippy nativo/x86 e
+formatação. O teste entre processos usa duas janelas Rust próprias (ANSI e
+Unicode), DLL real, execução na thread correta, encaminhamento de texto e ping,
+timeout durante bloqueio, ausência de execução tardia do pedido cancelado,
+restauração, descarga e nova carga limpa. Não depende de assets comerciais.
+
+Na partida aberta pela Steam, o novo processo Windows 412 usou janela `0x60098`
+e thread 416; `probe`, `registry` e `inspect actors.car` executaram na thread 416.
+Foram lidos os 80 tipos e tamanho `0x2118`, construtor `game.dll+0xcef70` e
+destrutor `game.dll+0xd1820`. `detach` retornou `active=0`, `inflight=0`; a DLL
+foi descarregada. PIDs/handles são somente evidência desta sessão.
+Uma tentativa anterior instalou o dispatcher no PID 420, mas o processo encerrou
+antes da primeira consulta. O proprietário não relatou fechamento manual;
+nenhum diagnóstico de crash foi obtido. A repetição após abrir pela Steam passou;
+a causa da primeira saída continua indeterminada e exige observação prolongada.
+Os seis hashes do manifesto de originais continuaram iguais após os testes.
+
+**Limite e próximo bloco:** o dispatcher comprova a thread da janela, não a fase
+segura do motor. A inspeção de `prism3d.exe` aponta uma rotina que executa tarefas
+e depois processa mensagens, mas ainda há caminhos reentrantes de carregamento
+a investigar. Nenhum construtor foi chamado. A rotina de factory em `p3shared`
+incrementa contadores em uma cadeia (`+0x31f20`); a remoção os decrementa
+(`+0x31f40`). Não tratar isso como mutex nem copiar objetos em memória. Confirmar
+fase, ABI, contadores e ownership antes de criar/remover uma entidade privada;
+só depois integrar modelo, mundo e transform. Ainda não há veículo remoto visual.
 
 ## 3. Primeira versão jogável e limites
 
@@ -402,7 +444,8 @@ Não há ainda uma API do motor identificada e validada para essas operações.
 - [ ] Criar uma fachada Rust pequena para operações do motor; manter offsets e
   chamadas desconhecidas fora do núcleo de rede.
 - [ ] Encaminhar comandos por fila limitada até o tick/thread do jogo; não
-  manipular entidades a partir do worker UDP.
+  manipular entidades a partir do worker UDP. Dispatcher de diagnóstico na
+  thread da janela entregue; a fase de atualização do motor ainda está pendente.
 - [ ] Criar primeiro um único veículo visual de teste a distância controlada,
   usando assets originais disponíveis localmente e física/colisões desativadas.
 - [ ] Mapear jogador → entidade, atualizar transform, remover na saída e limpar
@@ -775,8 +818,8 @@ e [seleção de toolchain com rustup](https://rust-lang.github.io/rustup/overrid
 
 ## 9. Registro de passagem para a próxima etapa
 
-**Próxima entrega:** investigar os registros de entidades e a thread do motor
-para criar uma entidade remota visual, sobre o ciclo x86 já entregue. Ampliar
+**Próxima entrega:** comprovar a fase do motor e o ownership dos objetos para
+testar criação/remoção privada, usando o registro e dispatcher já entregues. Ampliar
 a matriz de estados de M1 e a robustez de M2, sem refazer a busca ampla inicial.
 
 **Antes de começar:** ler os três documentos, conferir Git e toolchain, localizar

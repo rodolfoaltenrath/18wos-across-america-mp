@@ -346,6 +346,25 @@ impl Controller {
         );
         Ok(())
     }
+    pub fn engine_control(&self, dll: &Path, block: &mut api::EngineControl) -> Result<()> {
+        ensure!(self.module(dll)?.is_some(), "DLL not loaded");
+        let name = dll.file_name().unwrap().to_string_lossy();
+        let function = self.export(&name, "client_engine_control")?;
+        // SAFETY: EngineControl is pointer-free and has no implicit padding.
+        let bytes = unsafe {
+            std::slice::from_raw_parts_mut(
+                (block as *mut api::EngineControl).cast::<u8>(),
+                size_of::<api::EngineControl>(),
+            )
+        };
+        let code = self.call(function, bytes, None)?;
+        ensure!(
+            code == 0 && block.result == 0,
+            "engine command failed: {}",
+            api::text(&block.message).unwrap_or("invalid diagnostic")
+        );
+        Ok(())
+    }
 }
 struct Allocation {
     process: HANDLE,

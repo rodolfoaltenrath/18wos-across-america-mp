@@ -7,6 +7,60 @@ pub const SIMULATED: u32 = 1;
 pub const GAME: u32 = 2;
 pub const MEMORY: u32 = 3;
 
+pub const UI_ATTACH: u32 = 1;
+pub const UI_PROBE: u32 = 2;
+pub const UI_REGISTRY: u32 = 3;
+pub const UI_DETACH: u32 = 4;
+pub const UI_STATUS: u32 = 5;
+pub const UI_INSPECT_TYPE: u32 = 6;
+/// Separate extension ABI; does not change the original Control v1 layout.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct EngineControl {
+    pub version: u32,
+    pub size: u32,
+    pub command: u32,
+    pub result: u32,
+    pub window: u32,
+    pub window_thread: u32,
+    pub executed_thread: u32,
+    pub active: u32,
+    pub completed: u32,
+    pub inflight: u32,
+    pub registry_count: u32,
+    pub reserved: u32,
+    pub entity: u32,
+    pub object_size: u32,
+    pub constructor: u32,
+    pub destructor: u32,
+    pub name: [u8; 128],
+    pub message: [u8; 256],
+}
+impl EngineControl {
+    pub fn new(command: u32) -> Self {
+        Self {
+            version: 1,
+            size: std::mem::size_of::<Self>() as u32,
+            command,
+            result: 0,
+            window: 0,
+            window_thread: 0,
+            executed_thread: 0,
+            active: 0,
+            completed: 0,
+            inflight: 0,
+            registry_count: 0,
+            reserved: 0,
+            entity: 0,
+            object_size: 0,
+            constructor: 0,
+            destructor: 0,
+            name: [0; 128],
+            message: [0; 256],
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct ClientConfig {
@@ -86,6 +140,8 @@ mod tests {
     use super::*;
     #[test]
     fn stable_layout_and_bounded_strings() {
+        assert_eq!(std::mem::size_of::<EngineControl>(), 448);
+        assert_eq!(std::mem::offset_of!(EngineControl, name), 64);
         assert_eq!(std::mem::size_of::<ClientConfig>(), 976);
         assert_eq!(std::mem::size_of::<Control>(), 1536);
         assert_eq!(std::mem::offset_of!(Control, sent), 24);

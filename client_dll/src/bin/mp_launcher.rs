@@ -26,6 +26,10 @@ fn main() -> anyhow::Result<()> {
     }
     #[derive(Subcommand)]
     enum Task {
+        Engine {
+            #[command(subcommand)]
+            task: EngineTask,
+        },
         Connect {
             #[arg(long)]
             server: SocketAddr,
@@ -41,6 +45,20 @@ fn main() -> anyhow::Result<()> {
         },
         Stop,
         Unload,
+    }
+    #[derive(Subcommand)]
+    enum EngineTask {
+        Attach {
+            #[arg(long)]
+            window: Option<u32>,
+        },
+        Probe,
+        Registry,
+        Inspect {
+            name: String,
+        },
+        Detach,
+        Status,
     }
     #[derive(Clone, Copy, ValueEnum)]
     enum Mode {
@@ -59,8 +77,9 @@ fn main() -> anyhow::Result<()> {
     let name = executable.file_name().unwrap_or_default().to_string_lossy();
     if args.fixture {
         ensure!(
-            name.eq_ignore_ascii_case("memory_tool.exe"),
-            "fixture target must be memory_tool.exe"
+            name.eq_ignore_ascii_case("memory_tool.exe")
+                || name.eq_ignore_ascii_case("engine_fixture.exe"),
+            "fixture target must be memory_tool.exe or engine_fixture.exe"
         );
     } else {
         ensure!(
@@ -69,6 +88,42 @@ fn main() -> anyhow::Result<()> {
         );
     }
     let mut block = match args.command {
+        Task::Engine { task } => {
+            if matches!(task, EngineTask::Attach { .. }) {
+                controller.load(&dll)?;
+            }
+            let mut block = match task {
+                EngineTask::Attach { window } => {
+                    let mut b = api::EngineControl::new(api::UI_ATTACH);
+                    b.window = window.unwrap_or(0);
+                    b
+                }
+                EngineTask::Probe => api::EngineControl::new(api::UI_PROBE),
+                EngineTask::Registry => api::EngineControl::new(api::UI_REGISTRY),
+                EngineTask::Inspect { name } => {
+                    let mut b = api::EngineControl::new(api::UI_INSPECT_TYPE);
+                    api::put(&mut b.name, &name).map_err(anyhow::Error::msg)?;
+                    b
+                }
+                EngineTask::Detach => api::EngineControl::new(api::UI_DETACH),
+                EngineTask::Status => api::EngineControl::new(api::UI_STATUS),
+            };
+            controller.engine_control(&dll, &mut block)?;
+            println!(
+                "active={} window=0x{:x} window_thread={} executed_thread={} completed={} inflight={} registry_count={} size={} ctor=0x{:x} dtor=0x{:x}",
+                block.active,
+                block.window,
+                block.window_thread,
+                block.executed_thread,
+                block.completed,
+                block.inflight,
+                block.registry_count,
+                block.object_size,
+                block.constructor,
+                block.destructor
+            );
+            return Ok(());
+        }
         Task::Connect {
             server,
             mode,

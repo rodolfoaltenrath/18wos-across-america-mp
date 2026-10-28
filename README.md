@@ -42,6 +42,7 @@ client_dll/                cdylib Win32, leitura local de memória e cliente UDP
   src/bin/mp_launcher.rs   controlador Windows x86 para um PID explícito
   src/bin/proton_host.rs   entrada nativa Linux no prefixo Proton escolhido
   src/bin/test_host.rs     executa a bancada Windows num único runtime
+  src/bin/engine_fixture.rs janela Rust ANSI/Unicode para testar o dispatcher
   tests/                  teste entre processos com fixture própria em Rust
 ```
 
@@ -160,7 +161,9 @@ O launcher valida alvo x86, caminho absoluto da DLL e o perfil
 de transmitir. Carga usa `LoadLibraryW`, controle usa `client_control`, descarga
 usa `FreeLibrary`, em threads fora de `DllMain`. Os endereços dos exports são
 resolvidos nas imagens do alvo, incluindo forwarders, sem presumir endereços
-iguais entre processos. Não há alteração de executáveis nem hooks do motor.
+iguais entre processos. Não há alteração de executáveis. A extensão opcional de
+diagnóstico abaixo instala temporariamente um procedimento na janela; não
+intercepta instruções do motor.
 
 O wrapper usa **`runinprefix`**. Não substitua por `run` para ferramentas numa
 partida aberta: `run` pode refazer os drives S:/T: sem o ambiente completo da
@@ -171,6 +174,43 @@ Se uma chamada remota exceder 30 segundos, o launcher retém sua alocação para
 evitar liberar dados ainda usados pelo alvo. Ele não termina a thread à força;
 encerre/reabra o alvo antes de novas operações de controle nesse caso. Saída
 abrupta, menus/reloads e perda de rede prolongada ainda exigem uma matriz maior.
+
+Para testar o dispatcher de diagnóstico, com a partida aberta, use o mesmo
+comando `proton_host ... -- mp_launcher.exe --pid ... --dll ...`, substituindo
+o comando final por cada uma destas ações, em sequência:
+
+```text
+engine attach
+engine probe
+engine registry
+engine inspect actors.car
+engine detach
+unload
+```
+
+`attach` carrega a DLL e seleciona a maior janela visível sem proprietário do
+processo; `engine attach --window HANDLE_DECIMAL` permite escolher explicitamente.
+As outras ações exigem a DLL já carregada. `probe` informa a thread da janela e
+a thread que executou o comando; `registry` verifica os hashes dos dois módulos
+e conta os tipos; `inspect` retorna tamanho, construtor e destrutor da variante
+`false`, sem executá-los. Esta extensão tem ABI própria de 448 bytes e preserva
+a ABI v1 de configuração/rede. Não cria nem move objetos.
+
+A fila tem limite de 16 comandos, identificadores sem reutilização e pedidos
+pertencentes à DLL. O timeout de 1 segundo cancela trabalho ainda não iniciado;
+um comando que já começou pode terminar depois. A DLL mantém uma referência
+adicional enquanto o procedimento estiver instalado. `detach` restaura o
+procedimento original na thread da janela e só libera essa referência após
+confirmar o retorno da chamada. `stop`/`unload` também fazem essa limpeza; se
+outro componente substituir o procedimento ou a janela deixar de responder,
+a descarga falha e a referência permanece até uma remoção segura ou o fim do
+processo. Mensagens normais continuam encaminhadas ao procedimento original.
+
+O ciclo passou em janela Rust própria ANSI/Unicode e numa partida sob Proton,
+com 80 registros consultados. Uma primeira tentativa perdeu o processo antes
+da primeira consulta; a causa não foi determinada. A repetição passou, mas a
+estabilidade prolongada e a fase do motor continuam pendentes. Executar na thread
+da janela, por si só, não autoriza chamar construtores do jogo. Consulte o roadmap.
 
 ## Ambiente e compilação Windows (registro anterior)
 

@@ -230,30 +230,7 @@ pub fn main() -> Result<()> {
     match Cli::parse().command {
         Command::Entities { pid } => {
             let process = Process::open(pid)?;
-            ensure!(
-                process.identity.pointer_bytes == 4,
-                "entity registry profile requires x86"
-            );
-            let modules = process.modules()?;
-            let engine = modules
-                .iter()
-                .find(|m| m.name.eq_ignore_ascii_case("p3shared.dll"))
-                .context("p3shared.dll not loaded")?;
-            let game = modules
-                .iter()
-                .find(|m| m.name.eq_ignore_ascii_case("game.dll"))
-                .context("game.dll not loaded")?;
-            client_dll::profile::verify_engine(Path::new(&engine.path))
-                .map_err(anyhow::Error::msg)?;
-            client_dll::profile::verify_module(Path::new(&game.path))
-                .map_err(anyhow::Error::msg)?;
-            let head = u32::try_from(engine.base)?
-                .checked_add(client_dll::profile::ENTITY_REGISTRY_HEAD)
-                .context("registry address overflow")?;
-            let records = client_dll::engine_discovery::registry(head, 4096, |at, out| {
-                process.read(at.into(), out).map_err(|e| e.to_string())
-            })
-            .map_err(anyhow::Error::msg)?;
+            let records = client_dll::inspection::entities::registered(&process)?;
             println!("{}", serde_json::to_string_pretty(&records)?);
         }
         Command::Processes { all } => {

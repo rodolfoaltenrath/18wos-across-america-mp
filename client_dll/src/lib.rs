@@ -17,6 +17,8 @@ pub mod addresses;
 pub mod api;
 #[cfg(windows)]
 pub mod controller;
+#[cfg(windows)]
+mod engine_bridge;
 pub mod engine_discovery;
 #[cfg(windows)]
 pub mod inspection;
@@ -331,6 +333,12 @@ pub extern "system" fn client_stop() -> i32 {
         if let Ok(mut remotes) = REMOTES.lock() {
             remotes.clear();
         }
+        #[cfg(windows)]
+        if let Err(error) = engine_bridge::detach() {
+            diagnostic(&error);
+            STATUS.store(3, Ordering::Release);
+            return 1;
+        }
         STATUS.store(2, Ordering::Release);
         SAMPLE_STATE.store(0, Ordering::Release);
         result
@@ -338,7 +346,7 @@ pub extern "system" fn client_stop() -> i32 {
     .unwrap_or(1)
 }
 
-/// 0 = never started; 1 = running; 2 = stopped; 3 = worker failure.
+/// 0 = never started; 1 = running; 2 = stopped; 3 = worker/dispatcher failure.
 #[unsafe(no_mangle)]
 pub extern "system" fn client_status() -> u32 {
     STATUS.load(Ordering::Acquire)
@@ -383,7 +391,10 @@ pub unsafe extern "system" fn client_control(block: *mut api::Control) -> u32 {
                 if client_stop() == 0 {
                     Ok(())
                 } else {
-                    Err("worker joined after failure".into())
+                    Err(MESSAGE
+                        .lock()
+                        .map(|m| format!("stop incomplete: {m}"))
+                        .unwrap_or_else(|_| "stop failed".into()))
                 }
             }
             _ => Err("unknown control command".into()),
@@ -403,6 +414,46 @@ pub unsafe extern "system" fn client_control(block: *mut api::Control) -> u32 {
                 end -= 1;
             }
             let _ = api::put(&mut block.message, &message[..end]);
+        }
+        block.result
+    }))
+    .unwrap_or(1)
+}
+
+/// Optional UI-thread extension. The caller owns a complete, aligned block
+/// until return; no engine constructor is exposed by this API.
+///
+/// # Safety
+/// `block` must be exclusive writable storage for an EngineControl. Do not
+/// call under loader lock or unload this module until client_stop succeeds.
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn client_engine_control(block: *mut api::EngineControl) -> u32 {
+    if block.is_null()
+        || !(block as usize).is_multiple_of(std::mem::align_of::<api::EngineControl>())
+    {
+        return 1;
+    }
+    let header = block.cast::<u32>();
+    if unsafe { header.read() } != 1
+        || unsafe { header.add(1).read() } != std::mem::size_of::<api::EngineControl>() as u32
+    {
+        return 1;
+    }
+    panic::catch_unwind(AssertUnwindSafe(|| {
+        let block = unsafe { &mut *block };
+        let result = if cfg!(target_pointer_width = "32") {
+            engine_bridge::control(block)
+        } else {
+            Err("engine extension requires Windows x86".into())
+        };
+        block.result = u32::from(result.is_err());
+        if let Err(error) = result {
+            let mut end = error.len().min(block.message.len() - 1);
+            while !error.is_char_boundary(end) {
+                end -= 1;
+            }
+            let _ = api::put(&mut block.message, &error[..end]);
         }
         block.result
     }))
