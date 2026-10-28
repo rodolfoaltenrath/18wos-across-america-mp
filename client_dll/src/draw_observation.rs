@@ -132,6 +132,9 @@ pub struct Visual {
     pub target: u32,
     /// Parts that received the requested shader at creation (0 = fallback).
     pub skinned_parts: u32,
+    /// Automatic release+recreate cycles after a player entity change.
+    pub recreated: u32,
+    pub recreate_pending: u32,
 }
 impl Visual {
     pub fn encode(&self, b: &mut EngineControl) {
@@ -148,6 +151,8 @@ impl Visual {
         b.constructor = self.offset[2].to_bits();
         b.destructor = self.target;
         b.executable_frame = self.skinned_parts;
+        b.executable_base = self.recreated;
+        b.frame_count = self.recreate_pending;
     }
     pub fn decode(b: &EngineControl) -> Self {
         Self {
@@ -163,6 +168,8 @@ impl Visual {
             offset: [b.object_vtable, b.object_destructor, b.constructor].map(f32::from_bits),
             target: b.destructor,
             skinned_parts: b.executable_frame,
+            recreated: b.executable_base,
+            recreate_pending: b.frame_count,
         }
     }
 }
@@ -244,6 +251,8 @@ mod tests {
             offset: [400.0, 0.0, -1.5],
             target: 7,
             skinned_parts: 3,
+            recreated: 2,
+            recreate_pending: 1,
         };
         let mut b = crate::api::EngineControl::new(40);
         v.encode(&mut b);

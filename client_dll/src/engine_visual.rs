@@ -43,6 +43,13 @@ static SKIPPED: AtomicU32 = AtomicU32::new(0);
 static LAST_FLUSH: AtomicU32 = AtomicU32::new(0);
 static HIDDEN_AT: AtomicU32 = AtomicU32::new(0);
 static SKINNED: AtomicU32 = AtomicU32::new(0);
+/// Player entity seen by the last draw; a change means the game reloaded it.
+static LAST_THIS: AtomicU32 = AtomicU32::new(0);
+/// Hidden after an entity change; the loop recreates it once release is safe.
+static RECREATE: AtomicBool = AtomicBool::new(false);
+static RECREATED: AtomicU32 = AtomicU32::new(0);
+/// Show block used for creation, replayed on recreation (model, skin, mode).
+static CREATION: std::sync::Mutex<Option<EngineControl>> = std::sync::Mutex::new(None);
 /// 0 = local player plus offset; otherwise the relayed player id.
 static TARGET: AtomicU32 = AtomicU32::new(0);
 /// Older relayed samples are not drawn (no extrapolation yet).
@@ -109,6 +116,12 @@ fn remote_poses(target: u32, out: &mut [([f32; 4], [f32; 3]); MAX_REMOTE_DRAWS])
     Some(count)
 }
 pub(crate) fn after_car_draw(this: u32, [world, _, path, viewport]: [u32; 4]) {
+    let previous = LAST_THIS.swap(this, Ordering::AcqRel);
+    if previous != 0 && previous != this && SHOWN.swap(false, Ordering::AcqRel) {
+        // Reloaded player entity: stop drawing now; maintain() recreates later.
+        HIDDEN_AT.store(flush_calls(), Ordering::Release);
+        RECREATE.store(true, Ordering::Release);
+    }
     // Publish the local pose for the Drawn network source; same coordinates as drawing.
     if let Some((q, p)) = player_pose(this) {
         let rotation = Rotation {
@@ -289,6 +302,10 @@ pub fn run(mut block: EngineControl, fixture: bool) -> Result<EngineControl, Str
             create(&block, fixture)?;
         }
         SHOWN.store(true, Ordering::Release);
+        RECREATE.store(false, Ordering::Release);
+        if let Ok(mut creation) = CREATION.lock() {
+            *creation = Some(block);
+        }
     }
     fill(&mut block);
     Ok(block)
@@ -431,14 +448,49 @@ fn fill(b: &mut EngineControl) {
             .map(|o| f32::from_bits(o.load(Ordering::Acquire))),
         target: TARGET.load(Ordering::Acquire),
         skinned_parts: SKINNED.load(Ordering::Acquire),
+        recreated: RECREATED.load(Ordering::Acquire),
+        recreate_pending: u32::from(RECREATE.load(Ordering::Acquire)),
     }
     .encode(b);
 }
 /// Remote-thread commands: hide (atomic only) and status.
 pub fn control(b: &mut EngineControl) -> Result<(), String> {
-    if b.command == api::VISUAL_HIDE && SHOWN.swap(false, Ordering::AcqRel) {
-        HIDDEN_AT.store(flush_calls(), Ordering::Release);
+    if b.command == api::VISUAL_HIDE {
+        // An explicit hide also cancels a pending automatic recreation.
+        RECREATE.store(false, Ordering::Release);
+        if SHOWN.swap(false, Ordering::AcqRel) {
+            HIDDEN_AT.store(flush_calls(), Ordering::Release);
+        }
     }
     fill(b);
     Ok(())
+}
+/// Loop-thread maintenance after each pump pass: once a reload-triggered hide
+/// has settled, release and recreate with the original show parameters.
+pub(crate) fn maintain(fixture: bool) {
+    if !RECREATE.load(Ordering::Acquire) {
+        return;
+    }
+    if STATE.load(Ordering::Acquire) != 1 || crate::engine_draw::mode() != Some(fixture) {
+        RECREATE.store(false, Ordering::Release);
+        return;
+    }
+    if let Err(e) = release() {
+        if !e.contains("retry") {
+            // Unexpected refusal: keep the instance hidden and stop automating.
+            FAULT.store(2, Ordering::Release);
+            RECREATE.store(false, Ordering::Release);
+        }
+        return;
+    }
+    let block = CREATION.lock().ok().and_then(|c| *c);
+    match block.map(|b| create(&b, fixture)) {
+        Some(Ok(())) => {
+            RECREATED.fetch_add(1, Ordering::AcqRel);
+            LAST_THIS.store(0, Ordering::Release);
+            SHOWN.store(true, Ordering::Release);
+        }
+        _ => FAULT.store(2, Ordering::Release),
+    }
+    RECREATE.store(false, Ordering::Release);
 }

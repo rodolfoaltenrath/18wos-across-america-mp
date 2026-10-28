@@ -33,6 +33,8 @@ const STACK_WORDS: usize = 1 + 16 * 33;
 static DEPTH: AtomicU32 = AtomicU32::new(2);
 static STATE: AtomicU32 = AtomicU32::new(7);
 static CAR: AtomicU32 = AtomicU32::new(0);
+/// Two player entities with the same chain; switching simulates a reload.
+static CARS: [AtomicU32; 2] = [const { AtomicU32::new(0) }; 2];
 static CALLS: AtomicU32 = AtomicU32::new(0);
 static PAGE: AtomicUsize = AtomicUsize::new(0);
 static WORLD: AtomicU32 = AtomicU32::new(0);
@@ -60,7 +62,7 @@ static DRAWN: Mutex<Drawn> = Mutex::new(Drawn {
 static LAST: Mutex<([f32; 3], [f32; 4])> = Mutex::new(([0.0; 3], [0.0; 4]));
 pub struct Fixture {
     page: *mut c_void,
-    car: Words<128>,
+    cars: [Words<128>; 2],
     physics: Words<256>,
     body: Words<16>,
     world: Words<STACK_WORDS>,
@@ -88,16 +90,19 @@ impl Fixture {
             unsafe { VirtualProtect(page, 4096, PAGE_READONLY, &mut old) },
             0
         );
-        let (car, physics, body, world, camera, path) = (
-            words::<128>(),
+        let (cars, physics, body, world, camera, path) = (
+            [words::<128>(), words::<128>()],
             words::<256>(),
             words::<16>(),
             words::<STACK_WORDS>(),
             words::<16>(),
             words::<3>(),
         );
-        car[0].store(page as u32, Ordering::Release);
-        car[0x1d0 / 4].store(address(&physics), Ordering::Release);
+        for (car, slot) in cars.iter().zip(&CARS) {
+            car[0].store(page as u32, Ordering::Release);
+            car[0x1d0 / 4].store(address(&physics), Ordering::Release);
+            slot.store(address(car), Ordering::Release);
+        }
         physics[0x3e4 / 4].store(address(&body), Ordering::Release);
         body[0x14 / 4 + 3].store(1f32.to_bits(), Ordering::Release);
         for (i, v) in [2f32, 3.0].into_iter().enumerate() {
@@ -113,14 +118,14 @@ impl Fixture {
         }
         path[0].store(0x1111, Ordering::Release);
         path[2].store(0x2222, Ordering::Release);
-        CAR.store(address(&car), Ordering::Release);
+        CAR.store(address(&cars[0]), Ordering::Release);
         PAGE.store(page as usize, Ordering::Release);
         WORLD.store(address(&world), Ordering::Release);
         OWNER.store(unsafe { GetCurrentThreadId() }, Ordering::Release);
         Self {
             page,
             camera_head: Box::new(AtomicU32::new(address(&camera))),
-            car,
+            cars,
             physics,
             body,
             world,
@@ -152,12 +157,14 @@ impl Fixture {
         ]
     }
     pub fn car(&self) -> u32 {
-        address(&self.car)
+        address(&self.cars[0])
     }
     pub fn frame(&mut self) {
         self.frame += 1;
         let depth = DEPTH.load(Ordering::Acquire);
-        self.car[0x1e8 / 4].store(STATE.load(Ordering::Acquire) << 8, Ordering::Release);
+        for car in &self.cars {
+            car[0x1e8 / 4].store(STATE.load(Ordering::Acquire) << 8, Ordering::Release);
+        }
         self.body[0x30 / 4].store((self.frame as f32).to_bits(), Ordering::Release);
         self.physics[0x3e4 / 4].store(
             if INVALID.load(Ordering::Acquire) {
@@ -171,7 +178,7 @@ impl Fixture {
         self.world[0].store(head, Ordering::Release);
         self.world[top(depth) + 12].store((self.frame as f32).to_bits(), Ordering::Release);
         self.camera[14].store((-(self.frame as f32)).to_bits(), Ordering::Release);
-        unsafe { call(self.car()) };
+        unsafe { call(CAR.load(Ordering::Acquire)) };
         assert_eq!(self.world[0].load(Ordering::Acquire), head);
     }
     /// Runs after the render fixture's flush: queued draws release their access.
@@ -217,6 +224,14 @@ pub fn command(line: &str) -> bool {
         "draw-invalid" => INVALID.store(true, Ordering::Release),
         "draw-valid" => INVALID.store(false, Ordering::Release),
         "draw-foreign" => unsafe { call(CAR.load(Ordering::Acquire)) },
+        "draw-respawn" => {
+            let next = if CAR.load(Ordering::Acquire) == CARS[0].load(Ordering::Acquire) {
+                1
+            } else {
+                0
+            };
+            CAR.store(CARS[next].load(Ordering::Acquire), Ordering::Release);
+        }
         "draw-shallow" => DEPTH.store(0, Ordering::Release),
         "draw-deep" => DEPTH.store(2, Ordering::Release),
         "draw-interior" => STATE.store(4, Ordering::Release),

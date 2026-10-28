@@ -121,6 +121,34 @@ fn test_visual_draws_only_in_validated_context_and_releases_after_flush() {
     assert_eq!(interior.drawn, before);
     assert!(interior.skipped > drawing.skipped);
     assert_eq!(send(&mut host, &mut output, "draw-exterior"), "armed");
+    // Reload: a new player entity hides the visual, which the loop releases
+    // once settled and recreates with the same model and skin.
+    let before_reload = status(&controller, &dll);
+    assert_eq!(send(&mut host, &mut output, "draw-respawn"), "armed");
+    let mut reloaded = before_reload;
+    for _ in 0..100 {
+        std::thread::sleep(Duration::from_millis(20));
+        reloaded = status(&controller, &dll);
+        if reloaded.recreated == 1 && reloaded.drawn > before_reload.drawn + 3 {
+            break;
+        }
+    }
+    assert_eq!(
+        (reloaded.recreated, reloaded.recreate_pending),
+        (1, 0),
+        "{reloaded:?}"
+    );
+    assert_eq!(
+        (reloaded.shown, reloaded.fault, reloaded.skinned_parts),
+        (1, 0, 3)
+    );
+    assert!(reloaded.drawn > before_reload.drawn);
+    let stats: serde_json::Value =
+        serde_json::from_str(&send(&mut host, &mut output, "actor-stats")).unwrap();
+    assert_eq!(
+        stats["instance"]["created"].as_u64().unwrap(),
+        stats["instance"]["freed"].as_u64().unwrap() + 1
+    );
     // Guards: no observer/pump removal or release while in use.
     let release = EngineControl::new(api::VISUAL_RELEASE);
     assert!(error(&controller, &dll, release).contains("hide the visual"));

@@ -93,6 +93,7 @@ unsafe extern "system" fn peek_impl(
             TASKS.run_one(|block| {
                 crate::engine_lifecycle::run(block, FIXTURE.load(Ordering::Acquire) != 0)
             });
+            crate::engine_visual::maintain(FIXTURE.load(Ordering::Acquire) != 0);
         }
     }
     unsafe { SetLastError(error) };
