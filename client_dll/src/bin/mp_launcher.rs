@@ -2,6 +2,8 @@
 #[cfg(windows)]
 mod launcher_session;
 #[cfg(windows)]
+mod report_output;
+#[cfg(windows)]
 fn main() -> anyhow::Result<()> {
     use anyhow::{Context, ensure};
     use clap::{Parser, Subcommand, ValueEnum};
@@ -119,7 +121,11 @@ fn main() -> anyhow::Result<()> {
         TransitionArm,
         TransitionStatus,
         /// Snapshot of the append-only capture, even while still armed.
-        TransitionReport,
+        TransitionReport {
+            /// Save a NEW complete snapshot JSON without overwriting an earlier capture.
+            #[arg(long)]
+            output: Option<PathBuf>,
+        },
         TransitionRemove,
         /// Retained truck instance drawn after the player's exterior draw; needs draw+render.
         VisualShow {
@@ -335,6 +341,10 @@ fn main() -> anyhow::Result<()> {
             let render_status_only = matches!(task, EngineTask::RenderStatus);
             let draw_status_only = matches!(task, EngineTask::DrawStatus);
             let transition_status_only = matches!(task, EngineTask::TransitionStatus);
+            let transition_output = match &task {
+                EngineTask::TransitionReport { output } => output.clone(),
+                _ => None,
+            };
             if matches!(task, EngineTask::Attach { .. }) {
                 controller.load(&dll)?;
             }
@@ -362,7 +372,7 @@ fn main() -> anyhow::Result<()> {
                     api::EngineControl::new(api::UI_TRANSITION_COMMANDS)
                 }
                 EngineTask::TransitionArm => api::EngineControl::new(api::TRANSITION_ARM),
-                EngineTask::TransitionStatus | EngineTask::TransitionReport => {
+                EngineTask::TransitionStatus | EngineTask::TransitionReport { .. } => {
                     api::EngineControl::new(api::TRANSITION_STATUS)
                 }
                 EngineTask::TransitionRemove => api::EngineControl::new(api::UI_TRANSITION_REMOVE),
@@ -473,12 +483,12 @@ fn main() -> anyhow::Result<()> {
                     controller.engine_control(&dll, &mut row)?;
                     records.push(Record::decode(&row).json());
                 }
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(
-                        &serde_json::json!({"summary":summary,"records":records})
-                    )?
-                );
+                let mut report = serde_json::json!({"summary":summary,"records":records});
+                match client_dll::transition_analysis::analyze(&serde_json::to_vec(&report)?) {
+                    Ok(analysis) => report["analysis"] = serde_json::to_value(analysis)?,
+                    Err(error) => report["analysis_error"] = error.into(),
+                }
+                report_output::emit(&report, transition_output.as_deref())?;
                 return Ok(());
             }
             if block.command == api::RENDER_STATUS {

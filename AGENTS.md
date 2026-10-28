@@ -297,3 +297,15 @@ Conferidos estaticamente `game+0xd3596` e `prism3d+0xe210`. Ainda sem nova
 captura no jogo: `load` é somente o comando da fixture. Não automatizar teardown
 com base nesse nome. Preservar o carregamento preparado e separar os resultados
 da bancada Fedora/Proton das provas Windows anteriores.
+
+O bloco seguinte acrescenta `engine transition-report --output ARQUIVO.json`
+(arquivo novo, pasta existente) e `transition_report CAPTURA [--output ANALISE]`
+nativo/offline. Salvar ANTES da saída do processo; a ferramenta não recupera
+registros a partir de status. JSON cru preservado com análise; pares, fases,
+cenas, falhas de init e intervalos entre comandos são correlacionados sem
+inferir causalidade. `structurally_complete` cobre só a estrutura do snapshot;
+`automation_validated` é sempre false. Ausências/limites/perdas não comprovam
+limpeza. Próximo: captura real de comandos SEM visual retido, usando o novo
+procedimento do README. Não automatizar teardown nem repetir reload retido.
+Este bloco passou em 51 testes nativos e 51 x86 sob Proton no Fedora, builds
+release nativo/x86, Clippy nos dois alvos e rustfmt. Sem novo teste no jogo.

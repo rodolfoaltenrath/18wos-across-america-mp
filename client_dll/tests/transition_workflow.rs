@@ -446,6 +446,38 @@ fn phase_virtuals_forward_arguments_result_and_error_then_restore_on_detach() {
     assert!(report.status.success(), "{report:?}");
     let report: serde_json::Value = serde_json::from_slice(&report.stdout).unwrap();
     assert_eq!(report["records"].as_array().unwrap().len(), CAPACITY);
+    assert_eq!(report["analysis"]["structurally_complete"], false);
+    assert_eq!(report["analysis"]["automation_validated"], false);
+    // Persist the snapshot before the process exits, and analyze it offline.
+    let temp = tempfile::tempdir().unwrap();
+    let capture = temp.path().join("capture.json");
+    let save = || {
+        Command::new(env!("CARGO_BIN_EXE_mp_launcher"))
+            .args(["--pid", &host.0.id().to_string(), "--dll"])
+            .arg(&dll)
+            .args(["--fixture", "engine", "transition-report", "--output"])
+            .arg(&capture)
+            .output()
+            .unwrap()
+    };
+    let saved = save();
+    assert!(saved.status.success(), "{saved:?}");
+    let original = std::fs::read(&capture).unwrap();
+    assert!(!save().status.success());
+    assert_eq!(std::fs::read(&capture).unwrap(), original);
     writeln!(host.0.stdin.as_mut().unwrap(), "quit").unwrap();
     assert!(host.0.wait().unwrap().success());
+    let analysis = temp.path().join("analysis.json");
+    let offline = Command::new(env!("CARGO_BIN_EXE_transition_report"))
+        .arg(&capture)
+        .arg("--output")
+        .arg(&analysis)
+        .output()
+        .unwrap();
+    assert!(offline.status.success(), "{offline:?}");
+    let analyzed: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&analysis).unwrap()).unwrap();
+    assert_eq!(analyzed["record_count"], CAPACITY);
+    assert_eq!(analyzed["structurally_complete"], false);
+    assert_eq!(analyzed["automation_validated"], false);
 }

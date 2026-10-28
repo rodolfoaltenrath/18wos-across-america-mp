@@ -675,7 +675,7 @@ engine transition-commands
 engine transition-arm
 # Com a captura armada: ir ao menu, carregar save de teste existente e parar.
 engine transition-status
-engine transition-report
+engine transition-report --output target\analysis\transicao-NOVA\captura-01.json
 mp_launcher.exe --pid PID --dll CAMINHO\client_dll.dll session-stop --verify target\analysis\transicao-NOVA
 ```
 
@@ -748,6 +748,48 @@ filtro de caller/thread, ponteiros inválidos, limites, ordem anterior ao init,
 conflito de ownership e remoção automática. Ainda falta a captura no jogo:
 o nome `load` simulado pela fixture não identifica o comando real nem comprova
 um ponto seguro para liberar recursos durante uma recarga.
+
+### Preservar e analisar uma captura de transição
+
+`engine transition-report --output ARQUIVO.json` salva o snapshot com os
+registros crus e a análise, sem substituir um arquivo existente. A pasta pai
+deve existir. Sem `--output`, continua imprimindo JSON no terminal. Os registros
+são lidos integralmente na geração consultada antes de criar o arquivo; uma
+falha de leitura do processo não deixa um snapshot parcial. Erros de escrita
+são reportados e podem deixar um arquivo novo incompleto, que deve ser
+descartado. Salve antes de encerrar o jogo: status e contagens não permitem
+reconstituir registros perdidos depois da saída.
+
+O binário Rust `transition_report` analisa esse JSON sem PID, injeção, DLL ou
+assets do jogo. Depois do build release nativo, no Fedora:
+
+```text
+target/release/transition_report target/analysis/transicao-NOVA/captura-01.json --output target/analysis/transicao-NOVA/analise-01.json
+```
+
+No Windows, use `target\i686-pc-windows-gnu\release\transition_report.exe`
+com os caminhos locais. O executável também pode analisar snapshots antigos
+sem eventos de comando. O arquivo de análise também deve ser novo; omita
+`--output` para imprimir no terminal.
+
+A análise verifica limite de 8 MiB/512 registros, geração, contagens, thread,
+profundidade e pares de entrada/retorno. Expõe fases assinadas por ator/cena,
+retornos false de init de bloco, leituras de física/modelos após done(0) e
+janelas entre comandos consecutivos, com o primeiro init/draw de ator
+diferente e done do ator observado anteriormente. Índices começam em zero.
+Essas janelas mostram ordem temporal, não causalidade nem duração do handler.
+Endereços identificam observações locais e podem ser reutilizados pelo motor.
+O contador `foreign_calls` é cumulativo desde a instalação; por precaução, um
+valor não nulo sinaliza ressalva mesmo sem evento estrangeiro no snapshot.
+
+`structurally_complete` descreve somente os registros presentes e seus pares,
+não cobertura de todos os caminhos do motor nem completude de uma recarga.
+Leituras ausentes ficam desconhecidas; modelos acima de 16 não comprovam
+limpeza completa. Um init false não comprova rollback integral; diferença de
+flushes não comprova consumo de todas as referências. `automation_validated`
+permanece sempre false. O relatório ao vivo conserva os registros crus e
+expõe `analysis_error` se não puder analisá-los. A ferramenta não libera
+recursos e não altera o procedimento `session-prepare-load`/`visual-show`.
 
 ### Primeiro caminhão de teste (`visual-*`)
 

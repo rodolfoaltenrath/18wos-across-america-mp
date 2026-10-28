@@ -1796,6 +1796,56 @@ de forma reproduzível, relacionando comandos, cenas, pares enter/return,
 rollback e primeiro draw; nunca converter observação isolada em autorização
 para liberar recursos do motor.
 
+### M4 — Captura persistida e análise offline da timeline — 28/10/2026
+
+Entregue o próximo bloco após completar `transition-commands`: o launcher
+aceita `engine transition-report --output ARQUIVO.json`, coleta todos os
+registros da geração antes de criar o arquivo e recusa sobrescrever capturas.
+O JSON preserva summary/records e acrescenta análise ou erro de análise.
+Sem a opção, a saída JSON no terminal permanece disponível. A pasta pai deve
+existir; falhas de I/O são reportadas, podendo deixar um arquivo novo incompleto.
+
+O novo binário Rust nativo `transition_report CAPTURA [--output ANALISE]`
+funciona após o processo encerrar, sem acesso ao jogo, assets ou DLL. O módulo
+portável `transition_analysis` usa os mesmos eventos do launcher, com limite
+de 8 MiB/512 registros e validação de esquema/geração/contagem. Relaciona
+atores/cenas, fases assinadas, chamadas aninhadas, resultados false de init de
+bloco, leituras antes/depois de done(0), comandos e primeiro draw subsequente.
+Expõe índices dos registros, ordem do init novo/done antigo e diferença de
+flushes entre o retorno de done(0) antigo e o primeiro draw diferente.
+
+Perdas, truncamento, thread inesperada, pares/profundidades inconsistentes,
+chamadas abertas e nomes incompletos são ressalvas explícitas. Contadores de
+chamadas estrangeiras são cumulativos e tratados conservadoramente. Leituras
+ausentes e modelos acima de 16 não se tornam prova de limpeza; retorno false
+não é prova de rollback completo. Comandos delimitam somente intervalos
+cronológicos, sem inferir causa ou duração do handler. Relatórios anteriores
+sem comandos continuam aceitos, sem inventar o início ausente do load.
+
+`structurally_complete` avalia somente a estrutura do snapshot. Mesmo uma
+captura íntegra mantém `automation_validated=false`: não prova cobertura
+global, ownership, consumo de todas as referências ou momento seguro para
+teardown. Endereços podem ser reutilizados entre gerações. A implementação
+não chama callbacks extras nem altera ABI/hooks ou o caminho manual seguro.
+
+Fixtures próprias exercitam init novo antes do destroy antigo, fases negativas,
+falha do bloco novo mantendo ator antigo, nomes incompletos, perdas/limites,
+leituras ausentes e fronteiras de comandos aninhados. A bancada x86 também
+salva uma captura, recusa sobrescrita sem alterar seus bytes, encerra o host e
+executa o analisador offline. Não depende de assets comerciais.
+
+Validação no **Fedora**: **51 testes nativos e 51 x86 sob Proton passaram**,
+incluindo persistência/recusa de sobrescrita e análise após a saída do host.
+Build release nativo e cruzado x86, Clippy nos dois alvos e rustfmt passaram.
+Logs em `target/analysis/timeline-*` (ignorados). Não foi executado o jogo;
+essas verificações não substituem uma recarga real no Windows ou no Proton.
+
+**Próximo:** capturar `transition-commands` numa recarga real SEM visual retido,
+salvar o snapshot antes da saída e analisar comandos/cenas/ordem com a nova
+ferramenta. Provar qual comando real precede as liberações globais antes de
+propor automação. Nenhuma nova validação no jogo neste bloco; LAN entre dois
+PCs e sessões longas continuam pendentes. Manter o preparo manual do load.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,

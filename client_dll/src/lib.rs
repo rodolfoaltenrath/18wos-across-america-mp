@@ -55,6 +55,7 @@ mod phase_queue;
 pub mod profile;
 pub mod render_observation;
 pub mod resource_bindings;
+pub mod transition_analysis;
 pub mod transition_observation;
 
 static WORKER: Mutex<Option<JoinHandle<Result<(), String>>>> = Mutex::new(None);
