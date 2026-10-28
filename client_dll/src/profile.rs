@@ -17,6 +17,7 @@ pub const ENGINE_CONTEXT: u32 = 0x51314;
 pub const GAME_CONTEXT: u32 = 0x160a24;
 pub const CREATE_FACTORY: u32 = 0xcba0;
 pub const DESTROY_FACTORY: u32 = 0xcc40;
+pub const STRING_SETTER: u32 = 0x1b10;
 pub const CAR_RECORD: u32 = 0x127a34;
 pub const CAR_CONSTRUCTOR: u32 = 0xcef70;
 pub const CAR_DESTRUCTOR: u32 = 0xd1820;

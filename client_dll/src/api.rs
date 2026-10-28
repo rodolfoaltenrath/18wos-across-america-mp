@@ -23,6 +23,10 @@ pub const PRIVATE_CYCLE: u32 = 13;
 pub const PRIVATE_FIXTURE: u32 = 14;
 pub const PRIVATE_ITEM: u32 = 15;
 pub const PRIVATE_ITEM_FIXTURE: u32 = 16;
+/// Private PMD model_name write/readback, followed by immediate destruction.
+/// name carries the model path; no layout or ABI version change.
+pub const PRIVATE_MODEL: u32 = 17;
+pub const PRIVATE_MODEL_FIXTURE: u32 = 18;
 pub const ENGINE_ABI_VERSION: u32 = 3;
 /// Separate extension ABI; does not change the original Control v1 layout.
 #[repr(C)]
@@ -60,7 +64,8 @@ pub struct EngineControl {
     pub count_after: u32,
     pub object_vtable: u32,
     pub object_destructor: u32,
-    /// Own-fixture only: record, factory, destroy, engine head, game head, vtable.
+    /// Own-fixture only. Private factory: record/create/destroy/heads/vtable.
+    /// Private item: descriptor in [0]. Model: also metadata root [1], setter [2].
     pub fixture: [u32; 6],
     pub frames: [u32; 32],
     pub name: [u8; 128],

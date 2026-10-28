@@ -26,6 +26,8 @@ mod engine_item;
 #[cfg(all(windows, target_arch = "x86"))]
 mod engine_lifecycle;
 #[cfg(all(windows, target_arch = "x86"))]
+mod engine_model;
+#[cfg(all(windows, target_arch = "x86"))]
 mod engine_phase;
 pub mod engine_values;
 #[cfg(windows)]

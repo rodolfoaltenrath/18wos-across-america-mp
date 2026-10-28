@@ -62,8 +62,9 @@ Limites da ferramenta e instruções de prioridade superior continuam aplicávei
 No Windows, usar `dev_env windows` com GCC/GNU ld da versão ativa, conforme
 README. O antigo `rust-lld` x86 falhou na recuperação de panic neste host; não
 reutilizar sua configuração. O helper preserva `.cargo/config.toml` local.
-A última validação Windows terminou com dispatcher removido, worker parado e
-DLL descarregada do jogo. Não reutilizar PID/endereços absolutos do registro.
+A última validação Windows de setter terminou com sonda/dispatcher removidos,
+worker parado e processo encerrado normalmente. Não reutilizar PID/endereços
+absolutos do registro.
 Foi validada uma sequência dirigir/menu/carregar, com pausa transitória e
 recuperação da leitura; o restante da matriz ainda está pendente.
 
@@ -104,6 +105,14 @@ voltou a fixar a DLL; foi encerrado pelo proprietário após a limpeza.
 `decals.pmd` já possui perfil explícito de metadados e lifetime privado:
 `values --entity decals.pmd` leu 13 propriedades, e `item-cycle --kind pmd`
 passou 17 vezes no jogo com 2700 bytes/referências equilibrados. O proprietário
-dirigiu, recarregou e fechou o último processo. Prosseguir para setters/modelo e
-init/teardown de recursos, antes de inserir/manter um visual entre frames.
+dirigiu, recarregou e fechou o último processo.
+`engine model-cycle --model models/ai/truck/models/truck.psm` agora foi entregue:
+18 ciclos reais do setter, incluindo recarga, com bytes/referências equilibrados.
+O metadado `model_name` é tipo 21; não confundir com strings genéricas tipo 14,
+mesmo com callback igual. A bancada valida ABI cdecl/bool AL, limites, rejeições,
+falhas e cancelamento. Não repetir essa prova sem necessidade.
+Antes de init/render, resolver os slots `game.dll+0x160e20`/`+0x16114c`, que
+estavam nulos na partida inclusive após recarga, e o ownership compartilhado da
+base (`+0xf3fe0`/`+0xf40b0`, contador `+0x166598`). Não chamar init da fase 0 com
+esses bindings nulos; investigar pré-requisitos ou outro candidato visual.
 A criação e a movimentação de caminhões remotos ainda não foram implementadas.

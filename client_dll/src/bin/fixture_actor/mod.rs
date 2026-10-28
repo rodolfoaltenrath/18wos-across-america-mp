@@ -1,6 +1,7 @@
 //! Own x86 fixture: two module-lock contexts, C factories, thiscall virtuals.
 //! Every allocation is created/destroyed by this host, across the DLL boundary.
 mod item;
+mod model;
 use std::{
     ffi::c_void,
     ptr,
@@ -36,6 +37,7 @@ pub fn fail_item_step(step: &str) {
     match step {
         "item-fail-fix" => item::fail_fix(),
         "item-fail-create" => FAIL_PLACED.store(true, Ordering::Release),
+        "model-fail-set" | "model-no-write" | "model-side-effect" => model::arm(step),
         _ => unreachable!(),
     }
 }
@@ -45,6 +47,9 @@ struct Object {
     padding: [u32; 21],
     destructor: u32,
     tail: [u32; 11],
+    before_model: [u8; 0x200 - 0x88],
+    model_name: [u8; 64],
+    after_model: [u8; 0xa8c - 0x240],
 }
 pub struct Fixture {
     record: Box<[u32; 8]>,
@@ -58,6 +63,8 @@ impl Fixture {
             Ordering::Release,
         );
         assert_eq!(std::mem::offset_of!(Object, destructor), 0x58);
+        assert_eq!(std::mem::offset_of!(Object, model_name), 0x200);
+        assert_eq!(std::mem::size_of::<Object>(), 0xa8c);
         CHILD
             .parent
             .store(&ROOT as *const _ as u32, Ordering::Release);
@@ -108,11 +115,17 @@ impl Fixture {
     pub fn item_descriptors(&self) -> [u32; 2] {
         item::descriptors(self.bindings())
     }
+    pub fn model_definitions(&self) -> [u32; 9] {
+        model::roots()
+    }
+    pub fn model_setter(&self) -> u32 {
+        model::callback()
+    }
 }
 pub fn stats() -> serde_json::Value {
     serde_json::json!({"created": CREATED.load(Ordering::Acquire), "freed": FREED.load(Ordering::Acquire),
         "post": POST.load(Ordering::Acquire), "pre": PRE.load(Ordering::Acquire),
-        "root": ROOT.refs.load(Ordering::Acquire), "game": CHILD.refs.load(Ordering::Acquire), "items": item::stats()})
+        "root": ROOT.refs.load(Ordering::Acquire), "game": CHILD.refs.load(Ordering::Acquire), "items": item::stats(), "model_calls": model::calls()})
 }
 unsafe extern "thiscall" fn no_op(_: *mut Object) {}
 unsafe extern "thiscall" fn post_constructor(object: *mut Object) {
@@ -123,6 +136,10 @@ unsafe extern "thiscall" fn post_constructor(object: *mut Object) {
 }
 unsafe extern "thiscall" fn pre_destructor(object: *mut Object) {
     assert_eq!(unsafe { (*object).padding[0] }, 0x18aa);
+    let object = unsafe { &*object };
+    assert!(object.before_model.iter().all(|b| *b == 0x5a));
+    assert!(object.after_model.iter().all(|b| *b == 0xa5));
+    assert!(object.model_name.contains(&0));
     PRE.fetch_add(1, Ordering::AcqRel);
 }
 unsafe extern "thiscall" fn deleting_destructor(object: *mut Object, flags: u32) {
@@ -141,6 +158,9 @@ unsafe extern "C" fn construct(storage: *mut c_void) -> *mut c_void {
         padding: [0; 21],
         destructor: 0,
         tail: [0; 11],
+        before_model: [0x5a; 0x200 - 0x88],
+        model_name: [0; 64],
+        after_model: [0xa5; 0xa8c - 0x240],
     };
     if storage.is_null() {
         Box::into_raw(Box::new(value)).cast()

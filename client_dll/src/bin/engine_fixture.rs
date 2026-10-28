@@ -40,6 +40,10 @@ fn main() -> anyhow::Result<()> {
     let bindings = [0u32; 6];
     #[cfg(not(target_arch = "x86"))]
     let item_descriptors = [0u32; 2];
+    #[cfg(target_arch = "x86")]
+    let (model_definitions, model_setter) = (actor.model_definitions(), actor.model_setter());
+    #[cfg(not(target_arch = "x86"))]
+    let (model_definitions, model_setter) = ([0u32; 9], 0u32);
     PEEK_SLOT.store(
         PeekMessageA as *const () as usize,
         std::sync::atomic::Ordering::Release,
@@ -118,7 +122,7 @@ fn main() -> anyhow::Result<()> {
     ensure!(!window.is_null(), "cannot create fixture window");
     println!(
         "{}",
-        serde_json::json!({"pid":unsafe{GetCurrentProcessId()},"window":window as usize,"thread":unsafe{GetCurrentThreadId()}, "peek_slot": peek_slot, "factory": bindings, "item_descriptors": item_descriptors})
+        serde_json::json!({"pid":unsafe{GetCurrentProcessId()},"window":window as usize,"thread":unsafe{GetCurrentThreadId()}, "peek_slot": peek_slot, "factory": bindings, "item_descriptors": item_descriptors, "model_definitions": model_definitions, "model_setter": model_setter})
     );
     std::io::stdout().flush()?;
     let address = window as usize;
@@ -128,7 +132,14 @@ fn main() -> anyhow::Result<()> {
                 break;
             };
             #[cfg(target_arch = "x86")]
-            if matches!(line.as_str(), "item-fail-fix" | "item-fail-create") {
+            if matches!(
+                line.as_str(),
+                "item-fail-fix"
+                    | "item-fail-create"
+                    | "model-fail-set"
+                    | "model-no-write"
+                    | "model-side-effect"
+            ) {
                 fixture_actor::fail_item_step(&line);
                 println!("armed");
                 continue;

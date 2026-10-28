@@ -360,6 +360,37 @@ O formato JSON expõe `element_size` e `table_bound`: o segundo é capacidade de
 array inline ou parâmetro de crescimento, conforme o tipo de tabela; não é
 um offset no objeto. Os campos brutos continuam disponíveis.
 
+Para testar somente a configuração do nome de modelo no PMD privado, use
+a mesma preparação `engine attach` / `engine pump-attach`, seguida de:
+
+```text
+engine phase-probe
+engine model-cycle --model models/ai/truck/models/truck.psm
+engine model-cycle --model models/ai/truck/models/truck.psm --cycles 16
+engine pump-remove
+stop
+```
+
+`model-cycle` fixa o tipo `decals.pmd`, cria um item, escreve `model_name` pelo
+export cdecl do motor, confirma os bytes e libera o item na mesma operação.
+O campo deve estar inicialmente vazio; nada fora de seus 64 bytes pode mudar.
+São aceitos somente caminhos ASCII relativos `models/*.psm`, sem componentes
+vazios, `.`/`..`, barras invertidas ou NUL, com até 63 bytes mais terminador.
+O caminho é uma string de configuração: esta prova não abre o asset, carrega
+recursos, inicializa render/colisão ou insere um caminhão no mundo.
+
+O perfil exige tipo de metadado **21**, flags 0, offset `0x200`, elemento 64,
+limite/auxiliar/contagem `-1` e o setter exportado em `p3shared.dll+0x1b10`.
+String genérica de tipo 14 é recusada mesmo que compartilhe o callback.
+A definição é relida antes de cada chamada; alteração de metadados, retorno
+false, escrita fora do campo e confirmação divergente falham com limpeza pelo
+item. A extensão continua ABI v3/664 bytes, com novos comandos 17/18; `name`
+transporta o caminho nesses comandos. Nenhum ponteiro é aceito na CLI do jogo.
+Após a limpeza, feche normalmente o processo fixado antes de reconstruir a DLL.
+Passaram 18 ciclos reais de setter no Windows, incluindo repetição após dirigir
+e recarregar. Os slots de carga/liberação PMD estavam nulos nessa partida;
+resolver essa dependência é necessário antes de habilitar init/render.
+
 Para investigar acessos candidatos a membros, sem executar uma imagem:
 `engine_report ARQUIVO field --offset 0x200`. A busca distingue memória baseada
 em registrador de imediatos/endereços absolutos, mas não prova o tipo do

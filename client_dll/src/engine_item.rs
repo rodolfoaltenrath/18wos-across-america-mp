@@ -58,7 +58,15 @@ fn bindings(
             .find(|m| m.name.eq_ignore_ascii_case(name))
             .ok_or_else(|| format!("{name} missing"))
     };
-    let (factory, addresses) = if fixture && block.command == api::PRIVATE_ITEM_FIXTURE {
+    let model = matches!(
+        block.command,
+        api::PRIVATE_MODEL | api::PRIVATE_MODEL_FIXTURE
+    );
+    let (factory, addresses) = if fixture
+        && matches!(
+            block.command,
+            api::PRIVATE_ITEM_FIXTURE | api::PRIVATE_MODEL_FIXTURE
+        ) {
         let owner = get("engine_fixture.exe")?;
         let values = words::<12>(process, block.fixture[0])?;
         let mut normalized = *block;
@@ -68,9 +76,13 @@ fn bindings(
             executable(*callback, owner)?;
         }
         (factory, values[6..].try_into().unwrap())
-    } else if !fixture && block.command == api::PRIVATE_ITEM {
+    } else if !fixture && matches!(block.command, api::PRIVATE_ITEM | api::PRIVATE_MODEL) {
         // actor::game verifies all three images, exact record, factories and ABI branch.
-        let kind = crate::profile::entity_type(api::text(&block.name)?)?;
+        let kind = if model {
+            crate::profile::PMD
+        } else {
+            crate::profile::entity_type(api::text(&block.name)?)?
+        };
         let factory = actor::game_type(process, kind)?;
         let engine = get("p3shared.dll")?;
         let exe = get("prism3d.exe")?;
@@ -166,7 +178,26 @@ pub fn run(mut block: EngineControl, fixture: bool) -> Result<EngineControl, Str
     }
     block.executed_thread = unsafe { GetCurrentThreadId() };
     let process = Process::open(unsafe { GetCurrentProcessId() }).map_err(|e| e.to_string())?;
+    let model = if matches!(
+        block.command,
+        api::PRIVATE_MODEL | api::PRIVATE_MODEL_FIXTURE
+    ) {
+        Some(crate::engine_model::ModelName::parse(api::text(
+            &block.name,
+        )?)?)
+    } else {
+        None
+    };
     let (factory, hooks) = bindings(&process, &block, fixture)?;
+    let model = model
+        .map(|name| {
+            crate::engine_model::Binding::resolve(
+                &process,
+                name,
+                fixture.then_some((block.fixture[1], block.fixture[2])),
+            )
+        })
+        .transpose()?;
     let mut verified = 0;
     let before = if fixture {
         None
@@ -260,6 +291,11 @@ pub fn run(mut block: EngineControl, fixture: bool) -> Result<EngineControl, Str
             if memory_totals(&process, manager)? != (total_alloc, totals.1) {
                 return Err("unexpected allocated storage bytes".into());
             }
+            if let Some(model) = &model {
+                // SAFETY: constructor/header checks succeeded, the item owns
+                // storage with exactly one fix, and we are on the outer loop.
+                unsafe { model.apply(&process, object, factory.size)? };
+            }
             Ok(())
         })();
         drop(item);
@@ -289,5 +325,11 @@ pub fn run(mut block: EngineControl, fixture: bool) -> Result<EngineControl, Str
     block.object_size = factory.size;
     block.constructor = factory.constructor;
     block.destructor = factory.destructor;
+    if model.is_some() {
+        api::put(
+            &mut block.message,
+            "model_name verified; private item released; resources not initialized",
+        )?;
+    }
     Ok(block)
 }

@@ -718,6 +718,75 @@ resolver os slots de recursos e efeitos da base, os pares init/teardown e
 seu ownership. Não chamar init nem manter um PMD entre frames apenas com esta
 análise. Não é necessário refazer os ciclos vazios já comprovados no Fedora.
 
+### M4 — Setter privado de `model_name` — 28/10/2026
+
+Entregue `engine model-cycle --model models/ai/truck/models/truck.psm
+[--cycles 1..16]`. O comando usa somente `decals.pmd` e o item privado já
+perfilado, na fila externa do loop. Confere a definição escalar, resolve e
+compara o export `me_string_set`, relê a definição imediatamente antes da
+chamada cdecl e escreve no índice zero. O objeto precisa ter `model_name`
+inicialmente vazio; são conferidos o caminho com NUL e todos os bytes fora do
+campo `+0x200..+0x23f`. O item destrói o objeto na mesma operação. Referências,
+pool, bytes alocados/liberados e posição local continuam sendo verificados.
+Não há recurso carregado ou objeto mantido entre frames.
+
+O caminho é ASCII relativo `models/*.psm`, até 63 bytes, sem componentes
+vazios, `.`/`..`, barras invertidas ou NUL. O contrato exige tipo **21**,
+flags 0, elemento 64, offset `0x200`, limite/auxiliar/contagem `-1` e callback
+`p3shared.dll+0x1b10`. O layout e versão das ABIs não mudaram: comandos 17/18
+na extensão v3, `name` contém o caminho; o 18 é restrito ao host próprio.
+
+**Bancada:** 28 testes nativos e 21 x86, build release, Clippy nativo/x86 e
+formatação passaram. A fixture Rust própria tem PMD-sized storage com guardas
+e um setter cdecl que devolve bool em AL deixando EAX alto preenchido. Foram
+18 ciclos bem-sucedidos (16 com string de exatamente 63 bytes), três falhas
+após construção (false, nenhuma escrita e efeito fora do campo), oito definições
+incompatíveis, caminhos inválidos, modo errado e pedido cancelado durante loop
+aninhado. Os 21 itens criados foram liberados, 56700 bytes equilibrados, todas
+as referências restauradas e nenhum setter executado pelo pedido cancelado.
+Nenhum asset comercial participa dos testes automatizados.
+
+Na primeira tentativa real, a validação recusou o tipo genérico 14 usado
+indevidamente na fixture, antes de alocar o item. O jogo informou tipo 21,
+também confirmado na captura nativa anterior: `play_animation` usa 14 e
+`model_skins` usa 25, embora compartilhem o descritor/callback de strings.
+A sonda foi removida, o proprietário encerrou o processo e o contrato/fixture
+foram corrigidos; tipo 14 passou a ser um caso explicitamente recusado.
+
+**Jogo Windows, após reconstrução:** PID 13108, thread 19512, hashes do perfil
+conferidos pela preparação. Passaram um ciclo e depois 16, com
+`1826 / 1827 / 1826` referências, 2700 bytes por item, confirmação do nome e
+nenhum byte externo ao campo alterado. A checagem da posição local passou
+dentro de cada comando. Após o proprietário dirigir, fazer uma curva e
+recarregar um save existente, mais um ciclo passou com `1846 / 1847 / 1846`.
+Foram **18 ciclos reais de setter**, além dos ciclos vazios anteriormente
+validados. O proprietário informou que controles, câmera e interface estavam
+normais. `pump-remove` restaurou a entrada, `stop` removeu o dispatcher e as
+filas ficaram sem pendências ou execução, quatro operações de fase concluídas
+(probe e três comandos de ciclo). A remoção informou 169491 hits. O processo
+foi encerrado normalmente e sua ausência foi verificada antes de nova edição
+de binários. Os três originais do perfil e os dois saves mantiveram seus hashes;
+as cópias de segurança dos saves ficam ignoradas em `target/backups/`.
+
+**Dependência concreta para init/render:** os slots usados por
+`game.dll+0x107c90` e pelo teardown PMD, em `+0x160e20` e `+0x16114c`, estavam
+**nulos** na partida carregada, inclusive após a recarga. A instrução carregada
+em `+0x107cea` confirmou o endereço real do primeiro slot após relocação.
+Não foi feita nenhuma chamada a esses ponteiros. Não é seguro executar a fase 0
+do init apenas porque o lifetime e a string passaram; descobrir quais etapas
+ou módulos preenchem esses bindings, ou selecionar outro caminho de visual.
+O init da base `+0xf2f10` também chama `+0xf3fe0(-1)`, que incrementa um contador
+global em `+0x166598` e pode criar recursos compartilhados; foi observado valor
+4. A chamada de teardown da base passa por `+0xf40b0`. Esse estado compartilhado
+precisa de um par comprovado; não copiar o init completo de outro ator.
+
+**Próximo bloco:** investigar registro/resolução dos callbacks PMD e o par de
+recursos compartilhados da base. A escolha de `decals.pmd` continua candidata;
+a ausência dos callbacks na partida impede habilitar init com o perfil atual.
+Depois de comprovar os pré-requisitos, validar init/teardown em fixture e no
+processo antes de inserir ou manter um visual entre frames. Não repetir os
+ciclos de alocação/setter já comprovados sem uma mudança que justifique isso.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,

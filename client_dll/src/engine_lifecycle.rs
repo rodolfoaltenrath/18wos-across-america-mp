@@ -173,7 +173,13 @@ impl Drop for PrivateEntity {
     }
 }
 pub fn run(mut block: EngineControl, is_fixture: bool) -> Result<EngineControl, String> {
-    if matches!(block.command, api::PRIVATE_ITEM | api::PRIVATE_ITEM_FIXTURE) {
+    if matches!(
+        block.command,
+        api::PRIVATE_ITEM
+            | api::PRIVATE_ITEM_FIXTURE
+            | api::PRIVATE_MODEL
+            | api::PRIVATE_MODEL_FIXTURE
+    ) {
         return crate::engine_item::run(block, is_fixture);
     }
     block.executed_thread = unsafe { GetCurrentThreadId() };

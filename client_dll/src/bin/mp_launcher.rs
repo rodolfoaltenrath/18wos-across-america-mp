@@ -56,6 +56,13 @@ fn main() -> anyhow::Result<()> {
             #[arg(long, value_enum, default_value = "car")]
             kind: ItemKind,
         },
+        /// Set/read back model_name on a private PMD and immediately release it.
+        ModelCycle {
+            #[arg(long)]
+            model: String,
+            #[arg(long, default_value_t=1, value_parser=clap::value_parser!(u32).range(1..=16))]
+            cycles: u32,
+        },
         PrivateCycle {
             #[arg(long, default_value_t=1, value_parser=clap::value_parser!(u32).range(1..=16))]
             cycles: u32,
@@ -143,6 +150,12 @@ fn main() -> anyhow::Result<()> {
                     b.cycles = cycles;
                     b
                 }
+                EngineTask::ModelCycle { model, cycles } => {
+                    let mut b = api::EngineControl::new(api::PRIVATE_MODEL);
+                    b.cycles = cycles;
+                    api::put(&mut b.name, &model).map_err(anyhow::Error::msg)?;
+                    b
+                }
                 EngineTask::Registry => api::EngineControl::new(api::UI_REGISTRY),
                 EngineTask::Inspect { name } => {
                     let mut b = api::EngineControl::new(api::UI_INSPECT_TYPE);
@@ -153,6 +166,10 @@ fn main() -> anyhow::Result<()> {
                 EngineTask::Status => api::EngineControl::new(api::UI_STATUS),
             };
             controller.engine_control(&dll, &mut block)?;
+            let message = api::text(&block.message).map_err(anyhow::Error::msg)?;
+            if !message.is_empty() {
+                println!("{message}");
+            }
             println!(
                 "active={} window=0x{:x} window_thread={} executed_thread={} completed={} inflight={} registry_count={} size={} ctor=0x{:x} dtor=0x{:x}",
                 block.active,

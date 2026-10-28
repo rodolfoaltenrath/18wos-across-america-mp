@@ -27,6 +27,151 @@ fn dispatcher_uses_window_thread_cancels_timeout_and_restores_before_unload() {
     exercise(true, false);
     exercise(true, true);
 }
+#[test]
+fn private_model_setter_uses_cdecl_bool_bounds_metadata_and_balanced_cleanup() {
+    let dll = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../target/i686-pc-windows-gnu/release/client_dll.dll")
+        .canonicalize()
+        .unwrap();
+    let mut host = Host(
+        Command::new(env!("CARGO_BIN_EXE_engine_fixture"))
+            .args(["--ansi", "--peek"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap(),
+    );
+    let mut output = BufReader::new(host.0.stdout.take().unwrap());
+    let mut line = String::new();
+    output.read_line(&mut line).unwrap();
+    let info: serde_json::Value = serde_json::from_str(&line).unwrap();
+    let controller = Controller::open(host.0.id()).unwrap();
+    controller.load(&dll).unwrap();
+    let mut attach = EngineControl::new(api::UI_ATTACH);
+    attach.window = info["window"].as_u64().unwrap() as u32;
+    controller.engine_control(&dll, &mut attach).unwrap();
+    let mut pump = EngineControl::new(api::UI_PUMP_FIXTURE);
+    pump.entity = info["peek_slot"].as_u64().unwrap() as u32;
+    controller.engine_control(&dll, &mut pump).unwrap();
+    let mut request = EngineControl::new(api::PRIVATE_MODEL_FIXTURE);
+    request.fixture[0] = info["item_descriptors"][0].as_u64().unwrap() as u32;
+    request.fixture[1] = info["model_definitions"][0].as_u64().unwrap() as u32;
+    request.fixture[2] = info["model_setter"].as_u64().unwrap() as u32;
+    request.cycles = 16;
+    let longest = format!("models/{}.psm", "a".repeat(52));
+    api::put(&mut request.name, &longest).unwrap();
+    let mut result = request;
+    controller.engine_control(&dll, &mut result).unwrap();
+    assert_eq!(result.cycles, 16);
+    assert_eq!(
+        (
+            result.count_before,
+            result.count_created,
+            result.count_after
+        ),
+        (7, 9, 7)
+    );
+    assert_eq!(result.object_size, 0xa8c);
+    assert_eq!(result.executed_thread, attach.window_thread);
+    assert!(
+        api::text(&result.message)
+            .unwrap()
+            .contains("model_name verified")
+    );
+    request.cycles = 2;
+    api::put(&mut request.name, "models/fixture/truck.psm").unwrap();
+    result = request;
+    controller.engine_control(&dll, &mut result).unwrap();
+    assert_eq!(result.cycles, 2);
+    // Each malformed input is rejected before the container is allocated.
+    for model in [
+        "models/../truck.psm".to_string(),
+        format!("models/{}.psm", "a".repeat(53)),
+    ] {
+        result = request;
+        api::put(&mut result.name, &model).unwrap();
+        assert!(
+            controller
+                .engine_control(&dll, &mut result)
+                .unwrap_err()
+                .to_string()
+                .contains("relative models/")
+        );
+    }
+    for row in info["model_definitions"].as_array().unwrap().iter().skip(1) {
+        result = request;
+        result.fixture[1] = row.as_u64().unwrap() as u32;
+        assert!(
+            controller
+                .engine_control(&dll, &mut result)
+                .unwrap_err()
+                .to_string()
+                .contains("metadata differs")
+        );
+    }
+    result = request;
+    result.command = api::PRIVATE_MODEL; // game command cannot borrow fixture callbacks
+    assert!(controller.engine_control(&dll, &mut result).is_err());
+    for (failure, diagnostic) in [
+        ("model-fail-set", "setter returned false"),
+        ("model-no-write", "readback differs"),
+        ("model-side-effect", "outside model_name"),
+    ] {
+        writeln!(host.0.stdin.as_mut().unwrap(), "{failure}").unwrap();
+        line.clear();
+        output.read_line(&mut line).unwrap();
+        assert_eq!(line.trim(), "armed");
+        result = request;
+        result.cycles = 1;
+        assert!(
+            controller
+                .engine_control(&dll, &mut result)
+                .unwrap_err()
+                .to_string()
+                .contains(diagnostic)
+        );
+    }
+    // A canceled model task must not allocate, mutate, or call the setter later.
+    writeln!(host.0.stdin.as_mut().unwrap(), "nested-pump").unwrap();
+    line.clear();
+    output.read_line(&mut line).unwrap();
+    assert_eq!(line.trim(), "nested");
+    result = request;
+    result.cycles = 1;
+    assert!(
+        controller
+            .engine_control(&dll, &mut result)
+            .unwrap_err()
+            .to_string()
+            .contains("canceled before execution")
+    );
+    std::thread::sleep(Duration::from_millis(2400));
+    writeln!(host.0.stdin.as_mut().unwrap(), "actor-stats").unwrap();
+    line.clear();
+    output.read_line(&mut line).unwrap();
+    let stats: serde_json::Value = serde_json::from_str(&line).unwrap();
+    for key in ["created", "freed", "post", "pre", "model_calls"] {
+        assert_eq!(stats[key], 21, "{key}");
+    }
+    for key in ["allocated", "released"] {
+        assert_eq!(stats["items"][key], 21);
+    }
+    for key in ["bytes_allocated", "bytes_freed"] {
+        assert_eq!(stats["items"][key], 21 * 0xa8c);
+    }
+    assert_eq!(stats["root"], 7);
+    assert_eq!(stats["game"], 0);
+    call(&controller, &dll, api::UI_PUMP_REMOVE);
+    assert!(
+        controller
+            .unload(&dll)
+            .unwrap_err()
+            .to_string()
+            .contains("pins DLL")
+    );
+    writeln!(host.0.stdin.as_mut().unwrap(), "quit").unwrap();
+    assert!(host.0.wait().unwrap().success());
+}
 fn exercise(ansi: bool, peek: bool) {
     let dll = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../target/i686-pc-windows-gnu/release/client_dll.dll")
@@ -167,8 +312,8 @@ fn exercise(ansi: bool, peek: bool) {
         assert_eq!(stats["pre"], 10);
         assert_eq!(stats["items"]["allocated"], 7);
         assert_eq!(stats["items"]["released"], 7);
-        assert_eq!(stats["items"]["bytes_allocated"], 6 * 0x88);
-        assert_eq!(stats["items"]["bytes_freed"], 6 * 0x88);
+        assert_eq!(stats["items"]["bytes_allocated"], 6 * 0xa8c);
+        assert_eq!(stats["items"]["bytes_freed"], 6 * 0xa8c);
         assert_eq!(stats["root"], 7);
         assert_eq!(stats["game"], 0);
     }
