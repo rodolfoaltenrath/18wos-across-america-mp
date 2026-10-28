@@ -66,6 +66,8 @@ pub const TRANSITION_READ: u32 = 46;
 /// Extend the installed passive transition observer with init/destroy block IATs.
 pub const UI_TRANSITION_BLOCKS: u32 = 47;
 pub const UI_TRANSITION_BLOCKS_FIXTURE: u32 = 48;
+pub const UI_TRANSITION_COMMANDS: u32 = 49;
+pub const UI_TRANSITION_COMMANDS_FIXTURE: u32 = 50;
 pub const ENGINE_ABI_VERSION: u32 = 3;
 /// Separate extension ABI; does not change the original Control v1 layout.
 #[repr(C)]

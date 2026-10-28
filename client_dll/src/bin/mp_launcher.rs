@@ -114,6 +114,8 @@ fn main() -> anyhow::Result<()> {
         TransitionAttach,
         /// Add passive init_eblock/destroy_eblock import hooks to the same trace.
         TransitionBlocks,
+        /// Observe command names at the profiled game handler, without arguments.
+        TransitionCommands,
         TransitionArm,
         TransitionStatus,
         /// Snapshot of the append-only capture, even while still armed.
@@ -356,6 +358,9 @@ fn main() -> anyhow::Result<()> {
                 EngineTask::DrawRemove => api::EngineControl::new(api::UI_DRAW_REMOVE),
                 EngineTask::TransitionAttach => api::EngineControl::new(api::UI_TRANSITION_ATTACH),
                 EngineTask::TransitionBlocks => api::EngineControl::new(api::UI_TRANSITION_BLOCKS),
+                EngineTask::TransitionCommands => {
+                    api::EngineControl::new(api::UI_TRANSITION_COMMANDS)
+                }
                 EngineTask::TransitionArm => api::EngineControl::new(api::TRANSITION_ARM),
                 EngineTask::TransitionStatus | EngineTask::TransitionReport => {
                     api::EngineControl::new(api::TRANSITION_STATUS)

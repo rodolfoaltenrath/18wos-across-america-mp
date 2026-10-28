@@ -24,6 +24,7 @@ pub struct Record {
     pub context: [u32; 8],
     pub returned: u32,
     pub models: [u32; 16],
+    pub command: [u8; 32],
 }
 impl Record {
     pub fn encode(&self, b: &mut EngineControl) {
@@ -39,6 +40,7 @@ impl Record {
         b.frames[4..12].copy_from_slice(&self.context);
         b.frames[12] = self.returned;
         b.frames[13..29].copy_from_slice(&self.models);
+        b.name[..32].copy_from_slice(&self.command);
         b.count_before = self.flushes;
         b.reserved = self.readable;
     }
@@ -56,13 +58,17 @@ impl Record {
             context: b.frames[4..12].try_into().unwrap(),
             returned: b.frames[12],
             models: b.frames[13..29].try_into().unwrap(),
+            command: b.name[..32].try_into().unwrap(),
         }
     }
     pub fn json(&self) -> serde_json::Value {
         let value = |i: usize| (self.readable & (1 << i) != 0).then_some(self.values[i]);
         let context = |i: usize| (self.readable & (1 << (8 + i)) != 0).then_some(self.context[i]);
         let block = (6..=9).contains(&self.kind);
-        serde_json::json!({"kind":match self.kind {1=>"init_enter",2=>"init_return",3=>"done_enter",4=>"done_return",5=>"first_draw",6=>"block_init_enter",7=>"block_init_return",8=>"destroy_request_enter",9=>"destroy_request_return",_=>"unknown"},"thread":self.thread,"caller":self.caller,"this":self.this,"argument":self.argument,"phase":(!block && self.kind != 5).then_some(self.argument as i32),"depth":self.depth,"flushes_seen":self.flushes,"scene":value(0),"physics":value(1),"first_model":value(2),"model_count":value(3),"readable":self.readable,
+        let command = (self.kind == 10 && self.readable & 32 != 0)
+            .then(|| crate::api::text(&self.command).ok())
+            .flatten();
+        serde_json::json!({"kind":match self.kind {1=>"init_enter",2=>"init_return",3=>"done_enter",4=>"done_return",5=>"first_draw",6=>"block_init_enter",7=>"block_init_return",8=>"destroy_request_enter",9=>"destroy_request_return",10=>"command_dispatch",_=>"unknown"},"command":command,"thread":self.thread,"caller":self.caller,"this":self.this,"argument":self.argument,"phase":(self.kind<=4).then_some(self.argument as i32),"depth":self.depth,"flushes_seen":self.flushes,"scene":value(0),"physics":value(1),"first_model":value(2),"model_count":value(3),"readable":self.readable,
         "observed_car":self.context[5],"block":block.then_some(self.argument),"block_data":context(0),"block_context":context(1),"block_strong":context(2),"block_residency":context(3),"block_access":context(4),"queue_words":[context(6),context(7)],"returned":matches!(self.kind,7|9).then_some(self.returned != 0),"models":(self.readable & 16 != 0).then(|| &self.models[..(self.values[3] as usize).min(16)]),"models_truncated":self.readable & 8 != 0 && self.values[3]>16})
     }
 }
@@ -79,6 +85,8 @@ pub struct Summary {
     pub block_init_calls: u32,
     pub destroy_requests: u32,
     pub blocks_installed: bool,
+    pub command_calls: u32,
+    pub commands_installed: bool,
 }
 impl Summary {
     pub fn decode(b: &EngineControl) -> Self {
@@ -94,6 +102,8 @@ impl Summary {
             block_init_calls: b.frames[0],
             destroy_requests: b.frames[1],
             blocks_installed: b.frames[2] != 0,
+            command_calls: b.frames[3],
+            commands_installed: b.frames[4] != 0,
         }
     }
 }

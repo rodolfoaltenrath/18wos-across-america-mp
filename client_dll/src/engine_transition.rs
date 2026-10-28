@@ -29,10 +29,11 @@ const SLOTS: [u32; 2] = [profile::CAR_VTABLE + 0x5c, profile::CAR_VTABLE + 0x60]
 const FUNCTIONS: [u32; 2] = [0x50f40, 0x515d0];
 static STATE: AtomicU32 = AtomicU32::new(0);
 static OWNER: AtomicU32 = AtomicU32::new(0);
-static SLOTS_AT: [AtomicUsize; 4] = [const { AtomicUsize::new(0) }; 4];
-static ORIGINALS: [AtomicUsize; 4] = [const { AtomicUsize::new(0) }; 4];
-static PROTECTION: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
-static CALLS: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
+static SLOTS_AT: [AtomicUsize; 5] = [const { AtomicUsize::new(0) }; 5];
+static ORIGINALS: [AtomicUsize; 5] = [const { AtomicUsize::new(0) }; 5];
+static PROTECTION: [AtomicU32; 5] = [const { AtomicU32::new(0) }; 5];
+static CALLS: [AtomicU32; 5] = [const { AtomicU32::new(0) }; 5];
+static ARGV_SITE: AtomicU32 = AtomicU32::new(0);
 static HOOKS: AtomicU32 = AtomicU32::new(0);
 static FIXTURE: AtomicBool = AtomicBool::new(false);
 static LAST_CAR: AtomicU32 = AtomicU32::new(0);
@@ -67,6 +68,7 @@ impl Trace {
                 context: [0; 8],
                 returned: 0,
                 models: [0; 16],
+                command: [0; 32],
             }; CAPACITY],
         }
     }
@@ -97,7 +99,7 @@ fn record(kind: u32, this: u32, argument: u32, caller: u32, depth: u32, returned
         ..Record::default()
     };
     let block = (6..=9).contains(&kind);
-    let car = if block {
+    let car = if block || kind == 10 {
         LAST_CAR.load(Ordering::Acquire)
     } else {
         this
@@ -147,6 +149,25 @@ fn record(kind: u32, this: u32, argument: u32, caller: u32, depth: u32, returned
             {
                 row.context[i] = u32::from_le_bytes(bytes);
                 row.readable |= 1 << (8 + i);
+            }
+        }
+    }
+    if kind == 10 {
+        // Copy ONLY argv[0]. Never inspect save names, paths or other arguments.
+        let mut pointer = [0; 4];
+        if read(argument, &mut pointer).is_ok() {
+            let at = u32::from_le_bytes(pointer);
+            for i in 0..32 {
+                if let Some(at) = at.checked_add(i as u32)
+                    && read(at, &mut row.command[i..i + 1]).is_ok()
+                {
+                    if row.command[i] == 0 {
+                        row.readable |= 32;
+                        break;
+                    }
+                } else {
+                    break;
+                }
             }
         }
     }
@@ -246,12 +267,37 @@ unsafe extern "C" fn block_impl(
     unsafe { SetLastError(error) };
     result
 }
-fn shims() -> [usize; 4] {
+#[unsafe(naked)]
+unsafe extern "C" fn argv_shim() -> *const *const u8 {
+    core::arch::naked_asm!("push ebp","mov ebp,esp","and esp,-16","sub esp,8","push dword ptr [ebp+4]","push ecx","call {implementation}","mov esp,ebp","pop ebp","ret",implementation=sym argv_impl);
+}
+unsafe extern "C" fn argv_impl(context: u32, caller: u32) -> *const *const u8 {
+    type Argv = unsafe extern "C" fn() -> *const *const u8;
+    let original: Argv = unsafe { std::mem::transmute(ORIGINALS[4].load(Ordering::Acquire)) };
+    // The original only reads a core global. No diagnostic precedes it.
+    let result = unsafe { original() };
+    let error = unsafe { GetLastError() };
+    if caller == ARGV_SITE.load(Ordering::Acquire) {
+        if unsafe { GetCurrentThreadId() } == OWNER.load(Ordering::Acquire) {
+            let depth = DEPTH.fetch_add(1, Ordering::AcqRel) + 1;
+            CALLS[4].fetch_add(1, Ordering::Relaxed);
+            record(10, context, result as u32, caller, depth, 0);
+            NEXT_DRAW.store(true, Ordering::Release);
+            DEPTH.fetch_sub(1, Ordering::AcqRel);
+        } else {
+            FOREIGN.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+    unsafe { SetLastError(error) };
+    result
+}
+fn shims() -> [usize; 5] {
     [
         init_shim as *const () as usize,
         done_shim as *const () as usize,
         block_init_shim as *const () as usize,
         destroy_request_shim as *const () as usize,
+        argv_shim as *const () as usize,
     ]
 }
 fn replace(index: usize, expected: usize, desired: usize) -> Result<(), String> {
@@ -433,6 +479,71 @@ pub fn install_blocks(thread: u32, b: &EngineControl) -> Result<(), String> {
     }
     Ok(())
 }
+pub fn install_commands(thread: u32, b: &EngineControl) -> Result<(), String> {
+    if STATE.load(Ordering::Acquire) != 1 || HOOKS.load(Ordering::Acquire) != 4 {
+        return Err("install block observation before command observation, exactly once".into());
+    }
+    if ACTIVE.load(Ordering::Acquire)
+        || DEPTH.load(Ordering::Acquire) != 0
+        || thread != OWNER.load(Ordering::Acquire)
+    {
+        return Err("install command observation before arming, on the owner thread".into());
+    }
+    let fixture = b.command == api::UI_TRANSITION_COMMANDS_FIXTURE;
+    if fixture != FIXTURE.load(Ordering::Acquire) {
+        return Err("transition fixture/game mode mismatch".into());
+    }
+    let process = Process::open(unsafe { GetCurrentProcessId() }).map_err(|e| e.to_string())?;
+    let modules = process.modules().map_err(|e| e.to_string())?;
+    let get = |name: &str| {
+        modules
+            .iter()
+            .find(|m| m.name.eq_ignore_ascii_case(name))
+            .ok_or_else(|| format!("{name} missing"))
+    };
+    let (slot, original, site) = if fixture {
+        let module = get("engine_fixture.exe")?;
+        executable(b.fixture[1], module)?;
+        executable(b.fixture[2], module)?;
+        (b.fixture[0], b.fixture[1], b.fixture[2])
+    } else {
+        let core = get("prism3d.exe")?;
+        let game = get("game.dll")?;
+        profile::verify_executable(std::path::Path::new(&core.path))?;
+        profile::verify_module(std::path::Path::new(&game.path))?;
+        let original = add(core, 0xe210)?;
+        let site = add(game, 0xd3596)?;
+        executable(original, core)?;
+        executable(site, game)?;
+        (add(game, 0x160930)?, original, site)
+    };
+    if slot == 0
+        || !slot.is_multiple_of(4)
+        || SLOTS_AT[..4]
+            .iter()
+            .any(|s| s.load(Ordering::Acquire) == slot as usize)
+    {
+        return Err("invalid or duplicate command slot".into());
+    }
+    let mut bytes = [0; 4];
+    process
+        .read(slot.into(), &mut bytes)
+        .map_err(|e| e.to_string())?;
+    if u32::from_le_bytes(bytes) != original {
+        return Err("command slot already modified or incompatible".into());
+    }
+    SLOTS_AT[4].store(slot as usize, Ordering::Release);
+    ORIGINALS[4].store(original as usize, Ordering::Release);
+    ARGV_SITE.store(site, Ordering::Release);
+    HOOKS.store(5, Ordering::Release);
+    if let Err(error) = replace(4, original as usize, argv_shim as *const () as usize) {
+        let rollback = remove();
+        return Err(format!(
+            "{error}; rollback={rollback:?}; reopen process before reinstalling"
+        ));
+    }
+    Ok(())
+}
 pub fn remove() -> Result<(), String> {
     if STATE.load(Ordering::Acquire) != 1 {
         return Ok(());
@@ -502,10 +613,12 @@ pub fn control(b: &mut EngineControl) -> Result<(), String> {
     b.count_before = CALLS[0].load(Ordering::Acquire);
     b.count_created = CALLS[1].load(Ordering::Acquire);
     b.count_after = FOREIGN.load(Ordering::Acquire);
-    b.frames[..3].copy_from_slice(&[
+    b.frames[..5].copy_from_slice(&[
         CALLS[2].load(Ordering::Acquire),
         CALLS[3].load(Ordering::Acquire),
-        u32::from(HOOKS.load(Ordering::Acquire) == 4 && STATE.load(Ordering::Acquire) == 1),
+        u32::from(HOOKS.load(Ordering::Acquire) >= 4 && STATE.load(Ordering::Acquire) == 1),
+        CALLS[4].load(Ordering::Acquire),
+        u32::from(HOOKS.load(Ordering::Acquire) == 5 && STATE.load(Ordering::Acquire) == 1),
     ]);
     b.reserved = trace.flags
         | u32::from(ACTIVE.load(Ordering::Acquire))
