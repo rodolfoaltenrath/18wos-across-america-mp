@@ -615,6 +615,26 @@ profundidade 0, desenha no passe do mundo) e o estado 12 (profundidade 1, não
 desenha). A recarga criou outra entidade. O slot original foi restaurado,
 conferido por leitura externa, e os hashes de originais/saves se mantiveram.
 
+### Primeiro caminhão de teste (`visual-*`)
+
+Com pump, render e draw instalados (nessa ordem), em partida carregada:
+
+```text
+engine visual-show --offset 400 0 0
+engine visual-status
+engine visual-hide
+engine visual-release
+```
+
+`visual-show` cria (uma vez) uma instância privada do `truck.psm` de IA na fila
+do loop e passa a desenhá-la logo após o desenho externo do caminhão do
+jogador, deslocada em eixos do mundo (centímetros) e com a mesma rotação.
+Interior, profundidade inesperada ou path/viewport nulos contam em `skipped`.
+Sem física, colisão, HUD ou inserção no mundo. `visual-release` só libera
+depois de ocultar, de ≥8 flushes e com o contador de acesso do item em zero;
+se recusar, repita após alguns frames. `stop`/`pump-remove`/`render-remove`
+recusam enquanto a instância existir, e `draw-remove` enquanto estiver visível.
+
 Para anotar uma desmontagem com os nomes de bindings recuperados:
 
 ```text

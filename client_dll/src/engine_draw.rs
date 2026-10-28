@@ -43,6 +43,8 @@ static DEPTH: AtomicU32 = AtomicU32::new(0);
 static LOST: AtomicBool = AtomicBool::new(false);
 /// Armed or capturing; idle draws never touch the trace lock.
 static ACTIVE: AtomicBool = AtomicBool::new(false);
+/// 1 game, 2 own fixture; selects the test visual mode.
+static MODE: AtomicU32 = AtomicU32::new(0);
 static TRACE: Mutex<Trace> = Mutex::new(Trace::new());
 struct Trace {
     generation: u32,
@@ -199,6 +201,7 @@ unsafe extern "C" fn draw_impl(this: *mut c_void, caller: u32) {
     if owner {
         if depth == 1 {
             record(2, this as u32, caller);
+            crate::engine_visual::after_car_draw(this as u32, globals());
         }
         DEPTH.fetch_sub(1, Ordering::AcqRel);
     }
@@ -233,6 +236,13 @@ fn replace(expected: usize, desired: usize) -> Result<(), String> {
     exchanged
         .map(|_| ())
         .map_err(|_| "draw slot owner changed; refusing overwrite".into())
+}
+/// Installed observer mode: Some(true) fixture, Some(false) game.
+pub(crate) fn mode() -> Option<bool> {
+    (STATE.load(Ordering::Acquire) == 1).then(|| MODE.load(Ordering::Acquire) == 2)
+}
+pub(crate) fn globals() -> [u32; 4] {
+    GLOBALS.each_ref().map(|g| g.load(Ordering::Acquire))
 }
 pub fn install(thread: u32, b: &EngineControl) -> Result<(), String> {
     if STATE.load(Ordering::Acquire) != 0 {
@@ -293,6 +303,14 @@ pub fn install(thread: u32, b: &EngineControl) -> Result<(), String> {
     for (g, v) in GLOBALS.iter().zip(globals) {
         g.store(v, Ordering::Release);
     }
+    MODE.store(
+        if b.command == api::UI_DRAW_FIXTURE {
+            2
+        } else {
+            1
+        },
+        Ordering::Release,
+    );
     STATE.store(1, Ordering::Release);
     if let Err(error) = replace(original as usize, draw_shim as *const () as usize) {
         let cleanup = remove();
@@ -301,6 +319,9 @@ pub fn install(thread: u32, b: &EngineControl) -> Result<(), String> {
     Ok(())
 }
 pub fn remove() -> Result<(), String> {
+    if crate::engine_visual::shown() {
+        return Err("hide the test visual before removing the draw observer".into());
+    }
     if STATE.load(Ordering::Acquire) != 1 {
         return Ok(());
     }

@@ -24,7 +24,7 @@ impl Drop for Instance {
         unsafe { (self.free)(self.pointer) };
     }
 }
-fn bindings(
+pub(super) fn bindings(
     process: &Process,
     block: &EngineControl,
     fixture: bool,
@@ -36,12 +36,16 @@ fn bindings(
             .find(|m| m.name.eq_ignore_ascii_case(name))
             .ok_or_else(|| format!("{name} missing"))
     };
-    let addresses = if fixture && block.command == api::PRIVATE_INSTANCE_FIXTURE {
+    let addresses = if fixture
+        && matches!(
+            block.command,
+            api::PRIVATE_INSTANCE_FIXTURE | api::VISUAL_SHOW_FIXTURE
+        ) {
         let owner = get("engine_fixture.exe")?;
         executable(block.fixture[3], owner)?;
         executable(block.fixture[4], owner)?;
         [block.fixture[3], block.fixture[4], block.fixture[5]]
-    } else if !fixture && block.command == api::PRIVATE_INSTANCE {
+    } else if !fixture && matches!(block.command, api::PRIVATE_INSTANCE | api::VISUAL_SHOW) {
         let psm = get("psm.dll")?;
         let core = get("prism3d.exe")?;
         let engine = get("p3shared.dll")?;
@@ -125,11 +129,11 @@ fn counters(process: &Process, at: u32) -> Result<[u32; 3], String> {
         value(process, offset(at, 0x58)?)?,
     ])
 }
-struct Checked {
+pub(super) struct Checked {
     size: u32,
     shaders: BTreeMap<u32, (u32, u32)>,
 }
-fn check_instance(
+pub(super) fn check_instance(
     process: &Process,
     at: u32,
     descriptor: u32,

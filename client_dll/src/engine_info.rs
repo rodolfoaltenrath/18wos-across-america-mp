@@ -57,7 +57,7 @@ pub(super) fn bindings(
     let (allocate, release, head) = if fixture
         && matches!(
             block.command,
-            api::PRIVATE_INFO_FIXTURE | api::PRIVATE_INSTANCE_FIXTURE
+            api::PRIVATE_INFO_FIXTURE | api::PRIVATE_INSTANCE_FIXTURE | api::VISUAL_SHOW_FIXTURE
         ) {
         let owner = modules
             .iter()
@@ -66,7 +66,12 @@ pub(super) fn bindings(
         executable(block.fixture[0], owner)?;
         executable(block.fixture[1], owner)?;
         (block.fixture[0], block.fixture[1], block.fixture[2])
-    } else if !fixture && matches!(block.command, api::PRIVATE_INFO | api::PRIVATE_INSTANCE) {
+    } else if !fixture
+        && matches!(
+            block.command,
+            api::PRIVATE_INFO | api::PRIVATE_INSTANCE | api::VISUAL_SHOW
+        )
+    {
         let audit = crate::inspection::resources::inspect(process).map_err(|e| e.to_string())?;
         if !audit.psm_exports_match {
             return Err("PSM resource bindings do not match the verified profile".into());

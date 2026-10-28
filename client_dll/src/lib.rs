@@ -39,6 +39,8 @@ mod engine_phase;
 #[cfg(all(windows, target_arch = "x86"))]
 mod engine_render;
 pub mod engine_values;
+#[cfg(all(windows, target_arch = "x86"))]
+mod engine_visual;
 #[cfg(windows)]
 pub mod inspection;
 mod memory;

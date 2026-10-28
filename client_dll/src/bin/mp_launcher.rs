@@ -60,6 +60,18 @@ fn main() -> anyhow::Result<()> {
         DrawStatus,
         DrawReport,
         DrawRemove,
+        /// Retained truck instance drawn after the player's exterior draw; needs draw+render.
+        VisualShow {
+            #[arg(long, default_value = "models/ai/truck/models/truck.psm")]
+            model: String,
+            /// World offset in game units (centimeters): x y z.
+            #[arg(long, num_args = 3, allow_hyphen_values = true, default_values_t = [400.0f32, 0.0, 0.0])]
+            offset: Vec<f32>,
+        },
+        VisualHide,
+        /// Frees the instance only after queued draws were flushed.
+        VisualRelease,
+        VisualStatus,
         PhaseProbe,
         /// Private container-backed actor, immediately released; never inserted.
         ItemCycle {
@@ -166,6 +178,16 @@ fn main() -> anyhow::Result<()> {
                     api::EngineControl::new(api::DRAW_STATUS)
                 }
                 EngineTask::DrawRemove => api::EngineControl::new(api::UI_DRAW_REMOVE),
+                EngineTask::VisualShow { model, offset } => {
+                    let mut b = api::EngineControl::new(api::VISUAL_SHOW);
+                    api::put(&mut b.name, &model).map_err(anyhow::Error::msg)?;
+                    [b.count_before, b.count_created, b.count_after] =
+                        [offset[0], offset[1], offset[2]].map(f32::to_bits);
+                    b
+                }
+                EngineTask::VisualHide => api::EngineControl::new(api::VISUAL_HIDE),
+                EngineTask::VisualRelease => api::EngineControl::new(api::VISUAL_RELEASE),
+                EngineTask::VisualStatus => api::EngineControl::new(api::VISUAL_STATUS),
                 EngineTask::Trace => api::EngineControl::new(api::UI_TRACE),
                 EngineTask::PumpAttach => api::EngineControl::new(api::UI_PUMP_ATTACH),
                 EngineTask::PumpStatus => api::EngineControl::new(api::UI_PUMP_STATUS),
@@ -245,6 +267,14 @@ fn main() -> anyhow::Result<()> {
                         &serde_json::json!({"summary":summary,"records":records})
                     )?
                 );
+                return Ok(());
+            }
+            if matches!(
+                block.command,
+                api::VISUAL_SHOW | api::VISUAL_HIDE | api::VISUAL_RELEASE | api::VISUAL_STATUS
+            ) {
+                let visual = client_dll::draw_observation::Visual::decode(&block);
+                println!("{}", serde_json::to_string_pretty(&visual)?);
                 return Ok(());
             }
             if block.command == api::DRAW_STATUS {

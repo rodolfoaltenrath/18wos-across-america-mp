@@ -392,7 +392,10 @@ pub fn control(block: &mut EngineControl) -> Result<(), String> {
         | api::PRIVATE_INFO
         | api::PRIVATE_INFO_FIXTURE
         | api::PRIVATE_INSTANCE
-        | api::PRIVATE_INSTANCE_FIXTURE => {
+        | api::PRIVATE_INSTANCE_FIXTURE
+        | api::VISUAL_SHOW
+        | api::VISUAL_SHOW_FIXTURE
+        | api::VISUAL_RELEASE => {
             crate::engine_phase::dispatch(*block, WINDOW.load(Ordering::Acquire) as HWND).map(
                 |response| {
                     *block = response;
@@ -407,6 +410,8 @@ pub fn control(block: &mut EngineControl) -> Result<(), String> {
         }
         #[cfg(target_arch = "x86")]
         api::DRAW_ARM | api::DRAW_STATUS | api::DRAW_READ => crate::engine_draw::control(block),
+        #[cfg(target_arch = "x86")]
+        api::VISUAL_HIDE | api::VISUAL_STATUS => crate::engine_visual::control(block),
         api::UI_DETACH => detach_locked(),
         api::UI_PROBE
         | api::UI_REGISTRY

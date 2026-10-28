@@ -388,11 +388,17 @@ pub fn install(thread: u32, b: &EngineControl) -> Result<(), String> {
     }
     Ok(())
 }
+pub(crate) fn installed() -> bool {
+    STATE.load(Ordering::Acquire) == 1
+}
 /// Owner-thread flush count, used by other passive probes to order their events.
 pub(crate) fn flush_calls() -> u32 {
     FLUSHES.load(Ordering::Acquire)
 }
 pub fn remove() -> Result<(), String> {
+    if crate::engine_visual::allocated() {
+        return Err("release the test visual before removing the render observer".into());
+    }
     if STATE.load(Ordering::Acquire) != 1 {
         return Ok(());
     }

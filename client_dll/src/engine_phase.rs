@@ -181,6 +181,9 @@ pub fn install(thread: u32, fixture_slot: Option<u32>) -> Result<(), String> {
     replace(slot, original, peek_shim as *const () as usize)
 }
 pub fn remove() -> Result<(), String> {
+    if crate::engine_visual::allocated() {
+        return Err("release the test visual before removing the pump".into());
+    }
     TASKS.cancel_pending()?;
     if TASKS.stats().1 != 0 {
         return Err("phase operation still running; dispatcher and module retained".into());

@@ -55,6 +55,10 @@ fn main() -> anyhow::Result<()> {
     #[cfg(not(target_arch = "x86"))]
     let (draw_descriptors, draw_car) = ([0u32; 6], 0u32);
     #[cfg(target_arch = "x86")]
+    let visual_descriptors = fixture_draw::Fixture::visual_descriptors();
+    #[cfg(not(target_arch = "x86"))]
+    let visual_descriptors = [0u32; 5];
+    #[cfg(target_arch = "x86")]
     let actor = fixture_actor::Fixture::new();
     #[cfg(target_arch = "x86")]
     let bindings = actor.bindings();
@@ -154,7 +158,7 @@ fn main() -> anyhow::Result<()> {
     ensure!(!window.is_null(), "cannot create fixture window");
     println!(
         "{}",
-        serde_json::json!({"pid":unsafe{GetCurrentProcessId()},"window":window as usize,"thread":unsafe{GetCurrentThreadId()}, "peek_slot": peek_slot, "factory": bindings, "item_descriptors": item_descriptors, "model_definitions": model_definitions, "model_setter": model_setter,"info_descriptors":info_descriptors,"instance_descriptors":instance_descriptors,"render_descriptors":render_descriptors,"draw_descriptors":draw_descriptors,"draw_car":draw_car})
+        serde_json::json!({"pid":unsafe{GetCurrentProcessId()},"window":window as usize,"thread":unsafe{GetCurrentThreadId()}, "peek_slot": peek_slot, "factory": bindings, "item_descriptors": item_descriptors, "model_definitions": model_definitions, "model_setter": model_setter,"info_descriptors":info_descriptors,"instance_descriptors":instance_descriptors,"render_descriptors":render_descriptors,"draw_descriptors":draw_descriptors,"draw_car":draw_car,"visual_descriptors":visual_descriptors})
     );
     std::io::stdout().flush()?;
     let address = window as usize;
@@ -240,6 +244,10 @@ fn main() -> anyhow::Result<()> {
         #[cfg(target_arch = "x86")]
         if let Some(renderer) = renderer.as_mut() {
             renderer.frame();
+        }
+        #[cfg(target_arch = "x86")]
+        if let Some(drawer) = drawer.as_mut() {
+            drawer.consume();
         }
         if peek {
             let function: unsafe extern "system" fn(

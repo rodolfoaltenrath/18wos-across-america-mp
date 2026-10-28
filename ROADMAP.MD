@@ -1272,6 +1272,53 @@ Não comprovado: o significado exato de 6/12 (espelho/sombra/outro passe), a
 convenção da matriz de câmera, interior (estado 4) e caminhões de IA (outro
 tipo ou ausentes nesta cena).
 
+### M4 — Primeiro visual de teste: implementação e bancada — 28/10/2026
+
+**Escala:** o `truck.psm` de IA (extraído localmente em `target/analysis/`,
+não versionado) tem caixa de ~250 × 290 × 680 unidades, ou 2,5 × 2,9 × 6,8 m:
+**a unidade do mundo é o centímetro**. A câmera estava a ~324 cm do corpo.
+
+**Entregue:** `engine visual-show [--model M] [--offset X Y Z]`, `visual-hide`,
+`visual-release`, `visual-status` (comandos 35–39, ABI v3/664 preservada).
+Módulo `engine_visual`:
+
+- Criação na fila do loop (`visual-show`): reaproveita os contratos validados
+  de info/instância (`psm_alloc_info`, `psm_alloc_inst(info,NULL,0,1)` e
+  `check_instance`), sem skins (shader de fallback). Restrito a
+  `models/ai/truck/models/truck.psm` no jogo. Confere exports e slots do jogo de
+  `psm_draw` (`psm+0x6a10`, slot `+0x160ba4`) e `gfx_push/pop/translate/qrotate`
+  (núcleo `+0x2de0/+0x2eb0/+0x30e0/+0x3140`, slots `+0x16104c/+0x160a98/+0x160fd8/
+  +0x160fe4`). Exige as sondas de draw e de render no mesmo modo.
+- Desenho: dentro da sonda do `draw`, depois do original, na mesma thread.
+  Somente se o estado não for 4/9/12 (o mesmo ramo externo do jogo), com a pilha
+  world na profundidade 0, path/info/viewport não nulos e o corpo legível. Faz
+  `gfx_push → gfx_translate(pos+offset) → gfx_qrotate(quat do jogador) →
+  psm_draw(item,1,-1) → gfx_pop` e confere o topo da pilha depois; divergência
+  marca `fault` e para de desenhar. Offset em eixos do mundo, padrão 400 cm em
+  X, limite 100 m. `LastError` é preservado.
+- Liberação na fila do loop (`visual-release`): exige o visual oculto, pelo
+  menos 8 flushes desde o último desenho/ocultação e contadores do item de volta
+  a `[1,1,0]`. O `+0x58` (acesso) é o que `psm_draw` incrementa e o consumo do
+  passe devolve. Senão, recusa e mantém a instância.
+- Guardas: `draw-remove` recusa com o visual exibido; `render-remove`,
+  `pump-remove` e `stop` recusam com a instância alocada.
+
+**Bancada própria:** a fixture de draw ganhou profundidade/estado selecionáveis
+e `psm_draw`/`gfx_*` falsos sobre a mesma pilha. O desenho falso incrementa
+`+0x58` e o "flush" o consome. Passaram: exigência das sondas e do modo,
+offset fora do limite, nada desenhado na profundidade 2 nem no interior (só
+`skipped`), desenho na profundidade 0 com pilha +1, pose/offset/quaternion
+corretos, item e cor/cull esperados. Também passaram as guardas de remoção,
+`release` recusado com o visual exibido e com acesso pendente após ≥8 flushes,
+liberação depois do consumo (instâncias criadas = liberadas), recriação,
+`visual-hide` pela CLI e liberação depois de assentar. 32 testes x86 e 38
+nativos, com Clippy e formatação limpos.
+
+**Partida:** pendente, com o proprietário. Riscos ainda abertos: visibilidade
+padrão das partes da instância nova, fallback de shader, altura do corpo em
+relação ao solo, e se a recarga do save invalida recursos PSM retidos (por
+isso o primeiro teste oculta e libera antes de recarregar).
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -1807,7 +1854,9 @@ e [seleção de toolchain com rustup](https://rust-lang.github.io/rustup/overrid
 
 ## 9. Registro de passagem para a próxima etapa
 
-**Próxima entrega:** primeiro visual de teste. A sonda `draw-*` passou na
+**Próxima entrega:** validar `visual-*` na partida (implementado; bancada
+passou): ver o caminhão, dirigir, ocultar, liberar, depois recarregar e repetir.
+Contexto anterior — a sonda `draw-*` passou na
 partida (parado, movimento, menu/recarga): o `draw` de `actors.car` com estado
 6, profundidade 0, enfileira no passe do mundo esvaziado em `game+0xf3a24`.
 Plano: após o `draw` original **somente com estado 6**, conferir profundidade

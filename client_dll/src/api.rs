@@ -44,6 +44,14 @@ pub const UI_DRAW_REMOVE: u32 = 31;
 pub const DRAW_ARM: u32 = 32;
 pub const DRAW_STATUS: u32 = 33;
 pub const DRAW_READ: u32 = 34;
+/// Test visual: loop-queue create/show and release; remote hide/status.
+/// Show carries the model in name and the world offset as f32 bits in
+/// count_before/created/after; the fixture also passes draw functions in frames.
+pub const VISUAL_SHOW: u32 = 35;
+pub const VISUAL_SHOW_FIXTURE: u32 = 36;
+pub const VISUAL_HIDE: u32 = 37;
+pub const VISUAL_RELEASE: u32 = 38;
+pub const VISUAL_STATUS: u32 = 39;
 pub const ENGINE_ABI_VERSION: u32 = 3;
 /// Separate extension ABI; does not change the original Control v1 layout.
 #[repr(C)]

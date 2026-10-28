@@ -114,8 +114,70 @@ impl Summary {
         }
     }
 }
+/// Test visual status, carried in existing fields of the v3 block.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
+pub struct Visual {
+    pub state: u32,
+    pub shown: u32,
+    pub fault: u32,
+    pub item: u32,
+    pub drawn: u32,
+    pub skipped: u32,
+    /// Item access counter (+0x58); u32::MAX when unreadable.
+    pub access: u32,
+    pub last_draw_flush: u32,
+    pub flushes: u32,
+    pub offset: [f32; 3],
+}
+impl Visual {
+    pub fn encode(&self, b: &mut EngineControl) {
+        b.object_size = self.state;
+        b.reserved = self.shown | (self.fault << 1);
+        b.entity = self.item;
+        b.count_before = self.drawn;
+        b.count_created = self.skipped;
+        b.count_after = self.access;
+        b.cycles = self.last_draw_flush;
+        b.registry_count = self.flushes;
+        b.object_vtable = self.offset[0].to_bits();
+        b.object_destructor = self.offset[1].to_bits();
+        b.constructor = self.offset[2].to_bits();
+    }
+    pub fn decode(b: &EngineControl) -> Self {
+        Self {
+            state: b.object_size,
+            shown: b.reserved & 1,
+            fault: b.reserved >> 1,
+            item: b.entity,
+            drawn: b.count_before,
+            skipped: b.count_created,
+            access: b.count_after,
+            last_draw_flush: b.cycles,
+            flushes: b.registry_count,
+            offset: [b.object_vtable, b.object_destructor, b.constructor].map(f32::from_bits),
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn visual_status_roundtrip() {
+        let v = super::Visual {
+            state: 1,
+            shown: 1,
+            fault: 1,
+            item: 0x1234,
+            drawn: 9,
+            skipped: 2,
+            access: 1,
+            last_draw_flush: 40,
+            flushes: 48,
+            offset: [400.0, 0.0, -1.5],
+        };
+        let mut b = crate::api::EngineControl::new(40);
+        v.encode(&mut b);
+        assert_eq!(super::Visual::decode(&b), v);
+    }
     use super::*;
     #[test]
     fn stack_depth_pose_and_matrix_bits_roundtrip() {

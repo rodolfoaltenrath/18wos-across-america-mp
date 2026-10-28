@@ -170,9 +170,12 @@ chamado de `game+0xf3785`; estados alternados 6 (profundidade 0, desenha) e 12
 (profundidade 1, não desenha); o passe do mundo é esvaziado em `+0xf3a24`.
 A recarga recria a entidade do jogador. Slots restaurados por leitura externa,
 hashes preservados; DLL fixada até o proprietário fechar o jogo.
-Próximo bloco: draw ativo de teste após o `draw` original só no estado 6,
-conferindo profundidade/path/viewport e liberando a instância somente após um
-flush posterior completo do mundo.
+Unidade do mundo = centímetro (caixa do truck.psm ~250×290×680).
+`engine visual-show/hide/release/status` (comandos 35–39) está implementado:
+instância retida e desenhada após o `draw` externo na profundidade 0, liberada
+só oculta, após ≥8 flushes e com o item em `[1,1,0]`. A bancada passou
+(32 x86, 38 nativos). Próximo bloco: validar no jogo com o proprietário
+(mostrar, dirigir, ocultar, liberar; recarregar só depois de liberar).
 `psm_draw` põe protos na fila e aumenta referências de pacotes: não desenhar e
 liberar a instância imediatamente sem comprovar o consumo desses recursos.
 Não refazer instância/descritor/setter/lifetime sem necessidade concreta.
