@@ -139,18 +139,37 @@ fn session_commands_compose_start_status_and_safe_stop() {
     assert_eq!(status["remotes"][0]["player_id"], 3);
     assert_eq!(status["visual"]["target"], u32::MAX);
     assert!(status["visual"]["drawn"].as_u64().unwrap() > 0);
+    let prepared = launcher(&["session-prepare-load", "--timeout", "10"]);
+    assert!(prepared.status.success(), "{prepared:?}");
+    let prepared: serde_json::Value = serde_json::from_slice(&prepared.stdout).unwrap();
+    assert_eq!(prepared["released"], true);
+    let paused = launcher(&["session-status"]);
+    assert!(paused.status.success());
+    let paused: serde_json::Value = serde_json::from_slice(&paused.stdout).unwrap();
+    assert_eq!(paused["visual"]["state"], 0);
+    assert_eq!(paused["client"]["status"], 1);
+    // Simulate loading only after proving that no visual resource is retained.
+    writeln!(host.0.stdin.as_mut().unwrap(), "draw-respawn").unwrap();
+    line.clear();
+    output.read_line(&mut line).unwrap();
+    assert_eq!(line.trim(), "armed");
     let stopped = launcher(&["session-stop", "--timeout", "10", "--verify", backup_path]);
     assert!(stopped.status.success(), "{stopped:?}");
     let stopped: serde_json::Value = serde_json::from_slice(&stopped.stdout).unwrap();
-    assert_eq!(stopped["released"], true);
+    assert_eq!(stopped["released"], false);
     assert_eq!(stopped["client_status"], 2);
     assert_eq!(stopped["files"]["unchanged"], 2);
+    // The backed-up files must remain verifiable after the target has exited.
+    writeln!(host.0.stdin.as_mut().unwrap(), "quit").unwrap();
+    assert!(host.0.wait().unwrap().success());
+    let verified = launcher(&["session-verify", "--backup", backup_path]);
+    assert!(verified.status.success(), "{verified:?}");
+    let verified: serde_json::Value = serde_json::from_slice(&verified.stdout).unwrap();
+    assert_eq!(verified["unchanged"], 2);
     // A changed save is reported; the backup copy is kept for restoration.
     std::fs::write(saves.join("a.sav"), b"changed").unwrap();
     let changed = launcher(&["session-verify", "--backup", backup_path]);
     assert!(!changed.status.success());
     assert!(String::from_utf8_lossy(&changed.stderr).contains("a.sav"));
     assert_eq!(std::fs::read(backup.join("saves/a.sav")).unwrap(), b"first");
-    writeln!(host.0.stdin.as_mut().unwrap(), "quit").unwrap();
-    assert!(host.0.wait().unwrap().success());
 }

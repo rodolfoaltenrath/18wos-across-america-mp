@@ -42,6 +42,9 @@ static OWNER: AtomicU32 = AtomicU32::new(0);
 static INVALID: AtomicBool = AtomicBool::new(false);
 static RETAIN: AtomicBool = AtomicBool::new(false);
 static SHADER_CALLS: AtomicU32 = AtomicU32::new(0);
+static LIGHT_CALLS: AtomicU32 = AtomicU32::new(0);
+static SCENE: AtomicU32 = AtomicU32::new(0);
+static LIGHT_INVALID: AtomicBool = AtomicBool::new(false);
 #[derive(Default)]
 struct Drawn {
     calls: u32,
@@ -63,6 +66,7 @@ static LAST: Mutex<([f32; 3], [f32; 4])> = Mutex::new(([0.0; 3], [0.0; 4]));
 pub struct Fixture {
     page: *mut c_void,
     cars: [Words<128>; 2],
+    _scene: Words<1>,
     physics: Words<256>,
     body: Words<16>,
     world: Words<STACK_WORDS>,
@@ -83,7 +87,10 @@ impl Fixture {
         unsafe {
             page.cast::<usize>()
                 .add(SLOT)
-                .write(draw as *const () as usize)
+                .write(draw as *const () as usize);
+            page.cast::<usize>()
+                .add(0x48 / 4)
+                .write(get_light as *const () as usize);
         };
         let mut old = 0;
         assert_ne!(
@@ -102,6 +109,12 @@ impl Fixture {
             car[0].store(page as u32, Ordering::Release);
             car[0x1d0 / 4].store(address(&physics), Ordering::Release);
             slot.store(address(car), Ordering::Release);
+        }
+        let scene = words::<1>();
+        scene[0].store(page as u32, Ordering::Release);
+        SCENE.store(address(&scene), Ordering::Release);
+        for car in &cars {
+            car[0x84 / 4].store(address(&scene), Ordering::Release);
         }
         physics[0x3e4 / 4].store(address(&body), Ordering::Release);
         body[0x14 / 4 + 3].store(1f32.to_bits(), Ordering::Release);
@@ -126,6 +139,7 @@ impl Fixture {
             page,
             camera_head: Box::new(AtomicU32::new(address(&camera))),
             cars,
+            _scene: scene,
             physics,
             body,
             world,
@@ -146,7 +160,7 @@ impl Fixture {
         ]
     }
     /// psm_draw, gfx_push, gfx_pop, gfx_translate, gfx_qrotate, psm_set_shader.
-    pub fn visual_descriptors() -> [u32; 6] {
+    pub fn visual_descriptors() -> [u32; 8] {
         [
             psm_draw as *const () as u32,
             push as *const () as u32,
@@ -154,6 +168,8 @@ impl Fixture {
             translate as *const () as u32,
             qrotate as *const () as u32,
             set_shader as *const () as u32,
+            set_light as *const () as u32,
+            get_light as *const () as u32,
         ]
     }
     pub fn car(&self) -> u32 {
@@ -164,6 +180,14 @@ impl Fixture {
         let depth = DEPTH.load(Ordering::Acquire);
         for car in &self.cars {
             car[0x1e8 / 4].store(STATE.load(Ordering::Acquire) << 8, Ordering::Release);
+            car[0x84 / 4].store(
+                if LIGHT_INVALID.load(Ordering::Acquire) {
+                    0
+                } else {
+                    SCENE.load(Ordering::Acquire)
+                },
+                Ordering::Release,
+            );
         }
         self.body[0x30 / 4].store((self.frame as f32).to_bits(), Ordering::Release);
         self.physics[0x3e4 / 4].store(
@@ -222,6 +246,8 @@ impl Drop for Fixture {
 pub fn command(line: &str) -> bool {
     match line {
         "draw-invalid" => INVALID.store(true, Ordering::Release),
+        "draw-light-invalid" => LIGHT_INVALID.store(true, Ordering::Release),
+        "draw-light-valid" => LIGHT_INVALID.store(false, Ordering::Release),
         "draw-valid" => INVALID.store(false, Ordering::Release),
         "draw-foreign" => unsafe { call(CAR.load(Ordering::Acquire)) },
         "draw-respawn" => {
@@ -246,7 +272,7 @@ pub fn command(line: &str) -> bool {
             let d = DRAWN.lock().unwrap();
             println!(
                 "{}",
-                serde_json::json!({"calls":d.calls,"item":d.item,"depth":d.depth,"position":d.position,"quaternion":d.quaternion,"pending":d.pending.len(),"shader_calls":SHADER_CALLS.load(Ordering::Acquire)})
+                serde_json::json!({"calls":d.calls,"item":d.item,"depth":d.depth,"position":d.position,"quaternion":d.quaternion,"pending":d.pending.len(),"shader_calls":SHADER_CALLS.load(Ordering::Acquire),"light_calls":LIGHT_CALLS.load(Ordering::Acquire)})
             );
             return true;
         }
@@ -294,6 +320,15 @@ unsafe extern "C" fn qrotate(q: *const f32) {
 unsafe extern "C" fn psm_draw(item: *mut c_void, cull: u32, color: u32) {
     owner();
     assert_eq!((cull, color), (1, u32::MAX));
+    if SHADER_CALLS.load(Ordering::Acquire) != 0 {
+        let data = unsafe { *item.cast::<u32>().add(2) as *const u32 };
+        let callback: unsafe extern "C" fn(*mut c_void) -> *mut c_void =
+            unsafe { std::mem::transmute(*data.add(0x60 / 4) as usize) };
+        assert_eq!(
+            unsafe { callback(*data.add(0x5c / 4) as *mut c_void) } as usize,
+            0x1822
+        );
+    }
     let (position, quaternion) = *LAST.lock().unwrap();
     let mut d = DRAWN.lock().unwrap();
     d.calls += 1;
@@ -316,4 +351,22 @@ unsafe extern "C" fn set_shader(
     SHADER_CALLS.fetch_add(1, Ordering::AcqRel);
     // A borrowed, non-null item handle is all the caller inspects.
     item
+}
+unsafe extern "C" fn set_light(
+    item: *mut c_void,
+    callback: Option<unsafe extern "C" fn(*mut c_void) -> *mut c_void>,
+    context: *mut c_void,
+) {
+    owner();
+    let data = unsafe { *item.cast::<u32>().add(2) as *mut u32 };
+    unsafe {
+        *data.add(0x60 / 4) = callback.map_or(0, |f| f as usize as u32);
+        *data.add(0x5c / 4) = context as u32;
+    }
+}
+unsafe extern "C" fn get_light(context: *mut c_void) -> *mut c_void {
+    owner();
+    assert_eq!(context as u32, SCENE.load(Ordering::Acquire));
+    LIGHT_CALLS.fetch_add(1, Ordering::AcqRel);
+    0x1822usize as *mut c_void
 }

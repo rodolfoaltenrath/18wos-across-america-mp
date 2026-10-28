@@ -34,6 +34,9 @@ pub(super) fn executable(at: u32, owner: &Module) -> Result<(), String> {
     if u64::from(at) < owner.base || u64::from(at) - owner.base >= owner.size {
         return Err("factory callback outside expected module".into());
     }
+    executable_memory(at)
+}
+pub(super) fn executable_memory(at: u32) -> Result<(), String> {
     let mut region: MEMORY_BASIC_INFORMATION = unsafe { std::mem::zeroed() };
     if unsafe {
         VirtualQuery(

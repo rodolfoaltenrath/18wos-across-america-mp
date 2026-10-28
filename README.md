@@ -25,6 +25,10 @@ passou com 41 testes x86 e 47 nativos, Clippy e formatação.
 Textura, recarga automática com instância
 retida e movimento pela rede ainda aguardam teste no jogo, primeiro com eco
 num PC e depois na LAN entre dois PCs. Ainda não há multiplayer LAN validado.
+O primeiro teste com eco já desenhou poses recebidas, mas o usuário relatou
+material preto e atraso; carregar um save com o visual retido fechou o jogo.
+A recarga automática permanece sem validação real. Ver o procedimento abaixo:
+liberar o visual antes do carregamento, até resolver o lifetime na transição.
 
 O plano completo, os critérios de conclusão e o procedimento para continuar em
 outro computador estão em [ROADMAP.MD](ROADMAP.MD). As orientações de autonomia
@@ -678,6 +682,10 @@ jogo, carregue o save e deixe a janela em primeiro plano. Em outro terminal:
 multiplayer_server --bind 0.0.0.0:39000
 mp_launcher.exe --pid PID --dll CAMINHO\client_dll.dll session-start --server IP:39000 --backup target\analysis\sessao-NOVA
 mp_launcher.exe --pid PID --dll CAMINHO\client_dll.dll session-status
+mp_launcher.exe --pid PID --dll CAMINHO\client_dll.dll session-prepare-load
+# Somente após prepared=true: carregar um save existente no jogo.
+# Depois de voltar à partida:
+mp_launcher.exe --pid PID --dll CAMINHO\client_dll.dll engine visual-show --player all --offset 400 0 0 --shader models/ai/truck/shaders/truck.shd
 mp_launcher.exe --pid PID --dll CAMINHO\client_dll.dll session-stop --verify target\analysis\sessao-NOVA
 ```
 
@@ -688,6 +696,12 @@ e o SHA-256 dos cinco originais e dos saves. `session-status` lista os IDs dos
 remotos. `session-stop` só termina depois de liberar o visual com segurança
 (mantenha a janela em foco), remove as sondas e confere os slots e os arquivos.
 Depois disso, feche o jogo normalmente: a DLL fica fixada até ele encerrar.
+`session-prepare-load` oculta e libera a instância com as mesmas guardas da
+parada, mantendo rede e sondas. Aguarde `prepared=true` antes de abrir/carregar
+o save. A primeira tentativa de reload com a instância retida terminou em
+violação de acesso; detectar a nova entidade depois da recarga não protege os
+recursos durante a destruição do mundo antigo. Este procedimento é um contorno
+para investigar a transição, não uma correção comprovada da recarga automática.
 Para testar num só PC, inicie o servidor com `--echo`: ele também devolve a
 cada cliente a própria pose como o jogador `1000000000 + id`. Com
 `session-start --server 127.0.0.1:39000 --offset 400 0 0`, o seu caminhão
@@ -709,15 +723,22 @@ um com sua sessão apontando para o mesmo servidor.
   shader do `car.def` de IA a todas as partes via `psm_set_shader`.
   `session-start` faz isso por padrão (`--no-skin` mantém o fallback); o status
   informa `skinned_parts`.
-- **Recarga:** se a entidade do jogador local mudar (recarga do save), o visual
-  some na hora, é liberado quando seguro e recriado sozinho com os mesmos
-  parâmetros. O status mostra `recreated`/`recreate_pending`; `fault=2` indica
-  que a recriação foi interrompida.
+  O primeiro teste real ficou preto mesmo com três partes configuradas;
+  `skinned_parts` não comprova textura correta. O código agora fornece a
+  iluminação da cena durante o draw e remove o callback/contexto da instância
+  logo depois; ainda exige nova validação visual.
+- **Recarga:** a recriação ao detectar uma entidade nova passou somente na
+  bancada; o primeiro reload real com a instância retida fechou o processo.
+  Use `session-prepare-load` antes de carregar e `visual-show` depois.
+  `recreated`/`recreate_pending` são diagnósticos da tentativa automática;
+  `fault=2` indica interrupção, não cobertura de todos os riscos do carregamento.
 - **Métricas:** `draw_cost_avg_ns`/`draw_cost_max_ns` (custo das nossas chamadas
   ao motor por frame) e `frame_interval_avg_us` (tempo médio de frame local) em
   `visual-status`/`session-status`.
 - **Arquivos:** `session-verify --backup DIR` compara originais e saves com o
-  backup sem chamar a DLL; as cópias dos saves ficam na pasta do backup.
+  backup sem abrir o processo nem chamar a DLL, inclusive após saída/crash.
+  As cópias dos saves ficam na pasta do backup. Os argumentos globais `--pid`
+  e `--dll` continuam aceitos/exigidos pela CLI, mas não são usados nessa ação.
 
 ### Caminhão remoto pela rede (`--mode drawn` e `--player`)
 

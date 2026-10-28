@@ -70,6 +70,11 @@ fn main() -> anyhow::Result<()> {
         },
         /// Client, visual, draw and relayed players in one JSON report.
         SessionStatus,
+        /// Release the visual BEFORE opening/loading a save; keep probes/network.
+        SessionPrepareLoad {
+            #[arg(long, default_value_t = 30, value_parser = clap::value_parser!(u64).range(1..=600))]
+            timeout: u64,
+        },
         /// Compare originals and saves with a session-start backup; no DLL calls.
         SessionVerify {
             #[arg(long)]
@@ -181,6 +186,14 @@ fn main() -> anyhow::Result<()> {
         Drawn,
     }
     let args = Args::parse();
+    // File verification must remain available after the game has crashed/exited.
+    if let Task::SessionVerify { backup } = &args.command {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&launcher_session::verify(backup)?)?
+        );
+        return Ok(());
+    }
     let dll = args.dll.canonicalize().context("DLL must exist")?;
     ensure!(
         dll.file_name()
@@ -256,16 +269,20 @@ fn main() -> anyhow::Result<()> {
             println!("{}", serde_json::to_string_pretty(&report)?);
             return Ok(());
         }
-        Task::SessionVerify { backup } => {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&launcher_session::verify(backup)?)?
-            );
-            return Ok(());
-        }
         Task::SessionStatus => {
             let report = launcher_session::status(&controller, &dll)?;
             println!("{}", serde_json::to_string_pretty(&report)?);
+            return Ok(());
+        }
+        Task::SessionPrepareLoad { timeout } => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&launcher_session::prepare_load(
+                    &controller,
+                    &dll,
+                    std::time::Duration::from_secs(*timeout),
+                )?)?
+            );
             return Ok(());
         }
         Task::SessionStop { timeout, verify } => {
@@ -548,6 +565,7 @@ fn main() -> anyhow::Result<()> {
             return Ok(());
         }
         Task::SessionStart { .. }
+        | Task::SessionPrepareLoad { .. }
         | Task::SessionStatus
         | Task::SessionStop { .. }
         | Task::SessionVerify { .. } => {

@@ -56,7 +56,7 @@ repositório e orientar futuras sessões de desenvolvimento.
 | Host de teste | `client_probe`, controlador entre processos e `test_host`; bancada x86 passou sob Proton | Testes de sessão longa, saída abrupta e duas máquinas |
 | Investigação | `memory_tool` Rust: processos, regiões, busca, filtros, comparação, ponteiros, observação e envio externo | Perfis de versões e ciclo de vida do veículo |
 | Coordenadas | Cadeia validada após movimento, reinício e comparação com save; pose de draw no mesmo corpo, escala em centímetros identificada | Outros estados/versões e amostragem consistente |
-| Multiplayer visual | Caminhão PSM sem textura seguindo o jogador, visto no jogo; rede, interpolação, skin e recarga automática entregues na bancada | Validar eco no jogo com textura/recarga/custo; depois remotos em dois PCs na LAN |
+| Multiplayer visual | Visual seguindo o jogador e eco com pose/rotação vistos no jogo; luz e preparação do load em investigação | Material preto e crash no primeiro reload retido; validar luz e liberação antes do load, depois LAN |
 | GitHub | Remoto `rodolfoaltenrath/18wos-across-america-mp`, histórico inicial Apache-2.0 preservado, exclusão do jogo | Manter staging auditado e documentação atualizada em cada entrega |
 
 O estado atual **não é multiplayer LAN validado entre dois computadores**.
@@ -1470,6 +1470,65 @@ validação visual nesta preparação: o jogo ainda não estava aberto. O teste
 real continua pendente da partida carregada; não promover esse preparo a
 evidência de skin, suavização ou recarga na partida.
 
+### M4/M5 — Primeiro eco real: material preto e falha na recarga — 28/10/2026
+
+Processo histórico 15768, thread 3584; servidor nativo com eco em loopback.
+`session-start` completou sete etapas com backup dos dois saves e hashes dos
+cinco módulos originais. A DLL transmitiu/recebeu poses com quaternion; o
+proprietário viu o caminhão copiando seu movimento, levemente atrasado e preto.
+Uma amostra registrou 3.265 envios, 2.741 recebimentos, 16 amostras no histórico,
+6.409 desenhos, `fault=0`, `foreign_calls=0` e acesso do item zerado entre frames.
+Três partes receberam o shader; isso não comprovou sua aparência correta.
+Custo EMA das chamadas próprias ~4,4 µs, máximo 205,6 µs, intervalo de frame EMA
+~8 ms. Não houve medição de baseline nem RTT/perda/jitter: não converter esses
+dados em garantia de impacto no FPS ou diagnóstico completo do atraso.
+Os 100 ms de interpolação configurados podem contribuir para o atraso percebido.
+
+**Falha:** ao tentar carregar um save existente com a instância ainda retida,
+o jogo fechou. `prism3d.crash` e evento 1000 registraram `0xc0000005`, em
+`ntdll+0x4e728`; a pilha inclui `RtlFreeHeap` e núcleo `+0x18165`, sem localizar
+a origem da corrupção. Não concluir que foi o setter, double-free ou bug do
+Windows só por esse registro. A recriação que espera outro `this` depois do
+load não demonstra segurança durante o descarregamento do mundo antigo.
+Os cinco originais e os dois saves conservaram os hashes. O processo terminou;
+não foi possível executar teardown nele. Servidor de teste encerrado.
+Relatórios/dump textual permanecem em `target/analysis/echo-session-*`, ignorados.
+
+**Alterações para investigar e conter a falha:**
+
+- `session-prepare-load`: oculta/libera o visual ANTES de carregar, com espera
+  pelos flushes/contadores, mantendo sondas e rede. Depois da partida carregada,
+  `visual-show` pode recriá-lo. Não apresentar esse contorno como reload
+  automático corrigido. A bancada verifica instância ausente antes de trocar
+  a entidade e parada limpa em seguida.
+- `session-verify` foi movido antes de abrir o PID/resolver a DLL: a primeira
+  tentativa após o crash falhava ao abrir o processo morto. Agora confere o
+  backup após saída e detecta arquivo alterado; teste inclui encerrar a fixture
+  antes dessas verificações. A conferência real após o crash retornou sete
+  arquivos inalterados.
+- Iluminação: `templates/car.tpl` usa material iluminado. O jogo instala
+  `psm_set_light_callback` (`psm+0x38c0`, slot `game+0x160de0`) com callback
+  cdecl `game+0x641c0` e contexto `this+0x84`; o callback faz tail-call thiscall
+  do getter em `vtable+0x48`. `psm_draw` consulta-o sincronamente; instância
+  nova tem contexto/callback zerados em dados `+0x5c/+0x60`. O caminho novo usa
+  a cena atual apenas durante cada draw, verifica alvo no game/engine perfilado
+  e página executável, e remove ambos os campos ao retornar. Não transfere nem
+  retém propriedade da cena. Fixtures próprias verificam ABI/thread/contexto,
+  callback durante o draw, remoção antes do free e descarte de cena inválida.
+  O fornecimento de luz é uma hipótese de correção para o preto, não resultado
+  visual já comprovado nem explicação comprovada do crash.
+
+**Verificação desta revisão:** build release x86 e nativo, 41 testes x86,
+47 nativos, Clippy x86/nativo e rustfmt passaram via `dev_env verify`.
+A prova real da luz e do carregamento preparado ainda depende do novo teste.
+
+**Próxima dependência:** nova prova de textura com o callback de luz, seguida
+de liberação prévia/carregamento/recriação explícita e conferência dos arquivos.
+Mapear uma fase anterior à destruição do mundo para restaurar a automação;
+os passes e o evento de troca de entidade, sozinhos, são insuficientes. Uma
+sonda de lifecycle deve comprovar ABI/thread/ordem antes de chamar liberações.
+Dois PCs, vários remotos e estabilidade prolongada seguem pendentes.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -2132,7 +2191,16 @@ e [seleção de toolchain com rustup](https://rust-lang.github.io/rustup/overrid
 
 ## 9. Registro de passagem para a próxima etapa
 
-**Próxima entrega:** validar no jogo o que a bancada já cobre. Usar o
+**Próxima entrega:** repetir textura com luz e validar recarga PREPARADA.
+O primeiro eco real funcionou, mas ficou preto e fechou ao carregar com o visual
+retido; ver registro "Primeiro eco real". Antes de abrir/carregar um save,
+executar `session-prepare-load` e aguardar `prepared=true`; após carregar,
+recriar via `visual-show`. Não repetir retenção durante load como se a
+recriação automática estivesse validada. Mapear a fase pré-destruição para
+retomar essa automação. O processo da falha já terminou e os arquivos
+conservaram os hashes; reenumerar antes de qualquer nova ação.
+
+Contexto do procedimento anterior: validar no jogo o que a bancada já cobre. Usar o
 procedimento "Teste no jogo com sessão" do README, num PC (servidor local e o
 próprio jogador espelhado) e depois em LAN com dois PCs. A ordem de risco é:
 skin, recriação após recarga real, vários remotos e interpolação com tráfego

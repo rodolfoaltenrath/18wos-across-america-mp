@@ -99,8 +99,8 @@ pub fn start(c: &Controller, dll: &Path, o: &Options) -> Result<Value> {
             Some(info) => {
                 let mut b = EngineControl::new(api::VISUAL_SHOW_FIXTURE);
                 b.fixture = words(info, "instance_descriptors")?;
-                let functions: [u32; 6] = words(info, "visual_descriptors")?;
-                b.frames[..6].copy_from_slice(&functions);
+                let functions: [u32; 8] = words(info, "visual_descriptors")?;
+                b.frames[..8].copy_from_slice(&functions);
                 api::put(&mut b.name, "models/fixture/truck.psm").map_err(anyhow::Error::msg)?;
                 if o.skin {
                     api::put(&mut b.message, "models/fixture/truck.shd")
@@ -193,7 +193,9 @@ fn verify_slots(pid: u32) -> Result<Vec<Value>> {
     Ok(rows)
 }
 
-pub fn stop(c: &Controller, dll: &Path, pid: u32, timeout: Duration, game: bool) -> Result<Value> {
+/// Release the visual before the game starts destroying its world resources.
+/// Keep the probes/network alive, so the visual may be shown again after loading.
+pub fn prepare_load(c: &Controller, dll: &Path, timeout: Duration) -> Result<Value> {
     let mut refusals: Vec<String> = Vec::new();
     let mut attempts = 0;
     let visual = Visual::decode(&engine(c, dll, EngineControl::new(api::VISUAL_STATUS))?);
@@ -219,6 +221,14 @@ pub fn stop(c: &Controller, dll: &Path, pid: u32, timeout: Duration, game: bool)
             }
         }
     }
+    Ok(
+        json!({"released": visual.state == 1, "release_attempts": attempts,
+        "refusals": refusals, "prepared": true}),
+    )
+}
+
+pub fn stop(c: &Controller, dll: &Path, pid: u32, timeout: Duration, game: bool) -> Result<Value> {
+    let mut report = prepare_load(c, dll, timeout)?;
     for command in [
         api::UI_DRAW_REMOVE,
         api::UI_RENDER_REMOVE,
@@ -232,11 +242,10 @@ pub fn stop(c: &Controller, dll: &Path, pid: u32, timeout: Duration, game: bool)
     if slots.iter().any(|s| s["restored"] != true) {
         bail!("slots not restored: {slots:?}");
     }
-    Ok(
-        json!({"released": visual.state == 1, "release_attempts": attempts,
-        "refusals": refusals, "client_status": stop.status, "slots": slots,
-        "note": "the DLL stays pinned until the game exits"}),
-    )
+    report["client_status"] = stop.status.into();
+    report["slots"] = slots.into();
+    report["note"] = "the DLL stays pinned until the game exits".into();
+    Ok(report)
 }
 
 /// Originals checked around a game session, relative to prism3d.exe's folder.

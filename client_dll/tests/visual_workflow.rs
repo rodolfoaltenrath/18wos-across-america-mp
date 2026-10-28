@@ -60,7 +60,7 @@ fn test_visual_draws_only_in_validated_context_and_releases_after_flush() {
     controller.engine_control(&dll, &mut pump).unwrap();
     let mut show = EngineControl::new(api::VISUAL_SHOW_FIXTURE);
     show.fixture = std::array::from_fn(|i| words("instance_descriptors", i));
-    for i in 0..6 {
+    for i in 0..8 {
         show.frames[i] = words("visual_descriptors", i);
     }
     api::put(&mut show.name, "models/fixture/truck.psm").unwrap();
@@ -112,6 +112,13 @@ fn test_visual_draws_only_in_validated_context_and_releases_after_flush() {
     assert_eq!(last["item"], drawing.item);
     assert_eq!(last["depth"], 1);
     assert_eq!(last["shader_calls"], 3);
+    assert!(last["light_calls"].as_u64().unwrap() > 0);
+    assert_eq!(send(&mut host, &mut output, "draw-light-invalid"), "armed");
+    std::thread::sleep(Duration::from_millis(40));
+    let invalid_scene = status(&controller, &dll);
+    std::thread::sleep(Duration::from_millis(40));
+    assert_eq!(status(&controller, &dll).drawn, invalid_scene.drawn);
+    assert_eq!(send(&mut host, &mut output, "draw-light-valid"), "armed");
     let x = last["position"][0].as_f64().unwrap();
     assert!(x > 400.0 && x.fract() == 0.0);
     assert_eq!(last["position"][1], 2.0);

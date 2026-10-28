@@ -6,7 +6,7 @@ use crate::{
     api::{self, EngineControl},
     draw_observation::{self as observation, Visual},
     engine_info::{self as info, Info, offset, value},
-    engine_lifecycle::{add, executable},
+    engine_lifecycle::{add, executable, executable_memory},
     engine_model::ModelName,
     engine_render::{flush_calls, read},
     inspection::process::Process,
@@ -28,6 +28,12 @@ type Draw = unsafe extern "C" fn(*mut c_void, u32, u32);
 /// psm_set_shader(item, part, path): mm_precache + set_shader_item, which
 /// releases the part's previous shader and consumes the new reference.
 type SetShader = unsafe extern "C" fn(*mut c_void, u32, *const std::ffi::c_char) -> *mut c_void;
+type LightCallback = unsafe extern "C" fn(*mut c_void) -> *mut c_void;
+type SetLight = unsafe extern "C" fn(*mut c_void, Option<LightCallback>, *mut c_void);
+static SET_LIGHT: AtomicUsize = AtomicUsize::new(0);
+static GET_LIGHT: AtomicUsize = AtomicUsize::new(0);
+/// Getter targets must belong to the profiled game/engine (or the own fixture).
+static LIGHT_RANGES: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
 /// Flushes that must pass after the last draw before the instance may be freed.
 pub const SETTLE_FLUSHES: u32 = 8;
 static STATE: AtomicU32 = AtomicU32::new(0); // 0 none, 1 allocated
@@ -68,7 +74,7 @@ fn ema(slot: &AtomicU32, sample: u32) {
 static CREATION: std::sync::Mutex<Option<EngineControl>> = std::sync::Mutex::new(None);
 /// 0 = local player plus offset; otherwise the relayed player id.
 static TARGET: AtomicU32 = AtomicU32::new(0);
-/// Older relayed samples are not drawn (no extrapolation yet).
+/// Older relayed samples are not drawn, even after limited extrapolation.
 const REMOTE_FRESH: std::time::Duration = std::time::Duration::from_secs(1);
 fn word(at: u32) -> Result<u32, ()> {
     let mut b = [0; 4];
@@ -204,6 +210,27 @@ pub(crate) fn after_car_draw(this: u32, [world, _, path, viewport]: [u32; 4]) {
     let Some(count @ 1..) = count else {
         return skip();
     };
+    let light_context = if SKINNED.load(Ordering::Acquire) != 0 {
+        let scene = word(this.wrapping_add(0x84)).ok().filter(|p| *p != 0);
+        let getter = scene
+            .and_then(|s| word(s).ok())
+            .and_then(|v| v.checked_add(0x48))
+            .and_then(|a| word(a).ok());
+        let ranges = LIGHT_RANGES.each_ref().map(|r| r.load(Ordering::Acquire));
+        if !getter.is_some_and(|f| {
+            ranges
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .any(|r| (r[0]..r[1]).contains(&f))
+                && executable_memory(f).is_ok()
+        }) {
+            return skip();
+        }
+        scene.unwrap_or(0)
+    } else {
+        0
+    };
     let started = std::time::Instant::now();
     let f = |i: usize| FUNCTIONS[i].load(Ordering::Acquire);
     let error = unsafe { GetLastError() };
@@ -215,6 +242,17 @@ pub(crate) fn after_car_draw(this: u32, [world, _, path, viewport]: [u32; 4]) {
         // phase as the game's own exterior draw; one balanced push/pop at depth
         // 0. The game itself draws one wheel instance several times per frame.
         unsafe {
+            let set_light: SetLight = std::mem::transmute(SET_LIGHT.load(Ordering::Acquire));
+            if light_context != 0 {
+                // Borrow only for this synchronous draw, like game+0x641c0.
+                set_light(
+                    ITEM.load(Ordering::Acquire) as *mut c_void,
+                    Some(std::mem::transmute::<usize, LightCallback>(
+                        GET_LIGHT.load(Ordering::Acquire),
+                    )),
+                    light_context as *mut c_void,
+                );
+            }
             std::mem::transmute::<usize, Plain>(f(1))();
             std::mem::transmute::<usize, Vector>(f(3))(position.as_ptr());
             std::mem::transmute::<usize, Vector>(f(4))(quaternion.as_ptr());
@@ -224,6 +262,14 @@ pub(crate) fn after_car_draw(this: u32, [world, _, path, viewport]: [u32; 4]) {
                 u32::MAX,
             );
             std::mem::transmute::<usize, Plain>(f(2))();
+            if light_context != 0 {
+                // No scene pointer survives between frames or a reload.
+                set_light(
+                    ITEM.load(Ordering::Acquire) as *mut c_void,
+                    None,
+                    ptr::null_mut(),
+                );
+            }
         }
         DRAWN.fetch_add(1, Ordering::Relaxed);
         if word(world) != Ok(top) {
@@ -244,7 +290,7 @@ fn draw_functions(
     process: &Process,
     block: &EngineControl,
     fixture: bool,
-) -> Result<[u32; 6], String> {
+) -> Result<[u32; 8], String> {
     let modules = process.modules().map_err(|e| e.to_string())?;
     let get = |name: &str| {
         modules
@@ -254,9 +300,15 @@ fn draw_functions(
     };
     if fixture {
         let host = get("engine_fixture.exe")?;
-        let functions: [u32; 6] = std::array::from_fn(|i| block.frames[i]);
+        let functions: [u32; 8] = std::array::from_fn(|i| block.frames[i]);
         for f in functions {
             executable(f, host)?;
+        }
+        for (slot, v) in LIGHT_RANGES
+            .iter()
+            .zip([host.base as u32, (host.base + host.size) as u32].repeat(2))
+        {
+            slot.store(v, Ordering::Release);
         }
         return Ok(functions);
     }
@@ -271,7 +323,7 @@ fn draw_functions(
         })
         .collect::<Result<Vec<_>, String>>()?;
     let game = get("game.dll")?;
-    let mut out = [0; 6];
+    let mut out = [0; 8];
     for (i, (module, name, rva, slot)) in [
         ("psm.dll", "psm_draw", 0x6a10, 0x160ba4),
         ("prism3d.exe", "gfx_push", 0x2de0, 0x16104c),
@@ -279,6 +331,7 @@ fn draw_functions(
         ("prism3d.exe", "gfx_translate", 0x30e0, 0x160fd8),
         ("prism3d.exe", "gfx_qrotate", 0x3140, 0x160fe4),
         ("psm.dll", "psm_set_shader", 0x3a60, 0x16102c),
+        ("psm.dll", "psm_set_light_callback", 0x38c0, 0x160de0),
     ]
     .into_iter()
     .enumerate()
@@ -294,6 +347,17 @@ fn draw_functions(
             return Err(format!("{name} export/game slot differs from profile"));
         }
         out[i] = expected;
+    }
+    out[7] = add(game, 0x641c0)?;
+    executable(out[7], game)?;
+    let engine = get("p3shared.dll")?;
+    for (slot, v) in LIGHT_RANGES.iter().zip([
+        game.base as u32,
+        (game.base + game.size) as u32,
+        engine.base as u32,
+        (engine.base + engine.size) as u32,
+    ]) {
+        slot.store(v, Ordering::Release);
     }
     Ok(out)
 }
@@ -411,6 +475,8 @@ fn create(block: &EngineControl, fixture: bool) -> Result<(), String> {
     ITEM.store(item as usize, Ordering::Release);
     INFO.store(pointer as usize, Ordering::Release);
     SKINNED.store(skinned, Ordering::Release);
+    SET_LIGHT.store(functions[6] as usize, Ordering::Release);
+    GET_LIGHT.store(functions[7] as usize, Ordering::Release);
     std::mem::forget(descriptor); // Ownership moves to the retained visual.
     DRAWN.store(0, Ordering::Release);
     SKIPPED.store(0, Ordering::Release);

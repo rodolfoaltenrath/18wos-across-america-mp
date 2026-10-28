@@ -212,5 +212,22 @@ sessão" do README (eco num PC, depois LAN), priorizando skin e recarga real.
 liberar a instância imediatamente sem comprovar o consumo desses recursos.
 Não refazer instância/descritor/setter/lifetime sem necessidade concreta.
 Distinção obrigatória: o visual sem textura seguindo o jogador foi visto no
-jogo; pose remota pela rede, skin, interpolação e recarga automática só passaram
-na bancada. Não afirmar ausência de visual de teste nem multiplayer LAN pronto.
+jogo; o eco real posterior também recebeu/desenhou poses. Skin correta,
+suavização na LAN e recarga automática ainda não foram validadas. Não afirmar
+ausência de visual de teste nem multiplayer LAN pronto.
+
+Retomada após primeiro eco real: PID histórico 15768, thread 3584. Rede/rotação
+e desenho por eco funcionaram; usuário relatou atraso leve e material preto,
+apesar de `skinned_parts=3`. Carregar com a instância retida FECHOU o jogo
+(`0xc0000005`, pilha de liberação de heap); causa ainda indeterminada. Processo
+encerrado, servidor parado, hashes de cinco originais/dois saves inalterados.
+Não repetir reload com visual retido nem tratar `fault=0` como prova de segurança.
+Novos caminhos: luz da cena emprestada apenas durante o draw (callback apagado
+depois), `session-prepare-load` para liberar ANTES de carregar e `visual-show`
+depois, `session-verify` independente do PID/DLL para conferir após saída/crash.
+Fixtures verificam luz/contexto/remoção, cena inválida, preparação e verificação
+após saída. A luz ainda precisa de prova visual e o contorno de prova no jogo;
+automação completa exige fase comprovada anterior à destruição do mundo.
+O teste seguinte é textura e recarga PREPARADA, não recarga automática.
+Essa revisão passou em build release x86/nativo, 41 testes x86, 47 nativos,
+Clippy x86/nativo e rustfmt. Nova prova visual ainda pendente.

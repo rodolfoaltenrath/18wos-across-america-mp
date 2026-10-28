@@ -140,6 +140,7 @@ unsafe extern "C" fn free(pointer: *mut c_void) {
     assert_eq!(pointer, s.item.as_mut_ptr().cast());
     assert_eq!((s.item[19], s.item[20], s.item[22]), (1, 1, 0));
     let data = s.data.take().unwrap();
+    assert_eq!((data[0x5c / 4], data[0x60 / 4]), (0, 0));
     let info = data[2] as *mut u32;
     assert_eq!(unsafe { *info }, 2);
     unsafe {
