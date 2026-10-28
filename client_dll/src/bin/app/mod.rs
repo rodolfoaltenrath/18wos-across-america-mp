@@ -534,6 +534,7 @@ pub fn main() -> Result<()> {
                     version: VERSION,
                     sequence,
                     position,
+                    rotation: None,
                 })
                 .map_err(anyhow::Error::msg)?;
                 match socket.send(&bytes) {

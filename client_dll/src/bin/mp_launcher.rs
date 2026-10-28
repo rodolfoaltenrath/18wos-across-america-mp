@@ -67,6 +67,9 @@ fn main() -> anyhow::Result<()> {
             /// World offset in game units (centimeters): x y z.
             #[arg(long, num_args = 3, allow_hyphen_values = true, default_values_t = [400.0f32, 0.0, 0.0])]
             offset: Vec<f32>,
+            /// Relayed player id to follow; 0 follows the local player plus offset.
+            #[arg(long, default_value_t = 0)]
+            player: u32,
         },
         VisualHide,
         /// Frees the instance only after queued draws were flushed.
@@ -130,6 +133,8 @@ fn main() -> anyhow::Result<()> {
     enum Mode {
         Game,
         Simulated,
+        /// Pose from the draw observer, with rotation; install pump+draw first.
+        Drawn,
     }
     let args = Args::parse();
     let dll = args.dll.canonicalize().context("DLL must exist")?;
@@ -178,8 +183,13 @@ fn main() -> anyhow::Result<()> {
                     api::EngineControl::new(api::DRAW_STATUS)
                 }
                 EngineTask::DrawRemove => api::EngineControl::new(api::UI_DRAW_REMOVE),
-                EngineTask::VisualShow { model, offset } => {
+                EngineTask::VisualShow {
+                    model,
+                    offset,
+                    player,
+                } => {
                     let mut b = api::EngineControl::new(api::VISUAL_SHOW);
+                    b.entity = player;
                     api::put(&mut b.name, &model).map_err(anyhow::Error::msg)?;
                     [b.count_before, b.count_created, b.count_after] =
                         [offset[0], offset[1], offset[2]].map(f32::to_bits);
@@ -357,17 +367,17 @@ fn main() -> anyhow::Result<()> {
                 let root = executable.parent().context("target has no directory")?;
                 profile::verify_module(&root.join("aa/lib/game.dll"))
                     .map_err(anyhow::Error::msg)?;
-            } else {
+            } else if matches!(mode, Mode::Simulated) {
                 ensure!(
                     args.fixture,
                     "simulated mode is restricted to the fixture host"
                 );
             }
             let mut config = ClientConfig {
-                mode: if matches!(mode, Mode::Game) {
-                    api::GAME
-                } else {
-                    api::SIMULATED
+                mode: match mode {
+                    Mode::Game => api::GAME,
+                    Mode::Simulated => api::SIMULATED,
+                    Mode::Drawn => api::DRAWN,
                 },
                 phase,
                 ..ClientConfig::default()

@@ -105,6 +105,7 @@ fn loads_configures_captures_recovers_stops_restarts_and_unloads_real_dll() {
         player_id: 7,
         sequence: 10,
         position: packet.position,
+        rotation: None,
     })
     .unwrap();
     receiver.send_to(&remote, addr).unwrap();

@@ -12,6 +12,7 @@ use crate::{
     inspection::process::Process,
     pe_exports::{self, Image},
 };
+use multiplayer_server::protocol::{Position, Rotation};
 use std::{
     ffi::c_void,
     ptr,
@@ -38,6 +39,10 @@ static DRAWN: AtomicU32 = AtomicU32::new(0);
 static SKIPPED: AtomicU32 = AtomicU32::new(0);
 static LAST_FLUSH: AtomicU32 = AtomicU32::new(0);
 static HIDDEN_AT: AtomicU32 = AtomicU32::new(0);
+/// 0 = local player plus offset; otherwise the relayed player id.
+static TARGET: AtomicU32 = AtomicU32::new(0);
+/// Older relayed samples are not drawn (no extrapolation yet).
+const REMOTE_FRESH: std::time::Duration = std::time::Duration::from_secs(1);
 fn word(at: u32) -> Result<u32, ()> {
     let mut b = [0; 4];
     read(at, &mut b)?;
@@ -62,7 +67,58 @@ pub(crate) fn shown() -> bool {
 /// Called by the draw probe after the original returned, on its owner thread,
 /// outside nesting. Mirrors the exterior branch: skips interior (4) and the
 /// early-return states (9, 12) observed statically and in the match.
+fn player_pose(this: u32) -> Option<([f32; 4], [f32; 3])> {
+    word(this.wrapping_add(0x1d0))
+        .and_then(|b| word(b.wrapping_add(0x3e4)))
+        .and_then(|s| {
+            Ok((
+                floats::<4>(s.wrapping_add(0x14))?,
+                floats::<3>(s.wrapping_add(0x30))?,
+            ))
+        })
+        .ok()
+}
+/// Remote pose for the selected player, if fresh. Never blocks the render thread.
+fn remote_pose(id: u32) -> Option<([f32; 4], [f32; 3])> {
+    let remotes = crate::REMOTES.try_lock().ok()?;
+    let entry = remotes.get(&u64::from(id))?;
+    if entry.seen.elapsed() >= REMOTE_FRESH {
+        return None;
+    }
+    let r = entry.rotation.unwrap_or(Rotation {
+        x: 0.0,
+        y: 0.0,
+        z: 0.0,
+        w: 1.0,
+    });
+    Some((
+        [r.x, r.y, r.z, r.w],
+        [entry.state.x, entry.state.y, entry.state.z],
+    ))
+}
 pub(crate) fn after_car_draw(this: u32, [world, _, path, viewport]: [u32; 4]) {
+    // Publish the local pose for the Drawn network source; same coordinates as drawing.
+    if let Some((q, p)) = player_pose(this) {
+        let rotation = Rotation {
+            x: q[0],
+            y: q[1],
+            z: q[2],
+            w: q[3],
+        };
+        if rotation.is_valid()
+            && let Ok(mut local) = crate::LOCAL_POSE.try_lock()
+        {
+            *local = Some((
+                Position {
+                    x: p[0],
+                    y: p[1],
+                    z: p[2],
+                },
+                rotation,
+                std::time::Instant::now(),
+            ));
+        }
+    }
     if !SHOWN.load(Ordering::Acquire) {
         return;
     }
@@ -85,16 +141,13 @@ pub(crate) fn after_car_draw(this: u32, [world, _, path, viewport]: [u32; 4]) {
     {
         return skip();
     }
-    let Some((quaternion, mut position)) = word(this.wrapping_add(0x1d0))
-        .and_then(|b| word(b.wrapping_add(0x3e4)))
-        .and_then(|s| {
-            Ok((
-                floats::<4>(s.wrapping_add(0x14))?,
-                floats::<3>(s.wrapping_add(0x30))?,
-            ))
-        })
-        .ok()
-    else {
+    let target = TARGET.load(Ordering::Acquire);
+    let pose = if target == 0 {
+        player_pose(this)
+    } else {
+        remote_pose(target)
+    };
+    let Some((quaternion, mut position)) = pose else {
         return skip();
     };
     for (p, o) in position.iter_mut().zip(&OFFSET) {
@@ -210,6 +263,7 @@ pub fn run(mut block: EngineControl, fixture: bool) -> Result<EngineControl, Str
             return Err("visual faulted; release it and restart the process".into());
         }
         set_offset(&block)?;
+        TARGET.store(block.entity, Ordering::Release);
         if STATE.load(Ordering::Acquire) != 1 {
             create(&block, fixture)?;
         }
@@ -322,6 +376,7 @@ fn fill(b: &mut EngineControl) {
         offset: OFFSET
             .each_ref()
             .map(|o| f32::from_bits(o.load(Ordering::Acquire))),
+        target: TARGET.load(Ordering::Acquire),
     }
     .encode(b);
 }

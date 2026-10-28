@@ -128,6 +128,8 @@ pub struct Visual {
     pub last_draw_flush: u32,
     pub flushes: u32,
     pub offset: [f32; 3],
+    /// 0 = local player plus offset; otherwise the relayed player id.
+    pub target: u32,
 }
 impl Visual {
     pub fn encode(&self, b: &mut EngineControl) {
@@ -142,6 +144,7 @@ impl Visual {
         b.object_vtable = self.offset[0].to_bits();
         b.object_destructor = self.offset[1].to_bits();
         b.constructor = self.offset[2].to_bits();
+        b.destructor = self.target;
     }
     pub fn decode(b: &EngineControl) -> Self {
         Self {
@@ -155,6 +158,7 @@ impl Visual {
             last_draw_flush: b.cycles,
             flushes: b.registry_count,
             offset: [b.object_vtable, b.object_destructor, b.constructor].map(f32::from_bits),
+            target: b.destructor,
         }
     }
 }
@@ -173,6 +177,7 @@ mod tests {
             last_draw_flush: 40,
             flushes: 48,
             offset: [400.0, 0.0, -1.5],
+            target: 7,
         };
         let mut b = crate::api::EngineControl::new(40);
         v.encode(&mut b);

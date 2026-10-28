@@ -1,6 +1,8 @@
 //! Win32 DLL prototype. Call client_start AFTER LoadLibrary returns and call
 //! client_stop BEFORE FreeLibrary. DllMain deliberately performs no work.
-use multiplayer_server::protocol::{self, ClientUpdate, MAX_PACKET, Position, TICK_HZ, VERSION};
+use multiplayer_server::protocol::{
+    self, ClientUpdate, MAX_PACKET, Position, Rotation, TICK_HZ, VERSION,
+};
 use std::{
     collections::BTreeMap,
     net::{SocketAddr, UdpSocket},
@@ -59,7 +61,17 @@ static RECEIVED: AtomicU64 = AtomicU64::new(0);
 static SAMPLE_STATE: AtomicU32 = AtomicU32::new(0);
 static READ_FAILURES: AtomicU64 = AtomicU64::new(0);
 static MESSAGE: Mutex<String> = Mutex::new(String::new());
-static REMOTES: Mutex<BTreeMap<u64, (RemoteState, Instant)>> = Mutex::new(BTreeMap::new());
+/// Latest relayed state per player. The render thread only uses try_lock.
+pub(crate) static REMOTES: Mutex<BTreeMap<u64, RemoteEntry>> = Mutex::new(BTreeMap::new());
+/// Local pose observed by the draw probe (same coordinates the game draws with).
+pub(crate) static LOCAL_POSE: Mutex<Option<(Position, Rotation, Instant)>> = Mutex::new(None);
+pub(crate) struct RemoteEntry {
+    pub(crate) state: RemoteState,
+    /// Read by the x86 test visual; other targets only relay it.
+    #[cfg_attr(not(all(windows, target_arch = "x86")), allow(dead_code))]
+    pub(crate) rotation: Option<Rotation>,
+    pub(crate) seen: Instant,
+}
 
 /// C ABI result layout. Coordinates are the most recent relayed samples;
 /// rendering and interpolation are future game integration work.
@@ -74,9 +86,17 @@ pub struct RemoteState {
 }
 
 enum Source {
-    Simulated { phase: f32 },
-    Memory { addresses: [addresses::Address; 3] },
-    Game { verified_base: usize },
+    Simulated {
+        phase: f32,
+    },
+    Memory {
+        addresses: [addresses::Address; 3],
+    },
+    Game {
+        verified_base: usize,
+    },
+    /// Pose published by the actors.car draw observer, including rotation.
+    Drawn,
 }
 
 #[derive(Debug)]
@@ -95,17 +115,35 @@ fn diagnostic(message: &str) {
 }
 
 impl Source {
-    fn sample(&mut self, elapsed: f32) -> Result<Position, SampleError> {
+    fn sample(&mut self, elapsed: f32) -> Result<(Position, Option<Rotation>), SampleError> {
         match self {
-            Self::Simulated { phase } => Ok(Position {
-                x: (elapsed + *phase).cos() * 100.0,
-                y: 0.0,
-                z: (elapsed + *phase).sin() * 100.0,
-            }),
-            Self::Memory { addresses } => {
-                memory::position(addresses).map_err(SampleError::Unavailable)
+            Self::Simulated { phase } => Ok((
+                Position {
+                    x: (elapsed + *phase).cos() * 100.0,
+                    y: 0.0,
+                    z: (elapsed + *phase).sin() * 100.0,
+                },
+                None,
+            )),
+            Self::Memory { addresses } => memory::position(addresses)
+                .map(|p| (p, None))
+                .map_err(SampleError::Unavailable),
+            Self::Game { verified_base } => memory::game_position(verified_base).map(|p| (p, None)),
+            Self::Drawn => {
+                let pose = *LOCAL_POSE
+                    .lock()
+                    .map_err(|_| SampleError::Fatal("local pose mutex poisoned".into()))?;
+                match pose {
+                    Some((position, rotation, seen))
+                        if seen.elapsed() < Duration::from_millis(500) =>
+                    {
+                        Ok((position, Some(rotation)))
+                    }
+                    _ => Err(SampleError::Unavailable(
+                        "waiting for a drawn exterior pose (game in foreground)".into(),
+                    )),
+                }
             }
-            Self::Game { verified_base } => memory::game_position(verified_base),
         }
     }
 }
@@ -150,7 +188,7 @@ fn run(socket: UdpSocket, mut source: Source) -> Result<(), String> {
     let mut sequence = 0u64;
     let mut buffer = [0; MAX_PACKET + 1];
     while !STOP.load(Ordering::Acquire) {
-        let position = match source.sample(start.elapsed().as_secs_f32()) {
+        let sample = match source.sample(start.elapsed().as_secs_f32()) {
             Ok(value) => {
                 if SAMPLE_STATE.swap(1, Ordering::AcqRel) != 1 {
                     diagnostic("coordinate capture available");
@@ -168,14 +206,15 @@ fn run(socket: UdpSocket, mut source: Source) -> Result<(), String> {
                 return Err(message);
             }
         };
-        if let Some(position) = position {
-            if !position.is_valid() {
+        if let Some((position, rotation)) = sample {
+            if !position.is_valid() || !rotation.is_none_or(Rotation::is_valid) {
                 return Err("coordinate sample contains NaN/infinity".into());
             }
             let bytes = protocol::encode(&ClientUpdate {
                 version: VERSION,
                 sequence,
                 position,
+                rotation,
             })?;
             match socket.send(&bytes) {
                 Ok(_) => {
@@ -198,20 +237,21 @@ fn run(socket: UdpSocket, mut source: Source) -> Result<(), String> {
                     let mut remotes = REMOTES.lock().map_err(|_| "remote state mutex poisoned")?;
                     let is_new = remotes
                         .get(&update.player_id)
-                        .is_none_or(|(previous, _)| update.sequence > previous.sequence);
+                        .is_none_or(|previous| update.sequence > previous.state.sequence);
                     if is_new && (remotes.contains_key(&update.player_id) || remotes.len() < 64) {
                         remotes.insert(
                             update.player_id,
-                            (
-                                RemoteState {
+                            RemoteEntry {
+                                state: RemoteState {
                                     player_id: update.player_id,
                                     sequence: update.sequence,
                                     x: update.position.x,
                                     y: update.position.y,
                                     z: update.position.z,
                                 },
-                                Instant::now(),
-                            ),
+                                rotation: update.rotation,
+                                seen: Instant::now(),
+                            },
                         );
                         RECEIVED.fetch_add(1, Ordering::Relaxed);
                     }
@@ -224,7 +264,7 @@ fn run(socket: UdpSocket, mut source: Source) -> Result<(), String> {
         REMOTES
             .lock()
             .map_err(|_| "remote state mutex poisoned")?
-            .retain(|_, (_, seen)| seen.elapsed() < Duration::from_secs(5));
+            .retain(|_, entry| entry.seen.elapsed() < Duration::from_secs(5));
         next_tick += tick;
         let now = Instant::now();
         if next_tick > now {
@@ -265,6 +305,12 @@ fn explicit_configuration(config: &api::ClientConfig) -> Result<(SocketAddr, Sou
                 return Err("game profile requires Windows x86 DLL".into());
             }
             Source::Game { verified_base: 0 }
+        }
+        api::DRAWN => {
+            if !cfg!(all(windows, target_pointer_width = "32")) {
+                return Err("drawn pose requires the Windows x86 DLL".into());
+            }
+            Source::Drawn
         }
         api::MEMORY => Source::Memory {
             addresses: [
@@ -499,12 +545,12 @@ pub unsafe extern "system" fn client_get_remote(index: u32, output: *mut RemoteS
         let Ok(remotes) = REMOTES.lock() else {
             return 0;
         };
-        let Some((state, _)) = remotes.values().nth(index as usize) else {
+        let Some(entry) = remotes.values().nth(index as usize) else {
             return 0;
         };
         // SAFETY: the caller guarantees valid writable storage as documented.
         unsafe {
-            output.write(*state);
+            output.write(entry.state);
         }
         1
     })
@@ -535,7 +581,38 @@ mod tests {
             Source::Simulated { phase: 0.0 }
                 .sample(1.0)
                 .unwrap()
+                .0
                 .is_valid()
         );
+    }
+    #[test]
+    fn drawn_source_requires_a_fresh_published_pose_and_carries_rotation() {
+        let mut source = Source::Drawn;
+        *LOCAL_POSE.lock().unwrap() = None;
+        assert!(matches!(
+            source.sample(0.0),
+            Err(SampleError::Unavailable(_))
+        ));
+        let position = Position {
+            x: 1.0,
+            y: 2.0,
+            z: 3.0,
+        };
+        let rotation = Rotation {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+            w: 1.0,
+        };
+        *LOCAL_POSE.lock().unwrap() = Some((position, rotation, Instant::now()));
+        let (p, r) = source.sample(0.0).unwrap();
+        assert_eq!((p, r), (position, Some(rotation)));
+        let old = Instant::now().checked_sub(Duration::from_secs(1)).unwrap();
+        *LOCAL_POSE.lock().unwrap() = Some((position, rotation, old));
+        assert!(matches!(
+            source.sample(0.0),
+            Err(SampleError::Unavailable(_))
+        ));
+        *LOCAL_POSE.lock().unwrap() = None;
     }
 }

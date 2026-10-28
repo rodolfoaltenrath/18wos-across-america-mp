@@ -6,6 +6,8 @@ pub const STOP: u32 = 3;
 pub const SIMULATED: u32 = 1;
 pub const GAME: u32 = 2;
 pub const MEMORY: u32 = 3;
+/// Local pose from the draw observer (position + rotation); Windows x86 only.
+pub const DRAWN: u32 = 4;
 
 pub const UI_ATTACH: u32 = 1;
 pub const UI_PROBE: u32 = 2;

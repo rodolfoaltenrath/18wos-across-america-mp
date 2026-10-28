@@ -64,6 +64,7 @@ pub async fn run(
                         player_id: peer.id,
                         sequence: peer.latest.sequence,
                         position: peer.latest.position,
+                        rotation: peer.latest.rotation,
                     };
                     let bytes = protocol::encode(&update).map_err(anyhow::Error::msg)?;
                     for destination in peers.keys().filter(|addr| *addr != source) {
@@ -79,7 +80,7 @@ pub async fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::Position;
+    use crate::protocol::{Position, Rotation};
     use tokio::sync::oneshot;
 
     #[tokio::test]
@@ -97,6 +98,12 @@ mod tests {
                 version: VERSION,
                 sequence,
                 position: Position { x, y: 0.0, z: 0.0 },
+                rotation: (x == 22.0).then_some(Rotation {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 1.0,
+                    w: 0.0,
+                }),
             })
             .unwrap()
         };
@@ -111,12 +118,14 @@ mod tests {
             .unwrap();
         let from_b = protocol::decode_server(&buffer[..len]).unwrap();
         assert_eq!(from_b.position.x, 22.0);
+        assert_eq!(from_b.rotation.map(|r| r.z), Some(1.0));
         let (len, _) = time::timeout(Duration::from_secs(2), b.recv_from(&mut buffer))
             .await
             .unwrap()
             .unwrap();
         let from_a = protocol::decode_server(&buffer[..len]).unwrap();
         assert_eq!(from_a.position.x, 11.0);
+        assert!(from_a.rotation.is_none());
         assert_eq!(from_a.sequence, 10);
         assert_ne!(from_a.player_id, from_b.player_id);
         stop.send(()).unwrap();

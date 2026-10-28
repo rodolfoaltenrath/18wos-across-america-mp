@@ -1341,6 +1341,43 @@ proprietário não relatou desvio de altura), interior (estado 4), manter a
 instância durante uma recarga, e mais de um visual. A pose ainda é a do
 jogador mais um deslocamento: falta alimentá-la pela rede.
 
+### M4/M3 — Pose pela rede para o visual de teste (bancada) — 28/10/2026
+
+Entregue sem teste no jogo, a pedido do proprietário:
+
+- **Protocolo:** `Rotation` opcional (quaternion) em `ClientUpdate` e
+  `ServerUpdate`, com `serde(default)`. Pacotes v1 sem rotação continuam
+  válidos e a versão segue 1. Quaternion não finito ou fora de
+  `0.98 ≤ |q|² ≤ 1.02` é rejeitado; o receptor nunca normaliza em silêncio. O
+  servidor retransmite a rotação.
+- **Fonte local `DRAWN` (modo 4 da configuração v1, `connect --mode drawn`):**
+  a cada `draw` do caminhão, a sonda publica posição e quaternion do corpo
+  (`try_lock`, sem bloquear o render). O worker envia essa pose com rotação se
+  ela tiver menos de 0,5 s; caso contrário, pausa e informa. Assim, posição
+  enviada e desenho usam o mesmo sistema de coordenadas. A fonte `GAME` antiga
+  (só posição, cadeia descoberta por varredura) foi mantida, mas não deve ser
+  misturada com `drawn` entre pares, porque a equivalência não foi comprovada.
+- **Alvo remoto do visual (`visual-show --player ID`):** usa a entrada mais
+  recente do jogador em `REMOTES` (`try_lock` na thread de render), somada ao
+  offset; sem rotação, usa identidade. Acima de 1 s não desenha (`skipped`).
+  `RemoteState`/`client_get_remote` (ABI C) permanecem inalterados; a rotação
+  fica numa entrada interna à parte.
+- **Bancada:** testes do protocolo (com/sem rotação, quaternions inválidos) e do
+  servidor (retransmite rotação, ausência preservada), teste unitário da fonte
+  `Drawn` (pose fresca/velha) e o teste ponta a ponta `remote_visual_workflow`:
+  servidor UDP falso recebe a pose da fixture com rotação; "jogador 5" faz a
+  fixture desenhar exatamente em `(5000, 10+1, −20)` com o quaternion
+  enviado; amostra mais nova move o visual e a mais antiga é ignorada; após 1 s
+  sem dados para de desenhar; jogador desconhecido não desenha; liberação,
+  `pump-remove` e `STOP` limpos. 34 testes x86 e 39 nativos, Clippy e
+  formatação limpos.
+
+Pendente no jogo: dois computadores na LAN, cada um com `connect --mode drawn`
+ao servidor e `visual-show --player <id do outro>`. Antes disso, um teste
+local: o mesmo PC com um par falso, ou espelhando o próprio jogador via servidor.
+O ID do outro jogador é atribuído pelo servidor; ainda não há comando para
+listá-lo, o que é necessário antes do teste em LAN.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,

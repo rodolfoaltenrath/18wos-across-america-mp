@@ -635,6 +635,25 @@ depois de ocultar, de ≥8 flushes e com o contador de acesso do item em zero;
 se recusar, repita após alguns frames. `stop`/`pump-remove`/`render-remove`
 recusam enquanto a instância existir, e `draw-remove` enquanto estiver visível.
 
+### Caminhão remoto pela rede (`--mode drawn` e `--player`)
+
+O protocolo agora aceita um campo opcional `rotation` (quaternion x, y, z, w;
+unitário, com tolerância de 2%) em `ClientUpdate`/`ServerUpdate`. Pacotes sem
+rotação continuam válidos, e o servidor retransmite o campo sem alterá-lo.
+
+Com pump e draw instalados, `connect --mode drawn` envia a pose que a sonda de
+`draw` observa no caminhão local: posição e rotação no mesmo sistema de
+coordenadas usado para desenhar, em centímetros. Sem um `draw` recente (menos
+de 0,5 s; por exemplo, com o jogo fora de foco), o envio pausa e informa o
+motivo em vez de mandar uma pose velha.
+
+`engine visual-show --player ID --offset 0 0 0` desenha o caminhão de teste na
+pose mais recente do jogador remoto `ID`, somada ao offset; sem rotação
+recebida, usa a orientação identidade. Amostras com mais de 1 s não são
+desenhadas (contam em `skipped`); ainda não há interpolação nem extrapolação.
+`--player 0` mantém o comportamento anterior (jogador local mais o offset).
+`visual-status` informa o alvo em `target`.
+
 Para anotar uma desmontagem com os nomes de bindings recuperados:
 
 ```text

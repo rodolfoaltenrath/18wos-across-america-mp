@@ -18,12 +18,36 @@ impl Position {
     }
 }
 
+/// Optional orientation quaternion (x, y, z, w). Older packets omit it.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Rotation {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub w: f32,
+}
+
+impl Rotation {
+    /// Finite and close to unit length; the receiver never normalizes silently.
+    pub fn is_valid(self) -> bool {
+        let v = [self.x, self.y, self.z, self.w];
+        let norm: f32 = v.iter().map(|c| c * c).sum();
+        v.iter().all(|c| c.is_finite()) && (0.98..=1.02).contains(&norm)
+    }
+}
+
+fn rotation_valid(rotation: Option<Rotation>) -> bool {
+    rotation.is_none_or(Rotation::is_valid)
+}
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ClientUpdate {
     pub version: u8,
     pub sequence: u64,
     pub position: Position,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rotation: Option<Rotation>,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -33,6 +57,8 @@ pub struct ServerUpdate {
     pub player_id: u64,
     pub sequence: u64,
     pub position: Position,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rotation: Option<Rotation>,
 }
 
 pub fn encode<T: Serialize>(value: &T) -> Result<Vec<u8>, String> {
@@ -48,7 +74,8 @@ pub fn decode_client(bytes: &[u8]) -> Option<ClientUpdate> {
         return None;
     }
     let value: ClientUpdate = serde_json::from_slice(bytes).ok()?;
-    (value.version == VERSION && value.position.is_valid()).then_some(value)
+    (value.version == VERSION && value.position.is_valid() && rotation_valid(value.rotation))
+        .then_some(value)
 }
 
 pub fn decode_server(bytes: &[u8]) -> Option<ServerUpdate> {
@@ -56,7 +83,11 @@ pub fn decode_server(bytes: &[u8]) -> Option<ServerUpdate> {
         return None;
     }
     let value: ServerUpdate = serde_json::from_slice(bytes).ok()?;
-    (value.version == VERSION && value.player_id != 0 && value.position.is_valid()).then_some(value)
+    (value.version == VERSION
+        && value.player_id != 0
+        && value.position.is_valid()
+        && rotation_valid(value.rotation))
+    .then_some(value)
 }
 
 #[cfg(test)]
@@ -73,6 +104,7 @@ mod tests {
                 y: -2.0,
                 z: 3.0,
             },
+            rotation: None,
         };
         let decoded = decode_client(&encode(&update).unwrap()).unwrap();
         assert_eq!(decoded.position, update.position);
@@ -88,6 +120,43 @@ mod tests {
                 .is_none()
         );
         assert!(decode_client(b"garbage").is_none());
+        // v1 packets without rotation stay valid; present rotations must be unit quaternions.
+        let turned = ClientUpdate {
+            rotation: Some(Rotation {
+                x: 0.0,
+                y: std::f32::consts::FRAC_1_SQRT_2,
+                z: 0.0,
+                w: std::f32::consts::FRAC_1_SQRT_2,
+            }),
+            ..update
+        };
+        let bytes = encode(&turned).unwrap();
+        assert_eq!(decode_client(&bytes).unwrap().rotation, turned.rotation);
+        assert!(
+            !String::from_utf8(encode(&update).unwrap())
+                .unwrap()
+                .contains("rotation")
+        );
+        for bad in [
+            [0.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 2.0],
+            [f32::NAN, 0.0, 0.0, 1.0],
+        ] {
+            let bad = ClientUpdate {
+                rotation: Some(Rotation {
+                    x: bad[0],
+                    y: bad[1],
+                    z: bad[2],
+                    w: bad[3],
+                }),
+                ..update
+            };
+            assert!(decode_client(&encode(&bad).unwrap()).is_none());
+        }
+        assert!(
+            decode_server(br#"{"version":1,"player_id":3,"sequence":1,"position":{"x":0,"y":0,"z":0},"rotation":{"x":0,"y":0,"z":0,"w":1}}"#)
+                .is_some_and(|u| u.rotation.is_some())
+        );
         assert!(
             !Position {
                 x: f32::NAN,
