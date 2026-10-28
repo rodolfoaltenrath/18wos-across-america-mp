@@ -21,6 +21,8 @@ pub const UI_PUMP_REMOVE: u32 = 11;
 pub const PHASE_PROBE: u32 = 12;
 pub const PRIVATE_CYCLE: u32 = 13;
 pub const PRIVATE_FIXTURE: u32 = 14;
+pub const PRIVATE_ITEM: u32 = 15;
+pub const PRIVATE_ITEM_FIXTURE: u32 = 16;
 pub const ENGINE_ABI_VERSION: u32 = 3;
 /// Separate extension ABI; does not change the original Control v1 layout.
 #[repr(C)]

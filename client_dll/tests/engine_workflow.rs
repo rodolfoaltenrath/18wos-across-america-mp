@@ -98,14 +98,52 @@ fn exercise(ansi: bool, peek: bool) {
         let mut wrong_mode = EngineControl::new(api::PRIVATE_CYCLE);
         wrong_mode.cycles = 1;
         assert!(controller.engine_control(&dll, &mut wrong_mode).is_err());
+        let mut item = EngineControl::new(api::PRIVATE_ITEM_FIXTURE);
+        item.fixture[0] = info["item_descriptors"][0].as_u64().unwrap() as u32;
+        item.cycles = 4;
+        controller.engine_control(&dll, &mut item).unwrap();
+        assert_eq!(item.cycles, 4);
+        assert_eq!(
+            (item.count_before, item.count_created, item.count_after),
+            (7, 9, 7)
+        );
+        assert_eq!(item.executed_thread, attach.window_thread);
+        // The container still owns and frees the placed actor on a Rust error.
+        item.fixture[0] = info["item_descriptors"][1].as_u64().unwrap() as u32;
+        item.cycles = 1;
+        assert!(
+            controller
+                .engine_control(&dll, &mut item)
+                .unwrap_err()
+                .to_string()
+                .contains("header differs")
+        );
+        item.fixture[0] = info["item_descriptors"][0].as_u64().unwrap() as u32;
+        for (failure, diagnostic) in [
+            ("item-fail-fix", "storage allocation returned null"),
+            ("item-fail-create", "constructor returned null"),
+        ] {
+            writeln!(host.0.stdin.as_mut().unwrap(), "{failure}").unwrap();
+            line.clear();
+            output.read_line(&mut line).unwrap();
+            assert_eq!(line.trim(), "armed");
+            item.cycles = 1;
+            assert!(
+                controller
+                    .engine_control(&dll, &mut item)
+                    .unwrap_err()
+                    .to_string()
+                    .contains(diagnostic)
+            );
+        }
         // Nested PeekMessage DOES run, but window callbacks are never an engine phase.
         let before = call(&controller, &dll, api::UI_PUMP_STATUS).phase_completed;
         writeln!(host.0.stdin.as_mut().unwrap(), "nested-pump").unwrap();
         line.clear();
         output.read_line(&mut line).unwrap();
         assert_eq!(line.trim(), "nested");
-        let mut pending = EngineControl::new(api::PRIVATE_FIXTURE);
-        pending.fixture = std::array::from_fn(|i| info["factory"][i].as_u64().unwrap() as u32);
+        let mut pending = EngineControl::new(api::PRIVATE_ITEM_FIXTURE);
+        pending.fixture[0] = info["item_descriptors"][0].as_u64().unwrap() as u32;
         pending.cycles = 1;
         assert!(
             controller
@@ -123,10 +161,14 @@ fn exercise(ansi: bool, peek: bool) {
         line.clear();
         output.read_line(&mut line).unwrap();
         let stats: serde_json::Value = serde_json::from_str(&line).unwrap();
-        assert_eq!(stats["created"], 5);
-        assert_eq!(stats["freed"], 5);
-        assert_eq!(stats["post"], 5);
-        assert_eq!(stats["pre"], 5);
+        assert_eq!(stats["created"], 10);
+        assert_eq!(stats["freed"], 10);
+        assert_eq!(stats["post"], 10);
+        assert_eq!(stats["pre"], 10);
+        assert_eq!(stats["items"]["allocated"], 7);
+        assert_eq!(stats["items"]["released"], 7);
+        assert_eq!(stats["items"]["bytes_allocated"], 6 * 0x88);
+        assert_eq!(stats["items"]["bytes_freed"], 6 * 0x88);
         assert_eq!(stats["root"], 7);
         assert_eq!(stats["game"], 0);
     }

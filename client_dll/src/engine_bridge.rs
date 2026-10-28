@@ -372,7 +372,11 @@ pub fn control(block: &mut EngineControl) -> Result<(), String> {
     let _control = CONTROL.lock().map_err(|_| "dispatcher control poisoned")?;
     let result = match block.command {
         #[cfg(target_arch = "x86")]
-        api::PHASE_PROBE | api::PRIVATE_CYCLE | api::PRIVATE_FIXTURE => {
+        api::PHASE_PROBE
+        | api::PRIVATE_CYCLE
+        | api::PRIVATE_FIXTURE
+        | api::PRIVATE_ITEM
+        | api::PRIVATE_ITEM_FIXTURE => {
             crate::engine_phase::dispatch(*block, WINDOW.load(Ordering::Acquire) as HWND).map(
                 |response| {
                     *block = response;

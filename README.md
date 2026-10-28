@@ -301,6 +301,21 @@ Passaram 19 testes nativos e 17 testes x86. No jogo, 18 ciclos privados passaram
 incluindo repetição após dirigir, salvar manualmente e recarregar. Contadores e
 posição local foram conferidos em cada comando, e a instrumentação foi removida.
 
+O comando `engine item-cycle [--cycles N]` valida um segundo contrato: um
+`actors.car` privado construído na memória de um `c_item_t` anônimo. Usa a mesma
+preparação `attach`/`pump-attach`, fila do loop e limpeza `pump-remove`/`stop`.
+Limita-se a 1–16 ciclos e não inicializa nem insere o objeto no mundo. O item
+fornece armazenamento e mantém a referência inicial; a DLL solta sua fixação e
+devolve essa referência. As operações do próprio item chamam o destrutor com
+armazenamento explícito e liberam a memória. Rust não libera esses ponteiros.
+São conferidos a tabela de operações, cabeçalhos, referências, retorno ao pool,
+bytes alocados/liberados e posição local. Esse caminho também passou 18 vezes
+no jogo, incluindo movimento/menu/recarga, sem mudanças no save ou nos originais.
+Os testes x86 cobrem falhas antes e depois da construção e cancelamento pendente.
+Se a fixação perder sua exclusividade, a limpeza retém o item e informa falha,
+em vez de liberar armazenamento de propriedade incerta. Isso não cobre exceções
+C++/SEH nem constitui auditoria completa do heap.
+
 Referências de ABI: [funções externas em Rust](https://doc.rust-lang.org/reference/items/functions.html#extern-function-qualifier)
 e [convenções de chamada x86 da Microsoft](https://learn.microsoft.com/en-us/cpp/cpp/argument-passing-and-naming-conventions?view=msvc-170).
 

@@ -34,8 +34,12 @@ fn main() -> anyhow::Result<()> {
     let actor = fixture_actor::Fixture::new();
     #[cfg(target_arch = "x86")]
     let bindings = actor.bindings();
+    #[cfg(target_arch = "x86")]
+    let item_descriptors = actor.item_descriptors();
     #[cfg(not(target_arch = "x86"))]
     let bindings = [0u32; 6];
+    #[cfg(not(target_arch = "x86"))]
+    let item_descriptors = [0u32; 2];
     PEEK_SLOT.store(
         PeekMessageA as *const () as usize,
         std::sync::atomic::Ordering::Release,
@@ -114,7 +118,7 @@ fn main() -> anyhow::Result<()> {
     ensure!(!window.is_null(), "cannot create fixture window");
     println!(
         "{}",
-        serde_json::json!({"pid":unsafe{GetCurrentProcessId()},"window":window as usize,"thread":unsafe{GetCurrentThreadId()}, "peek_slot": peek_slot, "factory": bindings})
+        serde_json::json!({"pid":unsafe{GetCurrentProcessId()},"window":window as usize,"thread":unsafe{GetCurrentThreadId()}, "peek_slot": peek_slot, "factory": bindings, "item_descriptors": item_descriptors})
     );
     std::io::stdout().flush()?;
     let address = window as usize;
@@ -123,6 +127,12 @@ fn main() -> anyhow::Result<()> {
             let Ok(line) = line else {
                 break;
             };
+            #[cfg(target_arch = "x86")]
+            if matches!(line.as_str(), "item-fail-fix" | "item-fail-create") {
+                fixture_actor::fail_item_step(&line);
+                println!("armed");
+                continue;
+            }
             #[cfg(target_arch = "x86")]
             if line == "actor-stats" {
                 println!("{}", fixture_actor::stats());

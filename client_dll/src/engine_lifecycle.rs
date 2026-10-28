@@ -15,22 +15,22 @@ use windows_sys::Win32::System::{
     },
     Threading::{GetCurrentProcessId, GetCurrentThreadId},
 };
-type Create = unsafe extern "C" fn(*const c_void, bool, *mut c_void) -> *mut c_void;
+pub(super) type Create = unsafe extern "C" fn(*const c_void, bool, *mut c_void) -> *mut c_void;
 type Destroy = unsafe extern "C" fn(*mut c_void, *mut c_void);
-struct Factory {
-    record: u32,
-    create: u32,
-    destroy: u32,
-    heads: [u32; 2],
-    vtable: u32,
-    constructor: u32,
-    destructor: u32,
-    size: u32,
+pub(super) struct Factory {
+    pub(super) record: u32,
+    pub(super) create: u32,
+    pub(super) destroy: u32,
+    pub(super) heads: [u32; 2],
+    pub(super) vtable: u32,
+    pub(super) constructor: u32,
+    pub(super) destructor: u32,
+    pub(super) size: u32,
 }
-fn read(process: &Process, at: u32, out: &mut [u8]) -> Result<(), String> {
+pub(super) fn read(process: &Process, at: u32, out: &mut [u8]) -> Result<(), String> {
     process.read(at.into(), out).map_err(|e| e.to_string())
 }
-fn executable(at: u32, owner: &Module) -> Result<(), String> {
+pub(super) fn executable(at: u32, owner: &Module) -> Result<(), String> {
     if u64::from(at) < owner.base || u64::from(at) - owner.base >= owner.size {
         return Err("factory callback outside expected module".into());
     }
@@ -53,13 +53,13 @@ fn executable(at: u32, owner: &Module) -> Result<(), String> {
     }
     Ok(())
 }
-fn add(module: &Module, rva: u32) -> Result<u32, String> {
+pub(super) fn add(module: &Module, rva: u32) -> Result<u32, String> {
     if u64::from(rva) >= module.size {
         return Err("profile RVA outside module".into());
     }
     u32::try_from(module.base + u64::from(rva)).map_err(|e| e.to_string())
 }
-fn game(process: &Process) -> Result<Factory, String> {
+pub(super) fn game(process: &Process) -> Result<Factory, String> {
     let modules = process.modules().map_err(|e| e.to_string())?;
     let get = |name: &str| {
         modules
@@ -120,7 +120,7 @@ fn game(process: &Process) -> Result<Factory, String> {
         size: record.false_size,
     })
 }
-fn fixture(process: &Process, block: &EngineControl) -> Result<Factory, String> {
+pub(super) fn fixture(process: &Process, block: &EngineControl) -> Result<Factory, String> {
     let modules = process.modules().map_err(|e| e.to_string())?;
     let base = unsafe { GetModuleHandleW(ptr::null()) } as usize as u64;
     let module = modules
@@ -163,6 +163,9 @@ impl Drop for PrivateEntity {
     }
 }
 pub fn run(mut block: EngineControl, is_fixture: bool) -> Result<EngineControl, String> {
+    if matches!(block.command, api::PRIVATE_ITEM | api::PRIVATE_ITEM_FIXTURE) {
+        return crate::engine_item::run(block, is_fixture);
+    }
     block.executed_thread = unsafe { GetCurrentThreadId() };
     if block.command == api::PHASE_PROBE {
         return Ok(block);

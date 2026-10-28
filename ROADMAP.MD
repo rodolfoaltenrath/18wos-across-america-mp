@@ -498,6 +498,78 @@ fluxo por `entity_destroy(obj,null)` usado no ciclo privado independente. Compro
 a alocação/fixação, referências, callbacks e liberação do contêiner em fixture
 antes da inicialização/inserção. Não chamar `init_eblock` sobre um objeto avulso.
 
+### M4 — Ownership do contêiner e armazenamento explícito — 27/10/2026
+
+Entregues `engine_item` e `engine item-cycle [--cycles 1..16]`, sem alterar o
+layout da ABI v3/664 bytes nem a configuração/rede v1. O ciclo executa na mesma
+fila do loop validada anteriormente e mantém um único item/ator privado por vez.
+Não chama inicialização, inserção, física, render ou criação de HUD.
+
+**Contrato específico do perfil:** `entity_proc_t::alloc_eitem` em
+`p3shared.dll+0xc9a0` usa a ABI `thiscall`; os helpers de armazenamento/referência
+em `prism3d.exe` são `cdecl`. A tabela de nove palavras em
+`p3shared.dll+0x4523c` é verificada integralmente, incluindo callbacks preenchidos
+em runtime. O item vem do pool anônimo com flags `0xd2`, uma referência e sem
+objeto, pai, filhos, armazenamento ou fixação. A DLL grava o registro próprio do
+tipo no item e chama `ci_alloc_mem_fix` (`prism3d.exe+0x13420`): armazenamento do
+tamanho do ator, uma fixação e bit de memória carregada.
+
+O factory já validado recebe a variante `false` e o endereço desse armazenamento,
+construindo o ator no mesmo endereço. São preenchidos backlink `objeto+0x60`,
+contexto `+0x84` e seletor `+0x50`, conforme o caminho de criação observado no
+motor. Nenhum desses campos é copiado do caminhão do jogador. Vtable, destrutor,
+ambas as cadeias de contadores e bytes do allocator precisam bater com o contrato.
+
+Um guard distingue item vazio, armazenamento sem objeto e objeto construído.
+Solta somente a fixação exclusiva adquirida pela operação e devolve a referência
+com `ci_dec_refs` (`prism3d.exe+0x13520`). Para um objeto construído, o callback
+do item em `p3shared.dll+0xa9a0` chama `entity_destroy(objeto,objeto)` e depois
+libera o armazenamento. A DLL não chama o destrutor independente com argumento
+nulo sobre essa memória. Antes da construção, a limpeza usa `ci_free_mem` sem
+destruir memória não inicializada. Se a fixação não for mais exclusiva, o guard
+retém o item e a checagem de retorno ao pool falha; não tenta liberar memória
+com outro proprietário. Exceções nativas C++/SEH continuam fora dessa proteção.
+
+Após cada operação, o item precisa voltar ao pool com flags `0x80`, sem ponteiro,
+tamanho, referências ou fixações. Os totais u64 do manager em `+0x60`/`+0x68`
+precisam avançar exatamente `0x2118` bytes alocados/liberados. Isso comprova o
+equilíbrio do armazenamento observado, não de todo o heap do processo.
+
+**Bancada:** 22 testes nativos e 19 testes x86 sob Proton passaram; Clippy
+nativo/x86, formatação e build release passaram. O host próprio agora separa
+pool, armazenamento e objeto, aceita construção no endereço fornecido e recusa
+destruição/liberação erradas. O teste de integração conferiu quatro ciclos
+normais, erro de cabeçalho após construção, falha de alocação e construtor nulo:
+sete itens devolvidos, seis buffers alocados/liberados, cinco atores construídos/
+destruídos pelo caminho do contêiner. A criação independente também continuou
+passando. Um pedido de item durante callback aninhado expirou sem executar.
+
+**Jogo original sob Proton:** nova sessão, PID Windows enumerado 396, execução
+na thread 400. Nenhuma sonda estava carregada antes do build deste bloco.
+
+| Cenário | Ciclos | Referências do motor antes/criado/depois |
+| --- | ---: | --- |
+| Primeiro contêiner com ator | 1 | 1864 / 1865 / 1864 |
+| Repetição individual, sem objetos simultâneos | 16 | 1864 / 1865 / 1864 no último ciclo |
+| Após dirigir, menu e carregar novamente | 1 | 1852 / 1853 / 1852 |
+
+Foram **18 ciclos reais com contêiner**, além dos 18 ciclos independentes do
+bloco anterior. Em todos, retornaram as referências do jogo/motor, item limpo no
+pool e `8472` bytes de armazenamento liberados; posição local igual dentro de
+cada comando. O proprietário confirmou movimento/recarga normais. Os hashes do
+save preservado e dos seis originais continuaram iguais. `pump-remove` restaurou
+a entrada, e `stop` removeu o procedimento e confirmou parada. A DLL continua
+fixada até o processo encerrar; não reconstruí-la enquanto o jogo estiver aberto.
+
+**Próxima dependência:** selecionar o caminho de um visual sem HUD/controle/IA/
+colisão antes de chamar inicialização. A lista de init de `actors.car` em
+`game.dll+0x14d1b8` inclui níveis `-1` e `10`; o método em `+0x50f40`, nível 10,
+cria `/ui/ghud.esc`. Portanto, inicializar indiscriminadamente um segundo
+`actors.car` pode acionar comportamento de jogador local. Investigar o caminho
+de modelo/render ou um tipo visual já disponível (por exemplo `decals.pmd`),
+com teardown próprio, sem chamar o init completo nem clonar o objeto local.
+Não há ainda um caminhão remoto visível.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -645,6 +717,8 @@ mundo ainda precisam de contratos e testes próprios.
   integração no mundo; o contrato do ciclo privado já passou.
 - [x] Confirmar ABI x86 dos factories e lifetime privado: convenções de chamada,
   variante, armazenamento, tamanho, alocação e liberação pareadas.
+- [x] Validar item anônimo, armazenamento explícito e retorno ao pool em host
+  próprio e na partida, incluindo recarga e equilíbrio de bytes/referências.
 - [ ] Confirmar ABI/ownership de inicialização, inserção, transform e remoção
   do mundo antes de ampliar as chamadas `unsafe`.
 - [x] Criar fachada Rust para o ciclo privado, mantendo offsets e chamadas
@@ -1023,10 +1097,11 @@ e [seleção de toolchain com rustup](https://rust-lang.github.io/rustup/overrid
 
 ## 9. Registro de passagem para a próxima etapa
 
-**Próxima entrega:** comprovar ownership/alocação do contêiner `c_item_t`, inicialização,
-modelo, transform e inserção/remoção no mundo, sobre o lifetime privado e os
-metadados já validados. O processo com a sonda fixada foi encerrado pelo
-proprietário; a nova sessão foi usada somente para leitura externa. Ampliar
+**Próxima entrega:** identificar e validar um caminho de modelo/render sem HUD,
+controle local ou colisão; comprovar inicialização e inserção/remoção no mundo.
+Lifetime privado independente, ownership do `c_item_t` e metadados estão validados.
+O processo atual voltou a usar a sonda fixada no teste do contêiner; encerrá-lo
+antes de reconstruir a DLL, mesmo após `stop`. Ampliar
 a matriz de estados de M1 e a robustez de M2, sem refazer a busca ampla inicial.
 
 **Antes de começar:** ler os três documentos, conferir Git e toolchain, localizar

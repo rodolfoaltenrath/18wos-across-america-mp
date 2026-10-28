@@ -22,6 +22,8 @@ mod engine_bridge;
 pub mod engine_contract;
 pub mod engine_discovery;
 #[cfg(all(windows, target_arch = "x86"))]
+mod engine_item;
+#[cfg(all(windows, target_arch = "x86"))]
 mod engine_lifecycle;
 #[cfg(all(windows, target_arch = "x86"))]
 mod engine_phase;

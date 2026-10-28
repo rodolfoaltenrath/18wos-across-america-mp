@@ -1,11 +1,12 @@
 //! Own x86 fixture: two module-lock contexts, C factories, thiscall virtuals.
 //! Every allocation is created/destroyed by this host, across the DLL boundary.
+mod item;
 use std::{
     ffi::c_void,
     ptr,
     sync::{
         OnceLock,
-        atomic::{AtomicU32, Ordering},
+        atomic::{AtomicBool, AtomicU32, Ordering},
     },
 };
 #[repr(C)]
@@ -30,11 +31,20 @@ static FREED: AtomicU32 = AtomicU32::new(0);
 static POST: AtomicU32 = AtomicU32::new(0);
 static PRE: AtomicU32 = AtomicU32::new(0);
 static OWNER: AtomicU32 = AtomicU32::new(0);
+static FAIL_PLACED: AtomicBool = AtomicBool::new(false);
+pub fn fail_item_step(step: &str) {
+    match step {
+        "item-fail-fix" => item::fail_fix(),
+        "item-fail-create" => FAIL_PLACED.store(true, Ordering::Release),
+        _ => unreachable!(),
+    }
+}
 #[repr(C)]
 struct Object {
     table: u32,
     padding: [u32; 21],
     destructor: u32,
+    tail: [u32; 11],
 }
 pub struct Fixture {
     record: Box<[u32; 8]>,
@@ -86,6 +96,7 @@ impl Fixture {
         ]
     }
     pub fn assert_clean(&self) {
+        item::assert_clean();
         assert_eq!(ROOT.refs.load(Ordering::Acquire), 7);
         assert_eq!(CHILD.refs.load(Ordering::Acquire), 0);
         assert_eq!(
@@ -94,11 +105,14 @@ impl Fixture {
         );
         assert_eq!(POST.load(Ordering::Acquire), PRE.load(Ordering::Acquire));
     }
+    pub fn item_descriptors(&self) -> [u32; 2] {
+        item::descriptors(self.bindings())
+    }
 }
 pub fn stats() -> serde_json::Value {
     serde_json::json!({"created": CREATED.load(Ordering::Acquire), "freed": FREED.load(Ordering::Acquire),
         "post": POST.load(Ordering::Acquire), "pre": PRE.load(Ordering::Acquire),
-        "root": ROOT.refs.load(Ordering::Acquire), "game": CHILD.refs.load(Ordering::Acquire)})
+        "root": ROOT.refs.load(Ordering::Acquire), "game": CHILD.refs.load(Ordering::Acquire), "items": item::stats()})
 }
 unsafe extern "thiscall" fn no_op(_: *mut Object) {}
 unsafe extern "thiscall" fn post_constructor(object: *mut Object) {
@@ -119,24 +133,38 @@ unsafe extern "thiscall" fn deleting_destructor(object: *mut Object, flags: u32)
     FREED.fetch_add(1, Ordering::AcqRel);
 }
 unsafe extern "C" fn construct(storage: *mut c_void) -> *mut c_void {
-    assert!(storage.is_null());
     CHILD.refs.fetch_add(1, Ordering::AcqRel);
     ROOT.refs.fetch_add(1, Ordering::AcqRel);
     CREATED.fetch_add(1, Ordering::AcqRel);
-    Box::into_raw(Box::new(Object {
+    let value = Object {
         table: TABLE.get().unwrap().as_ptr() as u32,
         padding: [0; 21],
         destructor: 0,
-    }))
-    .cast()
+        tail: [0; 11],
+    };
+    if storage.is_null() {
+        Box::into_raw(Box::new(value)).cast()
+    } else {
+        unsafe {
+            ptr::write(storage.cast(), value);
+        }
+        storage
+    }
 }
 unsafe extern "C" fn destruct(object: *mut c_void, storage: *mut c_void) {
-    assert!(storage.is_null());
-    let table = unsafe { (*(object as *const Object)).table } as *const usize;
-    let method: unsafe extern "thiscall" fn(*mut Object, u32) =
-        unsafe { std::mem::transmute(*table.add(2)) };
-    unsafe {
-        method(object.cast(), 1);
+    if storage.is_null() {
+        let table = unsafe { (*(object as *const Object)).table } as *const usize;
+        let method: unsafe extern "thiscall" fn(*mut Object, u32) =
+            unsafe { std::mem::transmute(*table.add(2)) };
+        unsafe {
+            method(object.cast(), 1);
+        }
+    } else {
+        assert_eq!(storage, object);
+        unsafe {
+            ptr::drop_in_place(object.cast::<Object>());
+        }
+        FREED.fetch_add(1, Ordering::AcqRel);
     }
     CHILD.refs.fetch_sub(1, Ordering::AcqRel);
     ROOT.refs.fetch_sub(1, Ordering::AcqRel);
@@ -151,12 +179,14 @@ unsafe extern "C" fn create(
         OWNER.load(Ordering::Acquire)
     );
     assert!(!variant);
-    assert!(storage.is_null());
+    if !storage.is_null() && FAIL_PLACED.swap(false, Ordering::AcqRel) {
+        return ptr::null_mut();
+    }
     ROOT.refs.fetch_add(1, Ordering::AcqRel);
     let record = record.cast::<u32>();
     let ctor: unsafe extern "C" fn(*mut c_void) -> *mut c_void =
         unsafe { std::mem::transmute(*record.add(6) as usize) };
-    let object = unsafe { ctor(ptr::null_mut()) } as *mut Object;
+    let object = unsafe { ctor(storage) } as *mut Object;
     unsafe {
         (*object).destructor = *record.add(7);
     }
@@ -173,7 +203,6 @@ unsafe extern "C" fn destroy(object: *mut c_void, storage: *mut c_void) {
         unsafe { windows_sys::Win32::System::Threading::GetCurrentThreadId() },
         OWNER.load(Ordering::Acquire)
     );
-    assert!(storage.is_null());
     let table = unsafe { (*(object as *const Object)).table } as *const usize;
     let pre: unsafe extern "thiscall" fn(*mut Object) =
         unsafe { std::mem::transmute(*table.add(3)) };
@@ -183,7 +212,7 @@ unsafe extern "C" fn destroy(object: *mut c_void, storage: *mut c_void) {
     let dtor: unsafe extern "C" fn(*mut c_void, *mut c_void) =
         unsafe { std::mem::transmute((*(object as *const Object)).destructor as usize) };
     unsafe {
-        dtor(object, ptr::null_mut());
+        dtor(object, storage);
     }
     ROOT.refs.fetch_sub(1, Ordering::AcqRel);
 }

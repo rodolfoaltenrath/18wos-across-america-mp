@@ -49,6 +49,11 @@ fn main() -> anyhow::Result<()> {
     #[derive(Subcommand)]
     enum EngineTask {
         PhaseProbe,
+        /// Private container-backed actor, immediately released; never inserted.
+        ItemCycle {
+            #[arg(long, default_value_t=1, value_parser=clap::value_parser!(u32).range(1..=16))]
+            cycles: u32,
+        },
         PrivateCycle {
             #[arg(long, default_value_t=1, value_parser=clap::value_parser!(u32).range(1..=16))]
             cycles: u32,
@@ -113,6 +118,11 @@ fn main() -> anyhow::Result<()> {
                 EngineTask::PumpStatus => api::EngineControl::new(api::UI_PUMP_STATUS),
                 EngineTask::PumpRemove => api::EngineControl::new(api::UI_PUMP_REMOVE),
                 EngineTask::PhaseProbe => api::EngineControl::new(api::PHASE_PROBE),
+                EngineTask::ItemCycle { cycles } => {
+                    let mut b = api::EngineControl::new(api::PRIVATE_ITEM);
+                    b.cycles = cycles;
+                    b
+                }
                 EngineTask::PrivateCycle { cycles } => {
                     let mut b = api::EngineControl::new(api::PRIVATE_CYCLE);
                     b.cycles = cycles;
