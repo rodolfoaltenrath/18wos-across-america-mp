@@ -57,7 +57,7 @@ fn main() -> anyhow::Result<()> {
     #[cfg(target_arch = "x86")]
     let visual_descriptors = fixture_draw::Fixture::visual_descriptors();
     #[cfg(not(target_arch = "x86"))]
-    let visual_descriptors = [0u32; 5];
+    let visual_descriptors = [0u32; 6];
     #[cfg(target_arch = "x86")]
     let actor = fixture_actor::Fixture::new();
     #[cfg(target_arch = "x86")]

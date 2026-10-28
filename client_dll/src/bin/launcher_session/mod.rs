@@ -20,6 +20,8 @@ pub struct Options {
     pub server: SocketAddr,
     pub player: u32,
     pub offset: [f32; 3],
+    /// Apply the AI truck skin (fixture: its own shader name).
+    pub skin: bool,
     /// engine_fixture's first stdout line; None targets the real game.
     pub fixture: Option<Value>,
 }
@@ -97,15 +99,23 @@ pub fn start(c: &Controller, dll: &Path, o: &Options) -> Result<Value> {
             Some(info) => {
                 let mut b = EngineControl::new(api::VISUAL_SHOW_FIXTURE);
                 b.fixture = words(info, "instance_descriptors")?;
-                let functions: [u32; 5] = words(info, "visual_descriptors")?;
-                b.frames[..5].copy_from_slice(&functions);
+                let functions: [u32; 6] = words(info, "visual_descriptors")?;
+                b.frames[..6].copy_from_slice(&functions);
                 api::put(&mut b.name, "models/fixture/truck.psm").map_err(anyhow::Error::msg)?;
+                if o.skin {
+                    api::put(&mut b.message, "models/fixture/truck.shd")
+                        .map_err(anyhow::Error::msg)?;
+                }
                 b
             }
             None => {
                 let mut b = EngineControl::new(api::VISUAL_SHOW);
                 api::put(&mut b.name, "models/ai/truck/models/truck.psm")
                     .map_err(anyhow::Error::msg)?;
+                if o.skin {
+                    api::put(&mut b.message, "models/ai/truck/shaders/truck.shd")
+                        .map_err(anyhow::Error::msg)?;
+                }
                 b
             }
         };

@@ -128,7 +128,7 @@ fn drawn_pose_is_sent_and_a_relayed_player_pose_drives_the_test_visual() {
     }
     let mut show = EngineControl::new(api::VISUAL_SHOW_FIXTURE);
     show.fixture = std::array::from_fn(|i| words("instance_descriptors", i));
-    for i in 0..5 {
+    for i in 0..6 {
         show.frames[i] = words("visual_descriptors", i);
     }
     api::put(&mut show.name, "models/fixture/truck.psm").unwrap();

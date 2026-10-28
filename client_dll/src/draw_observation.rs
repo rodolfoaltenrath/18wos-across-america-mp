@@ -130,6 +130,8 @@ pub struct Visual {
     pub offset: [f32; 3],
     /// 0 = local player plus offset; otherwise the relayed player id.
     pub target: u32,
+    /// Parts that received the requested shader at creation (0 = fallback).
+    pub skinned_parts: u32,
 }
 impl Visual {
     pub fn encode(&self, b: &mut EngineControl) {
@@ -145,6 +147,7 @@ impl Visual {
         b.object_destructor = self.offset[1].to_bits();
         b.constructor = self.offset[2].to_bits();
         b.destructor = self.target;
+        b.executable_frame = self.skinned_parts;
     }
     pub fn decode(b: &EngineControl) -> Self {
         Self {
@@ -159,6 +162,7 @@ impl Visual {
             flushes: b.registry_count,
             offset: [b.object_vtable, b.object_destructor, b.constructor].map(f32::from_bits),
             target: b.destructor,
+            skinned_parts: b.executable_frame,
         }
     }
 }
@@ -239,6 +243,7 @@ mod tests {
             flushes: 48,
             offset: [400.0, 0.0, -1.5],
             target: 7,
+            skinned_parts: 3,
         };
         let mut b = crate::api::EngineControl::new(40);
         v.encode(&mut b);

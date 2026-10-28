@@ -61,9 +61,12 @@ fn main() -> anyhow::Result<()> {
             /// NEW folder: copy saves and hash originals+saves before touching the game.
             #[arg(long)]
             backup: Option<PathBuf>,
-            /// Saves folder (default: %USERPROFILE%Documents8 WoS Across Americasaves).
+            /// Saves folder (default: %USERPROFILE%/Documents/18 WoS Across America/saves).
             #[arg(long)]
             saves: Option<PathBuf>,
+            /// Keep the fallback shader instead of the AI truck skin.
+            #[arg(long)]
+            no_skin: bool,
         },
         /// Client, visual, draw and relayed players in one JSON report.
         SessionStatus,
@@ -106,6 +109,9 @@ fn main() -> anyhow::Result<()> {
             /// 0 follows the local player plus offset.
             #[arg(long, default_value = "0", value_parser = parse_player)]
             player: u32,
+            /// Skin applied to every part at creation (game: models/ai/truck/shaders/truck.shd).
+            #[arg(long)]
+            shader: Option<String>,
         },
         VisualHide,
         /// Frees the instance only after queued draws were flushed.
@@ -204,6 +210,7 @@ fn main() -> anyhow::Result<()> {
             fixture_info,
             backup,
             saves,
+            no_skin,
         } => {
             let backup = match backup {
                 Some(directory) => {
@@ -239,6 +246,7 @@ fn main() -> anyhow::Result<()> {
                 server: *server,
                 player: *player,
                 offset: [offset[0], offset[1], offset[2]],
+                skin: !*no_skin,
                 fixture,
             };
             let mut report = launcher_session::start(&controller, &dll, &options)?;
@@ -305,8 +313,12 @@ fn main() -> anyhow::Result<()> {
                     model,
                     offset,
                     player,
+                    shader,
                 } => {
                     let mut b = api::EngineControl::new(api::VISUAL_SHOW);
+                    if let Some(shader) = shader {
+                        api::put(&mut b.message, &shader).map_err(anyhow::Error::msg)?;
+                    }
                     b.entity = player;
                     api::put(&mut b.name, &model).map_err(anyhow::Error::msg)?;
                     [b.count_before, b.count_created, b.count_after] =

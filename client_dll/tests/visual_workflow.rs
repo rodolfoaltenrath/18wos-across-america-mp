@@ -60,10 +60,11 @@ fn test_visual_draws_only_in_validated_context_and_releases_after_flush() {
     controller.engine_control(&dll, &mut pump).unwrap();
     let mut show = EngineControl::new(api::VISUAL_SHOW_FIXTURE);
     show.fixture = std::array::from_fn(|i| words("instance_descriptors", i));
-    for i in 0..5 {
+    for i in 0..6 {
         show.frames[i] = words("visual_descriptors", i);
     }
     api::put(&mut show.name, "models/fixture/truck.psm").unwrap();
+    api::put(&mut show.message, "models/fixture/truck.shd").unwrap();
     [show.count_before, show.count_created, show.count_after] =
         [400f32, 0.0, -50.0].map(f32::to_bits);
     assert!(error(&controller, &dll, show).contains("draw observer"));
@@ -76,6 +77,10 @@ fn test_visual_draws_only_in_validated_context_and_releases_after_flush() {
     let mut game = show;
     game.command = api::VISUAL_SHOW;
     assert!(error(&controller, &dll, game).contains("mode does not match"));
+    let mut bad_skin = show;
+    api::put(&mut bad_skin.message, "models/fixture/truck.psm").unwrap();
+    assert!(error(&controller, &dll, bad_skin).contains("shader requires"));
+    assert_eq!(status(&controller, &dll).state, 0);
     let mut far = show;
     far.count_before = 20_000f32.to_bits();
     assert!(error(&controller, &dll, far).contains("within 100 m"));
@@ -92,6 +97,7 @@ fn test_visual_draws_only_in_validated_context_and_releases_after_flush() {
     );
     assert!(deep.skipped > 0 && deep.item != 0);
     assert_eq!(deep.offset, [400.0, 0.0, -50.0]);
+    assert_eq!(deep.skinned_parts, 3);
     assert_eq!(send(&mut host, &mut output, "draw-shallow"), "armed");
     std::thread::sleep(Duration::from_millis(60));
     let drawing = status(&controller, &dll);
@@ -100,6 +106,7 @@ fn test_visual_draws_only_in_validated_context_and_releases_after_flush() {
         serde_json::from_str(&send(&mut host, &mut output, "visual-last")).unwrap();
     assert_eq!(last["item"], drawing.item);
     assert_eq!(last["depth"], 1);
+    assert_eq!(last["shader_calls"], 3);
     let x = last["position"][0].as_f64().unwrap();
     assert!(x > 400.0 && x.fract() == 0.0);
     assert_eq!(last["position"][1], 2.0);

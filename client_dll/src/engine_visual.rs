@@ -25,6 +25,9 @@ use windows_sys::Win32::{
 type Plain = unsafe extern "C" fn();
 type Vector = unsafe extern "C" fn(*const f32);
 type Draw = unsafe extern "C" fn(*mut c_void, u32, u32);
+/// psm_set_shader(item, part, path): mm_precache + set_shader_item, which
+/// releases the part's previous shader and consumes the new reference.
+type SetShader = unsafe extern "C" fn(*mut c_void, u32, *const std::ffi::c_char) -> *mut c_void;
 /// Flushes that must pass after the last draw before the instance may be freed.
 pub const SETTLE_FLUSHES: u32 = 8;
 static STATE: AtomicU32 = AtomicU32::new(0); // 0 none, 1 allocated
@@ -39,6 +42,7 @@ static DRAWN: AtomicU32 = AtomicU32::new(0);
 static SKIPPED: AtomicU32 = AtomicU32::new(0);
 static LAST_FLUSH: AtomicU32 = AtomicU32::new(0);
 static HIDDEN_AT: AtomicU32 = AtomicU32::new(0);
+static SKINNED: AtomicU32 = AtomicU32::new(0);
 /// 0 = local player plus offset; otherwise the relayed player id.
 static TARGET: AtomicU32 = AtomicU32::new(0);
 /// Older relayed samples are not drawn (no extrapolation yet).
@@ -198,7 +202,7 @@ fn draw_functions(
     process: &Process,
     block: &EngineControl,
     fixture: bool,
-) -> Result<[u32; 5], String> {
+) -> Result<[u32; 6], String> {
     let modules = process.modules().map_err(|e| e.to_string())?;
     let get = |name: &str| {
         modules
@@ -208,7 +212,7 @@ fn draw_functions(
     };
     if fixture {
         let host = get("engine_fixture.exe")?;
-        let functions: [u32; 5] = std::array::from_fn(|i| block.frames[i]);
+        let functions: [u32; 6] = std::array::from_fn(|i| block.frames[i]);
         for f in functions {
             executable(f, host)?;
         }
@@ -225,13 +229,14 @@ fn draw_functions(
         })
         .collect::<Result<Vec<_>, String>>()?;
     let game = get("game.dll")?;
-    let mut out = [0; 5];
+    let mut out = [0; 6];
     for (i, (module, name, rva, slot)) in [
         ("psm.dll", "psm_draw", 0x6a10, 0x160ba4),
         ("prism3d.exe", "gfx_push", 0x2de0, 0x16104c),
         ("prism3d.exe", "gfx_pop", 0x2eb0, 0x160a98),
         ("prism3d.exe", "gfx_translate", 0x30e0, 0x160fd8),
         ("prism3d.exe", "gfx_qrotate", 0x3140, 0x160fe4),
+        ("psm.dll", "psm_set_shader", 0x3a60, 0x16102c),
     ]
     .into_iter()
     .enumerate()
@@ -294,6 +299,16 @@ fn create(block: &EngineControl, fixture: bool) -> Result<(), String> {
     if !fixture && path != "models/ai/truck/models/truck.psm" {
         return Err("test visual currently restricted to the profiled truck model".into());
     }
+    // Optional skin in `message` (input only; errors overwrite it on return).
+    let shader = api::text(&block.message)?;
+    let shader = (!shader.is_empty())
+        .then(|| {
+            if !fixture && shader != "models/ai/truck/shaders/truck.shd" {
+                return Err("test visual skin restricted to the AI truck shader".to_string());
+            }
+            ModelName::shader(shader)
+        })
+        .transpose()?;
     let process = Process::open(unsafe { GetCurrentProcessId() }).map_err(|e| e.to_string())?;
     let functions = draw_functions(&process, block, fixture)?;
     let (alloc_info, release_info, _) = info::bindings(&process, block, fixture)?;
@@ -319,15 +334,37 @@ fn create(block: &EngineControl, fixture: bool) -> Result<(), String> {
         unsafe { free(item) };
         return Err(e);
     }
+    let mut skinned = 0;
+    if let Some(shader) = &shader {
+        let set: SetShader = unsafe { std::mem::transmute(functions[5] as usize) };
+        let parts = value(&process, item as u32 + 8).and_then(|data| value(&process, data + 4));
+        let result = parts.and_then(|parts| {
+            for part in 0..parts.min(256) {
+                // SAFETY: profiled cdecl export; part < model part count; owned CString.
+                if unsafe { set(item, part, shader.as_cstr().as_ptr()) }.is_null() {
+                    return Err(format!("psm_set_shader failed on part {part}"));
+                }
+                skinned += 1;
+            }
+            Ok(())
+        });
+        if let Err(e) = result {
+            // Never drawn yet: freeing releases every shader already set.
+            unsafe { free(item) };
+            return Err(e);
+        }
+    }
     for (slot, v) in FUNCTIONS.iter().zip(
-        functions
-            .into_iter()
+        functions[..5]
+            .iter()
+            .copied()
             .chain([free as usize as u32, release_info as usize as u32]),
     ) {
         slot.store(v as usize, Ordering::Release);
     }
     ITEM.store(item as usize, Ordering::Release);
     INFO.store(pointer as usize, Ordering::Release);
+    SKINNED.store(skinned, Ordering::Release);
     std::mem::forget(descriptor); // Ownership moves to the retained visual.
     DRAWN.store(0, Ordering::Release);
     SKIPPED.store(0, Ordering::Release);
@@ -393,6 +430,7 @@ fn fill(b: &mut EngineControl) {
             .each_ref()
             .map(|o| f32::from_bits(o.load(Ordering::Acquire))),
         target: TARGET.load(Ordering::Acquire),
+        skinned_parts: SKINNED.load(Ordering::Acquire),
     }
     .encode(b);
 }

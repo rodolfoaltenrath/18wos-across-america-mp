@@ -19,11 +19,20 @@ impl ModelName {
         &self.0
     }
     pub(super) fn parse(path: &str) -> Result<Self, String> {
+        Self::resource(path, ".psm")
+    }
+    /// Shader (.shd) under models/, same contract as model paths.
+    pub(super) fn shader(path: &str) -> Result<Self, String> {
+        Self::resource(path, ".shd").map_err(|_| {
+            "shader requires a relative models/*.shd ASCII path of at most 63 bytes".into()
+        })
+    }
+    fn resource(path: &str, extension: &str) -> Result<Self, String> {
         // A deliberately small game-relative path contract. No truncation,
         // platform path normalization, or arbitrary engine resource names.
         if path.len() >= CAPACITY
             || !path.starts_with("models/")
-            || !path.ends_with(".psm")
+            || !path.ends_with(extension)
             || path.split('/').any(|part| matches!(part, "" | "." | ".."))
             || !path
                 .bytes()
@@ -207,5 +216,8 @@ mod tests {
             assert!(ModelName::parse(path).is_err(), "{path:?}");
         }
         assert!(ModelName::parse(&format!("models/{}.psm", "a".repeat(53))).is_err());
+        assert!(ModelName::shader("models/ai/truck/shaders/truck.shd").is_ok());
+        assert!(ModelName::shader("models/ai/truck/models/truck.psm").is_err());
+        assert!(ModelName::shader("models/../truck.shd").is_err());
     }
 }

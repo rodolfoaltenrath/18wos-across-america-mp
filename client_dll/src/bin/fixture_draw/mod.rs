@@ -39,6 +39,7 @@ static WORLD: AtomicU32 = AtomicU32::new(0);
 static OWNER: AtomicU32 = AtomicU32::new(0);
 static INVALID: AtomicBool = AtomicBool::new(false);
 static RETAIN: AtomicBool = AtomicBool::new(false);
+static SHADER_CALLS: AtomicU32 = AtomicU32::new(0);
 #[derive(Default)]
 struct Drawn {
     calls: u32,
@@ -139,14 +140,15 @@ impl Fixture {
             self.viewport.as_ref() as *const AtomicU32 as u32,
         ]
     }
-    /// psm_draw, gfx_push, gfx_pop, gfx_translate, gfx_qrotate.
-    pub fn visual_descriptors() -> [u32; 5] {
+    /// psm_draw, gfx_push, gfx_pop, gfx_translate, gfx_qrotate, psm_set_shader.
+    pub fn visual_descriptors() -> [u32; 6] {
         [
             psm_draw as *const () as u32,
             push as *const () as u32,
             pop as *const () as u32,
             translate as *const () as u32,
             qrotate as *const () as u32,
+            set_shader as *const () as u32,
         ]
     }
     pub fn car(&self) -> u32 {
@@ -229,7 +231,7 @@ pub fn command(line: &str) -> bool {
             let d = DRAWN.lock().unwrap();
             println!(
                 "{}",
-                serde_json::json!({"calls":d.calls,"item":d.item,"depth":d.depth,"position":d.position,"quaternion":d.quaternion,"pending":d.pending.len()})
+                serde_json::json!({"calls":d.calls,"item":d.item,"depth":d.depth,"position":d.position,"quaternion":d.quaternion,"pending":d.pending.len(),"shader_calls":SHADER_CALLS.load(Ordering::Acquire)})
             );
             return true;
         }
@@ -286,4 +288,17 @@ unsafe extern "C" fn psm_draw(item: *mut c_void, cull: u32, color: u32) {
     d.quaternion = quaternion;
     unsafe { *item.cast::<u32>().add(0x58 / 4) += 1 };
     d.pending.push(item as u32);
+}
+unsafe extern "C" fn set_shader(
+    item: *mut c_void,
+    part: u32,
+    path: *const std::ffi::c_char,
+) -> *mut c_void {
+    owner();
+    assert!(!item.is_null() && part < 3);
+    let path = unsafe { std::ffi::CStr::from_ptr(path) };
+    assert_eq!(path.to_bytes(), b"models/fixture/truck.shd");
+    SHADER_CALLS.fetch_add(1, Ordering::AcqRel);
+    // A borrowed, non-null item handle is all the caller inspects.
+    item
 }
