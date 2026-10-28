@@ -1,6 +1,7 @@
 //! Own x86 fixture: two module-lock contexts, C factories, thiscall virtuals.
 //! Every allocation is created/destroyed by this host, across the DLL boundary.
 mod info;
+mod instance;
 mod item;
 mod model;
 use std::{
@@ -35,6 +36,10 @@ static PRE: AtomicU32 = AtomicU32::new(0);
 static OWNER: AtomicU32 = AtomicU32::new(0);
 static FAIL_PLACED: AtomicBool = AtomicBool::new(false);
 pub fn fail_item_step(step: &str) {
+    if step.starts_with("instance-") {
+        instance::arm(step);
+        return;
+    }
     if step.starts_with("info-") {
         info::arm(step);
         return;
@@ -108,6 +113,7 @@ impl Fixture {
         ]
     }
     pub fn assert_clean(&self) {
+        instance::assert_clean();
         info::assert_clean();
         item::assert_clean();
         assert_eq!(ROOT.refs.load(Ordering::Acquire), 7);
@@ -130,11 +136,14 @@ impl Fixture {
     pub fn info_descriptors(&self) -> [u32; 3] {
         info::descriptors()
     }
+    pub fn instance_descriptors(&self) -> [u32; 6] {
+        instance::descriptors()
+    }
 }
 pub fn stats() -> serde_json::Value {
     serde_json::json!({"created": CREATED.load(Ordering::Acquire), "freed": FREED.load(Ordering::Acquire),
         "post": POST.load(Ordering::Acquire), "pre": PRE.load(Ordering::Acquire),
-        "root": ROOT.refs.load(Ordering::Acquire), "game": CHILD.refs.load(Ordering::Acquire), "items": item::stats(), "model_calls": model::calls(), "info":info::stats()})
+        "root": ROOT.refs.load(Ordering::Acquire), "game": CHILD.refs.load(Ordering::Acquire), "items": item::stats(), "model_calls": model::calls(), "info":info::stats(),"instance":instance::stats()})
 }
 unsafe extern "thiscall" fn no_op(_: *mut Object) {}
 unsafe extern "thiscall" fn post_constructor(object: *mut Object) {

@@ -8,30 +8,30 @@ use crate::{
 };
 use std::ffi::{c_char, c_void};
 use windows_sys::Win32::System::Threading::{GetCurrentProcessId, GetCurrentThreadId};
-type Allocate = unsafe extern "C" fn(*const c_char) -> *mut c_void;
-type Release = unsafe extern "C" fn(*mut c_void);
-struct Info {
-    pointer: *mut c_void,
-    release: Release,
+pub(super) type Allocate = unsafe extern "C" fn(*const c_char) -> *mut c_void;
+pub(super) type Release = unsafe extern "C" fn(*mut c_void);
+pub(super) struct Info {
+    pub(super) pointer: *mut c_void,
+    pub(super) release: Release,
 }
 impl Drop for Info {
     fn drop(&mut self) {
         unsafe { (self.release)(self.pointer) };
     }
 }
-fn value(process: &Process, at: u32) -> Result<u32, String> {
+pub(super) fn value(process: &Process, at: u32) -> Result<u32, String> {
     word(&mut |a, b| read(process, a, b), at)
 }
-fn offset(at: u32, n: u32) -> Result<u32, String> {
+pub(super) fn offset(at: u32, n: u32) -> Result<u32, String> {
     at.checked_add(n).ok_or("info address overflow".into())
 }
 #[derive(PartialEq)]
-struct Context {
+pub(super) struct Context {
     pointer: u32,
     parent: u32,
-    count: u32,
+    pub(super) count: u32,
 }
-fn context(process: &Process, head: u32) -> Result<Context, String> {
+pub(super) fn context(process: &Process, head: u32) -> Result<Context, String> {
     let pointer = value(process, head)?;
     if pointer == 0 || !pointer.is_multiple_of(4) {
         return Err("PSM context is null or misaligned".into());
@@ -42,20 +42,23 @@ fn context(process: &Process, head: u32) -> Result<Context, String> {
         count: value(process, offset(pointer, 8)?)?,
     })
 }
-fn same(a: &Context, b: &Context) -> Result<(), String> {
+pub(super) fn same(a: &Context, b: &Context) -> Result<(), String> {
     if a.pointer != b.pointer || a.parent != b.parent {
         return Err("PSM context identity changed".into());
     }
     Ok(())
 }
-pub fn run(mut block: EngineControl, fixture: bool) -> Result<EngineControl, String> {
-    if !(1..=16).contains(&block.cycles) {
-        return Err("info cycles must be 1..=16".into());
-    }
-    let model = ModelName::parse(api::text(&block.name)?)?;
-    let process = Process::open(unsafe { GetCurrentProcessId() }).map_err(|e| e.to_string())?;
+pub(super) fn bindings(
+    process: &Process,
+    block: &EngineControl,
+    fixture: bool,
+) -> Result<(Allocate, Release, u32), String> {
     let modules = process.modules().map_err(|e| e.to_string())?;
-    let (allocate, release, head) = if fixture && block.command == api::PRIVATE_INFO_FIXTURE {
+    let (allocate, release, head) = if fixture
+        && matches!(
+            block.command,
+            api::PRIVATE_INFO_FIXTURE | api::PRIVATE_INSTANCE_FIXTURE
+        ) {
         let owner = modules
             .iter()
             .find(|m| m.name.eq_ignore_ascii_case("engine_fixture.exe"))
@@ -63,8 +66,8 @@ pub fn run(mut block: EngineControl, fixture: bool) -> Result<EngineControl, Str
         executable(block.fixture[0], owner)?;
         executable(block.fixture[1], owner)?;
         (block.fixture[0], block.fixture[1], block.fixture[2])
-    } else if !fixture && block.command == api::PRIVATE_INFO {
-        let audit = crate::inspection::resources::inspect(&process).map_err(|e| e.to_string())?;
+    } else if !fixture && matches!(block.command, api::PRIVATE_INFO | api::PRIVATE_INSTANCE) {
+        let audit = crate::inspection::resources::inspect(process).map_err(|e| e.to_string())?;
         if !audit.psm_exports_match {
             return Err("PSM resource bindings do not match the verified profile".into());
         }
@@ -82,7 +85,7 @@ pub fn run(mut block: EngineControl, fixture: bool) -> Result<EngineControl, Str
             (0xea58, 0x13630),
             (0xeb28, 0x13700),
         ] {
-            if value(&process, add(owner, slot)?)? != add(core, expected)? {
+            if value(process, add(owner, slot)?)? != add(core, expected)? {
                 return Err("PSM core resource/allocator callbacks differ from profile".into());
             }
         }
@@ -96,6 +99,15 @@ pub fn run(mut block: EngineControl, fixture: bool) -> Result<EngineControl, Str
     };
     let allocate: Allocate = unsafe { std::mem::transmute(allocate as usize) };
     let release: Release = unsafe { std::mem::transmute(release as usize) };
+    Ok((allocate, release, head))
+}
+pub fn run(mut block: EngineControl, fixture: bool) -> Result<EngineControl, String> {
+    if !(1..=16).contains(&block.cycles) {
+        return Err("info cycles must be 1..=16".into());
+    }
+    let model = ModelName::parse(api::text(&block.name)?)?;
+    let process = Process::open(unsafe { GetCurrentProcessId() }).map_err(|e| e.to_string())?;
+    let (allocate, release, head) = bindings(&process, &block, fixture)?;
     let mut verified = 0;
     let position = if fixture {
         None

@@ -48,6 +48,10 @@ fn main() -> anyhow::Result<()> {
     let info_descriptors = actor.info_descriptors();
     #[cfg(not(target_arch = "x86"))]
     let info_descriptors = [0u32; 3];
+    #[cfg(target_arch = "x86")]
+    let instance_descriptors = actor.instance_descriptors();
+    #[cfg(not(target_arch = "x86"))]
+    let instance_descriptors = [0u32; 6];
     PEEK_SLOT.store(
         PeekMessageA as *const () as usize,
         std::sync::atomic::Ordering::Release,
@@ -126,7 +130,7 @@ fn main() -> anyhow::Result<()> {
     ensure!(!window.is_null(), "cannot create fixture window");
     println!(
         "{}",
-        serde_json::json!({"pid":unsafe{GetCurrentProcessId()},"window":window as usize,"thread":unsafe{GetCurrentThreadId()}, "peek_slot": peek_slot, "factory": bindings, "item_descriptors": item_descriptors, "model_definitions": model_definitions, "model_setter": model_setter,"info_descriptors":info_descriptors})
+        serde_json::json!({"pid":unsafe{GetCurrentProcessId()},"window":window as usize,"thread":unsafe{GetCurrentThreadId()}, "peek_slot": peek_slot, "factory": bindings, "item_descriptors": item_descriptors, "model_definitions": model_definitions, "model_setter": model_setter,"info_descriptors":info_descriptors,"instance_descriptors":instance_descriptors})
     );
     std::io::stdout().flush()?;
     let address = window as usize;
@@ -136,16 +140,23 @@ fn main() -> anyhow::Result<()> {
                 break;
             };
             #[cfg(target_arch = "x86")]
-            if line.starts_with("info-")
-                || matches!(
-                    line.as_str(),
-                    "item-fail-fix"
-                        | "item-fail-create"
-                        | "model-fail-set"
-                        | "model-no-write"
-                        | "model-side-effect"
-                )
-            {
+            if matches!(
+                line.as_str(),
+                "item-fail-fix"
+                    | "item-fail-create"
+                    | "model-fail-set"
+                    | "model-no-write"
+                    | "model-side-effect"
+                    | "info-cold"
+                    | "info-null"
+                    | "info-repeat-growth"
+                    | "info-normal"
+                    | "instance-null"
+                    | "instance-bad-header"
+                    | "instance-cold"
+                    | "instance-repeat-growth"
+                    | "instance-normal"
+            ) {
                 fixture_actor::fail_item_step(&line);
                 println!("armed");
                 continue;

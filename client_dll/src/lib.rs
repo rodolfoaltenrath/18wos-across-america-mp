@@ -24,6 +24,8 @@ pub mod engine_discovery;
 #[cfg(all(windows, target_arch = "x86"))]
 mod engine_info;
 #[cfg(all(windows, target_arch = "x86"))]
+mod engine_instance;
+#[cfg(all(windows, target_arch = "x86"))]
 mod engine_item;
 #[cfg(all(windows, target_arch = "x86"))]
 mod engine_lifecycle;

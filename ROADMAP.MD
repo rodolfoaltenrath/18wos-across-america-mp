@@ -56,7 +56,7 @@ repositório e orientar futuras sessões de desenvolvimento.
 | Host de teste | `client_probe`, controlador entre processos e `test_host`; bancada x86 passou sob Proton | Testes de sessão longa, saída abrupta e duas máquinas |
 | Investigação | `memory_tool` Rust: processos, regiões, busca, filtros, comparação, ponteiros, observação e envio externo | Perfis de versões e ciclo de vida do veículo |
 | Coordenadas | Cadeia validada após movimento, reinício e comparação exata com save | Escala física, outros estados/versões e amostragem consistente |
-| Multiplayer visual | Lifetime privado, setter PMD, auditoria PSM e carga/liberação de descritor PSM validados; nenhum remoto no mundo | Instância/modelo, render, inserção, transform e remoção da entidade visual |
+| Multiplayer visual | Lifetime privado, setter PMD, auditoria PSM e carga/liberação de descritor e instância PSM validados; nenhum remoto no mundo | Render, skins, inserção, transform e remoção da entidade visual |
 | GitHub | Remoto `rodolfoaltenrath/18wos-across-america-mp`, histórico inicial Apache-2.0 preservado, exclusão do jogo | Manter staging auditado e documentação atualizada em cada entrega |
 
 O estado atual **não é multiplayer jogável**. Transmitir números e recebê-los
@@ -946,6 +946,114 @@ Depois comprovar estado de render e transform, inserção/remoção e retenção
 entre frames. Não inicializar `actors.car` com HUD nem preencher os slots PMD
 nulos para contornar essa dependência. Caminhões remotos continuam pendentes.
 
+### M4 — Instância PSM privada: implementação, bancada e partida — 28/10/2026
+
+Entregue `engine instance-cycle --model models/ai/truck/models/truck.psm
+[--cycles 1..16]`, na fila do loop externo. O caminho do jogo é restrito a esse
+modelo; capacidade 1, sem skins fornecidas e sem animações. `engine_info`
+compartilha somente os verificadores/guarda já usados; a nova fachada tem
+guarda própria para a instância. ABI v3/664 bytes, comandos 21/22, configuração
+e rede v1 preservadas. As assinaturas cdecl são:
+
+- `psm_alloc_inst +0x31c0`: `(info*, skins**, skin_count, capacity) -> c_item_t*`.
+  O info permanece retido pelo chamador, passando de 1 para 2 durante a instância.
+- `psm_free +0x3750`: `(c_item_t*) -> void`; recebe o item gerenciado, e não
+  os dados de tamanho variável em `item+8`. Libera shaders/pacotes, a referência
+  de info, residência/acesso e a referência forte do próprio item.
+
+O wrapper `psm_alloc +0x3160` cria/solta seu próprio info; não é usado pela
+ferramenta. Manter o info visível permite verificar sua referência e os contadores
+do item do modelo enquanto uma instância é criada e removida.
+
+O perfil exige os quatro hashes e os seis bindings existentes, mais
+`game.dll+0x161088` → export `psm_alloc_inst`. Confere seis callbacks internos:
+`PSM+0xeb40` → núcleo `+0x131b0` (item anônimo), `+0xe94c` → `+0x13420`
+(`ci_alloc_mem_fix`), `+0xeaec` → `+0x133f0` (MLRU add), `+0xe9ac` →
+`+0x13410` (MLRU move), `+0xe9e8` → `+0x2720` (packet alloc), `+0xea24` →
+`+0x2750` (packet free). O import `+0xb038` deve apontar a
+`p3shared.dll+0xd820`, setter thiscall do item de um pacote. A tabela
+`psm.dll+0xe568` deve coincidir com os nove campos perfilados, inclusive o
+callback de movimentação `+0x2eb0` e o unlock `+0x1010`. A ferramenta não chama
+esses callbacks diretamente: as chamadas são responsabilidade do provedor PSM.
+
+**Verificações da instância:** item anônimo/carregado, referência forte 1,
+residência 1, acesso 0 e identidade das operações. Dados alinhados e limitados
+a 16 MiB, cabeçalho mínimo, ligação ao info, capacidade 1, escala inicial 1 e
+campos de transformação inicialmente zerados. Contagens limitadas a 4096
+esqueletos e 256 partes; arrays de shaders/pacotes dentro do bloco. Cada pacote
+deve ter referência 1, ligar ao item correto e declarar o índice da parte.
+Shaders compartilhados são agregados para conferir todos os decrementos.
+Após `psm_free`, o info volta a 1, os contadores do modelo voltam ao baseline,
+o item mostra referência forte zero e o contexto não cresce nas repetições.
+O último info libera um lock do contexto. Releituras de itens já liberados são
+diagnósticas via API do sistema: memória ilegível ou reciclada falha a prova,
+sem dereferência Rust e sem nova tentativa de liberar o item.
+
+**Bancada própria:** 24 instâncias de 256 bytes criadas/liberadas, seis infos,
+três pacotes por instância e dois shaders, um deles usado por duas partes.
+Exercitados quatro ciclos normais, 16 incluindo saldo inicial simulado, retorno
+nulo, cabeçalho inválido com limpeza, crescimento repetido recusado após
+liberação, recuperação e timeout dentro de pump aninhado sem chamada tardia.
+Modo indevido, callback inválido, caminho inválido e limite de ciclos falham
+antes da alocação. Ao final: 6144 bytes próprios alocados/liberados, pool com
+referência zero, shaders de volta a 3/5, modelo de volta a 3 e contexto em
+7 + 4 referências simuladas explicitamente retidas. A fixture não reproduz
+todo o gerenciador de recursos comercial.
+
+Build release x86, Clippy x86/nativo, formatação, 26 testes x86 e 34 nativos
+passaram. Os testes de integração carregam a DLL release real na bancada.
+
+**Primeira tentativa real:** PID 14068/thread 17784. A conferência recusou a
+operação antes de chamar os alocadores: o perfil havia confundido o slot
+`+0xe94c` com `mm_alloc_mem +0x13380`. A leitura externa e a associação nome/slot
+confirmaram `ci_alloc_mem_fix +0x13420`; o perfil foi corrigido, sem remover a
+verificação. Sonda/dispatcher removidos, filas vazias, worker parado e processo
+encerrado normalmente pelo proprietário antes de reconstruir a DLL. Esse
+ensaio recusado não conta como criação/liberação validada no jogo.
+
+**Validação real após correção:** novo PID 2044/thread 19340. A leitura externa
+conferiu a tabela de operações inteira, o setter de pacote e o slot do export
+antes de instalar a sonda. O ciclo passou na fila de fase e criou um item com
+bloco de dados de **26.268 bytes**. Foram 18 ciclos bem-sucedidos:
+
+| Cenário | Ciclos | Contexto antes/criado/depois, info retido | Saldo módulo info/instância |
+| --- | --- | --- | --- |
+| Primeira carga | 1 | 897 / 898 / 897 | +1 / 0 |
+| Repetições na mesma partida | 16 | 897 / 898 / 897 | 0 / 0 |
+| Após dirigir, curva, menu e carregar save existente | 1 | 892 / 893 / 892 | 0 / 0 |
+
+As verificações de cabeçalho, referências dos shaders, item devolvido ao pool,
+contadores do modelo e info `1→2→1` passaram. Após cada comando, o último info
+também liberou um lock. A posição do caminhão local não mudou dentro de cada
+operação. A diferença de baseline após recarga não é atribuída ao diagnóstico.
+O saldo inicial +1 pertence ao caminho de info/modelo já observado; nenhuma
+retenção adicional de módulo foi observada nos ciclos de instância. Isso não
+mede todos os bytes ou recursos transitivos do gerenciador comercial.
+
+Sonda restaurada (`pump_state=2`), dispatcher removido (`active=0`), worker
+parado, filas/inflight zerados e quatro tarefas de fase completas. Backups dos
+dois saves foram preparados antes da carga da DLL; seus hashes e os quatro
+originais continuaram iguais. O proprietário confirmou o encerramento normal;
+a enumeração posterior não encontrou o jogo. Logs/disassembly/cópias comerciais
+somente em `target/analysis/resource-instance/`, fora do Git.
+
+**Limites:** sem skins próprias, o PSM usa `/shaders//specials/notfound.shd`.
+Não há draw, física, HUD, world insert ou instância persistente entre frames.
+Não tratar a fila do loop como fase de render comprovada, nem declarar todo
+heap/cache liberado pelos contadores diretos de módulo observados.
+
+**Próxima dependência:** comprovar fase, estado de matrizes/câmera, skins e
+lifetime da fila gráfica antes de desenhar. A análise estática de `psm_draw`
+mostra `r_proto_t::set_vpacket` (p3shared `+0xd830` incrementa a referência do
+pacote) e chamada a `gfx_queue_proto` pelo slot PSM `+0xe744` em `+0x6cf1`.
+Depois, o draw decrementa a referência local do proto, que pode continuar vivo
+na fila. Logo, o ciclo criar/desenhar/liberar imediatamente não é autorizado
+pela prova atual: precisam ser identificados o consumo/drenagem e as referências
+que ainda usam o item e seus dados. O shim de PeekMessage não comprova essa
+fronteira de render. Investigar observação passiva antes de chamadas gráficas.
+Depois validar um único visual persistente, transform, remoção em menus/reload
+e integração de jogadores. Não repetir estes 18 ciclos sem mudança que exija.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -1097,6 +1205,9 @@ mundo ainda precisam de contratos e testes próprios.
   variante, armazenamento, tamanho, alocação e liberação pareadas.
 - [x] Validar item anônimo, armazenamento explícito e retorno ao pool em host
   próprio e na partida, incluindo recarga e equilíbrio de bytes/referências.
+- [x] Validar setter PMD privado e descritor PSM, com bindings/hashes e recarga.
+- [x] Criar/liberar instância PSM privada sem draw: 18 ciclos reais, incluindo
+  recarga; fixture com shaders compartilhados, falhas e cancelamento.
 - [ ] Confirmar ABI/ownership de inicialização, inserção, transform e remoção
   do mundo antes de ampliar as chamadas `unsafe`.
 - [x] Criar fachada Rust para o ciclo privado, mantendo offsets e chamadas
@@ -1478,14 +1589,14 @@ e [seleção de toolchain com rustup](https://rust-lang.github.io/rustup/overrid
 
 ## 9. Registro de passagem para a próxima etapa
 
-**Próxima entrega:** provar o par de instância PSM/liberação, seus recursos e
-skins antes de render, sem HUD, controle local ou colisão. Depois comprovar
-transform, inserção/remoção e retenção entre frames. Lifetime, ownership,
-metadados, setter PMD e descritor PSM já têm provas registradas; não repeti-las
-sem necessidade. A última sessão PSM teve sonda/dispatcher removidos e worker
-parado; o fechamento normal foi confirmado e o processo deixou de existir.
-Reenumerar antes do próximo build. Ampliar a matriz de M1 e a robustez de M2 sem refazer a
-busca ampla inicial.
+**Próxima entrega:** observar a fase gráfica e comprovar matrizes/câmera,
+skins e drenagem das filas antes de um draw. Depois manter um único visual e
+validar transform/remoção em menus e reload. Lifetime, ownership, metadados,
+setter PMD, descritor e instância PSM privados já têm provas registradas;
+não repeti-las sem necessidade. A última sessão teve sonda/dispatcher removidos,
+worker parado e encerramento normal confirmado, sem processo restante.
+Reenumerar antes do próximo build. Ampliar a matriz de M1 e a robustez de M2
+sem refazer a busca ampla inicial.
 
 **Antes de começar:** ler os três documentos, conferir Git e toolchain, localizar
 a instalação local e conferir hash. Não refazer a busca ampla de memória se a

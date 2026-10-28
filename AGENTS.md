@@ -131,7 +131,17 @@ ficaram estáveis. Não declarar todo cache/heap liberado. A fixture detecta
 crescimento repetido e cancelamento sem executar trabalho atrasado.
 Sonda/dispatcher foram removidos, o proprietário confirmou o fechamento e a
 enumeração posterior não encontrou o jogo. Reenumerar antes de reconstruir.
-Investigar agora o par
-de instância PSM/liberação e seus recursos, antes de draw, init ou inserção.
-Não refazer descritor/setter/lifetime já validados sem necessidade concreta.
+`engine instance-cycle --model models/ai/truck/models/truck.psm` também passou
+18 vezes, incluindo recarga: `psm_alloc_inst(info,NULL,0,1)` devolve um item
+gerenciado e `psm_free` recebe esse item, não `item+8`. Dados de 26.268 bytes;
+info `1→2→1`, shaders, referência/residência/acesso e retorno ao pool passaram.
+O slot PSM `+0xe94c` é `ci_alloc_mem_fix` do núcleo `+0x13420`; a primeira
+tentativa foi recusada antes de criar recursos por perfil incorreto, corrigido
+após leitura externa. Não substituir por `mm_alloc_mem +0x13380`.
+O processo da prova corrigida também foi encerrado normalmente após a limpeza.
+O ciclo é privado, sem skins fornecidas/draw/física/HUD; usa shader de fallback.
+Próximo bloco: observar fase gráfica, matrizes/câmera, skins e drenagem de filas.
+`psm_draw` põe protos na fila e aumenta referências de pacotes: não desenhar e
+liberar a instância imediatamente sem comprovar o consumo desses recursos.
+Não refazer instância/descritor/setter/lifetime sem necessidade concreta.
 A criação e a movimentação de caminhões remotos ainda não foram implementadas.

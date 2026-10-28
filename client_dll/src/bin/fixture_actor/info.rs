@@ -21,6 +21,19 @@ fn owner() {
         OWNER.load(Ordering::Acquire)
     );
 }
+pub(super) fn instance_context(delta: i32) {
+    owner();
+    if delta >= 0 {
+        CONTEXT[2].fetch_add(delta as u32, Ordering::AcqRel);
+    } else {
+        CONTEXT[2].fetch_sub(delta.unsigned_abs(), Ordering::AcqRel);
+    }
+}
+pub(super) fn retain(count: u32) {
+    owner();
+    CACHE.fetch_add(count, Ordering::AcqRel);
+    CONTEXT[2].fetch_add(count, Ordering::AcqRel);
+}
 pub(super) fn descriptors() -> [u32; 3] {
     let head = HEAD.get_or_init(|| {
         MODEL[19].store(3, Ordering::Release);

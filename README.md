@@ -15,8 +15,8 @@ A DLL x86 já foi carregada no jogo sob Proton e transmitiu coordenadas reais
 ao servidor nativo do Fedora, com recepção por outro cliente de teste.
 A criação e destruição imediata de um `actors.car` privado também passaram,
 incluindo repetição após recarregar uma partida.
-No Windows, o setter PMD e a carga/liberação privada de um descritor PSM
-também passaram após recarga; nenhuma instância visual é mantida na cena.
+No Windows, o setter PMD e a carga/liberação privadas de descritor e instância
+PSM também passaram após recarga; nenhuma instância visual é mantida na cena.
 A criação/movimentação de caminhões remotos continua pendente.
 
 O plano completo, os critérios de conclusão e o procedimento para continuar em
@@ -462,10 +462,50 @@ Passaram 18 ciclos no Windows, incluindo recarga: a primeira carga observou
 dirigir e carregar o save, `903/904/903`. As referências do item balancearam e
 a posição local não mudou dentro das operações. O saldo inicial de uma
 referência permanece registrado para investigação. Nenhum descritor fica vivo
-entre frames; instância PSM, desenho, init de PMD e veículo remoto continuam
-pendentes. ABI de diagnóstico v3/664 bytes preservada, com comandos 19/20;
+entre frames; o ciclo de instância descrito abaixo amplia essa prova. Desenho,
+init de PMD e veículo remoto continuam pendentes. ABI de diagnóstico v3/664
+bytes preservada, com comandos 19/20;
 configuração/rede v1 preservada. Após a limpeza, feche o processo normalmente
 antes de reconstruir a DLL fixada pela sonda.
+
+O passo seguinte tem um diagnóstico separado de instância privada:
+
+```text
+engine phase-probe
+engine instance-cycle --model models/ai/truck/models/truck.psm
+engine instance-cycle --model models/ai/truck/models/truck.psm --cycles 16
+engine pump-remove
+stop
+```
+
+Prepare `engine attach` e `engine pump-attach` antes desses comandos. Esta prova
+é restrita ao caminho indicado, com capacidade 1 e nenhuma skin fornecida.
+O motor usa seu shader de fallback `notfound.shd`; aparência/texturas corretas
+exigem uma etapa posterior. A operação cria um único descritor para a chamada,
+mantém sua referência e passa `(info, NULL, 0, 1)` ao `psm_alloc_inst` cdecl.
+Cada instância retorna como `c_item_t`, e `psm_free` recebe esse item, nunca
+o ponteiro de dados em `item+8`. A instância é liberada antes da próxima e o
+descritor é liberado ao final, também nas saídas de erro Rust.
+
+São verificados os bindings de recursos, exports, callbacks de alocação/pacote,
+tabela de operações, referência do descritor `1→2→1`, referências do modelo,
+referências fortes/residência/acesso do item `1/1/0`, cabeçalho e limites dos
+arrays. Referências de shaders repetidos são agregadas antes de conferir sua
+liberação. O contador forte do item devolvido ao pool é relido pela API do
+sistema, sem dereferência Rust. Alterações no perfil ou contadores divergentes
+interrompem a prova; retenção inicial é informada, crescimento repetido falha.
+Os contadores e tamanho retornados referem-se ao último ciclo, com o info ainda
+retido durante a medição. Isso não comprova liberação de todo o heap/cache.
+
+Não há draw, colisão, HUD, inserção no mundo ou retenção da instância entre
+frames. O ponto observado no loop ainda não é uma fase de render comprovada.
+A extensão usa comandos 21/22 sem mudar a ABI v3/664 bytes. A bancada própria
+exercita falhas, shader compartilhado, retorno ao pool e timeout sem execução
+tardia; consulte o roadmap para os resultados da partida real.
+Passaram 18 ciclos reais de instância no Windows, incluindo repetição após
+dirigir/menu/recarga, com bloco de dados de 26.268 bytes e contadores estáveis
+nas repetições. Os módulos originais e os dois saves conservaram seus hashes;
+a sonda/dispatcher foram removidos e o jogo encerrado normalmente.
 
 ## Retomada no Windows com Rust 1.99.0
 
