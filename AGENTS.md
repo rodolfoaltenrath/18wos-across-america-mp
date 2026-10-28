@@ -3,9 +3,11 @@
 Leia `ROADMAP.MD` e `README.md` antes de implementar. O roadmap registra o estado
 validado, as dependências, os critérios de conclusão e a próxima etapa.
 
-O proprietário trabalha atualmente somente em **Fedora Linux**. Assets/servidor
-nativos, build cruzado Windows x86, bancada x86 sob Proton e integração inicial
-da DLL na partida foram validados; consultar os limites no roadmap. Não tentar
+O proprietário retornou ao **Windows em 28/10/2026**, após trabalhar em Fedora
+Linux. Preservar os dois fluxos. Assets/servidor nativos, build cruzado Windows
+x86, bancada x86 sob Proton e integração inicial da DLL na partida foram
+validados no Fedora; build/bancada e uma recarga real também foram validados no
+Windows em 28/10. Consultar os limites e o registro de retomada no roadmap. Não tentar
 executar o toolchain host Windows nativamente no Linux nem tratar build cruzado
 como teste do jogo. Coop significa LAN entre computadores distintos.
 
@@ -41,7 +43,8 @@ Limites da ferramenta e instruções de prioridade superior continuam aplicávei
   credenciais ou caminhos de configuração particulares. O `.gitignore` libera
   explicitamente apenas os fontes e documentos próprios.
 - O proprietário criou `rodolfoaltenrath/18wos-across-america-mp` e autorizou
-  explicitamente o commit/envio inicial do projeto, sem coautor. Preservar o
+  explicitamente o commit/envio inicial do projeto, sem coautor. Em 28/10/2026,
+  autorizou commits automáticos ao concluir blocos validados. Preservar o
   histórico existente e não adicionar trailers `Co-authored-by`. Não inferir
   autorização para mensagens externas ou publicação de releases. Consultar o
   estado real do Git antes de novas operações.
@@ -56,10 +59,20 @@ Limites da ferramenta e instruções de prioridade superior continuam aplicávei
 
 ## Próximo ponto de retomada
 
+No Windows, usar `dev_env windows` com GCC/GNU ld da versão ativa, conforme
+README. O antigo `rust-lld` x86 falhou na recuperação de panic neste host; não
+reutilizar sua configuração. O helper preserva `.cargo/config.toml` local.
+A última validação Windows terminou com dispatcher removido, worker parado e
+DLL descarregada do jogo. Não reutilizar PID/endereços absolutos do registro.
+Foi validada uma sequência dirigir/menu/carregar, com pausa transitória e
+recuperação da leitura; o restante da matriz ainda está pendente.
+
 Continuar a partir da integração inicial x86 entregue: completar a matriz de
 menus/reloads e investigar criação/remoção de uma entidade visual remota (M4).
-Usar `proton_host` com `runinprefix` para ferramentas no prefixo da partida;
-a bancada deve executar em prefixo próprio e num único runtime via `test_host`.
+No Linux, usar `proton_host` com `runinprefix` para ferramentas no prefixo da
+partida; a bancada deve executar em prefixo próprio e num único runtime via
+`test_host`. No Windows, executar os binários x86 diretamente, com PID atual;
+não usar `proton_host` nem copiar caminhos/prefixos do Fedora.
 Não chamar exports de registro do motor sem comprovar ABI/thread/ownership.
 `engine_report`, `memory_tool entities` e o dispatcher `mp_launcher engine`
 estão entregues. O dispatcher comprova a thread da janela; chamadas do motor

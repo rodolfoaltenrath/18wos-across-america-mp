@@ -21,7 +21,10 @@ O plano completo, os critérios de conclusão e o procedimento para continuar em
 outro computador estão em [ROADMAP.MD](ROADMAP.MD). As orientações de autonomia
 e continuidade do desenvolvimento estão em [AGENTS.md](AGENTS.md).
 
-O computador de continuidade usa Linux. Assets/servidor têm um fluxo nativo;
+O proprietário retornou ao Windows em 28/10/2026; os avanços feitos no Fedora
+foram preservados. Build, bancada x64/x86, transmissão da partida e recuperação
+após carregar um save também passaram no Windows nativo. Consulte o fluxo
+Windows abaixo e o registro de retomada no roadmap. No Linux, assets/servidor têm um fluxo nativo;
 a DLL do jogo continua sendo Windows x86 e pode ser gerada por compilação
 cruzada. Build, testes portáveis, formatação, Clippy e varredura dos assets foram
 validados em Fedora 44 com Rust 1.99.0. O build cruzado e a bancada x86 completa
@@ -362,7 +365,59 @@ Para investigar acessos candidatos a membros, sem executar uma imagem:
 em registrador de imediatos/endereços absolutos, mas não prova o tipo do
 registrador nem se a instrução é alcançada.
 
-## Ambiente e compilação Windows (registro anterior)
+## Retomada no Windows com Rust 1.99.0
+
+O toolchain fixado também se aplica ao Windows GNU x64. O `dev_env windows`
+agora detecta o host: no Windows usa as ferramentas distribuídas pelo Rust
+ativo; no Fedora preserva o fluxo de MinGW/rustup local. A configuração dos
+linkers é passada somente ao Cargo filho, sem sobrescrever `.cargo/config.toml`.
+O driver LLVM é copiado para cache por versão dentro de `target/toolchain/`;
+um cache com conteúdo diferente é recusado em vez de sobrescrito.
+
+No host GNU Windows, instale os componentes e compile o helper. O preparo de
+PATH/linker abaixo vale só para este terminal e também atende configurações
+locais antigas que apontavam para Rust 1.98.1:
+
+```powershell
+rustup component add llvm-tools-preview
+rustup component add rust-mingw --target x86_64-pc-windows-gnu
+rustup component add rust-mingw --target i686-pc-windows-gnu
+$aaRustRoot = rustc --print sysroot
+$aaGnuBin = Join-Path $aaRustRoot 'lib\rustlib\x86_64-pc-windows-gnu\bin\self-contained'
+$env:PATH = $aaGnuBin + ';' + $env:PATH
+$env:CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER = Join-Path $aaGnuBin 'x86_64-w64-mingw32-gcc.exe'
+cargo build -p asset_tools --bin dev_env --locked
+.\target\debug\dev_env.exe windows
+.\target\debug\dev_env.exe windows --tests
+.\target\i686-pc-windows-gnu\release\test_host.exe target/windows-tests.json
+.\target\debug\dev_env.exe windows --clippy
+```
+
+`--tests` gera os artefatos e o manifesto; `test_host` efetivamente os executa.
+O build release deve vir antes da bancada, que carrega a DLL release real.
+`windows --native --tests` cobre o workspace x64 e grava
+`target/windows-native-tests.json`; execute-o com
+`target/x86_64-pc-windows-gnu/debug/test_host.exe`. O mesmo helper aceita
+`windows --native --clippy` e `windows --check`.
+
+O GCC precisa localizar `ld.exe`; o helper passa o diretório correspondente
+com `-B`, prepara o PATH e seleciona o linker host também para build scripts e
+macros. Em x86 usa GCC/GNU ld do componente `rust-mingw` ativo. Na retomada,
+`rust-lld` gerava executáveis que encerravam ao recuperar um panic; o mesmo
+teste passou com GNU ld. Por isso, não reutilize o antigo linker x86 deste
+ambiente. Não misture um executável `dev_env` antigo com estes comandos sem
+recompilá-lo.
+
+No Windows, use `mp_launcher.exe --pid PID_ATUAL --dll CAMINHO_DA_DLL ...`
+diretamente, sem `proton_host`. O ciclo `connect`, consultas, `stop` e `unload`
+continua fora de `DllMain`. A regra de residência de `engine pump-attach`
+também vale no Windows: após usá-la, encerre o jogo antes de reconstruir a DLL.
+Mantenha a partida em primeiro plano durante as consultas `engine`: neste host,
+as mensagens expiraram fora de foco e passaram ao ativar a janela. Em timeout,
+consulte o estado, restaure o foco e remova o dispatcher antes de descarregar;
+se a remoção falhar, mantenha o módulo e encerre/reabra o jogo normalmente.
+
+## Ambiente e compilação Windows (registro histórico)
 
 Ambiente encontrado: Windows, Rust **1.98.1**, host `x86_64-pc-windows-gnu`.
 Os cabeçalhos PE locais de `aa.exe` e `prism3d.exe` indicam **x86, 32 bits**.
@@ -393,57 +448,14 @@ target/i686-pc-windows-gnu/release/client_dll.dll
 target/i686-pc-windows-gnu/release/client_probe.exe
 ```
 
-### Configuração GNU com os componentes distribuídos pelo Rust
+### Linker histórico e migração
 
-Nesta instalação, o linker não estava no PATH e o `dlltool` GNU não tinha um
-assembler disponível. O linker GNU de 32 bits também estava sem seu script de
-linkedição. O preparo abaixo usa o linker do componente `rust-mingw` em 64 bits,
-`rust-lld` em 32 bits e o driver `llvm-dlltool` contido no executável multicall
-`llvm-ar` do componente `llvm-tools`. A cópia fica em `target/toolchain/`, ignorada
-pelo Git. `.cargo/config.toml` contém os caminhos desta máquina e também é ignorado.
-
-Esse preparo já foi realizado nesta instalação: os comandos normais do Cargo
-usam a configuração local. Para reproduzi-lo em outra instalação, use o bloco
-abaixo. Se já existir uma configuração Cargo própria, mescle os blocos de target.
-
-Execute na raiz do projeto, em uma sessão PowerShell com o host GNU x64 acima:
-
-```powershell
-rustup target add i686-pc-windows-gnu
-rustup component add rust-mingw --target x86_64-pc-windows-gnu
-rustup component add rust-mingw --target i686-pc-windows-gnu
-rustup component add llvm-tools-preview
-
-$aaRustRoot = rustc --print sysroot
-$aaNativeBin = Join-Path $aaRustRoot 'lib\rustlib\x86_64-pc-windows-gnu\bin'
-$aaGnuBin = Join-Path $aaNativeBin 'self-contained'
-$aaToolDir = Join-Path (Get-Location) 'target\toolchain'
-New-Item -ItemType Directory -Path $aaToolDir -Force | Out-Null
-Copy-Item -LiteralPath (Join-Path $aaNativeBin 'llvm-ar.exe') -Destination (Join-Path $aaToolDir 'llvm-dlltool.exe')
-$aaDlltool = Join-Path $aaToolDir 'llvm-dlltool.exe'
-$aaGcc = Join-Path $aaGnuBin 'x86_64-w64-mingw32-gcc.exe'
-$aaLld = Join-Path $aaNativeBin 'rust-lld.exe'
-$aaCargoConfig = @"
-[target.x86_64-pc-windows-gnu]
-linker = '$aaGcc'
-rustflags = ['-C', 'dlltool=$aaDlltool']
-
-[target.i686-pc-windows-gnu]
-linker = '$aaLld'
-rustflags = ['-C', 'linker-flavor=ld.lld', '-C', 'link-self-contained=yes', '-C', 'dlltool=$aaDlltool']
-"@
-New-Item -ItemType Directory -Path .cargo -Force | Out-Null
-[System.IO.File]::WriteAllText((Join-Path (Get-Location) '.cargo\config.toml'), $aaCargoConfig)
-
-cargo build --workspace --locked
-cargo build -p client_dll --target i686-pc-windows-gnu --release --locked
-```
-
-A configuração local persiste entre terminais. Ao mover a pasta do projeto,
-trocar o toolchain ou executar `cargo clean`, refaça o preparo para atualizar os
-caminhos e recriar o driver em `target/`. Para somente executar os programas já
-compilados, o preparo não é necessário. Não copie dependências por cima das DLLs
-originais.
+No primeiro ambiente 1.98.1, a falta do script GNU x86 levou ao uso de
+`rust-lld`, com `llvm-ar` copiado como `llvm-dlltool`. Essa configuração era
+local e ignorada pelo Git. Foi substituída pelo procedimento 1.99.0 acima,
+que usa GNU ld também em x86 e não grava caminhos particulares no repositório.
+Após trocar toolchain ou limpar `target/`, recompile o helper e repita o fluxo
+atual. Não copie dependências por cima das DLLs originais.
 
 ## Ferramenta de assets
 

@@ -1,13 +1,14 @@
 # Roadmap — Across America multiplayer em Rust
 
-Última atualização: 27/10/2026. Este arquivo descreve o projeto, não uma promessa
+Última atualização: 28/10/2026. Este arquivo descreve o projeto, não uma promessa
 de prazo. Checkboxes concluídos exigem implementação ou evidência registrada.
 O objetivo é desenvolver ferramentas de assets e multiplayer para a instalação
 original Steam de **18 Wheels of Steel: Across America**, com todo o código e
 automação próprios em **Rust**. O jogo original permanece instalado separadamente
 e não será distribuído pelo projeto.
 
-**Ambiente de continuidade informado pelo proprietário: Linux.** Ferramentas e
+**Ambiente atual: Windows, após retorno do Fedora em 28/10/2026.** Preservar o
+fluxo Linux documentado e validar o host Windows com Rust 1.99.0. Ferramentas e
 servidor nativos e DLL para Windows x86 têm fluxos de compilação diferentes.
 A seção 8 contém o procedimento Linux. A análise de continuidade abaixo registra
 build e testes nativos em Fedora. A entrega de integração abaixo acrescenta
@@ -630,6 +631,93 @@ init/destruição e ownership dos recursos antes de manter um objeto entre frame
 O arquivo local `models/ai/truck/models/truck.psm` é um candidato existente no SCS;
 o projeto não transporta esse asset nem presume que ele carrega sozinho.
 
+### Retomada no Windows nativo — 28/10/2026
+
+O checkout retornou em `main`, igual a `origin/main`, no commit `9787f8a`.
+Os avanços do Fedora foram preservados. O toolchain fixado 1.99.0 GNU x64
+foi instalado no host Windows, com `llvm-tools-preview` e `rust-mingw` x86.
+A configuração Cargo particular ainda apontava para 1.98.1; não foi copiada
+para os fontes nem sobrescrita. Seu backup fica somente em `target/toolchain/`.
+
+`dev_env windows` agora detecta o host e seleciona as ferramentas da versão
+ativa: GCC/GNU ld tanto x64 quanto x86, LLVM dlltool em cache por toolchain,
+PATH e `-B` para localizar o linker. O linker host também é passado pelo
+ambiente para build scripts/macros; isso evita reaproveitar o GCC antigo
+nessas etapas. `--native` seleciona o workspace Windows x64. O caminho Fedora
+MinGW/rustup local foi preservado, mas não foi reexecutado neste Windows.
+O helper não modifica persistentemente `.cargo/config.toml`.
+
+Foi detectada uma diferença concreta entre linkers: com `rust-lld`, o teste
+x86 que provoca e recupera um panic encerrava com código 3. Trocando somente
+o fluxo de linkedição para GCC/GNU ld 1.99, o teste isolado e a bancada x86
+completa passaram. A causa interna do unwind não foi isolada; não tratar um
+build LLD bem-sucedido como equivalente a esta execução validada.
+
+**Verificações concluídas:** build release x86 e workspace x64; 28 testes
+nativos e 19 testes x86 executados pelos respectivos `test_host`; Clippy com
+`-D warnings` em ambos os alvos. A bancada cobre a DLL release real, controle
+entre processos, cancelamento/reentrância, lifetime privado, ownership de
+itens, ABI stdcall e recuperação de panic. Os avisos GNU de aliases stdcall
+continuam presentes no build release; a bancada valida os exports utilizados.
+
+**Partida Windows:** `prism3d.exe` PID 12148, thread da janela 8104. Os três
+hashes do perfil conferiram. A leitura externa recuperou a cadeia física e
+13 propriedades PMD. A DLL foi carregada, `probe` executou na thread correta,
+`registry` retornou 80 tipos e `inspect decals.pmd` confirmou 2700 bytes e os
+callbacks perfilados. Consultas expiraram com o jogo fora de primeiro plano;
+após o proprietário ativar a partida, passaram. O dispatcher foi removido,
+sem trabalho pendente/em execução e sem instalar a sonda `pump-attach`.
+
+No relay local Windows x64, a DLL do jogo enviou 965 pacotes e recebeu 871,
+com zero falhas de leitura. Outro processo x86 com a DLL recebeu coordenadas
+reais do jogo mudando durante o teste. `stop` e `unload` terminaram normalmente.
+Esse teste é loopback no mesmo computador, não coop LAN nem prova de render.
+Logs e artefatos ficam ignorados em `target/analysis/windows-return/`.
+
+Uma segunda conexão acompanhou a sequência manual dirigir → menu de carregar
+(aproximadamente 10 segundos) → carregar uma partida existente. Durante a
+recarga, a cadeia ficou indisponível: `sample=2`, envio parado em 5005 pacotes,
+105 falhas transitórias acumuladas. A captura retornou a `sample=1` sem reiniciar
+o worker, e o envio retomou. A leitura externa confirmou novos endereços finais
+(X em `0x0f3f81d0`, antes `0x12fcebf8` nesta sessão; Y/Z consecutivos). Outro
+probe recebeu as novas coordenadas pelo relay. No encerramento, 7533 pacotes enviados, 483
+recebidos, as mesmas 105 falhas, `stop`/`unload` concluídos e módulo ausente da
+lista do processo. O relay e os probes próprios foram encerrados; o jogo ficou
+aberto. Essa é uma linha validada da matriz, não a matriz completa: primeira
+partida sem veículo, mudanças de mapa/caminhão, recargas repetidas, sessão longa
+e saída abrupta permanecem pendentes. Não inferir que toda abertura de menu
+invalida a cadeia ou bloqueia pacotes: a indisponibilidade observada foi na carga.
+
+### M4 — Contratos estáticos candidatos para modelo PMD — 28/10/2026
+
+A investigação offline confirmou o export de `p3shared.dll+0x1b10`,
+`?me_string_set@@YA_NPAXPAUevalue_def_t@@IPBD@Z`: setter cdecl com objeto,
+definição, índice `u32` e string C, retornando bool em AL. A implementação
+usa `element_size`, `value_offset` e índice; a flag `0x02` seleciona
+armazenamento indireto. Copia até `element_size - 1`, termina com NUL e, se
+`auxiliary_offset >= 0`, aplica OR 6 no byte auxiliar. Não há validação de
+índice/tamanho na rotina observada; o chamador precisa validá-los previamente.
+
+Na partida nativa, `model_name` tinha flags 0, elemento 64, `table_bound=-1`,
+offset `0x200`, auxiliar/contagem `-1` e setter `p3shared.dll+0x1b10`.
+Isso delimita uma futura prova de string escalar inline, índice 0, máximo
+63 bytes mais NUL, somente no PMD privado e exclusivamente pertencente à DLL.
+Ainda não existe comando de escrita nem chamada desse setter neste bloco.
+
+O construtor real PMD é `game.dll+0x107a90`; o wrapper perfilado permanece
+`+0xf9c70`. O init candidato `+0x107d00` chama a base `+0xf2f10` e, na fase 0,
+passa `model_name` e as skins pelo helper `+0x107c90` ao slot `+0x160e20`,
+guardando o retorno em `objeto+0xa88`. O teardown candidato `+0x107c10`, fase 0,
+solta esse recurso pelo slot `+0x16114c`, limpa outros recursos e chama a base
+`+0xf2f40`. São evidências estáticas, não contratos completos de inicialização.
+
+**Próximo bloco M4:** validar em fixture própria a ABI cdecl/string e os limites,
+depois adicionar uma operação privada e restrita para `model_name`, pela fila
+do loop, com leitura de confirmação e destruição equilibrada. Antes de init,
+resolver os slots de recursos e efeitos da base, os pares init/teardown e
+seu ownership. Não chamar init nem manter um PMD entre frames apenas com esta
+análise. Não é necessário refazer os ciclos vazios já comprovados no Fedora.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -999,8 +1087,8 @@ git status
 ```
 
 4. Use o toolchain fixado atual: `1.99.0-x86_64-pc-windows-gnu`. O registro
-   anterior era 1.98.1; a migração 1.99.0 foi testada no Fedora/Proton, e uma
-   execução no Windows nativo ainda deve ser repetida. Esses comandos não
+   anterior era 1.98.1; a migração 1.99.0 foi testada no Fedora/Proton e na
+   bancada Windows nativa em 28/10/2026. Esses comandos não
    devem ser usados como toolchain host no Linux.
    Esses comandos selecionam o toolchain para o diretório do clone:
 
@@ -1017,19 +1105,22 @@ origem/diferença antes de escolher outro; registre uma migração testada, sem 
 uma troca de compiler/linker como automaticamente equivalente. `Cargo.lock` fixa
 dependências resolvidas, não instala o compilador ou linker.
 
-5. Leia no README a seção **Configuração GNU com os componentes distribuídos
-   pelo Rust**. Execute o preparo no novo clone para gerar caminhos locais de
-   linker/dlltool. Não copie a `.cargo/config.toml` absoluta deste computador.
-   O fluxo atual exige esse preparo manual; automatizá-lo em Rust está em M0.
+5. Leia no README a seção **Retomada no Windows com Rust 1.99.0**. Instale os
+   componentes e compile `dev_env` com o bootstrap descrito. O helper Rust
+   seleciona GCC/GNU ld e prepara o cache LLVM por versão sem gravar caminhos
+   particulares nos fontes. Não copie a `.cargo/config.toml` desta máquina.
 6. Compile e valide:
 
 ```powershell
-cargo build --workspace --locked
-cargo build -p client_dll --target i686-pc-windows-gnu --release --locked
+.\target\debug\dev_env.exe windows --native
+.\target\debug\dev_env.exe windows
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --all-targets --locked
-cargo test -p client_dll --target i686-pc-windows-gnu --locked
+.\target\debug\dev_env.exe windows --native --clippy
+.\target\debug\dev_env.exe windows --clippy
+.\target\debug\dev_env.exe windows --native --tests
+.\target\x86_64-pc-windows-gnu\debug\test_host.exe target/windows-native-tests.json
+.\target\debug\dev_env.exe windows --tests
+.\target\i686-pc-windows-gnu\release\test_host.exe target/windows-tests.json
 ```
 
 7. Inicie o servidor e dois `client_probe` conforme o README. Esse teste usa
