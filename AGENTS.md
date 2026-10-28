@@ -59,6 +59,25 @@ Limites da ferramenta e instruções de prioridade superior continuam aplicávei
 
 ## Próximo ponto de retomada
 
+Decisões de produto confirmadas pelo proprietário em 28/10/2026:
+
+- Priorizar LAN; hospedagem externa é somente compatibilidade futura da
+  arquitetura. Servidor independente do jogo/UI, endpoint configurável e
+  separação de conexão/identidade/regras/persistência; não iniciar migração
+  para VPS nem tornar infraestrutura pública requisito do MVP.
+- Oferecer no mod somente a carreira baseada em `Become a Millionaire`.
+  Antes de criar um save, escolher meta financeira ou checkbox `Sem limite`;
+  regra acompanha o save/sessão. Sem limite desativa a condição financeira
+  de vitória/encerramento, sem desativar economia e competição.
+- Após o MVP visual, evoluir empresas dos jogadores, fretes exclusivos,
+  economia autoritativa, frota/ranking e persistência. Provar um contrato com
+  pagamento único e recuperação antes de motoristas IA/licitações/cooperativas.
+- Tradução integral PT-BR e moeda R$ são futuras. Inventariar conteúdo/fontes
+  e separar apresentação de valores; conversão/rebalanceamento pendentes.
+  Não ampliar o mod para manter os outros quatro cenários como opções.
+
+São requisitos/plano, não funcionalidades já entregues. Ver detalhes em M6/M7.
+
 No Windows, usar `dev_env windows` com GCC/GNU ld da versão ativa, conforme
 README. O antigo `rust-lld` x86 falhou na recuperação de panic neste host; não
 reutilizar sua configuração. O helper preserva `.cargo/config.toml` local.
@@ -187,4 +206,6 @@ sessão" do README (eco num PC, depois LAN), priorizando skin e recarga real.
 `psm_draw` põe protos na fila e aumenta referências de pacotes: não desenhar e
 liberar a instância imediatamente sem comprovar o consumo desses recursos.
 Não refazer instância/descritor/setter/lifetime sem necessidade concreta.
-A criação e a movimentação de caminhões remotos ainda não foram implementadas.
+Distinção obrigatória: o visual sem textura seguindo o jogador foi visto no
+jogo; pose remota pela rede, skin, interpolação e recarga automática só passaram
+na bancada. Não afirmar ausência de visual de teste nem multiplayer LAN pronto.

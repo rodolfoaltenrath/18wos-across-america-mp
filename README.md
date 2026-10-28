@@ -15,13 +15,47 @@ A DLL x86 já foi carregada no jogo sob Proton e transmitiu coordenadas reais
 ao servidor nativo do Fedora, com recepção por outro cliente de teste.
 A criação e destruição imediata de um `actors.car` privado também passaram,
 incluindo repetição após recarregar uma partida.
-No Windows, o setter PMD e a carga/liberação privadas de descritor e instância
-PSM também passaram após recarga; nenhuma instância visual é mantida na cena.
-A criação/movimentação de caminhões remotos continua pendente.
+No Windows, o proprietário já confirmou um caminhão de teste sem textura,
+4 m ao lado do seu, copiando seus movimentos e rotação. É um visual PSM,
+sem física/colisão próprias, não outro jogador conectado.
+Os avanços seguintes (pose pela rede e os sete blocos de suavização/vários
+remotos, sessão com backup, skin, recarga automática, verificação, eco e
+métricas) têm provas na bancada própria; a última verificação registrada
+passou com 41 testes x86 e 47 nativos, Clippy e formatação.
+Textura, recarga automática com instância
+retida e movimento pela rede ainda aguardam teste no jogo, primeiro com eco
+num PC e depois na LAN entre dois PCs. Ainda não há multiplayer LAN validado.
 
 O plano completo, os critérios de conclusão e o procedimento para continuar em
 outro computador estão em [ROADMAP.MD](ROADMAP.MD). As orientações de autonomia
 e continuidade do desenvolvimento estão em [AGENTS.md](AGENTS.md).
+
+## Direção do mod definida pelo proprietário
+
+O mod oferecerá somente a carreira baseada em **Become a Millionaire**, com
+competição econômica entre transportadoras. Antes de criar um save, será
+possível definir a meta financeira ou marcar **Sem limite**. Com essa opção,
+a carreira continua sem vitória/encerramento pelo valor acumulado; dinheiro,
+despesas e progressão continuam funcionando. Não será um segundo modo Free
+Mode. A regra escolhida acompanhará o save e será comum à sessão multiplayer.
+Essa configuração e a alteração dos menus/regras ainda não foram implementadas.
+
+A evolução aprovada inclui empresas dos jogadores, fretes compartilhados com
+aceite exclusivo, pagamentos/despesas validados pelo servidor, frota e ranking.
+Motoristas IA, licitações e cooperativas ficam para depois da prova de um
+contrato completo, sem pagamento duplicado, inclusive após desconexão/reinício.
+A economia original permanece local durante a validação do MVP visual.
+
+A prioridade é **LAN**. Hospedagem externa é uma possibilidade futura: manter
+o servidor Rust independente do processo do jogo e da interface, com endereço
+configurável e separação entre conexão, identidade, regras e persistência.
+Contratar VPS e preparar operação pública não fazem parte da etapa atual.
+
+Uma etapa futura traduzirá o jogo para **PT-BR** e adotará **R$ (reais)** na
+moeda do jogo. Isso inclui revisar textos, fontes/acentos e apresentação de
+valores; conversão/rebalanceamento dos preços ainda precisam de definição.
+Não haverá dependência de cotação cambial real. O roadmap separa essas metas
+do que já foi entregue e registra as dependências técnicas.
 
 O proprietário retornou ao Windows em 28/10/2026; os avanços feitos no Fedora
 foram preservados. Build, bancada x64/x86, transmissão da partida e recuperação
@@ -700,7 +734,8 @@ motivo em vez de mandar uma pose velha.
 `engine visual-show --player ID --offset 0 0 0` desenha o caminhão de teste na
 pose mais recente do jogador remoto `ID`, somada ao offset; sem rotação
 recebida, usa a orientação identidade. Amostras com mais de 1 s não são
-desenhadas (contam em `skipped`); ainda não há interpolação nem extrapolação.
+desenhadas (contam em `skipped`). O histórico já aplica interpolação e
+extrapolação limitada, conforme a referência acima; validação no jogo pendente.
 `--player 0` mantém o comportamento anterior (jogador local mais o offset).
 `visual-status` informa o alvo em `target`.
 

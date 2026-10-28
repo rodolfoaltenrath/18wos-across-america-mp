@@ -51,16 +51,21 @@ repositório e orientar futuras sessões de desenvolvimento.
 | --- | --- | --- |
 | Workspace | Cargo com `asset_tools`, `multiplayer_server`, `client_dll` | Reproduzir o ambiente em outra máquina e automatizar o preparo |
 | Assets | Varredura, listagem, extração ZIP/SCS, conversão de texturas, reempacotamento e inspeção binária/PE | Testar instalação de pacote no jogo, manifesto, restauração e distribuição só das alterações próprias |
-| Servidor | Tokio UDP, retransmissão com alvo de 60 Hz, IDs, timeout, limites e validação básica | Sessão explícita, sincronização de relógio, rotação, controle de tráfego e mundo compartilhado |
+| Servidor | Tokio UDP, retransmissão com alvo de 60 Hz, rotação opcional, IDs, timeout, limites, validação e eco de teste | Sessão de protocolo explícita, identidade persistente, sincronização de relógio, controle de tráfego e mundo compartilhado |
 | DLL | x86 no jogo sob Proton, perfil por hash, configuração ABI, worker, UDP, dispatcher e sonda do loop | Matriz completa de estados do jogo e APIs de entidades |
 | Host de teste | `client_probe`, controlador entre processos e `test_host`; bancada x86 passou sob Proton | Testes de sessão longa, saída abrupta e duas máquinas |
 | Investigação | `memory_tool` Rust: processos, regiões, busca, filtros, comparação, ponteiros, observação e envio externo | Perfis de versões e ciclo de vida do veículo |
-| Coordenadas | Cadeia validada após movimento, reinício e comparação exata com save | Escala física, outros estados/versões e amostragem consistente |
-| Multiplayer visual | Lifetime privado, setter PMD, auditoria PSM e carga/liberação de descritor e instância PSM validados; nenhum remoto no mundo | Render, skins, inserção, transform e remoção da entidade visual |
+| Coordenadas | Cadeia validada após movimento, reinício e comparação com save; pose de draw no mesmo corpo, escala em centímetros identificada | Outros estados/versões e amostragem consistente |
+| Multiplayer visual | Caminhão PSM sem textura seguindo o jogador, visto no jogo; rede, interpolação, skin e recarga automática entregues na bancada | Validar eco no jogo com textura/recarga/custo; depois remotos em dois PCs na LAN |
 | GitHub | Remoto `rodolfoaltenrath/18wos-across-america-mp`, histórico inicial Apache-2.0 preservado, exclusão do jogo | Manter staging auditado e documentação atualizada em cada entrega |
 
-O estado atual **não é multiplayer jogável**. Transmitir números e recebê-los
-em outra DLL não cria automaticamente um caminhão no mundo do jogo.
+O estado atual **não é multiplayer LAN validado entre dois computadores**.
+O proprietário confirmou um visual sem textura ao lado do seu caminhão,
+copiando movimento e rotação; isso não foi um segundo jogador conectado.
+As implementações posteriores têm testes próprios (último registro:
+41 x86/47 nativos, Clippy e formatação), mas aguardam teste de skin, eco,
+recarga automática e suavização na partida. Não rebaixar esse visual a mera
+alocação privada, nem promover resultados da bancada a validação no jogo.
 
 ### Evidência de memória que deve acompanhar o código
 
@@ -1355,8 +1360,8 @@ Entregue sem teste no jogo, a pedido do proprietário:
   (`try_lock`, sem bloquear o render). O worker envia essa pose com rotação se
   ela tiver menos de 0,5 s; caso contrário, pausa e informa. Assim, posição
   enviada e desenho usam o mesmo sistema de coordenadas. A fonte `GAME` antiga
-  (só posição, cadeia descoberta por varredura) foi mantida, mas não deve ser
-  misturada com `drawn` entre pares, porque a equivalência não foi comprovada.
+  (só posição, cadeia descoberta por varredura) foi mantida. A revisão posterior
+  confirmou que ambas leem a mesma estrutura do corpo; ver a correção abaixo.
 - **Alvo remoto do visual (`visual-show --player ID`):** usa a entrada mais
   recente do jogador em `REMOTES` (`try_lock` na thread de render), somada ao
   offset; sem rotação, usa identidade. Acima de 1 s não desenha (`skipped`).
@@ -1470,6 +1475,71 @@ receberem regras explícitas de sincronização. O produto deve informar essa
 limitação. Não anunciar mundo compartilhado completo apenas por haver veículos
 visíveis. Internet pública, contas e matchmaking ficam depois da LAN funcional.
 
+### Decisões de produto confirmadas — 28/10/2026
+
+O proprietário aprovou a direção de competição econômica entre transportadoras
+e acrescentou as regras abaixo. São requisitos de desenvolvimento; a aprovação
+não comprova implementação nem substitui os testes de cada marco.
+
+**Prioridade LAN, hospedagem externa futura.** A migração para uma máquina
+externa/VPS é um adendo de arquitetura, não uma entrega prioritária. Manter o
+servidor Rust sem dependência do processo do jogo, de GPU ou de jogador-host;
+endpoint configurável e contratos separados para conexão, identidade, regras
+e persistência. Evoluir esses contratos quando necessários à LAN/economia,
+evitando acoplamentos que obriguem reconstruir todo o projeto depois. Não
+comprar/hospedar agora nem antecipar banco, painel ou serviços sem necessidade.
+Internet não é garantida por trocar o IP: autenticação, reconexão, proteção
+contra abuso e operação/recuperação serão exigidas antes da exposição pública.
+
+**Uma única carreira no mod.** Usar `Become a Millionaire` como base econômica;
+não oferecer os outros quatro cenários como opções no fluxo do mod. Antes de
+criar um save, apresentar meta financeira configurável e checkbox `Sem limite`.
+Com o checkbox ativo, o campo da meta fica desabilitado e o alcance de um valor
+financeiro não termina a carreira nem declara vitória. Economia, fretes,
+empresas e concorrência continuam ativos; não significa dinheiro infinito.
+É uma variante de configuração da mesma carreira, não um Free Mode separado.
+Gravar a regra versionada junto ao save multiplayer e recuperá-la ao carregar;
+todos os participantes da mesma sessão usam a mesma configuração. O valor
+padrão pode conservar 1.000.000 enquanto o usuário escolhe outra meta.
+Ainda investigar qual grandeza dispara a vitória original (caixa, patrimônio
+ou receita) antes de definir o texto exato da meta e adaptar a condição.
+Desabilitar a regra original de 1 milhão exige alterar o comportamento, não
+somente o texto do menu. Não modificar saves existentes silenciosamente.
+
+**Empresas e economia compartilhada.** Após a prova visual LAN, introduzir
+identidade durável de jogador/empresa (não IP/porta), nome/cor/sede, fretes
+compartilhados com aceite exclusivo, despesas/pagamentos validados e ranking.
+Depois ampliar frota, motoristas IA, licitações e cooperativas; concorrentes
+IA podem ser uma configuração futura da mesma carreira. Investigar eventos
+e estruturas econômicas do jogo por leitura antes de integrar callbacks.
+Primeiro contrato vertical: aceitar → transportar → entregar → receber uma vez,
+com recuperação de desconexão e reinício, antes de expandir a gestão.
+Separar snapshots descartáveis de comandos confirmados, IDs de operação,
+deduplicação e transações persistentes. Um relato do cliente de que entregou
+não comprova sozinho uma entrega válida; explicitar os limites da verificação
+enquanto a física continuar local. Posição em rede é temporária, mas a retomada
+precisa de checkpoint coerente de veículo/carga/contrato. SQLite é candidato
+inicial, não dependência já escolhida; persistência não precisa rodar a 60 Hz.
+
+**PT-BR e reais, etapa futura.** Traduzir o jogo integralmente e adotar `R$`
+como moeda apresentada. Inventariar menus, HUD, mensagens, ajuda/tutorial,
+textos em imagens e demais conteúdos de idioma; verificar fontes, acentos,
+codificação e limites de layout. Inventariar eventual áudio dependente de
+idioma antes de fechar seu tratamento. Formatação brasileira e unidade de
+conta devem ser separadas da lógica econômica. Ainda definir se os valores
+numéricos serão mantidos ou rebalanceados; não assumir conversão cambial real.
+Planejar valores exatos em unidades monetárias menores na economia própria e
+adaptar explicitamente o formato do motor, sem arredondamentos silenciosos.
+Regras financeiras do save não podem mudar por trocar idioma/formatação.
+Distribuir somente textos/recursos próprios e transformação local dos
+originais; não versionar pacotes comerciais reempacotados.
+
+**Inspeção preliminar local, somente leitura:** a listagem do `aa/base.scs`
+confirmou `defs/scenario_base.def` e os cinco arquivos em `defs/scenarios/`,
+incluindo `become_millionaire.def`; o patch contém uma definição de cenário.
+Isso localiza entradas para investigação, não comprova que a meta ou os menus
+sejam controlados só por esses arquivos. Não houve alteração/extração aplicada.
+
 ## 4. Arquitetura e decisões a preservar
 
 - `asset_tools`: pipeline de assets, inspeção e preparação de pacotes próprios.
@@ -1483,6 +1553,9 @@ visíveis. Internet pública, contas e matchmaking ficam depois da LAN funcional
   estruturas e capacidades validadas. Nome Steam sozinho não identifica bytes.
 - Configuração deve permitir caminhos externos ao repositório, servidor e
   perfil explícitos. Caminhos absolutos desta máquina não são configuração pública.
+- Preservar servidor independente da instalação do jogo e da interface; separar
+  identidade durável de conexão UDP e regras de apresentação/idioma. Hospedagem
+  externa é evolução futura, sem deslocar a validação LAN atual.
 - Manter `DllMain` mínimo. Inicialização/parada, joins e descarregamento precisam
   de ciclo explícito fora do loader lock.
 - Se a complexidade justificar separar protocolo, integração ou bootstrap em
@@ -1586,9 +1659,11 @@ com incompatibilidades diagnosticadas e comportamento definido sob perda/reorden
 
 ### M4 — Criar e remover caminhões remotos no motor
 
-Esta é a maior incerteza técnica do caminho até o primeiro multiplayer visual.
-O factory privado foi identificado e validado. Inicialização e integração no
-mundo ainda precisam de contratos e testes próprios.
+O primeiro visual PSM seguindo o jogador já foi visto na partida, sem textura.
+O caminho escolhido desenha modelos, sem inserir entidades físicas no mundo.
+Agora a dependência é validar as implementações de rede/skin/recarga no jogo e
+em dois PCs; inserção como entidade continua sem contrato e não é pré-requisito
+para o MVP visual sem colisão.
 
 - [ ] Investigar criação de veículo/modelo, atualização de transform e remoção,
   usando somente a instalação local e registrando conclusões próprias.
@@ -1636,8 +1711,8 @@ mundo ainda precisam de contratos e testes próprios.
 - [ ] Usar overlay/indicador apenas como diagnóstico se necessário; isso não
   substitui a entrega de um caminhão remoto no mundo 3D.
 
-**Concluído quando:** dois jogos em máquinas distintas mostram a entidade remota
-correta e ela aparece/desaparece com a sessão sem duplicatas ou referências inválidas.
+**Concluído quando:** dois jogos em máquinas distintas mostram o visual remoto
+correto e ele aparece/desaparece com a sessão sem duplicatas ou referências inválidas.
 
 ### M5 — Movimento remoto suave e apresentação
 
@@ -1663,6 +1738,12 @@ suave, e perda temporária de pacotes não produz movimentos indefinidos.
 
 ### M6 — Estado do mundo e regras de gameplay
 
+- [ ] Restringir o fluxo do mod à carreira `Become a Millionaire`, sem apagar
+  cenários/arquivos originais. Confirmar a origem da lista nos menus e das regras.
+- [ ] Implementar meta configurável antes de criar o save e checkbox `Sem limite`;
+  validar limites de entrada, salvar/restaurar a regra e impedir divergência
+  entre participantes. Identificar a grandeza econômica e substituir o gatilho
+  original de vitória, inclusive para metas menores/maiores e sem limite.
 - [ ] Negociar mapa, versão, mods e ponto de entrada compatíveis antes de criar
   remotos; impedir entrada em mundos incompatíveis com mensagem útil.
 - [ ] Definir relógio, clima, pausa e carregamento durante a sessão.
@@ -1676,6 +1757,14 @@ suave, e perda temporária de pacotes não produz movimentos indefinidos.
   Um servidor Rust de relay não possui automaticamente a física do jogo.
 - [ ] Definir entregas, cargas, dinheiro, multas, danos e progresso: primeiro
   preservar economia local; compartilhar somente com regras e persistência próprias.
+- [ ] Provar um contrato compartilhado com aceite exclusivo, validação da entrega
+  e pagamento único; testar duplicação, desconexão e reinício com fixtures próprias.
+- [ ] Introduzir empresas dos jogadores e ranking com identidade persistente;
+  depois ampliar compra/manutenção de frota. Motoristas IA, licitações,
+  cooperativas e concorrentes IA configuráveis dependem dessa base.
+- [ ] Persistir regras da carreira e checkpoints de jogador/veículo/carga/contrato,
+  separados dos snapshots de movimento e dos saves normais. Banco/migrações e
+  formato versionado serão definidos com o contrato; não inferir suporte atual.
 - [ ] Isolar dados multiplayer dos saves de uso normal, com backup/restauração
   e tratamento de desconexão durante eventos importantes.
 
@@ -1685,6 +1774,12 @@ Colisão e economia compartilhadas podem ser marcos posteriores ao MVP visual.
 
 ### M7 — Pipeline de assets e modificações distribuíveis
 
+- [ ] Tradução integral PT-BR (futura): inventário de conteúdo de idioma,
+  catálogo próprio, fontes/acentos, layout e validação na partida; registrar
+  cobertura e lacunas, incluindo textos embutidos em imagens e eventual áudio.
+- [ ] Moeda R$ (futura): definir manutenção/rebalanceamento dos valores, aplicar
+  apresentação brasileira em todas as telas e conferir persistência/cálculos.
+  Não apenas trocar um símbolo isolado nem depender de cotação cambial real.
 - [x] Ler os três SCS locais, extrair `data.scs`, converter uma TGA para PNG e
   reempacotar 76 arquivos num pacote separado de teste.
 - [ ] Organizar entradas originais, edição própria, cache e saída de build em
@@ -1746,6 +1841,10 @@ projeto e jogar o escopo LAN documentado sem assistência de desenvolvimento.
 
 ### M10 — Evoluções posteriores ao MVP LAN
 
+Hospedagem externa não é prioridade atual. Os contratos de arquitetura da
+seção 3 devem permitir evoluí-la sem refazer a integração do cliente; os itens
+abaixo continuam futuros e exigem validação própria.
+
 - [ ] Relevância espacial e otimização para mais jogadores, conforme medições.
 - [ ] Descoberta de salas LAN e UX de servidor dedicado.
 - [ ] Internet: autenticação de sessão, proteção contra abuso, NAT/relay e modelo
@@ -1765,10 +1864,12 @@ M6 amplia gameplay; M7 melhora o pipeline; M8 acompanha cada mudança de risco;
 M9 depende de resultados estáveis. Isso expressa dependências técnicas, não uma
 instrução para criar agentes paralelos.
 
-Prioridade imediata: descobrir criação de entidade remota sobre a integração
-x86 controlada e o perfil entregues. Investigar cedo esse ponto evita
-polir um transporte de rede sem uma forma de representar os jogadores no motor.
-Não é preciso concluir toda a economia ou sincronizar todo o trânsito para
+Prioridade imediata: testar o visual já implementado com eco no jogo (skin,
+recarga automática, suavização e custo) e depois com dois PCs na LAN. Não
+refazer a descoberta do primeiro visual já comprovado. Após essa prova, seguir
+com identidade/reconexão e um contrato econômico completo, expandir empresas
+e a carreira de meta configurável. PT-BR/R$ e hospedagem externa são futuras;
+não é preciso concluir toda a economia ou sincronizar todo o trânsito para
 testar dois caminhões visuais na LAN.
 
 | Risco/questão | Como reduzir e verificar |
@@ -2019,22 +2120,27 @@ procedimento "Teste no jogo com sessão" do README, num PC (servidor local e o
 próprio jogador espelhado) e depois em LAN com dois PCs. A ordem de risco é:
 skin, recriação após recarga real, vários remotos e interpolação com tráfego
 real. Pose pela rede, interpolação, sessão, backup/verificação, skin e recarga
-automática já estão implementados (seção "Blocos sem jogo"). Itens seguintes
-sem jogo: medir custo/tempo de frame (M5/M8), mais sinais visuais (rodas,
-reboque) depois de identificar suas partes.
+automática já estão implementados (seção "Blocos sem jogo"). As métricas de
+custo/tempo de frame (M5/M8) também estão implementadas; falta medi-las no jogo.
+Sinais visuais como rodas/reboque dependem de identificar as partes do modelo.
+As decisões de produto da seção 3 foram aprovadas, mas não mudam essa prioridade.
+Registrar separadamente modo único/meta, economia compartilhada, tradução/moeda
+e hospedagem futura.
 Contexto anterior — a sonda `draw-*` passou na
 partida (parado, movimento, menu/recarga): o `draw` de `actors.car` com estado
 6, profundidade 0, enfileira no passe do mundo esvaziado em `game+0xf3a24`.
-Plano: após o `draw` original **somente com estado 6**, conferir profundidade
-< 15 e path/viewport não nulos, então `gfx_push → gfx_translate → gfx_qrotate →
+Contrato do primeiro visual já entregue: após o `draw` original, recusar os
+estados 4/9/12 e exigir profundidade 0 e path/viewport não nulos, então
+`gfx_push → gfx_translate → gfx_qrotate →
 psm_draw(inst,1,-1) → gfx_pop` a uma distância fixa do jogador. Instância criada
 pela fila do loop, retida entre frames, liberada só após um flush posterior
 completo do mundo; nada de ponteiro do jogador entre recargas.
 O passe identificado pela sonda de render (`game.dll+0x800f2`) é o draw do
 céu/sol (`+0x7fa90`), não todo o render. Usar `render-status`/`draw-status`
 para captura pendente e manter a partida em primeiro plano.
-Depois manter um único visual e
-validar transform/remoção em menus e reload. Lifetime, ownership, metadados,
+O primeiro visual foi retido/liberado e recriado manualmente após recarga no
+jogo. Manutenção/recriação automática durante reload, skin e pose pela rede
+ainda precisam da validação descrita acima. Lifetime, ownership, metadados,
 setter PMD, descritor e instância PSM privados já têm provas registradas;
 não repeti-las sem necessidade. A última sessão teve sonda/dispatcher removidos,
 worker parado e encerramento normal confirmado, sem processo restante.
