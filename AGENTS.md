@@ -248,8 +248,22 @@ truncamento. Preserva forwarding, EAX e LastError. Não chama init/done adiciona
 nem libera recursos próprios. Sonda e visual alocado são mutuamente exclusivos.
 `session-backup` copia/hasha sem injetar; parada/detach/pump-remove restauram os
 hooks, e session-stop confere cinco slots. `dev_env verify`: 43 x86/48 nativos,
-Clippy x86/nativo e rustfmt. Próximo: captura real SEM visual durante reload,
-comprovar a relação com a destruição global antes da liberação automática.
+Clippy x86/nativo e rustfmt. A captura real SEM visual também passou: 16 eventos
+na thread 6148 do processo histórico 21192, zero foreign/perdas/truncamento.
+Init do novo ator (`-10,-1,0,10`) veio ANTES de destroy do antigo (`-10,0,10`),
+com cenas diferentes; física antiga zerada em destroy(0), primeiro draw novo
+três flushes depois. Não assumir que car::destroy(0) seja início global do load.
+O relatório oferece fase assinada, preservando também os bits originais.
+A fixture reproduz essa ordem com entidades distintas e fases negativas.
 Os candidatos estáticos init `game+0x50f40` e done `+0x515d0` são thiscall ret4,
 slots vtable `+0x5c/+0x60`; done(0) encadeia a liberação de modelos e física.
-Isso ainda não comprova o momento global de teardown. Ver seção nova do roadmap.
+O nome done corresponde ao virtual destroy(int), separado do destrutor do
+alocador. Não prova o momento global de teardown. Próximo: observar agendamento
+de destroy_eblock (IAT game+0x1242b4, destino p3shared+0xc600, fila +0x3ac) e/ou
+início global do load, com identidade de bloco/cena e rollback; isso é somente
+candidato estático. Não inserir liberações nesse ponto sem nova prova.
+Captura/backup em target/analysis/transition-20261028-01 (ignorado). Cinco slots
+restaurados, dispatcher/pump removidos, worker parado, tarefas zeradas, sete
+hashes iguais antes/depois da saída. Proprietário confirmou fechamento normal,
+enumeração confirmou ausência do jogo. Ver seção nova do roadmap; manter
+session-prepare-load/visual-show até validar a automação.

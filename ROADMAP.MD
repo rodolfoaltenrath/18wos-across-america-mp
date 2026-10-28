@@ -1593,12 +1593,69 @@ na parada e continuidade dos originais; também verifica exclusão com visual
 e backup sem injeção. `dev_env verify`: **43 testes x86, 48 nativos**,
 build release x86/nativo, Clippy dos dois alvos e rustfmt passaram.
 Log local ignorado: `target/analysis/transition-verify.log`.
-Observação real ainda pendente.
+Logs do helper ficam somente em `target/analysis/`.
 
-**Dependência ainda aberta:** observar thread/argumentos/ordem na recarga real,
-relacionar com a destruição global e o consumo de filas, e só então definir
-liberação antecipada e recriação automática. Não repetir reload com instância
-retida com base apenas nesta sonda. O procedimento preparado continua válido.
+**Captura real, sem visual:** processo histórico 21192, thread 6148. Backup
+de cinco módulos e dois saves em
+`target/analysis/transition-20261028-01/backup`. O proprietário manteve a
+partida em foco, aguardou no menu, carregou um save existente e confirmou
+"tudo normal". Trace completo com **16 eventos**, geração 1, `flags=1`
+(ativa, sem perda/truncamento), quatro init, três destroy, zero chamadas de
+outra thread, profundidade 1 nos callbacks e todas as quatro leituras válidas.
+
+| Ordem efetivamente observada | Entidade | Física (`+0x1d0`) |
+| --- | --- | --- |
+| Primeiro draw, flush 3 | antiga `0x0c512eac` | `0x12d0ec00` |
+| Init `-10,-1,0,10`, enter/return, flush 11618 | nova `0x0d9e33d8` | zero em todos esses eventos |
+| Destroy `-10`, enter/return, flush 11618 | antiga | ainda `0x12d0ec00` |
+| Destroy `0`, enter → return, flush 11618 | antiga | `0x12d0ec00` → zero |
+| Destroy `10`, enter/return, flush 11618 | antiga | zero |
+| Primeiro draw seguinte, flush 11621 | nova | `0x0f2f7290` |
+
+Callsites de retorno: `p3shared+0xc4ce` dentro de `init_eblock` e
+`p3shared+0xc84c` dentro de `_destroy_eblock`. Os símbolos exportados
+identificam `init(int)`/`destroy(int)`, ambos retornando inteiro; o nome `done`
+do diagnóstico refere-se a esse destroy por fase, não ao destrutor que libera
+o objeto. O relatório passa a oferecer `phase` com sinal e `argument` com os
+bits originais. A bancada passa a reproduzir também essa ordem com entidades
+distintas e fases negativas, sem supor destroy antigo antes de init novo.
+Após incorporar essa sequência e a apresentação assinada das fases,
+`dev_env verify` voltou a passar: **43 x86, 48 nativos**, builds release,
+Clippy x86/nativo e rustfmt; saída zero. Log em
+`target/analysis/transition-20261028-01/verify-after-real-final.log`.
+
+As cenas eram distintas e a nova já existia durante o init: `0x12ece430`,
+enquanto a antiga manteve `0x0f3ea508` até o último callback observado.
+Não houve flush adicional entre esses grupos de init/destroy. A primeira
+entrada de modelo era zero antes e depois, apesar de quantidade 16; esta
+captura não prova em qual fase cada entrada não nula foi liberada, nem que
+quantidade preservada indique recursos vivos. Também não há instância própria
+retida neste teste para comprovar seu lifetime.
+
+`session-stop --verify`: sem recurso a liberar, sem recusas, cinco slots
+restaurados, worker parado, dispatcher inativo, pump removido, nenhum trabalho
+pendente/em execução e **sete hashes iguais**. Sonda em state 2, captura
+inativa (`flags=0`), mesmos 16 eventos. O proprietário confirmou fechamento
+normal; enumeração não encontrou `prism3d` e a verificação pós-saída repetiu
+sete inalterados. Não há DLL residente desse processo. Captura/backup/logs são
+locais e ignorados; nenhuma alteração em originais ou saves.
+
+**Candidato anterior, apenas estático:** `p3shared+0xc600`
+(`entity_proc_t::destroy_eblock`) agenda o item na lista do processador em
+`+0x3ac`; `+0xbe23` chama `_destroy_eblock` ao consumir essa lista. O jogo
+importa esse agendamento em `game+0x1242b4`, com referências em
+`+0x4ff58,+0x69de6,+0x69e97,+0x6c197,+0xf2fee`. Há também destruição imediata
+no rollback de init (`p3shared+0xc5d6`). Uma eventual nova sonda deve distinguir
+solicitação, execução e rollback, e a que bloco/cena cada chamada pertence.
+Não foram interceptados ou chamados esses exports pelo mod nesta prova.
+
+**Dependência ainda aberta:** a captura provou thread/argumentos/ordem por ator,
+mas o init do novo ator ANTES do destroy do antigo impede usar simplesmente
+`car::destroy(0)` como começo universal da recarga. Observar a solicitação de
+destruição e/ou início global do carregamento, incluindo rollback, e relacionar
+com o consumo de filas antes de definir liberação antecipada/recriação.
+Não repetir reload com instância retida com base apenas nesta sonda.
+O procedimento preparado continua válido.
 
 ## 3. Primeira versão jogável e limites
 
@@ -2277,6 +2334,17 @@ recriar via `visual-show`. Não repetir retenção durante load como se a
 recriação automática estivesse validada. Mapear a fase pré-destruição para
 retomar essa automação. Ambos os processos históricos já terminaram e os arquivos
 conservaram os hashes; reenumerar antes de qualquer nova ação.
+
+**Atualização da sonda pré-teardown:** `transition-*` foi validada no processo
+histórico 21192/thread 6148, com 16 eventos íntegros. Init do novo ator nas fases
+`-10,-1,0,10` ocorreu ANTES do destroy do antigo em `-10,0,10`. Física antiga
+zerada em destroy(0); primeiro draw novo três flushes depois. Essa prova por
+ator não identifica o começo global do load. Próximo: observar agendamento de
+destruição (`game` importa `destroy_eblock` em `+0x1242b4`) e/ou entrada global
+de carregamento, discriminando blocos, cenas e rollback, antes de automatizar
+qualquer liberação. Ver a seção "Sonda passiva de init/done". Limpeza, cinco
+slots e sete hashes conferidos; usuário fechou normalmente e não há processo
+restante. Recriação automática segue pendente; usar o carregamento preparado.
 
 Contexto do procedimento anterior: validar no jogo o que a bancada já cobre. Usar o
 procedimento "Teste no jogo com sessão" do README, num PC (servidor local e o

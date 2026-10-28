@@ -39,7 +39,10 @@ fn call(which: usize, car: u32, phase: u32) {
     unsafe {
         SetLastError(0x1830);
         let result = function(car as *mut c_void, phase);
-        assert_eq!(result, 0x1800 + phase + which as u32);
+        assert_eq!(
+            result,
+            0x1800u32.wrapping_add(phase).wrapping_add(which as u32)
+        );
         assert_eq!(GetLastError(), 0x1831);
     }
 }
@@ -51,7 +54,7 @@ unsafe extern "thiscall" fn init(this: *mut c_void, phase: u32) -> u32 {
             .store(0x11110000, Ordering::Release);
     }
     unsafe { SetLastError(0x1831) };
-    0x1800 + phase
+    0x1800u32.wrapping_add(phase)
 }
 unsafe extern "thiscall" fn done(this: *mut c_void, phase: u32) -> u32 {
     assert_eq!(unsafe { GetLastError() }, 0x1830);
@@ -64,7 +67,7 @@ unsafe extern "thiscall" fn done(this: *mut c_void, phase: u32) -> u32 {
         call(1, this as u32, 8);
     }
     unsafe { SetLastError(0x1831) };
-    0x1801 + phase
+    0x1801u32.wrapping_add(phase)
 }
 pub fn frame(car: u32) {
     match REQUEST.swap(0, Ordering::AcqRel) {
@@ -80,6 +83,21 @@ pub fn frame(car: u32) {
                 call(1, car, 1);
             }
         }
+        4 => {
+            // Order observed in the real reload: new init BEFORE old destroy.
+            let next = super::CARS
+                .iter()
+                .map(|c| c.load(Ordering::Acquire))
+                .find(|&other| other != car)
+                .unwrap();
+            for phase in [-10i32, -1, 0, 10] {
+                call(0, next, phase as u32);
+            }
+            for phase in [-10i32, 0, 10] {
+                call(1, car, phase as u32);
+            }
+            super::CAR.store(next, Ordering::Release);
+        }
         _ => {}
     }
 }
@@ -88,6 +106,7 @@ pub fn command(line: &str, car: u32) -> bool {
         "transition-cycle" => REQUEST.store(1, Ordering::Release),
         "transition-nested" => REQUEST.store(2, Ordering::Release),
         "transition-overflow" => REQUEST.store(3, Ordering::Release),
+        "transition-reload" => REQUEST.store(4, Ordering::Release),
         "transition-foreign" => call(1, car, 1),
         "transition-stats" => {
             println!("{}", CALLS.load(Ordering::Acquire));

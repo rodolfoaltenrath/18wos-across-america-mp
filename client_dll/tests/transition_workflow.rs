@@ -166,6 +166,42 @@ fn phase_virtuals_forward_arguments_result_and_error_then_restore_on_detach() {
         [0, 1, 2, 2, 1, 0]
     );
     assert_eq!(nested[2].argument, 8);
+    // Reproduce the real ordering and signed phases, keeping the two entities
+    // distinct. No destruction of the new entity is inferred from old callbacks.
+    call(api::TRANSITION_ARM);
+    let initial = rows(&wait(1))[0];
+    assert_eq!(send(&mut host, &mut output, "transition-reload"), "armed");
+    std::thread::sleep(Duration::from_millis(80));
+    let real_order = rows(&wait(16));
+    assert_eq!(real_order.len(), 16);
+    assert_eq!(
+        real_order.iter().map(|r| r.kind).collect::<Vec<_>>(),
+        [5, 1, 2, 1, 2, 1, 2, 1, 2, 3, 4, 3, 4, 3, 4, 5]
+    );
+    assert_eq!(
+        real_order[1..9]
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|p| p[0].argument as i32)
+            .collect::<Vec<_>>(),
+        [-10, -1, 0, 10]
+    );
+    assert_eq!(
+        real_order[9..15]
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|p| p[0].argument as i32)
+            .collect::<Vec<_>>(),
+        [-10, 0, 10]
+    );
+    let new_this = real_order[15].this;
+    assert_ne!(new_this, initial.this);
+    assert!(real_order[1..9].iter().all(|r| r.this == new_this));
+    assert!(real_order[9..15].iter().all(|r| r.this == initial.this));
+    assert_eq!(real_order[11].values[2], 0x11110000);
+    assert_eq!(real_order[12].values[2], 0);
     call(api::TRANSITION_ARM);
     wait(1);
     assert_eq!(send(&mut host, &mut output, "transition-overflow"), "armed");

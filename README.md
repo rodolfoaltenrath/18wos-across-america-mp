@@ -683,13 +683,20 @@ até 128 registros append-only, entrada/retorno, argumento da fase, thread,
 callsite, entidade, cena/física/primeira entrada de modelo/quantidade de modelos,
 flushes vistos e primeiro draw após cada grupo de fases. Os valores são leituras
 de memória, não prova de ownership ou de que todas as filas foram consumidas.
+`argument` preserva os bits de entrada e `phase` os interpreta como `i32`
+(inclusive fases negativas). O nome `done` do diagnóstico corresponde ao
+virtual `destroy(int)` do motor; é separado do destrutor do alocador.
 `flags & 1` indica captura ativa, `flags & 4` truncamento e `flags & 32` perda
 por contenção; uma captura incompleta não autoriza liberação. Rearmar troca a
 geração, e leituras de uma geração antiga são recusadas. Evite consultar
 repetidamente durante a transição. `transition-remove` restaura só os slots
 que ainda pertencem à sonda; `pump-remove`, `session-stop` e `stop` também
 removem a sonda. Feche o jogo normalmente após limpar, antes de reconstruir
-a DLL. A comprovação na partida e a automação da liberação ainda estão pendentes.
+a DLL. A primeira captura real passou: quatro fases de init da nova entidade
+(`-10,-1,0,10`) precederam três fases de destroy da antiga (`-10,0,10`), na
+mesma thread, sem perdas. A física antiga foi zerada durante destroy(0).
+Isso comprova a observação, mas a nova cena já existia antes desse callback;
+a automação ainda depende de localizar a transição global mais cedo.
 
 ### Primeiro caminhão de teste (`visual-*`)
 

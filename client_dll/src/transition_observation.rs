@@ -49,7 +49,7 @@ impl Record {
     }
     pub fn json(&self) -> serde_json::Value {
         let value = |i: usize| (self.readable & (1 << i) != 0).then_some(self.values[i]);
-        serde_json::json!({"kind":match self.kind {1=>"init_enter",2=>"init_return",3=>"done_enter",4=>"done_return",5=>"first_draw",_=>"unknown"},"thread":self.thread,"caller":self.caller,"this":self.this,"argument":self.argument,"depth":self.depth,"flushes_seen":self.flushes,"scene":value(0),"physics":value(1),"first_model":value(2),"model_count":value(3),"readable":self.readable})
+        serde_json::json!({"kind":match self.kind {1=>"init_enter",2=>"init_return",3=>"done_enter",4=>"done_return",5=>"first_draw",_=>"unknown"},"thread":self.thread,"caller":self.caller,"this":self.this,"argument":self.argument,"phase":self.argument as i32,"depth":self.depth,"flushes_seen":self.flushes,"scene":value(0),"physics":value(1),"first_model":value(2),"model_count":value(3),"readable":self.readable})
     }
 }
 #[derive(Serialize)]
@@ -87,7 +87,7 @@ mod tests {
             thread: 123,
             caller: 456,
             this: 789,
-            argument: 0,
+            argument: (-10i32) as u32,
             depth: 2,
             flushes: 80,
             values: [0x1000, 0x2000, 0, 2],
@@ -97,6 +97,8 @@ mod tests {
         r.encode(&mut b);
         assert_eq!(Record::decode(&b), r);
         assert_eq!(r.json()["kind"], "done_enter");
+        assert_eq!(r.json()["phase"], -10);
+        assert_eq!(Record::decode(&b).argument, 0xfffffff6);
         assert!(r.json()["first_model"].is_null());
         assert_eq!(r.json()["model_count"], 2);
     }
