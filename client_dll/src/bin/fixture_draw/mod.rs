@@ -67,6 +67,7 @@ static LAST: Mutex<([f32; 3], [f32; 4])> = Mutex::new(([0.0; 3], [0.0; 4]));
 pub struct Fixture {
     page: *mut c_void,
     cars: [Words<256>; 2],
+    _blocks: lifecycle::Blocks,
     _scene: Words<1>,
     physics: Words<256>,
     body: Words<16>,
@@ -140,6 +141,7 @@ impl Fixture {
         WORLD.store(address(&world), Ordering::Release);
         OWNER.store(unsafe { GetCurrentThreadId() }, Ordering::Release);
         Self {
+            _blocks: lifecycle::Blocks::new(&cars),
             page,
             camera_head: Box::new(AtomicU32::new(address(&camera))),
             cars,
@@ -165,6 +167,9 @@ impl Fixture {
     }
     pub fn transition_descriptors(&self) -> [u32; 6] {
         lifecycle::descriptors(self.page)
+    }
+    pub fn block_descriptors(&self) -> [u32; 6] {
+        lifecycle::block_descriptors(self.page)
     }
     /// psm_draw, gfx_push, gfx_pop, gfx_translate, gfx_qrotate, psm_set_shader.
     pub fn visual_descriptors() -> [u32; 8] {

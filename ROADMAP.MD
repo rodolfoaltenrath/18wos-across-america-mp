@@ -1657,6 +1657,51 @@ com o consumo de filas antes de definir liberação antecipada/recriação.
 Não repetir reload com instância retida com base apenas nesta sonda.
 O procedimento preparado continua válido.
 
+### M4 — Observar blocos antes da destruição por ator — 28/10/2026
+
+Entregue `engine transition-blocks` (comandos 47/48, mesma ABI v3/664).
+Amplia a sonda de transição já instalada, antes de armar, com os imports do
+jogo para `entity_proc_t::init_eblock` (`game+0x124560` → `p3shared+0xc270`)
+e `destroy_eblock` (`game+0x1242b4` → `p3shared+0xc600`). Ambos thiscall com
+argumento ponteiro, bool em AL e ret4. Verifica hashes do jogo/provedor,
+executabilidade e os dois slots antes de escrever. Não chama nenhum export
+adicional: apenas repassa cada chamada original uma vez, na thread original,
+preservando argumento, retorno e LastError. A regra de exclusão com visual
+retido continua em vigor; ainda não automatiza liberação.
+
+A mesma timeline agora distingue entrada/retorno de init de bloco,
+SOLICITAÇÃO de destruição e fases do ator aninhadas. Inclui item, dados/contexto,
+contadores diretos, dois words crus da fila do processador, retorno booleano
+e último caminhão desenhado. Leituras de cena/física/modelos nas linhas de
+bloco referem-se a esse último caminhão, sem fixar ou presumir sua validade.
+Também captura até 16 entradas cruas de modelo, com flag de quantidade acima
+do limite, para não inferir liberação apenas a partir da primeira entrada nula.
+Leituras inválidas ficam ausentes, sem desreferência direta dos valores lidos.
+
+Trace limitado a 512 eventos, sem heap nem bloqueio nos callbacks; rearme só
+atualiza metadados, evitando temporário grande na stack do jogo. Extensão deve
+ser instalada antes da captura e com o mesmo modo fixture/jogo. Remoção
+restaura os quatro slots na ordem inversa e recusa sobrescrever outro dono;
+retry também restaura slots que já voltaram ao original. Forwarding permanece
+válido até a saída do processo, pela fixação do pump. `session-stop` verifica
+sete slots por leitura externa (draw/init/destroy, dois imports e render/flush).
+
+A fixture acrescenta processador e itens próprios, fila simulada, bool com
+EAX superior sujo, chamada de outra thread, init aninhado, solicitação antes
+do init novo, execução posterior do destroy antigo e init false com rollback
+somente do novo. Testes conferem identidade, profundidade, retorno/LastError,
+preflight sem mutação, ownership de import/vtable, restauração, continuidade
+dos originais, serialização e limites de modelos/trace. `dev_env verify` passou:
+**44 testes x86 e 49 nativos**, build release x86/nativo, Clippy dos dois alvos,
+rustfmt e saída zero. Log local `target/analysis/transition-blocks-verify.log`.
+Primeira captura real ainda em andamento.
+
+**Limites:** os imports interceptados pertencem somente ao jogo; chamadas
+diretas dentro de p3shared ou por outros módulos podem não aparecer. Solicitar
+destroy não comprova início global da recarga nem seu término. Correlacionar
+blocos, cenas, calls do ator e flushes antes de escolher uma fase de liberação.
+Não repetir reload com visual retido com base apenas nessa observação.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,

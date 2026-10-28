@@ -80,6 +80,15 @@ fn phase_virtuals_forward_arguments_result_and_error_then_restore_on_detach() {
     }
     b = observer;
     controller.engine_control(&dll, &mut b).unwrap();
+    let mut blocks = EngineControl::new(api::UI_TRANSITION_BLOCKS_FIXTURE);
+    blocks.fixture = std::array::from_fn(|i| info["block_descriptors"][i].as_u64().unwrap() as u32);
+    b = blocks;
+    b.fixture[3] += 1;
+    assert!(controller.engine_control(&dll, &mut b).is_err());
+    assert!(!Summary::decode(&call(api::TRANSITION_STATUS)).blocks_installed);
+    b = blocks;
+    controller.engine_control(&dll, &mut b).unwrap();
+    assert!(Summary::decode(&call(api::TRANSITION_STATUS)).blocks_installed);
     b = EngineControl::new(api::VISUAL_SHOW_FIXTURE);
     assert!(
         controller
@@ -129,7 +138,7 @@ fn phase_virtuals_forward_arguments_result_and_error_then_restore_on_detach() {
     assert!(
         captured
             .iter()
-            .all(|r| r.thread == attach.window_thread && r.readable == 15)
+            .all(|r| r.thread == attach.window_thread && r.readable & 15 == 15)
     );
     assert!(
         captured
@@ -144,6 +153,8 @@ fn phase_virtuals_forward_arguments_result_and_error_then_restore_on_detach() {
     assert_eq!(captured[4].values[2], 0);
     assert_eq!(captured[5].values[2], 0);
     assert_eq!(captured[6].values[2], 0x11110000);
+    assert_eq!(captured[3].models[..3], [0x11110000, 0, 0]);
+    assert_eq!(captured[4].models[..3], [0, 0, 0]);
     assert_eq!(send(&mut host, &mut output, "transition-foreign"), "armed");
     let foreign = Summary::decode(&call(api::TRANSITION_STATUS));
     assert_eq!((foreign.records, foreign.foreign_calls), (10, 1));
@@ -203,6 +214,62 @@ fn phase_virtuals_forward_arguments_result_and_error_then_restore_on_detach() {
     assert_eq!(real_order[11].values[2], 0x11110000);
     assert_eq!(real_order[12].values[2], 0);
     call(api::TRANSITION_ARM);
+    let old_this = rows(&wait(1))[0].this;
+    send(&mut host, &mut output, "transition-block-reload");
+    std::thread::sleep(Duration::from_millis(80));
+    let block_summary = wait(20);
+    assert_eq!(
+        (
+            block_summary.block_init_calls,
+            block_summary.destroy_requests,
+            block_summary.flags
+        ),
+        (1, 1, 1)
+    );
+    let block_rows = rows(&block_summary);
+    assert_eq!(
+        block_rows.iter().map(|r| r.kind).collect::<Vec<_>>(),
+        [5, 8, 9, 6, 1, 2, 1, 2, 1, 2, 1, 2, 7, 3, 4, 3, 4, 3, 4, 5]
+    );
+    assert_eq!(block_rows[2].returned, 1); // bool AL despite original's dirty EAX.
+    assert_eq!(block_rows[2].context[0], old_this);
+    assert_eq!(block_rows[2].context[7], 1);
+    assert_ne!(block_rows[2].context[6], 0);
+    assert_eq!(block_rows[3].context[0], block_rows[4].this);
+    assert_eq!(block_rows[3].context[5], old_this);
+    assert!(block_rows[4..12].iter().all(|r| r.depth == 2));
+    assert!(block_rows[13..19].iter().all(|r| r.this == old_this));
+    assert_ne!(block_rows[19].this, old_this);
+    assert_eq!(block_rows[12].json()["returned"], true);
+    assert!(block_rows[3].json()["phase"].is_null());
+    assert_eq!(block_rows[3].json()["block_strong"], 1);
+    call(api::TRANSITION_ARM);
+    let old_this = rows(&wait(1))[0].this;
+    send(&mut host, &mut output, "transition-block-rollback");
+    std::thread::sleep(Duration::from_millis(80));
+    let rollback = wait(14);
+    let rollback_rows = rows(&rollback);
+    assert_eq!(
+        (
+            rollback.block_init_calls,
+            rollback.destroy_requests,
+            rollback.flags
+        ),
+        (2, 1, 1)
+    );
+    assert_eq!(rollback_rows[12].kind, 7);
+    assert_eq!(rollback_rows[12].json()["returned"], false);
+    assert_eq!((rollback_rows[10].kind, rollback_rows[10].depth), (3, 2));
+    assert_eq!(rollback_rows[10].this, rollback_rows[1].context[0]);
+    assert_ne!(rollback_rows[10].this, old_this);
+    assert_eq!(rollback_rows[13].this, old_this);
+    send(&mut host, &mut output, "transition-block-foreign");
+    assert_eq!(
+        Summary::decode(&call(api::TRANSITION_STATUS)).foreign_calls,
+        2
+    );
+    assert_eq!(Summary::decode(&call(api::TRANSITION_STATUS)).records, 14);
+    call(api::TRANSITION_ARM);
     wait(1);
     assert_eq!(send(&mut host, &mut output, "transition-overflow"), "armed");
     std::thread::sleep(Duration::from_millis(80));
@@ -213,6 +280,16 @@ fn phase_virtuals_forward_arguments_result_and_error_then_restore_on_detach() {
     b.reserved = CAPACITY as u32;
     assert!(controller.engine_control(&dll, &mut b).is_err());
     // Refuse to overwrite a slot another owner changed; retry after it restores.
+    send(&mut host, &mut output, "transition-block-conflict");
+    b = EngineControl::new(api::UI_TRANSITION_REMOVE);
+    assert!(
+        controller
+            .engine_control(&dll, &mut b)
+            .unwrap_err()
+            .to_string()
+            .contains("owner changed")
+    );
+    send(&mut host, &mut output, "transition-block-unconflict");
     assert_eq!(send(&mut host, &mut output, "transition-conflict"), "armed");
     b = EngineControl::new(api::UI_TRANSITION_REMOVE);
     assert!(
@@ -249,6 +326,22 @@ fn phase_virtuals_forward_arguments_result_and_error_then_restore_on_detach() {
     assert_eq!(
         Summary::decode(&call(api::TRANSITION_STATUS)).done_calls,
         observed_before
+    );
+    let block_calls: u32 = send(&mut host, &mut output, "transition-block-stats")
+        .parse()
+        .unwrap();
+    send(&mut host, &mut output, "transition-block-rollback");
+    std::thread::sleep(Duration::from_millis(80));
+    send(&mut host, &mut output, "transition-block-foreign");
+    assert_eq!(
+        send(&mut host, &mut output, "transition-block-stats")
+            .parse::<u32>()
+            .unwrap(),
+        block_calls + 2
+    );
+    assert_eq!(
+        Summary::decode(&call(api::TRANSITION_STATUS)).block_init_calls,
+        2
     );
     drop(controller);
     let report = Command::new(env!("CARGO_BIN_EXE_mp_launcher"))

@@ -173,16 +173,19 @@ fn verify_slots(pid: u32) -> Result<Vec<Value>> {
             .map(|m| m.base)
             .with_context(|| format!("{name} not loaded"))
     };
-    let (game, core, gfx) = (
+    let (game, core, gfx, engine) = (
         base("game.dll")?,
         base("prism3d.exe")?,
         base("gfxshared.dll")?,
+        base("p3shared.dll")?,
     );
     let mut rows = Vec::new();
     for (name, slot, expected) in [
         ("actors.car draw", game + 0x12580c, game + 0x5a6a0),
         ("actors.car init", game + 0x1257fc, game + 0x50f40),
         ("actors.car done", game + 0x125800, game + 0x515d0),
+        ("init_eblock import", game + 0x124560, engine + 0xc270),
+        ("destroy_eblock import", game + 0x1242b4, engine + 0xc600),
         ("render_pool import", core + 0x22240, gfx + 0x3690),
         ("gfx_path_flush binding", game + 0x160ea0, core + 0x4820),
     ] {

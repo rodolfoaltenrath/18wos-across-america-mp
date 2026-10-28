@@ -112,6 +112,8 @@ fn main() -> anyhow::Result<()> {
         DrawRemove,
         /// Passive init/done(phase) capture; never frees mod resources.
         TransitionAttach,
+        /// Add passive init_eblock/destroy_eblock import hooks to the same trace.
+        TransitionBlocks,
         TransitionArm,
         TransitionStatus,
         /// Snapshot of the append-only capture, even while still armed.
@@ -353,6 +355,7 @@ fn main() -> anyhow::Result<()> {
                 }
                 EngineTask::DrawRemove => api::EngineControl::new(api::UI_DRAW_REMOVE),
                 EngineTask::TransitionAttach => api::EngineControl::new(api::UI_TRANSITION_ATTACH),
+                EngineTask::TransitionBlocks => api::EngineControl::new(api::UI_TRANSITION_BLOCKS),
                 EngineTask::TransitionArm => api::EngineControl::new(api::TRANSITION_ARM),
                 EngineTask::TransitionStatus | EngineTask::TransitionReport => {
                     api::EngineControl::new(api::TRANSITION_STATUS)

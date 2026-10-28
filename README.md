@@ -670,6 +670,7 @@ engine pump-attach
 engine render-attach
 engine draw-attach
 engine transition-attach
+engine transition-blocks
 engine transition-arm
 # Com a captura armada: ir ao menu, carregar save de teste existente e parar.
 engine transition-status
@@ -679,7 +680,7 @@ mp_launcher.exe --pid PID --dll CAMINHO\client_dll.dll session-stop --verify tar
 
 `session-backup` só copia os saves e registra hashes; não carrega a DLL nem
 cria um visual. `transition-report` lê um snapshot mesmo com captura ativa:
-até 128 registros append-only, entrada/retorno, argumento da fase, thread,
+até 512 registros append-only, entrada/retorno, argumento da fase, thread,
 callsite, entidade, cena/física/primeira entrada de modelo/quantidade de modelos,
 flushes vistos e primeiro draw após cada grupo de fases. Os valores são leituras
 de memória, não prova de ownership ou de que todas as filas foram consumidas.
@@ -697,6 +698,26 @@ a DLL. A primeira captura real passou: quatro fases de init da nova entidade
 mesma thread, sem perdas. A física antiga foi zerada durante destroy(0).
 Isso comprova a observação, mas a nova cena já existia antes desse callback;
 a automação ainda depende de localizar a transição global mais cedo.
+
+`transition-blocks` amplia a mesma captura com os imports de `init_eblock`
+e `destroy_eblock` do jogo. Instale depois de `transition-attach` e antes de
+armar. Registra processador (`this`), item (`block`), dados/contexto e contadores
+diretos do item, dois words crus da fila, retorno booleano e último caminhão
+observado (`observed_car`). Nas linhas de bloco, cena/física/modelos referem-se
+a esse último caminhão, que pode já estar obsoleto; as leituras não fixam sua
+memória. `destroy_request_*` indica SOLICITAÇÃO, não destruição concluída.
+O init pode executar fases aninhadas e retornar false com rollback do bloco
+novo; isso não significa que o caminhão antigo foi destruído. Chamadas por
+outros imports ou diretamente dentro de p3shared não passam por esses dois
+hooks; o trace não comprova cobertura global completa.
+
+As linhas também expõem até 16 entradas cruas de modelo (`models`), inclusive
+as nulas, e `models_truncated` quando a quantidade declarada supera esse limite.
+Isso permite observar outras entradas quando a primeira está vazia. As duas
+assinaturas de bloco são thiscall com argumento ponteiro, bool em AL e ret4;
+nunca são chamadas adicionalmente pela sonda. A parada remove os quatro hooks
+de transição e confere sete slots externos no perfil do jogo. A extensão de
+blocos ainda depende da primeira validação na partida.
 
 ### Primeiro caminhão de teste (`visual-*`)
 

@@ -24,14 +24,18 @@ use windows_sys::Win32::{
     },
 };
 type Phase = unsafe extern "thiscall" fn(*mut c_void, u32) -> u32;
+type Block = unsafe extern "thiscall" fn(*mut c_void, *mut c_void) -> bool;
 const SLOTS: [u32; 2] = [profile::CAR_VTABLE + 0x5c, profile::CAR_VTABLE + 0x60];
 const FUNCTIONS: [u32; 2] = [0x50f40, 0x515d0];
 static STATE: AtomicU32 = AtomicU32::new(0);
 static OWNER: AtomicU32 = AtomicU32::new(0);
-static SLOTS_AT: [AtomicUsize; 2] = [const { AtomicUsize::new(0) }; 2];
-static ORIGINALS: [AtomicUsize; 2] = [const { AtomicUsize::new(0) }; 2];
-static PROTECTION: [AtomicU32; 2] = [const { AtomicU32::new(0) }; 2];
-static CALLS: [AtomicU32; 2] = [const { AtomicU32::new(0) }; 2];
+static SLOTS_AT: [AtomicUsize; 4] = [const { AtomicUsize::new(0) }; 4];
+static ORIGINALS: [AtomicUsize; 4] = [const { AtomicUsize::new(0) }; 4];
+static PROTECTION: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
+static CALLS: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
+static HOOKS: AtomicU32 = AtomicU32::new(0);
+static FIXTURE: AtomicBool = AtomicBool::new(false);
+static LAST_CAR: AtomicU32 = AtomicU32::new(0);
 static FOREIGN: AtomicU32 = AtomicU32::new(0);
 static DEPTH: AtomicU32 = AtomicU32::new(0);
 static ACTIVE: AtomicBool = AtomicBool::new(false);
@@ -60,11 +64,14 @@ impl Trace {
                 flushes: 0,
                 values: [0; 4],
                 readable: 0,
+                context: [0; 8],
+                returned: 0,
+                models: [0; 16],
             }; CAPACITY],
         }
     }
 }
-fn record(kind: u32, this: u32, argument: u32, caller: u32, depth: u32) {
+fn record(kind: u32, this: u32, argument: u32, caller: u32, depth: u32, returned: u32) {
     if !ACTIVE.load(Ordering::Acquire) || STATE.load(Ordering::Acquire) != 1 {
         return;
     }
@@ -86,16 +93,61 @@ fn record(kind: u32, this: u32, argument: u32, caller: u32, depth: u32) {
         depth,
         thread: unsafe { GetCurrentThreadId() },
         flushes: flush_calls(),
+        returned,
         ..Record::default()
     };
+    let block = (6..=9).contains(&kind);
+    let car = if block {
+        LAST_CAR.load(Ordering::Acquire)
+    } else {
+        this
+    };
+    row.context[5] = car;
     for (i, offset) in [0x84, 0x1d0, 0x200, 0x300].into_iter().enumerate() {
         let mut bytes = [0; 4];
         let len = if i == 3 { 1 } else { 4 };
-        if let Some(at) = this.checked_add(offset)
+        if car != 0
+            && let Some(at) = car.checked_add(offset)
             && read(at, &mut bytes[..len]).is_ok()
         {
             row.values[i] = u32::from_le_bytes(bytes);
             row.readable |= 1 << i;
+        }
+    }
+    if row.readable & 8 != 0 {
+        let mut bytes = [0; 64];
+        let count = (row.values[3] as usize).min(16);
+        if count == 0
+            || car
+                .checked_add(0x200)
+                .is_some_and(|at| read(at, &mut bytes[..count * 4]).is_ok())
+        {
+            row.readable |= 16;
+            for (out, word) in row.models.iter_mut().zip(bytes.as_chunks::<4>().0) {
+                *out = u32::from_le_bytes(*word);
+            }
+        }
+    }
+    if block {
+        for (i, offset) in [8, 0x28, 0x4c, 0x50, 0x58].into_iter().enumerate() {
+            if argument != 0
+                && let Some(at) = argument.checked_add(offset)
+            {
+                let mut bytes = [0; 4];
+                if read(at, &mut bytes).is_ok() {
+                    row.context[i] = u32::from_le_bytes(bytes);
+                    row.readable |= 1 << (8 + i);
+                }
+            }
+        }
+        for (i, offset) in [(6, 0x3ac), (7, 0x3b0)] {
+            let mut bytes = [0; 4];
+            if let Some(at) = this.checked_add(offset)
+                && read(at, &mut bytes).is_ok()
+            {
+                row.context[i] = u32::from_le_bytes(bytes);
+                row.readable |= 1 << (8 + i);
+            }
         }
     }
     let index = trace.len;
@@ -104,10 +156,11 @@ fn record(kind: u32, this: u32, argument: u32, caller: u32, depth: u32) {
 }
 /// Called only after the original outer draw, on the proven owner thread.
 pub fn after_draw(this: u32) {
-    if unsafe { GetCurrentThreadId() } == OWNER.load(Ordering::Acquire)
-        && NEXT_DRAW.swap(false, Ordering::AcqRel)
-    {
-        record(5, this, 0, 0, 0);
+    if unsafe { GetCurrentThreadId() } == OWNER.load(Ordering::Acquire) {
+        LAST_CAR.store(this, Ordering::Release);
+        if NEXT_DRAW.swap(false, Ordering::AcqRel) {
+            record(5, this, 0, 0, 0, 0);
+        }
     }
 }
 #[unsafe(naked)]
@@ -128,7 +181,7 @@ unsafe extern "C" fn phase_impl(which: u32, this: *mut c_void, argument: u32, ca
     };
     if owner {
         CALLS[which as usize].fetch_add(1, Ordering::Relaxed);
-        record(1 + which * 2, this as u32, argument, caller, depth);
+        record(1 + which * 2, this as u32, argument, caller, depth, 0);
     } else {
         FOREIGN.fetch_add(1, Ordering::Relaxed);
     }
@@ -138,17 +191,67 @@ unsafe extern "C" fn phase_impl(which: u32, this: *mut c_void, argument: u32, ca
     let result = unsafe { original(this, argument) };
     let error = unsafe { GetLastError() };
     if owner {
-        record(2 + which * 2, this as u32, argument, caller, depth);
+        record(2 + which * 2, this as u32, argument, caller, depth, result);
         NEXT_DRAW.store(true, Ordering::Release);
         DEPTH.fetch_sub(1, Ordering::AcqRel);
     }
     unsafe { SetLastError(error) };
     result
 }
-fn shims() -> [usize; 2] {
+#[unsafe(naked)]
+unsafe extern "thiscall" fn block_init_shim(_: *mut c_void, _: *mut c_void) -> bool {
+    core::arch::naked_asm!("push ebp","mov ebp,esp","and esp,-16","push dword ptr [ebp+4]","push dword ptr [ebp+8]","push ecx","push 2","call {implementation}","mov esp,ebp","pop ebp","ret 4",implementation=sym block_impl);
+}
+#[unsafe(naked)]
+unsafe extern "thiscall" fn destroy_request_shim(_: *mut c_void, _: *mut c_void) -> bool {
+    core::arch::naked_asm!("push ebp","mov ebp,esp","and esp,-16","push dword ptr [ebp+4]","push dword ptr [ebp+8]","push ecx","push 3","call {implementation}","mov esp,ebp","pop ebp","ret 4",implementation=sym block_impl);
+}
+unsafe extern "C" fn block_impl(
+    which: u32,
+    this: *mut c_void,
+    item: *mut c_void,
+    caller: u32,
+) -> bool {
+    let error = unsafe { GetLastError() };
+    let owner = unsafe { GetCurrentThreadId() } == OWNER.load(Ordering::Acquire);
+    let depth = if owner {
+        DEPTH.fetch_add(1, Ordering::AcqRel) + 1
+    } else {
+        0
+    };
+    let kind = 6 + (which - 2) * 2;
+    if owner {
+        CALLS[which as usize].fetch_add(1, Ordering::Relaxed);
+        record(kind, this as u32, item as u32, caller, depth, 0);
+    } else {
+        FOREIGN.fetch_add(1, Ordering::Relaxed);
+    }
+    unsafe { SetLastError(error) };
+    let original: Block =
+        unsafe { std::mem::transmute(ORIGINALS[which as usize].load(Ordering::Acquire)) };
+    let result = unsafe { original(this, item) };
+    let error = unsafe { GetLastError() };
+    if owner {
+        record(
+            kind + 1,
+            this as u32,
+            item as u32,
+            caller,
+            depth,
+            u32::from(result),
+        );
+        NEXT_DRAW.store(true, Ordering::Release);
+        DEPTH.fetch_sub(1, Ordering::AcqRel);
+    }
+    unsafe { SetLastError(error) };
+    result
+}
+fn shims() -> [usize; 4] {
     [
         init_shim as *const () as usize,
         done_shim as *const () as usize,
+        block_init_shim as *const () as usize,
+        destroy_request_shim as *const () as usize,
     ]
 }
 fn replace(index: usize, expected: usize, desired: usize) -> Result<(), String> {
@@ -236,15 +339,96 @@ pub fn install(thread: u32, b: &EngineControl) -> Result<(), String> {
         }
     }
     OWNER.store(thread, Ordering::Release);
+    FIXTURE.store(b.command == api::UI_TRANSITION_FIXTURE, Ordering::Release);
     for i in 0..2 {
         SLOTS_AT[i].store(slots[i] as usize, Ordering::Release);
         ORIGINALS[i].store(originals[i] as usize, Ordering::Release);
     }
     STATE.store(1, Ordering::Release);
-    for (i, shim) in shims().into_iter().enumerate() {
+    HOOKS.store(2, Ordering::Release);
+    for (i, shim) in shims().into_iter().take(2).enumerate() {
         if let Err(error) = replace(i, originals[i] as usize, shim) {
             let rollback = remove();
             return Err(format!("{error}; rollback={rollback:?}"));
+        }
+    }
+    Ok(())
+}
+/// Add the game's two profiled imports to the SAME timeline. A destroy request
+/// schedules work; it is not evidence that a world has already been destroyed.
+pub fn install_blocks(thread: u32, b: &EngineControl) -> Result<(), String> {
+    if STATE.load(Ordering::Acquire) != 1 || HOOKS.load(Ordering::Acquire) != 2 {
+        return Err(
+            "install the actor transition observer exactly once before block observation".into(),
+        );
+    }
+    if ACTIVE.load(Ordering::Acquire) || DEPTH.load(Ordering::Acquire) != 0 {
+        return Err("install block observers before arming, outside callbacks".into());
+    }
+    if thread != OWNER.load(Ordering::Acquire) {
+        return Err("block observation owner thread changed".into());
+    }
+    let fixture = b.command == api::UI_TRANSITION_BLOCKS_FIXTURE;
+    if fixture != FIXTURE.load(Ordering::Acquire) {
+        return Err("transition fixture/game mode mismatch".into());
+    }
+    let process = Process::open(unsafe { GetCurrentProcessId() }).map_err(|e| e.to_string())?;
+    let modules = process.modules().map_err(|e| e.to_string())?;
+    let get = |name: &str| {
+        modules
+            .iter()
+            .find(|m| m.name.eq_ignore_ascii_case(name))
+            .ok_or_else(|| format!("{name} missing"))
+    };
+    let (slots, originals) = if fixture {
+        let module = get("engine_fixture.exe")?;
+        for at in [b.fixture[1], b.fixture[3]] {
+            executable(at, module)?;
+        }
+        ([b.fixture[0], b.fixture[2]], [b.fixture[1], b.fixture[3]])
+    } else {
+        let game = get("game.dll")?;
+        let engine = get("p3shared.dll")?;
+        profile::verify_module(std::path::Path::new(&game.path))?;
+        profile::verify_engine(std::path::Path::new(&engine.path))?;
+        let functions = [add(engine, 0xc270)?, add(engine, 0xc600)?];
+        for at in functions {
+            executable(at, engine)?;
+        }
+        ([add(game, 0x124560)?, add(game, 0x1242b4)?], functions)
+    };
+    if slots[0] == slots[1]
+        || slots.iter().any(|&s| {
+            SLOTS_AT[..2]
+                .iter()
+                .any(|old| old.load(Ordering::Acquire) == s as usize)
+        })
+    {
+        return Err("transition slots must be distinct".into());
+    }
+    for (slot, original) in slots.into_iter().zip(originals) {
+        if slot == 0 || !slot.is_multiple_of(4) {
+            return Err("invalid block slot alignment".into());
+        }
+        let mut bytes = [0; 4];
+        process
+            .read(slot.into(), &mut bytes)
+            .map_err(|e| e.to_string())?;
+        if u32::from_le_bytes(bytes) != original {
+            return Err("block slot already modified or incompatible".into());
+        }
+    }
+    for i in 0..2 {
+        SLOTS_AT[i + 2].store(slots[i] as usize, Ordering::Release);
+        ORIGINALS[i + 2].store(originals[i] as usize, Ordering::Release);
+    }
+    HOOKS.store(4, Ordering::Release);
+    for i in 2..4 {
+        if let Err(error) = replace(i, originals[i - 2] as usize, shims()[i]) {
+            let rollback = remove();
+            return Err(format!(
+                "{error}; rollback={rollback:?}; reopen process before reinstalling"
+            ));
         }
     }
     Ok(())
@@ -256,7 +440,12 @@ pub fn remove() -> Result<(), String> {
     if DEPTH.load(Ordering::Acquire) != 0 {
         return Err("transition callback active; retry removal".into());
     }
-    for (i, shim) in shims().into_iter().enumerate() {
+    for (i, shim) in shims()
+        .into_iter()
+        .take(HOOKS.load(Ordering::Acquire) as usize)
+        .enumerate()
+        .rev()
+    {
         let at = SLOTS_AT[i].load(Ordering::Acquire);
         let original = ORIGINALS[i].load(Ordering::Acquire);
         let current = unsafe { AtomicUsize::from_ptr(at as *mut usize) }.load(Ordering::Acquire);
@@ -286,7 +475,10 @@ pub fn control(b: &mut EngineControl) -> Result<(), String> {
             .generation
             .checked_add(1)
             .ok_or("transition generation exhausted")?;
-        *trace = Trace::new(generation);
+        // Rows are overwritten on append; avoid a large temporary on the game's stack.
+        trace.generation = generation;
+        trace.len = 0;
+        trace.flags = 0;
         LOST.store(false, Ordering::Release);
         NEXT_DRAW.store(true, Ordering::Release);
         ACTIVE.store(true, Ordering::Release);
@@ -310,6 +502,11 @@ pub fn control(b: &mut EngineControl) -> Result<(), String> {
     b.count_before = CALLS[0].load(Ordering::Acquire);
     b.count_created = CALLS[1].load(Ordering::Acquire);
     b.count_after = FOREIGN.load(Ordering::Acquire);
+    b.frames[..3].copy_from_slice(&[
+        CALLS[2].load(Ordering::Acquire),
+        CALLS[3].load(Ordering::Acquire),
+        u32::from(HOOKS.load(Ordering::Acquire) == 4 && STATE.load(Ordering::Acquire) == 1),
+    ]);
     b.reserved = trace.flags
         | u32::from(ACTIVE.load(Ordering::Acquire))
         | if LOST.load(Ordering::Acquire) {

@@ -182,6 +182,10 @@ fn execute(mut block: EngineControl) -> Result<EngineControl, String> {
         }
         #[cfg(target_arch = "x86")]
         api::UI_TRANSITION_REMOVE => crate::engine_transition::remove()?,
+        #[cfg(target_arch = "x86")]
+        api::UI_TRANSITION_BLOCKS | api::UI_TRANSITION_BLOCKS_FIXTURE => {
+            crate::engine_transition::install_blocks(tid, &block)?
+        }
         api::UI_PROBE => {}
         api::UI_TRACE => {
             let mut frames = [ptr::null_mut(); 32];
@@ -439,6 +443,8 @@ pub fn control(block: &mut EngineControl) -> Result<(), String> {
         | api::UI_DRAW_REMOVE
         | api::UI_TRANSITION_ATTACH
         | api::UI_TRANSITION_FIXTURE
+        | api::UI_TRANSITION_BLOCKS
+        | api::UI_TRANSITION_BLOCKS_FIXTURE
         | api::UI_TRANSITION_REMOVE => dispatch(*block).map(|response| {
             *block = response;
         }),

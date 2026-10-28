@@ -267,3 +267,16 @@ restaurados, dispatcher/pump removidos, worker parado, tarefas zeradas, sete
 hashes iguais antes/depois da saída. Proprietário confirmou fechamento normal,
 enumeração confirmou ausência do jogo. Ver seção nova do roadmap; manter
 session-prepare-load/visual-show até validar a automação.
+
+Extensão entregue: `engine transition-blocks` (47/48) acrescenta, antes do
+arm, os imports init_eblock/destroy_eblock à mesma timeline. A sonda continua
+passiva e incompatível com visual retido. Bool AL/ret4, LastError, aninhamento,
+rollback novo sem destruir antigo e ownership foram testados com fixture
+própria. Trace agora limitado a 512 eventos, com bloco/processador, dados e
+contadores diretos, words crus da fila, último caminhão observado e até 16
+entradas cruas de modelo. Não interpretar solicitação como destruição concluída
+nem cobertura desses imports como cobertura de todo o motor. Remoção desfaz
+quatro hooks e session-stop verifica sete slots. `dev_env verify`: 44 x86,
+49 nativos, Clippy x86/nativo e rustfmt. A extensão ainda aguarda prova real.
+Seguir o procedimento transition-* do README; não liberar visual nessa fase
+sem relacionar blocos/cenas/flushes e início global do carregamento.
