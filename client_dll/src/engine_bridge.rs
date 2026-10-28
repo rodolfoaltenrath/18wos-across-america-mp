@@ -412,6 +412,7 @@ pub fn control(block: &mut EngineControl) -> Result<(), String> {
         api::DRAW_ARM | api::DRAW_STATUS | api::DRAW_READ => crate::engine_draw::control(block),
         #[cfg(target_arch = "x86")]
         api::VISUAL_HIDE | api::VISUAL_STATUS => crate::engine_visual::control(block),
+        api::REMOTE_LIST => crate::remote_row(block),
         api::UI_DETACH => detach_locked(),
         api::UI_PROBE
         | api::UI_REGISTRY

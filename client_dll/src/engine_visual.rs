@@ -78,23 +78,31 @@ fn player_pose(this: u32) -> Option<([f32; 4], [f32; 3])> {
         })
         .ok()
 }
-/// Remote pose for the selected player, if fresh. Never blocks the render thread.
-fn remote_pose(id: u32) -> Option<([f32; 4], [f32; 3])> {
+/// TARGET value that draws every fresh relayed player with the same instance.
+pub const ALL_PLAYERS: u32 = u32::MAX;
+/// Upper bound on remote draws per frame.
+const MAX_REMOTE_DRAWS: usize = 16;
+/// Interpolated poses of the selected remote(s), if fresh. Never blocks the
+/// render thread: a contended lock skips this frame.
+fn remote_poses(target: u32, out: &mut [([f32; 4], [f32; 3]); MAX_REMOTE_DRAWS]) -> Option<usize> {
     let remotes = crate::REMOTES.try_lock().ok()?;
-    let entry = remotes.get(&u64::from(id))?;
-    if entry.seen.elapsed() >= REMOTE_FRESH {
-        return None;
+    let now = crate::interpolation::now();
+    let mut count = 0;
+    for (id, entry) in remotes.iter() {
+        if count == out.len() {
+            break;
+        }
+        if (target != ALL_PLAYERS && *id != u64::from(target))
+            || entry.seen.elapsed() >= REMOTE_FRESH
+        {
+            continue;
+        }
+        if let Some((position, rotation)) = entry.history.pose(now) {
+            out[count] = (rotation, position);
+            count += 1;
+        }
     }
-    let r = entry.rotation.unwrap_or(Rotation {
-        x: 0.0,
-        y: 0.0,
-        z: 0.0,
-        w: 1.0,
-    });
-    Some((
-        [r.x, r.y, r.z, r.w],
-        [entry.state.x, entry.state.y, entry.state.z],
-    ))
+    Some(count)
 }
 pub(crate) fn after_car_draw(this: u32, [world, _, path, viewport]: [u32; 4]) {
     // Publish the local pose for the Drawn network source; same coordinates as drawing.
@@ -142,40 +150,48 @@ pub(crate) fn after_car_draw(this: u32, [world, _, path, viewport]: [u32; 4]) {
         return skip();
     }
     let target = TARGET.load(Ordering::Acquire);
-    let pose = if target == 0 {
-        player_pose(this)
+    let mut poses = [([0f32; 4], [0f32; 3]); MAX_REMOTE_DRAWS];
+    let count = if target == 0 {
+        player_pose(this).map(|pose| {
+            poses[0] = pose;
+            1
+        })
     } else {
-        remote_pose(target)
+        remote_poses(target, &mut poses)
     };
-    let Some((quaternion, mut position)) = pose else {
+    let Some(count @ 1..) = count else {
         return skip();
     };
-    for (p, o) in position.iter_mut().zip(&OFFSET) {
-        *p += f32::from_bits(o.load(Ordering::Acquire));
-    }
     let f = |i: usize| FUNCTIONS[i].load(Ordering::Acquire);
     let error = unsafe { GetLastError() };
-    // SAFETY: profiled cdecl exports checked at creation; same thread and phase
-    // as the game's own exterior draw; one balanced push/pop at depth 0.
-    unsafe {
-        std::mem::transmute::<usize, Plain>(f(1))();
-        std::mem::transmute::<usize, Vector>(f(3))(position.as_ptr());
-        std::mem::transmute::<usize, Vector>(f(4))(quaternion.as_ptr());
-        std::mem::transmute::<usize, Draw>(f(0))(
-            ITEM.load(Ordering::Acquire) as *mut c_void,
-            1,
-            u32::MAX,
-        );
-        std::mem::transmute::<usize, Plain>(f(2))();
-    }
-    if word(world) != Ok(top) {
-        // Cannot repair an engine stack; stop drawing and keep the instance.
-        FAULT.store(1, Ordering::Release);
-        SHOWN.store(false, Ordering::Release);
-        HIDDEN_AT.store(flush_calls(), Ordering::Release);
+    for (quaternion, mut position) in poses.into_iter().take(count) {
+        for (p, o) in position.iter_mut().zip(&OFFSET) {
+            *p += f32::from_bits(o.load(Ordering::Acquire));
+        }
+        // SAFETY: profiled cdecl exports checked at creation; same thread and
+        // phase as the game's own exterior draw; one balanced push/pop at depth
+        // 0. The game itself draws one wheel instance several times per frame.
+        unsafe {
+            std::mem::transmute::<usize, Plain>(f(1))();
+            std::mem::transmute::<usize, Vector>(f(3))(position.as_ptr());
+            std::mem::transmute::<usize, Vector>(f(4))(quaternion.as_ptr());
+            std::mem::transmute::<usize, Draw>(f(0))(
+                ITEM.load(Ordering::Acquire) as *mut c_void,
+                1,
+                u32::MAX,
+            );
+            std::mem::transmute::<usize, Plain>(f(2))();
+        }
+        DRAWN.fetch_add(1, Ordering::Relaxed);
+        if word(world) != Ok(top) {
+            // Cannot repair an engine stack; stop drawing and keep the instance.
+            FAULT.store(1, Ordering::Release);
+            SHOWN.store(false, Ordering::Release);
+            HIDDEN_AT.store(flush_calls(), Ordering::Release);
+            break;
+        }
     }
     unsafe { SetLastError(error) };
-    DRAWN.fetch_add(1, Ordering::Relaxed);
     LAST_FLUSH.store(flush_calls(), Ordering::Release);
 }
 fn draw_functions(

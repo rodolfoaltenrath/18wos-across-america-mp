@@ -67,14 +67,17 @@ fn main() -> anyhow::Result<()> {
             /// World offset in game units (centimeters): x y z.
             #[arg(long, num_args = 3, allow_hyphen_values = true, default_values_t = [400.0f32, 0.0, 0.0])]
             offset: Vec<f32>,
-            /// Relayed player id to follow; 0 follows the local player plus offset.
-            #[arg(long, default_value_t = 0)]
+            /// Relayed player id to follow ("all" draws every fresh player);
+            /// 0 follows the local player plus offset.
+            #[arg(long, default_value = "0", value_parser = parse_player)]
             player: u32,
         },
         VisualHide,
         /// Frees the instance only after queued draws were flushed.
         VisualRelease,
         VisualStatus,
+        /// List relayed players (ids for visual-show --player).
+        Remotes,
         PhaseProbe,
         /// Private container-backed actor, immediately released; never inserted.
         ItemCycle {
@@ -198,6 +201,24 @@ fn main() -> anyhow::Result<()> {
                 EngineTask::VisualHide => api::EngineControl::new(api::VISUAL_HIDE),
                 EngineTask::VisualRelease => api::EngineControl::new(api::VISUAL_RELEASE),
                 EngineTask::VisualStatus => api::EngineControl::new(api::VISUAL_STATUS),
+                EngineTask::Remotes => {
+                    let mut rows = Vec::new();
+                    loop {
+                        let mut b = api::EngineControl::new(api::REMOTE_LIST);
+                        b.reserved = rows.len() as u32;
+                        controller.engine_control(&dll, &mut b)?;
+                        let row = client_dll::draw_observation::Remote::decode(&b);
+                        if row.count == 0 {
+                            break;
+                        }
+                        rows.push(row);
+                        if rows.len() as u32 >= row.count || rows.len() >= 64 {
+                            break;
+                        }
+                    }
+                    println!("{}", serde_json::to_string_pretty(&rows)?);
+                    return Ok(());
+                }
                 EngineTask::Trace => api::EngineControl::new(api::UI_TRACE),
                 EngineTask::PumpAttach => api::EngineControl::new(api::UI_PUMP_ATTACH),
                 EngineTask::PumpStatus => api::EngineControl::new(api::UI_PUMP_STATUS),
@@ -427,4 +448,15 @@ fn print_status(pid: u32, block: &client_dll::api::Control) {
 fn main() -> std::process::ExitCode {
     eprintln!("mp_launcher requires the Windows x86 build, run in the game's Proton prefix");
     std::process::ExitCode::FAILURE
+}
+#[cfg(windows)]
+fn parse_player(text: &str) -> Result<u32, String> {
+    if text.eq_ignore_ascii_case("all") {
+        Ok(u32::MAX)
+    } else {
+        text.parse::<u32>()
+            .ok()
+            .filter(|id| *id != u32::MAX)
+            .ok_or_else(|| "player must be an id or \"all\"".into())
+    }
 }

@@ -45,6 +45,7 @@ pub mod engine_values;
 mod engine_visual;
 #[cfg(windows)]
 pub mod inspection;
+pub mod interpolation;
 mod memory;
 pub mod pe_exports;
 #[cfg(any(all(windows, target_arch = "x86"), test))]
@@ -71,6 +72,9 @@ pub(crate) struct RemoteEntry {
     #[cfg_attr(not(all(windows, target_arch = "x86")), allow(dead_code))]
     pub(crate) rotation: Option<Rotation>,
     pub(crate) seen: Instant,
+    /// Recent samples for delayed interpolation, newest last.
+    #[cfg_attr(not(all(windows, target_arch = "x86")), allow(dead_code))]
+    pub(crate) history: interpolation::History,
 }
 
 /// C ABI result layout. Coordinates are the most recent relayed samples;
@@ -239,9 +243,25 @@ fn run(socket: UdpSocket, mut source: Source) -> Result<(), String> {
                         .get(&update.player_id)
                         .is_none_or(|previous| update.sequence > previous.state.sequence);
                     if is_new && (remotes.contains_key(&update.player_id) || remotes.len() < 64) {
+                        let mut history = remotes
+                            .remove(&update.player_id)
+                            .map(|entry| entry.history)
+                            .unwrap_or_default();
+                        let r = update.rotation.unwrap_or(Rotation {
+                            x: 0.0,
+                            y: 0.0,
+                            z: 0.0,
+                            w: 1.0,
+                        });
+                        history.push(interpolation::Sample {
+                            at: interpolation::now(),
+                            position: [update.position.x, update.position.y, update.position.z],
+                            rotation: [r.x, r.y, r.z, r.w],
+                        });
                         remotes.insert(
                             update.player_id,
                             RemoteEntry {
+                                history,
                                 state: RemoteState {
                                     player_id: update.player_id,
                                     sequence: update.sequence,
@@ -529,6 +549,39 @@ pub unsafe extern "system" fn client_engine_control(block: *mut api::EngineContr
         block.result
     }))
     .unwrap_or(1)
+}
+
+/// Fill one relayed player row (index in `reserved`) for diagnostics and listing.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn remote_row(b: &mut api::EngineControl) -> Result<(), String> {
+    let remotes = REMOTES.lock().map_err(|_| "remote state mutex poisoned")?;
+    let count = u32::try_from(remotes.len()).map_err(|e| e.to_string())?;
+    let index = b.reserved;
+    let row = match remotes.values().nth(index as usize) {
+        Some(entry) => {
+            let r = entry.rotation.unwrap_or(Rotation {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+                w: 1.0,
+            });
+            draw_observation::Remote {
+                index,
+                count,
+                player_id: u32::try_from(entry.state.player_id).unwrap_or(u32::MAX),
+                sequence: entry.state.sequence as u32,
+                age_ms: u32::try_from(entry.seen.elapsed().as_millis()).unwrap_or(u32::MAX),
+                samples: entry.history.len() as u32,
+                has_rotation: entry.rotation.is_some(),
+                position: [entry.state.x, entry.state.y, entry.state.z],
+                rotation: [r.x, r.y, r.z, r.w],
+            }
+        }
+        None if count == 0 => draw_observation::Remote::default(),
+        None => return Err("no relayed player at that index".into()),
+    };
+    row.encode(b);
+    Ok(())
 }
 
 /// Copy a remote player by sorted index. Returns 1 when found, 0 otherwise.

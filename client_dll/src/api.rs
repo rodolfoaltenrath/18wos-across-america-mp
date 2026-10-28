@@ -54,6 +54,8 @@ pub const VISUAL_SHOW_FIXTURE: u32 = 36;
 pub const VISUAL_HIDE: u32 = 37;
 pub const VISUAL_RELEASE: u32 = 38;
 pub const VISUAL_STATUS: u32 = 39;
+/// One relayed player by sorted index in `reserved`; see draw_observation::Remote.
+pub const REMOTE_LIST: u32 = 40;
 pub const ENGINE_ABI_VERSION: u32 = 3;
 /// Separate extension ABI; does not change the original Control v1 layout.
 #[repr(C)]

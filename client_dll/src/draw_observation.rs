@@ -162,8 +162,69 @@ impl Visual {
         }
     }
 }
+/// One relayed player as seen by this client; listing order is by player id.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
+pub struct Remote {
+    pub index: u32,
+    pub count: u32,
+    pub player_id: u32,
+    pub sequence: u32,
+    pub age_ms: u32,
+    pub samples: u32,
+    pub has_rotation: bool,
+    pub position: [f32; 3],
+    pub rotation: [f32; 4],
+}
+impl Remote {
+    pub fn encode(&self, b: &mut EngineControl) {
+        b.object_size = self.index;
+        b.registry_count = self.count;
+        b.entity = self.player_id;
+        b.cycles = self.sequence;
+        b.count_before = self.age_ms;
+        b.count_created = self.samples;
+        b.reserved = u32::from(self.has_rotation);
+        for (out, v) in b
+            .frames
+            .iter_mut()
+            .zip(self.position.iter().chain(&self.rotation))
+        {
+            *out = v.to_bits();
+        }
+    }
+    pub fn decode(b: &EngineControl) -> Self {
+        Self {
+            index: b.object_size,
+            count: b.registry_count,
+            player_id: b.entity,
+            sequence: b.cycles,
+            age_ms: b.count_before,
+            samples: b.count_created,
+            has_rotation: b.reserved & 1 != 0,
+            position: std::array::from_fn(|i| f32::from_bits(b.frames[i])),
+            rotation: std::array::from_fn(|i| f32::from_bits(b.frames[3 + i])),
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn remote_row_roundtrip() {
+        let r = super::Remote {
+            index: 1,
+            count: 2,
+            player_id: 5,
+            sequence: 99,
+            age_ms: 12,
+            samples: 16,
+            has_rotation: true,
+            position: [1.0, 2.0, 3.0],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+        };
+        let mut b = crate::api::EngineControl::new(40);
+        r.encode(&mut b);
+        assert_eq!(super::Remote::decode(&b), r);
+    }
     #[test]
     fn visual_status_roundtrip() {
         let v = super::Visual {

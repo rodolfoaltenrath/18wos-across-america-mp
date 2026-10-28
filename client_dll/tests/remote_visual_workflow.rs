@@ -100,10 +100,10 @@ fn drawn_pose_is_sent_and_a_relayed_player_pose_drives_the_test_visual() {
         z: 0.0,
         w: std::f32::consts::FRAC_1_SQRT_2,
     };
-    let relay = |sequence, x| {
+    let relay_from = |player_id, sequence, x| {
         let packet = protocol::encode(&ServerUpdate {
             version: protocol::VERSION,
-            player_id: 5,
+            player_id,
             sequence,
             position: Position {
                 x,
@@ -115,6 +115,7 @@ fn drawn_pose_is_sent_and_a_relayed_player_pose_drives_the_test_visual() {
         .unwrap();
         server.send_to(&packet, client).unwrap();
     };
+    let relay = |sequence, x| relay_from(5, sequence, x);
     relay(1, 5000.0);
     let deadline = Instant::now() + Duration::from_secs(3);
     let mut b = Control::new(api::STATUS);
@@ -144,10 +145,14 @@ fn drawn_pose_is_sent_and_a_relayed_player_pose_drives_the_test_visual() {
     let q = last["quaternion"].as_array().unwrap();
     assert_eq!(q[0], 0.0);
     assert!((q[1].as_f64().unwrap() - std::f64::consts::FRAC_1_SQRT_2).abs() < 1e-6);
-    // Newer relayed samples move the visual; older ones are ignored.
-    relay(3, 5100.0);
+    // Newer samples move the visual (held, so interpolation settles on them);
+    // an older sequence is ignored.
+    for sequence in 3..6 {
+        relay(sequence, 5100.0);
+        std::thread::sleep(Duration::from_millis(20));
+    }
     relay(2, 9999.0);
-    std::thread::sleep(Duration::from_millis(80));
+    std::thread::sleep(Duration::from_millis(250));
     let last: serde_json::Value =
         serde_json::from_str(&send(&mut host, &mut output, "visual-last")).unwrap();
     assert_eq!(last["position"][0], 5100.0);
@@ -159,7 +164,7 @@ fn drawn_pose_is_sent_and_a_relayed_player_pose_drives_the_test_visual() {
     assert_eq!(later.drawn, stale.drawn);
     assert!(later.skipped > stale.skipped);
     // An unknown player draws nothing.
-    relay(4, 5200.0);
+    relay(6, 5200.0);
     let mut unknown = show;
     unknown.entity = 9;
     controller.engine_control(&dll, &mut unknown).unwrap();
@@ -167,6 +172,51 @@ fn drawn_pose_is_sent_and_a_relayed_player_pose_drives_the_test_visual() {
     let before = status(&controller, &dll).drawn;
     std::thread::sleep(Duration::from_millis(60));
     assert_eq!(status(&controller, &dll).drawn, before);
+    // "all": every fresh player is drawn with the same instance, once per frame each.
+    let mut all = show;
+    all.entity = u32::MAX;
+    controller.engine_control(&dll, &mut all).unwrap();
+    let mut sequence = 10;
+    let mut feed = |rounds| {
+        for _ in 0..rounds {
+            relay_from(5, sequence, 5200.0);
+            relay_from(6, sequence, 7000.0);
+            sequence += 1;
+            std::thread::sleep(Duration::from_millis(15));
+        }
+    };
+    feed(10);
+    let draws = |c: &Controller| {
+        let mut b = EngineControl::new(api::DRAW_STATUS);
+        c.engine_control(&dll, &mut b).unwrap();
+        b.count_before
+    };
+    let (visual_before, car_before) = (status(&controller, &dll).drawn, draws(&controller));
+    feed(10);
+    let (visual_after, car_after) = (status(&controller, &dll).drawn, draws(&controller));
+    let (visual, car) = (visual_after - visual_before, car_after - car_before);
+    assert!(
+        car > 0 && visual + 6 >= 2 * car && visual <= 2 * car + 6,
+        "{visual}/{car}"
+    );
+    // Listing through the CLI (it takes the per-PID control mutex).
+    drop(controller);
+    let listed = Command::new(env!("CARGO_BIN_EXE_mp_launcher"))
+        .args(["--pid", &host.0.id().to_string(), "--dll"])
+        .arg(&dll)
+        .args(["--fixture", "engine", "remotes"])
+        .output()
+        .unwrap();
+    assert!(listed.status.success(), "{listed:?}");
+    let rows: serde_json::Value = serde_json::from_slice(&listed.stdout).unwrap();
+    assert_eq!(rows.as_array().unwrap().len(), 2);
+    assert_eq!(
+        (rows[0]["player_id"].as_u64(), rows[1]["player_id"].as_u64()),
+        (Some(5), Some(6))
+    );
+    assert_eq!(rows[1]["has_rotation"], true);
+    assert_eq!(rows[1]["position"][0], 7000.0);
+    let controller = Controller::open(host.0.id()).unwrap();
 
     let mut hide = EngineControl::new(api::VISUAL_HIDE);
     controller.engine_control(&dll, &mut hide).unwrap();
