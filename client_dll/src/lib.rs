@@ -19,13 +19,18 @@ pub mod api;
 pub mod controller;
 #[cfg(windows)]
 mod engine_bridge;
+pub mod engine_contract;
 pub mod engine_discovery;
+#[cfg(all(windows, target_arch = "x86"))]
+mod engine_lifecycle;
 #[cfg(all(windows, target_arch = "x86"))]
 mod engine_phase;
 #[cfg(windows)]
 pub mod inspection;
 mod memory;
 pub mod pe_exports;
+#[cfg(any(all(windows, target_arch = "x86"), test))]
+mod phase_queue;
 pub mod profile;
 
 static WORKER: Mutex<Option<JoinHandle<Result<(), String>>>> = Mutex::new(None);

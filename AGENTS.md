@@ -62,12 +62,19 @@ Usar `proton_host` com `runinprefix` para ferramentas no prefixo da partida;
 a bancada deve executar em prefixo próprio e num único runtime via `test_host`.
 Não chamar exports de registro do motor sem comprovar ABI/thread/ownership.
 `engine_report`, `memory_tool entities` e o dispatcher `mp_launcher engine`
-estão entregues. O dispatcher comprova a thread da janela, ainda não uma fase
-segura para criar objetos. Consultar o registro de validação e da saída
+estão entregues. O dispatcher comprova a thread da janela; chamadas do motor
+devem passar pela fila do loop, comprovada para o ciclo privado. Consultar o
+registro de validação e da saída
 indeterminada no roadmap. Remover o dispatcher e descarregar antes de reconstruir
 a DLL. Se a remoção falhar, manter a referência ao módulo e reabrir o processo.
 `engine pump-attach` é uma sonda opcional do import `PeekMessageA`: seu uso fixa
 a DLL até o fim do processo, mesmo após restaurar a entrada. Não reconstruir a
-DLL enquanto esse processo existir. A ABI de diagnóstico atual é v2/604 bytes;
+DLL enquanto esse processo existir. A ABI de diagnóstico atual é v3/664 bytes;
 a ABI de configuração/rede v1 foi preservada. Ver o procedimento no README.
+`phase-probe` e `private-cycle` usam a fila do loop, separada da fila de janela.
+O ciclo privado usa somente `actors.car` não inicializado e destruição imediata;
+não confundir essa prova de lifetime com inserção de um veículo no mundo.
+Foram validados 18 ciclos reais, incluindo repetição após recarga. O próximo
+bloco deve decodificar valores de entidade e investigar modelo, inicialização e
+inserção/remoção; não refazer o ciclo de alocação já comprovado sem necessidade.
 A criação e a movimentação de caminhões remotos ainda não foram implementadas.

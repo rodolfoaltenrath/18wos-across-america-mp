@@ -58,6 +58,9 @@ fn exercise(ansi: bool, peek: bool) {
     let mut incompatible = EngineControl::new(api::UI_STATUS);
     incompatible.version = 1;
     assert!(controller.engine_control(&dll, &mut incompatible).is_err());
+    incompatible.version = 2;
+    incompatible.size = 604;
+    assert!(controller.engine_control(&dll, &mut incompatible).is_err());
     let mut attach = EngineControl::new(api::UI_ATTACH);
     attach.window = info["window"].as_u64().unwrap() as u32;
     controller.engine_control(&dll, &mut attach).unwrap();
@@ -71,6 +74,61 @@ fn exercise(ansi: bool, peek: bool) {
         assert!(state.phase_hits > 0);
         assert_eq!(state.phase_thread, attach.window_thread);
         assert_ne!(state.phase_site, 0);
+        let phase = call(&controller, &dll, api::PHASE_PROBE);
+        assert_eq!(phase.executed_thread, attach.window_thread);
+        assert_eq!(phase.phase_completed, 1);
+        let mut lifecycle = EngineControl::new(api::PRIVATE_FIXTURE);
+        lifecycle.fixture = std::array::from_fn(|i| info["factory"][i].as_u64().unwrap() as u32);
+        lifecycle.cycles = 4;
+        controller.engine_control(&dll, &mut lifecycle).unwrap();
+        assert_eq!(lifecycle.cycles, 4);
+        assert_eq!(
+            (
+                lifecycle.count_before,
+                lifecycle.count_created,
+                lifecycle.count_after
+            ),
+            (7, 9, 7)
+        );
+        assert_eq!(lifecycle.executed_thread, attach.window_thread);
+        // A failed post-create header check must still destroy the private object.
+        lifecycle.fixture[5] = 1;
+        lifecycle.cycles = 1;
+        assert!(controller.engine_control(&dll, &mut lifecycle).is_err());
+        let mut wrong_mode = EngineControl::new(api::PRIVATE_CYCLE);
+        wrong_mode.cycles = 1;
+        assert!(controller.engine_control(&dll, &mut wrong_mode).is_err());
+        // Nested PeekMessage DOES run, but window callbacks are never an engine phase.
+        let before = call(&controller, &dll, api::UI_PUMP_STATUS).phase_completed;
+        writeln!(host.0.stdin.as_mut().unwrap(), "nested-pump").unwrap();
+        line.clear();
+        output.read_line(&mut line).unwrap();
+        assert_eq!(line.trim(), "nested");
+        let mut pending = EngineControl::new(api::PRIVATE_FIXTURE);
+        pending.fixture = std::array::from_fn(|i| info["factory"][i].as_u64().unwrap() as u32);
+        pending.cycles = 1;
+        assert!(
+            controller
+                .engine_control(&dll, &mut pending)
+                .unwrap_err()
+                .to_string()
+                .contains("canceled before execution")
+        );
+        std::thread::sleep(Duration::from_millis(2400));
+        assert_eq!(
+            call(&controller, &dll, api::UI_PUMP_STATUS).phase_completed,
+            before
+        );
+        writeln!(host.0.stdin.as_mut().unwrap(), "actor-stats").unwrap();
+        line.clear();
+        output.read_line(&mut line).unwrap();
+        let stats: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(stats["created"], 5);
+        assert_eq!(stats["freed"], 5);
+        assert_eq!(stats["post"], 5);
+        assert_eq!(stats["pre"], 5);
+        assert_eq!(stats["root"], 7);
+        assert_eq!(stats["game"], 0);
     }
     assert_eq!(attach.active, 1);
     assert_eq!(

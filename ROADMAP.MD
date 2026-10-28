@@ -55,7 +55,7 @@ repositório e orientar futuras sessões de desenvolvimento.
 | Host de teste | `client_probe`, controlador entre processos e `test_host`; bancada x86 passou sob Proton | Testes de sessão longa, saída abrupta e duas máquinas |
 | Investigação | `memory_tool` Rust: processos, regiões, busca, filtros, comparação, ponteiros, observação e envio externo | Perfis de versões e ciclo de vida do veículo |
 | Coordenadas | Cadeia validada após movimento, reinício e comparação exata com save | Escala física, outros estados/versões e amostragem consistente |
-| Multiplayer visual | Nenhuma entidade remota criada no jogo | Descobrir e integrar criação, atualização e remoção |
+| Multiplayer visual | Criação/destruição privada de `actors.car` validada; nenhum remoto no mundo | Inicialização, modelo, inserção, transform e remoção da entidade visual |
 | GitHub | Remoto `rodolfoaltenrath/18wos-across-america-mp`, histórico inicial Apache-2.0 preservado, exclusão do jogo | Manter staging auditado e documentação atualizada em cada entrega |
 
 O estado atual **não é multiplayer jogável**. Transmitir números e recebê-los
@@ -361,6 +361,90 @@ adicionar uma fila própria até esse ponto do loop e validar ABI/ownership em
 fixture antes da criação/remoção privada. A fila de janela atual continua sendo
 somente de diagnóstico. M4 não está concluído e não há caminhões remotos.
 
+### M4 — Fila do loop e lifetime privado real — 27/10/2026
+
+Entregues `phase_queue`, `engine_contract`, `engine_lifecycle`, fixture de
+factories x86 e comandos `engine phase-probe` / `engine private-cycle [--cycles N]`.
+O diagnóstico usa ABI v3/664 bytes, com recusa dos blocos v1/v2; configuração e
+rede preservam a ABI v1. Não foi criada uma API de criação a partir de pacotes UDP.
+
+**Fase e fila:** no máximo 16 pedidos pertencentes à DLL, uma operação por
+passagem, somente na thread da janela e nos retornos do perfil. A profundidade
+de `PeekMessageA` deve ser 1 e nenhum callback da janela pode estar ativo.
+`WM_QUIT` tem prioridade. Timeout pendente cancela antes da execução; timeout
+com trabalho iniciado devolve diagnóstico sem liberar o pedido ou interromper
+o motor. A parada cancela pendências e recusa desmontagem se houver trabalho
+ativo. A fixação do módulo introduzida pela sonda continua exigindo encerrar
+o processo antes de reconstruir a DLL.
+
+**Contrato de alocação:** a criação usa o export `cdecl` de `p3shared.dll+0xcba0`,
+registro `game.dll+0x127a34`, variante `false` e armazenamento nulo. A remoção
+usa exclusivamente o export pareado em `p3shared.dll+0xcc40`. Um guard Rust
+destrói o objeto na mesma operação, inclusive após falha de validação Rust.
+Nenhum objeto ou ponteiro proprietário é mantido entre frames. São conferidos
+os hashes dos três módulos, exports, callbacks executáveis, registro, tamanho,
+vtable e destrutor gravado em `objeto+0x58`.
+
+A análise adicional identificou o contexto do jogo em `game.dll+0x160a24`:
+o wrapper do construtor/destrutor também chama `vprocess_t::lock/unlock`.
+Essas funções incrementam/decrementam referências, incluindo os ancestrais.
+`engine_contract` captura as duas cadeias, rejeita ponteiros nulos, ciclos,
+overflow, troca de cabeça/pai e contagens inesperadas. Ancestrais compartilhados
+recebem o incremento de cada cadeia; não se presume delta 1 para todos os nós.
+Os dois contextos precisam voltar exatamente ao estado inicial de cada ciclo.
+A posição local é lida antes e depois, e precisa continuar igual durante o
+comando. Não são chamados `init`, inserção, carregamento de modelo ou física.
+
+**Bancada:** 19 testes nativos; 17 testes x86 sob Proton; Clippy nativo/x86 e
+formatação passaram. O host Rust próprio possui factories `cdecl`, booleano e
+armazenamento explícitos, objeto com destrutor em `+0x58`, métodos virtuais
+`thiscall`, checagem da thread, rastreamento de alocações e dois contextos com
+ancestral compartilhado. Quatro ciclos passaram; um erro intencional de vtable
+também liberou a alocação e restaurou os contadores. A fixture bombeia mensagens
+dentro de um callback: o pedido de criação expira sem executar depois e sem
+alocação adicional. Foram verificados timeout após início, recuperação de panic
+Rust, limite de fila, cancelamento na parada e restauração da página/entrada.
+Nenhum teste automatizado precisa de assets comerciais.
+
+**Teste real no jogo original sob Proton:** PID Windows 396/thread 400, com o
+caminhão parado em save de teste. `phase-probe` e três comandos de lifecycle
+concluíram, com fila vazia e nenhuma operação ativa ao final:
+
+| Cenário | Ciclos | Contador do motor antes/criado/depois |
+| --- | ---: | --- |
+| Primeiro objeto privado | 1 | 1865 / 1866 / 1865 |
+| Repetição, sempre um objeto por vez | 16 | 1848 / 1849 / 1848 no último ciclo |
+| Após dirigir, salvar manualmente, menu, carregar e dirigir novamente | 1 | 1882 / 1883 / 1882 |
+
+Foram **18 alocações/destruições reais de `actors.car`**, tamanho `0x2118`,
+vtable `game.dll+0x1257a0` e destrutor `game.dll+0xd1820`. As referências do
+contexto do jogo e seus ancestrais também passaram nas verificações. O valor de
+repouso muda com a atividade normal do jogo; o equilíbrio é conferido dentro de
+cada ciclo. A posição local permaneceu igual em cada comando. O proprietário
+conseguiu dirigir, salvar e recarregar entre os testes; não relatou falha.
+
+O prefixo/saves anteriores foram copiados com o jogo fechado para backup local.
+O proprietário salvou durante o procedimento; os saves após essa ação também
+foram preservados, e seus hashes continuaram iguais após a última operação.
+As ferramentas não escreveram saves. Os seis arquivos do manifesto de originais
+continuaram iguais. `pump-remove` restaurou a entrada, `stop` confirmou parada
+e remoção do procedimento da janela; o módulo permaneceu residente conforme a
+política da sonda. Evidências e backups permanecem em `target/`, fora do Git.
+
+**Limites:** o objeto é privado, não inicializado e destruído imediatamente.
+Isso não cria um caminhão visível nem prova inserção/remoção no mundo. As
+checagens de contadores não são uma auditoria completa do heap. O guard cobre
+fluxos de erro/panic Rust, não exceções nativas C++/SEH. O resultado vale somente
+para o perfil e ambiente registrados.
+
+**Próxima entrega:** mapear os valores de entidade e os contratos de `c_item_t`,
+`entity_proc_t::init_eblock` e inserção/remoção, identificar configuração de
+modelo e transform e criar um visual mínimo sem física/colisão. A inspeção
+somente leitura encontrou a raiz de valores de `actors.car` em
+`game.dll+0x15fdb8`; os nós são inicializados em runtime. Decodificar esses
+metadados com limites antes de chamar setters ou inicialização. Não copiar o
+objeto do jogador para simular outro veículo.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -494,21 +578,24 @@ com incompatibilidades diagnosticadas e comportamento definido sob perda/reorden
 ### M4 — Criar e remover caminhões remotos no motor
 
 Esta é a maior incerteza técnica do caminho até o primeiro multiplayer visual.
-Não há ainda uma API do motor identificada e validada para essas operações.
+O factory privado foi identificado e validado. Inicialização e integração no
+mundo ainda precisam de contratos e testes próprios.
 
 - [ ] Investigar criação de veículo/modelo, atualização de transform e remoção,
   usando somente a instalação local e registrando conclusões próprias.
 - [x] Descobrir o registro de tipos e consultar 80 entradas na partida.
 - [x] Observar retornos exatos do loop principal na thread da janela, incluindo
   movimento/menu/recarga; restaurar a instrumentação e conferir a parada.
-- [ ] Identificar a thread/fase correta para chamadas e a propriedade dos objetos.
-- [ ] Confirmar ABI x86: calling convention, `this`, alinhamento, tamanhos,
-  registradores e regras de alocação/liberação antes de chamadas `unsafe`.
-- [ ] Criar uma fachada Rust pequena para operações do motor; manter offsets e
-  chamadas desconhecidas fora do núcleo de rede.
-- [ ] Encaminhar comandos por fila limitada até o tick/thread do jogo; não
-  manipular entidades a partir do worker UDP. Dispatcher de diagnóstico na
-  thread da janela entregue; a fase de atualização do motor ainda está pendente.
+- [ ] Comprovar a thread/fase e a propriedade das operações de inicialização e
+  integração no mundo; o contrato do ciclo privado já passou.
+- [x] Confirmar ABI x86 dos factories e lifetime privado: convenções de chamada,
+  variante, armazenamento, tamanho, alocação e liberação pareadas.
+- [ ] Confirmar ABI/ownership de inicialização, inserção, transform e remoção
+  do mundo antes de ampliar as chamadas `unsafe`.
+- [x] Criar fachada Rust para o ciclo privado, mantendo offsets e chamadas
+  do motor fora do núcleo de rede; ampliar somente com operações comprovadas.
+- [x] Encaminhar diagnóstico e lifecycle por fila limitada até o ponto observado
+  do loop, fora de callbacks/reentrância; nenhum objeto é manipulado pelo UDP.
 - [ ] Criar primeiro um único veículo visual de teste a distância controlada,
   usando assets originais disponíveis localmente e física/colisões desativadas.
 - [ ] Mapear jogador → entidade, atualizar transform, remover na saída e limpar
@@ -881,9 +968,9 @@ e [seleção de toolchain com rustup](https://rust-lang.github.io/rustup/overrid
 
 ## 9. Registro de passagem para a próxima etapa
 
-**Próxima entrega:** comprovar ABI/ownership dos factories em bancada e adicionar
-fila até o ponto observado do loop para testar criação/remoção privada. O último
-processo usou a sonda fixada; encerrá-lo antes de reconstruir a DLL. Ampliar
+**Próxima entrega:** decodificar os metadados de valores e comprovar inicialização,
+modelo, transform e inserção/remoção no mundo, sobre o lifetime privado validado.
+O último processo usou a sonda fixada; encerrá-lo antes de reconstruir a DLL. Ampliar
 a matriz de estados de M1 e a robustez de M2, sem refazer a busca ampla inicial.
 
 **Antes de começar:** ler os três documentos, conferir Git e toolchain, localizar

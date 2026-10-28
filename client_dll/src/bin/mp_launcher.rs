@@ -48,6 +48,11 @@ fn main() -> anyhow::Result<()> {
     }
     #[derive(Subcommand)]
     enum EngineTask {
+        PhaseProbe,
+        PrivateCycle {
+            #[arg(long, default_value_t=1, value_parser=clap::value_parser!(u32).range(1..=16))]
+            cycles: u32,
+        },
         PumpAttach,
         PumpStatus,
         PumpRemove,
@@ -107,6 +112,12 @@ fn main() -> anyhow::Result<()> {
                 EngineTask::PumpAttach => api::EngineControl::new(api::UI_PUMP_ATTACH),
                 EngineTask::PumpStatus => api::EngineControl::new(api::UI_PUMP_STATUS),
                 EngineTask::PumpRemove => api::EngineControl::new(api::UI_PUMP_REMOVE),
+                EngineTask::PhaseProbe => api::EngineControl::new(api::PHASE_PROBE),
+                EngineTask::PrivateCycle { cycles } => {
+                    let mut b = api::EngineControl::new(api::PRIVATE_CYCLE);
+                    b.cycles = cycles;
+                    b
+                }
                 EngineTask::Registry => api::EngineControl::new(api::UI_REGISTRY),
                 EngineTask::Inspect { name } => {
                     let mut b = api::EngineControl::new(api::UI_INSPECT_TYPE);
@@ -139,8 +150,20 @@ fn main() -> anyhow::Result<()> {
                 );
             }
             println!(
-                "pump_state={} phase_thread={} phase_site=+0x{:x} phase_hits={}",
-                block.phase, block.phase_thread, block.phase_site, block.phase_hits
+                "pump_state={} phase_thread={} phase_site=+0x{:x} phase_hits={} pending={} running={} completed={} cycles={} refs={}/{}/{} vtable=0x{:x} object_dtor=0x{:x}",
+                block.phase,
+                block.phase_thread,
+                block.phase_site,
+                block.phase_hits,
+                block.phase_pending,
+                block.phase_running,
+                block.phase_completed,
+                block.cycles,
+                block.count_before,
+                block.count_created,
+                block.count_after,
+                block.object_vtable,
+                block.object_destructor
             );
             return Ok(());
         }

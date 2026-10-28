@@ -1,9 +1,10 @@
-//! Read-only observation at the return from the profiled PeekMessageA import.
+//! Bounded work at the return from the profiled PeekMessageA import.
 //! The naked Rust shim preserves stdcall's five arguments and captures the REAL
-//! caller return address before a compiler prologue. It never calls game APIs.
+//! caller return address before a compiler prologue. Engine APIs run only from
+//! explicit phase tasks, outside nested PeekMessage and window callbacks.
 //! Installing this observer pins the DLL until process exit: removing an IAT
 //! slot cannot prove another thread has not already loaded its old value.
-use crate::{api::EngineControl, inspection::process::Process, profile};
+use crate::{api::EngineControl, inspection::process::Process, phase_queue::Queue, profile};
 use std::{
     ffi::c_void,
     path::Path,
@@ -20,7 +21,7 @@ use windows_sys::Win32::{
         Memory::{PAGE_READWRITE, VirtualProtect},
         Threading::{GetCurrentProcessId, GetCurrentThreadId},
     },
-    UI::WindowsAndMessaging::{MSG, PeekMessageA},
+    UI::WindowsAndMessaging::{MSG, PeekMessageA, PostMessageW, WM_NULL, WM_QUIT},
 };
 type Peek = unsafe extern "system" fn(*mut MSG, HWND, u32, u32, u32) -> i32;
 static ORIGINAL: AtomicUsize = AtomicUsize::new(0);
@@ -33,6 +34,16 @@ static LAST_THREAD: AtomicU32 = AtomicU32::new(0);
 static LAST_SITE: AtomicU32 = AtomicU32::new(0);
 static HITS: AtomicU32 = AtomicU32::new(0);
 static RESTORE: AtomicU32 = AtomicU32::new(0);
+static DEPTH: AtomicU32 = AtomicU32::new(0);
+static TASKS: Queue = Queue::new();
+struct DepthGuard(bool);
+impl Drop for DepthGuard {
+    fn drop(&mut self) {
+        if self.0 {
+            DEPTH.fetch_sub(1, Ordering::AcqRel);
+        }
+    }
+}
 
 // Entry: [esp] return, [esp+4..24] five stdcall arguments. Preserve EBP,
 // realign the Rust call's stack, append the caller as argument six, and ret 20.
@@ -56,18 +67,33 @@ unsafe extern "system" fn peek_impl(
     remove: u32,
     caller: u32,
 ) -> i32 {
+    let thread = unsafe { GetCurrentThreadId() };
+    let owner = thread == THREAD.load(Ordering::Acquire);
+    if owner {
+        DEPTH.fetch_add(1, Ordering::AcqRel);
+    }
+    let _depth = DepthGuard(owner);
     // ORIGINAL stays valid even after removal; this module is process-pinned.
     let original: Peek = unsafe { std::mem::transmute(ORIGINAL.load(Ordering::Acquire)) };
     let result = unsafe { original(msg, hwnd, min, max, remove) };
     let error = unsafe { GetLastError() };
-    let thread = unsafe { GetCurrentThreadId() };
     let site = caller.wrapping_sub(BASE.load(Ordering::Acquire));
-    if thread == THREAD.load(Ordering::Acquire)
-        && (FIXTURE.load(Ordering::Acquire) != 0 || profile::PUMP_RETURN_SITES.contains(&site))
+    if owner && (FIXTURE.load(Ordering::Acquire) != 0 || profile::PUMP_RETURN_SITES.contains(&site))
     {
         LAST_THREAD.store(thread, Ordering::Release);
         LAST_SITE.store(site, Ordering::Release);
         HITS.fetch_add(1, Ordering::Relaxed);
+        // A quit message has priority over queued lifecycle operations.
+        let quitting = result != 0 && !msg.is_null() && unsafe { (*msg).message } == WM_QUIT;
+        if !quitting
+            && STATE.load(Ordering::Acquire) == 1
+            && DEPTH.load(Ordering::Acquire) == 1
+            && crate::engine_bridge::window_depth() == 0
+        {
+            TASKS.run_one(|block| {
+                crate::engine_lifecycle::run(block, FIXTURE.load(Ordering::Acquire) != 0)
+            });
+        }
     }
     unsafe { SetLastError(error) };
     result
@@ -155,6 +181,10 @@ pub fn install(thread: u32, fixture_slot: Option<u32>) -> Result<(), String> {
     replace(slot, original, peek_shim as *const () as usize)
 }
 pub fn remove() -> Result<(), String> {
+    TASKS.cancel_pending()?;
+    if TASKS.stats().1 != 0 {
+        return Err("phase operation still running; dispatcher and module retained".into());
+    }
     if STATE.load(Ordering::Acquire) != 1 {
         return Ok(());
     }
@@ -175,6 +205,21 @@ pub fn fill(block: &mut EngineControl) {
     block.phase_thread = LAST_THREAD.load(Ordering::Acquire);
     block.phase_site = LAST_SITE.load(Ordering::Acquire);
     block.phase_hits = HITS.load(Ordering::Acquire);
+    (
+        block.phase_pending,
+        block.phase_running,
+        block.phase_completed,
+    ) = TASKS.stats();
+}
+pub fn dispatch(block: EngineControl, window: HWND) -> Result<EngineControl, String> {
+    if STATE.load(Ordering::Acquire) != 1 {
+        return Err("attach the pump before submitting phase work".into());
+    }
+    let ticket = TASKS.enqueue(block)?;
+    unsafe {
+        PostMessageW(window, WM_NULL, 0, 0);
+    }
+    ticket.wait(std::time::Duration::from_secs(1))
 }
 
 #[cfg(test)]

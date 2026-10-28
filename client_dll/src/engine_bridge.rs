@@ -364,9 +364,21 @@ pub fn detach() -> Result<(), String> {
     let _control = CONTROL.lock().map_err(|_| "dispatcher control poisoned")?;
     detach_locked()
 }
+#[cfg(target_arch = "x86")]
+pub(super) fn window_depth() -> u32 {
+    DEPTH.load(Ordering::Acquire)
+}
 pub fn control(block: &mut EngineControl) -> Result<(), String> {
     let _control = CONTROL.lock().map_err(|_| "dispatcher control poisoned")?;
     let result = match block.command {
+        #[cfg(target_arch = "x86")]
+        api::PHASE_PROBE | api::PRIVATE_CYCLE | api::PRIVATE_FIXTURE => {
+            crate::engine_phase::dispatch(*block, WINDOW.load(Ordering::Acquire) as HWND).map(
+                |response| {
+                    *block = response;
+                },
+            )
+        }
         api::UI_ATTACH => attach(block.window),
         api::UI_STATUS | api::UI_PUMP_STATUS => Ok(()),
         api::UI_DETACH => detach_locked(),

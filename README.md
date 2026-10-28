@@ -13,6 +13,8 @@ de descoberta de memória em Rust. Uma cadeia de posição foi validada na insta
 local com movimento, reinício do jogo e comparação exata com o salvamento.
 A DLL x86 já foi carregada no jogo sob Proton e transmitiu coordenadas reais
 ao servidor nativo do Fedora, com recepção por outro cliente de teste.
+A criação e destruição imediata de um `actors.car` privado também passaram,
+incluindo repetição após recarregar uma partida.
 A criação/movimentação de caminhões remotos continua pendente.
 
 O plano completo, os critérios de conclusão e o procedimento para continuar em
@@ -43,6 +45,7 @@ client_dll/                cdylib Win32, leitura local de memória e cliente UDP
   src/bin/proton_host.rs   entrada nativa Linux no prefixo Proton escolhido
   src/bin/test_host.rs     executa a bancada Windows num único runtime
   src/bin/engine_fixture.rs janela Rust ANSI/Unicode para testar o dispatcher
+  src/bin/fixture_actor/   factories e métodos virtuais próprios da bancada x86
   tests/                  teste entre processos com fixture própria em Rust
 ```
 
@@ -193,9 +196,10 @@ processo; `engine attach --window HANDLE_DECIMAL` permite escolher explicitament
 As outras ações exigem a DLL já carregada. `probe` informa a thread da janela e
 a thread que executou o comando; `registry` verifica os hashes dos dois módulos
 e conta os tipos; `inspect` retorna tamanho, construtor e destrutor da variante
-`false`, sem executá-los. Esta extensão usa `EngineControl` v2 de 604 bytes e
+`false`, sem executá-los. Esta extensão usa `EngineControl` v3 de 664 bytes e
 preserva a ABI v1 de configuração/rede. Reconstrua launcher e DLL juntos; blocos
-antigos da extensão são recusados por versão/tamanho. Não cria nem move objetos.
+antigos da extensão são recusados por versão/tamanho. Esses comandos de consulta
+não criam nem movem objetos.
 
 A fila tem limite de 16 comandos, identificadores sem reutilização e pedidos
 pertencentes à DLL. O timeout de 1 segundo cancela trabalho ainda não iniciado;
@@ -231,7 +235,8 @@ original de `PeekMessageA` e instala uma sonda somente na entrada IAT do perfil.
 O shim stdcall é escrito em Rust com `naked_asm!`; preserva os cinco argumentos,
 o retorno e o erro Win32, e captura o endereço de retorno real do chamador.
 Ele conta retornos dos três pontos identificados do loop somente na thread da
-janela. Não chama funções do jogo nem escreve coordenadas/objetos.
+janela. Instalar a sonda não cria entidades; operações do motor exigem o comando
+explícito abaixo.
 
 **Usar `pump-attach` fixa a DLL na memória até encerrar o jogo.** Remover uma
 entrada IAT não prova que outra thread não tenha carregado seu valor anterior.
@@ -252,6 +257,52 @@ o módulo permaneceu residente conforme previsto. Passaram 16 testes nativos e
 Referências da implementação: [assembly em Rust](https://doc.rust-lang.org/reference/inline-assembly.html),
 [proteção de páginas Win32](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualprotect)
 e [referências ao módulo e fixação](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandleexw).
+
+Para validar o lifetime de uma entidade privada, com o caminhão local parado
+num save de teste e o perfil compatível:
+
+```text
+engine attach
+engine pump-attach
+engine phase-probe
+engine private-cycle
+engine pump-remove
+stop
+```
+
+`phase-probe` enfileira uma operação até o retorno observado de `PeekMessageA`.
+`private-cycle` cria um único `actors.car` não inicializado pelo factory do motor
+e o destrói na mesma operação. `--cycles N` permite 1 a 16 ciclos, sempre um
+objeto por vez. Não insere no mundo, não carrega um modelo e não cria um caminhão
+visível. Os endereços e o tipo são fixados pelo perfil; o comando do jogo não
+aceita callbacks ou ponteiros arbitrários.
+
+A fila do loop é separada da fila de janela, limita-se a 16 pedidos e só executa
+um por passagem, na thread esperada, fora de callbacks da janela e de chamadas
+aninhadas de `PeekMessageA`. O pedido é uma cópia pertencente à DLL. Timeout antes
+do início cancela a operação; timeout depois do início não interrompe nem libera
+seus dados. Nesse caso, consulte `pump-status` e aguarde `running=0` antes de
+decidir repetir. A parada cancela pendências e recusa desmontagem durante trabalho
+ativo. O worker UDP não pode criar entidades por essa interface.
+
+Os factories usam `cdecl`; os métodos virtuais internos usam `thiscall`. A criação
+seleciona a variante `false` com armazenamento nulo, delegando alocação ao motor.
+Um guard Rust devolve o objeto exclusivamente a `entity_destroy`, inclusive após
+falha de validação Rust. O objeto não é copiado nem liberado pelo alocador Rust.
+São conferidos vtable, destrutor e contadores dos contextos do motor e do jogo,
+incluindo ancestrais compartilhados. A posição local precisa continuar igual
+durante o comando. Esses controles não capturam exceções nativas C++/SEH.
+
+A bancada usa factories e métodos virtuais escritos em Rust num processo próprio,
+com rastreamento de alocações, contadores e thread. Valida o caminho completo entre
+DLL e host sem usar assets comerciais. A evidência do teste real e os limites
+ficam no roadmap. Encerre o jogo antes de reconstruir a DLL fixada pela sonda.
+Passaram 19 testes nativos e 17 testes x86. No jogo, 18 ciclos privados passaram,
+incluindo repetição após dirigir, salvar manualmente e recarregar. Contadores e
+posição local foram conferidos em cada comando, e a instrumentação foi removida.
+
+Referências de ABI: [funções externas em Rust](https://doc.rust-lang.org/reference/items/functions.html#extern-function-qualifier)
+e [convenções de chamada x86 da Microsoft](https://learn.microsoft.com/en-us/cpp/cpp/argument-passing-and-naming-conventions?view=msvc-170).
 
 ## Ambiente e compilação Windows (registro anterior)
 

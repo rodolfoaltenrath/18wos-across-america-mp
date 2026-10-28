@@ -1,6 +1,10 @@
 //! A private message-pump host for dispatcher lifecycle tests. No game assets.
+#[cfg(all(windows, target_arch = "x86"))]
+mod fixture_actor;
 #[cfg(windows)]
 static PEEK_SLOT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+#[cfg(windows)]
+static PEEK_ADDRESS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 #[cfg(windows)]
 fn main() -> anyhow::Result<()> {
     use anyhow::ensure;
@@ -26,6 +30,12 @@ fn main() -> anyhow::Result<()> {
     let instance = unsafe { GetModuleHandleW(ptr::null()) };
     let ansi = std::env::args().any(|a| a == "--ansi");
     let peek = std::env::args().any(|a| a == "--peek");
+    #[cfg(target_arch = "x86")]
+    let actor = fixture_actor::Fixture::new();
+    #[cfg(target_arch = "x86")]
+    let bindings = actor.bindings();
+    #[cfg(not(target_arch = "x86"))]
+    let bindings = [0u32; 6];
     PEEK_SLOT.store(
         PeekMessageA as *const () as usize,
         std::sync::atomic::Ordering::Release,
@@ -47,6 +57,7 @@ fn main() -> anyhow::Result<()> {
     } else {
         &PEEK_SLOT as *const _ as usize
     };
+    PEEK_ADDRESS.store(peek_slot, std::sync::atomic::Ordering::Release);
     let class = WNDCLASSW {
         lpfnWndProc: Some(procedure_w),
         hInstance: instance,
@@ -103,7 +114,7 @@ fn main() -> anyhow::Result<()> {
     ensure!(!window.is_null(), "cannot create fixture window");
     println!(
         "{}",
-        serde_json::json!({"pid":unsafe{GetCurrentProcessId()},"window":window as usize,"thread":unsafe{GetCurrentThreadId()}, "peek_slot": peek_slot})
+        serde_json::json!({"pid":unsafe{GetCurrentProcessId()},"window":window as usize,"thread":unsafe{GetCurrentThreadId()}, "peek_slot": peek_slot, "factory": bindings})
     );
     std::io::stdout().flush()?;
     let address = window as usize;
@@ -112,6 +123,12 @@ fn main() -> anyhow::Result<()> {
             let Ok(line) = line else {
                 break;
             };
+            #[cfg(target_arch = "x86")]
+            if line == "actor-stats" {
+                println!("{}", fixture_actor::stats());
+                let _ = std::io::stdout().flush();
+                continue;
+            }
             if line == "title" {
                 let title: Vec<u16> = "Caminhao MP".encode_utf16().chain(Some(0)).collect();
                 let mut received = [0u16; 32];
@@ -131,6 +148,7 @@ fn main() -> anyhow::Result<()> {
                 "quit" => WM_CLOSE,
                 "ping" => WM_APP + 100,
                 "block" => WM_APP + 101,
+                "nested-pump" => WM_APP + 102,
                 _ => continue,
             };
             unsafe {
@@ -194,6 +212,8 @@ fn main() -> anyhow::Result<()> {
             VirtualFree(peek_slot as *mut _, 0, MEM_RELEASE);
         }
     }
+    #[cfg(target_arch = "x86")]
+    actor.assert_clean();
     Ok(())
 }
 #[cfg(windows)]
@@ -240,6 +260,31 @@ unsafe fn procedure(
             println!("blocked");
             let _ = std::io::stdout().flush();
             std::thread::sleep(std::time::Duration::from_millis(2200));
+            0
+        }
+        m if m == WM_APP + 102 => {
+            println!("nested");
+            let _ = std::io::stdout().flush();
+            let start = std::time::Instant::now();
+            while start.elapsed() < std::time::Duration::from_millis(2200) {
+                let mut msg = MSG::default();
+                let function: unsafe extern "system" fn(
+                    *mut MSG,
+                    windows_sys::Win32::Foundation::HWND,
+                    u32,
+                    u32,
+                    u32,
+                ) -> i32 = unsafe {
+                    let slot = std::sync::atomic::AtomicUsize::from_ptr(
+                        PEEK_ADDRESS.load(std::sync::atomic::Ordering::Acquire) as *mut usize,
+                    );
+                    std::mem::transmute(slot.load(std::sync::atomic::Ordering::Acquire))
+                };
+                unsafe {
+                    function(&mut msg, std::ptr::null_mut(), 0, 0, PM_NOREMOVE);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
             0
         }
         _ => unsafe {
