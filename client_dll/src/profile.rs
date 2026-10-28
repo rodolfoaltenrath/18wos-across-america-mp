@@ -22,6 +22,7 @@ pub const CAR_CONSTRUCTOR: u32 = 0xcef70;
 pub const CAR_DESTRUCTOR: u32 = 0xd1820;
 pub const CAR_SIZE: u32 = 0x2118;
 pub const CAR_VTABLE: u32 = 0x1257a0;
+pub const CAR_VALUES: u32 = 0x15fdb8;
 pub const POSITION: &str = "game.dll+0x160df0->0x14c->0x4610->0x8->0x8->0x1d0->0x3e4->0x30";
 
 pub fn verify_module(path: &Path) -> Result<(), String> {

@@ -25,6 +25,7 @@ pub mod engine_discovery;
 mod engine_lifecycle;
 #[cfg(all(windows, target_arch = "x86"))]
 mod engine_phase;
+pub mod engine_values;
 #[cfg(windows)]
 pub mod inspection;
 mod memory;

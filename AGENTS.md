@@ -75,6 +75,11 @@ a ABI de configuração/rede v1 foi preservada. Ver o procedimento no README.
 O ciclo privado usa somente `actors.car` não inicializado e destruição imediata;
 não confundir essa prova de lifetime com inserção de um veículo no mundo.
 Foram validados 18 ciclos reais, incluindo repetição após recarga. O próximo
-bloco deve decodificar valores de entidade e investigar modelo, inicialização e
+bloco deve comprovar o ownership do `c_item_t`, modelo, inicialização e
 inserção/remoção; não refazer o ciclo de alocação já comprovado sem necessidade.
+`memory_tool values` já decodifica sete definições herdadas na partida sem
+executar callbacks; `asset_tools read` consulta definições no SCS sem extração.
+O `truck_build` estava vazio no jogador carregado; os transforms declarados não
+substituem a cadeia da física. Ver o contrato de armazenamento explícito do item
+no roadmap antes de ampliar a integração.
 A criação e a movimentação de caminhões remotos ainda não foram implementadas.

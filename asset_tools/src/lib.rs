@@ -79,6 +79,51 @@ pub fn list(path: &Path, limit: usize) -> Result<()> {
     Ok(())
 }
 
+/// Reads one exact UTF-8 entry without extracting or changing any file.
+/// Both the advertised and expanded lengths are bounded independently.
+pub fn read_text(path: &Path, name: &str, max_bytes: usize) -> Result<String> {
+    ensure!(
+        (1..=1024 * 1024).contains(&max_bytes),
+        "text limit must be 1..=1048576 bytes"
+    );
+    safe_relative(name)?;
+    let mut archive = open_archive(path)?;
+    ensure!(archive.len() <= MAX_ENTRIES, "too many archive entries");
+    let mut found = None;
+    for index in 0..archive.len() {
+        let file = archive.by_index(index)?;
+        if file.name()?.as_ref() == name {
+            ensure!(found.is_none(), "ambiguous duplicate archive entry: {name}");
+            found = Some(index);
+        }
+    }
+    let mut file = archive.by_index(found.context("archive entry not found")?)?;
+    ensure!(file.is_file(), "entry is not a regular file");
+    if let Some(mode) = file.unix_mode() {
+        ensure!(
+            matches!(mode & 0o170000, 0 | 0o100000),
+            "links/special files are unsupported"
+        );
+    }
+    ensure!(
+        file.size() <= max_bytes as u64,
+        "entry exceeds text size limit"
+    );
+    let mut bytes = Vec::new();
+    (&mut file)
+        .take(max_bytes as u64 + 1)
+        .read_to_end(&mut bytes)?;
+    ensure!(
+        bytes.len() <= max_bytes,
+        "expanded entry exceeds text size limit"
+    );
+    ensure!(
+        bytes.len() as u64 == file.size(),
+        "archive entry size mismatch"
+    );
+    String::from_utf8(bytes).context("archive entry is not UTF-8 text")
+}
+
 // Strict on Windows as well as Unix: reject traversal, alternate streams,
 // device names, trailing-dot aliases and archive-provided symlinks.
 fn safe_relative(name: &str) -> Result<PathBuf> {
@@ -349,6 +394,33 @@ mod tests {
             b"own test content"
         );
         assert!(extract(&archive, &dest, 1024).is_err());
+    }
+
+    #[test]
+    fn reads_only_bounded_exact_text_without_extraction() {
+        let temp = tempfile::tempdir().unwrap();
+        let archive = temp.path().join("own.scs");
+        let mut zip = ZipWriter::new(File::create(&archive).unwrap());
+        zip.start_file("models/own.def", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(b"model: own\n").unwrap();
+        zip.start_file("binary", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(&[0xff]).unwrap();
+        zip.finish().unwrap();
+        let before = fs::read(&archive).unwrap();
+        assert_eq!(
+            read_text(&archive, "models/own.def", 11).unwrap(),
+            "model: own\n"
+        );
+        assert!(read_text(&archive, "models/own.def", 10).is_err());
+        assert!(read_text(&archive, "models/own.def", 0).is_err());
+        assert!(read_text(&archive, "models/own.def", 1024 * 1024 + 1).is_err());
+        assert!(read_text(&archive, "Models/own.def", 100).is_err());
+        assert!(read_text(&archive, "../own.def", 100).is_err());
+        assert!(read_text(&archive, "binary", 100).is_err());
+        assert_eq!(fs::read(&archive).unwrap(), before);
+        assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 1);
     }
 
     #[test]

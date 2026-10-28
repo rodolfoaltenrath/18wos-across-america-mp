@@ -445,6 +445,59 @@ somente leitura encontrou a raiz de valores de `actors.car` em
 metadados com limites antes de chamar setters ou inicialização. Não copiar o
 objeto do jogador para simular outro veículo.
 
+### M4 — Metadados de entidade e definições de assets — 27/10/2026
+
+Entregues o decodificador portável `engine_values`, `memory_tool values --pid`,
+`engine_report string --rva` e `asset_tools read ARQUIVO ENTRADA --max-kib N`.
+São consultas somente leitura: nenhuma DLL é carregada e nenhum callback do
+motor é executado. A nova sessão foi aberta pela Steam, e o proprietário
+carregou a partida. O PID foi enumerado novamente; os hashes de ambos os módulos
+passaram. A raiz runtime `game.dll+0x15fdb8` retornou sete nós:
+
+| Propriedade | Código observado | Offset no objeto | Callback de escrita em p3shared.dll |
+| --- | ---: | --- | --- |
+| `truck_build` | 14 | `+0x12c8` | `+0x1b10` (`me_string_set`) |
+| `useable` | 2 | `+0xf4` | `+0x1070` (`me_bool_set`) |
+| `rotation` | 9 | `+0xe0` | `+0x1400` (`me_point_set`) |
+| `position` | 9 | `+0x94` | `+0x1400` (`me_point_set`) |
+| `volume` | 8 | `+0xb8` | `+0x16c0` (`me_real_set`) |
+| `rid` | 5 | `+0x64` | `+0x1970` (`me_s16_set`) |
+| `name` | 14 | `+0x4` | `+0xa0f0` (callback próprio da entidade) |
+
+Os nomes dos exports identificam os callbacks, sem constituir autorização para
+chamá-los. A implementação retém as 24 palavras por nó sem inferir o significado
+de flags/tipos desconhecidos. Limita nós/nomes, verifica alinhamento, overflow,
+terminação/UTF-8, ciclos e memória ilegível, e relê links/nome-pointers ao final.
+Isso detecta mudanças estruturais, não torna toda a captura atômica.
+
+A inspeção do caminhão local identificou `c_item_t` em
+`game.dll+0x160df0->0x14c->0x4610->0x8->0x0`; seu `+0x8` aponta para o
+`actors.car`. Foram conferidos vtable/destrutor do perfil, backlink do objeto
+em `+0x60`, registro do item em `+0x34` e tamanho `+0x48 = 0x2118`.
+`truck_build` tinha terminador inicial vazio e a posição declarada estava zerada,
+apesar de o caminhão estar carregado e da cadeia da física continuar disponível.
+Logo, esses metadados não bastam para transmitir o transform atual ou reconstruir
+o modelo de um save. A convenção de rotação continua pendente.
+
+Os SCS foram lidos diretamente, sem extração: as definições de tráfego referem
+modelos/shaders; os caminhões configuráveis usam definições de acessórios,
+incluindo base e rodas. Esse conteúdo não foi incorporado aos fontes. A leitura
+é limitada a 1 MiB, compara tamanho declarado/real e rejeita entradas ambíguas,
+inválidas ou não textuais. O helper PE imprime strings escapadas e limitadas.
+
+**Validação:** 22 testes nativos e 19 testes x86 sob Proton, incluindo os novos
+casos de decoder e texto SCS com fixtures próprias; build cruzado release,
+Clippy nativo/x86 e formatação passaram. A integração de janela, fila e factories
+continuou passando na bancada. Não houve criação ou escrita no jogo neste bloco.
+
+**Próximo contrato:** o contêiner do motor tem ownership separado do objeto:
+`alloc_eitem` chama `prism3d!mm_sys_get_new_anitem` e instala a tabela de operações
+em `p3shared.dll+0x4523c`. O caminho de liberação chama `entity_destroy(obj,obj)`,
+com armazenamento explícito, e depois libera o bloco do item. Não substituir esse
+fluxo por `entity_destroy(obj,null)` usado no ciclo privado independente. Comprovar
+a alocação/fixação, referências, callbacks e liberação do contêiner em fixture
+antes da inicialização/inserção. Não chamar `init_eblock` sobre um objeto avulso.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -584,6 +637,8 @@ mundo ainda precisam de contratos e testes próprios.
 - [ ] Investigar criação de veículo/modelo, atualização de transform e remoção,
   usando somente a instalação local e registrando conclusões próprias.
 - [x] Descobrir o registro de tipos e consultar 80 entradas na partida.
+- [x] Decodificar a cadeia de valores de `actors.car` e consultar as sete
+  definições herdadas na partida sem chamar getters/setters.
 - [x] Observar retornos exatos do loop principal na thread da janela, incluindo
   movimento/menu/recarga; restaurar a instrumentação e conferir a parada.
 - [ ] Comprovar a thread/fase e a propriedade das operações de inicialização e
@@ -968,9 +1023,10 @@ e [seleção de toolchain com rustup](https://rust-lang.github.io/rustup/overrid
 
 ## 9. Registro de passagem para a próxima etapa
 
-**Próxima entrega:** decodificar os metadados de valores e comprovar inicialização,
-modelo, transform e inserção/remoção no mundo, sobre o lifetime privado validado.
-O último processo usou a sonda fixada; encerrá-lo antes de reconstruir a DLL. Ampliar
+**Próxima entrega:** comprovar ownership/alocação do contêiner `c_item_t`, inicialização,
+modelo, transform e inserção/remoção no mundo, sobre o lifetime privado e os
+metadados já validados. O processo com a sonda fixada foi encerrado pelo
+proprietário; a nova sessão foi usada somente para leitura externa. Ampliar
 a matriz de estados de M1 e a robustez de M2, sem refazer a busca ampla inicial.
 
 **Antes de começar:** ler os três documentos, conferir Git e toolchain, localizar

@@ -304,6 +304,33 @@ posição local foram conferidos em cada comando, e a instrumentação foi remov
 Referências de ABI: [funções externas em Rust](https://doc.rust-lang.org/reference/items/functions.html#extern-function-qualifier)
 e [convenções de chamada x86 da Microsoft](https://learn.microsoft.com/en-us/cpp/cpp/argument-passing-and-naming-conventions?view=msvc-170).
 
+Para consultar os metadados sem carregar a DLL, execute pelo mesmo `proton_host`
+o comando `memory_tool.exe values --pid PID_ATUAL`. A ferramenta confere os hashes
+de `game.dll`/`p3shared.dll` e decodifica a cadeia de `evalue_def_t` de `actors.car`,
+incluindo as definições herdadas. Retorna nomes, campos/offsets assinados,
+callbacks e as 24 palavras originais por nó. Não executa getters/setters.
+Há limites de 2048 nós e 256 bytes por nome, detecção de ciclos, overflow,
+memória ilegível e mudança dos links durante a captura.
+
+Na partida foram encontradas sete propriedades. `truck_build` é uma string
+de capacidade 1024 em `+0x12c8`, mas estava vazia no caminhão carregado;
+`position`/`rotation` são triplas declaradas em `+0x94`/`+0xe0`, cujos valores
+não comprovam o transform atual da física. Não usar esses campos diretamente
+como coordenadas/orientação de rede. O relatório é observacional, específico
+do perfil; não define uma ABI de escrita nem uma captura atômica do processo.
+
+A ferramenta nativa também permite ler uma definição sem extrair o SCS:
+
+```sh
+cargo run -p asset_tools --bin asset_tools -- read ../aa/base.scs makes/truck/truck_base.def
+cargo run -p asset_tools --bin engine_report -- ../aa/lib/game.dll string --rva 0x14dba4
+```
+
+`read` exige o nome exato, UTF-8 e limite de 64 KiB por padrão (`--max-kib`,
+máximo 1024). Confere tamanho declarado e efetivo, rejeita caminhos inválidos,
+entradas duplicadas e links/arquivos especiais. Nenhum arquivo é extraído.
+Relatórios com conteúdo comercial permanecem locais, fora do Git.
+
 ## Ambiente e compilação Windows (registro anterior)
 
 Ambiente encontrado: Windows, Rust **1.98.1**, host `x86_64-pc-windows-gnu`.

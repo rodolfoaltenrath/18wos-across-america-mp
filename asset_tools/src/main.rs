@@ -22,6 +22,13 @@ enum Command {
         #[arg(long, default_value_t = 30)]
         limit: usize,
     },
+    /// Print one exact UTF-8 entry without extracting files.
+    Read {
+        archive: PathBuf,
+        entry: String,
+        #[arg(long, default_value_t = 64, value_parser = clap::value_parser!(u32).range(1..=1024))]
+        max_kib: u32,
+    },
     /// Extract to a NEW directory; never overwrite existing files.
     Extract {
         archive: PathBuf,
@@ -73,6 +80,16 @@ fn main() -> Result<()> {
     match Cli::parse().command {
         Command::Scan { root } => asset_tools::scan(&root),
         Command::List { archive, limit } => asset_tools::list(&archive, limit),
+        Command::Read {
+            archive,
+            entry,
+            max_kib,
+        } => {
+            use std::io::Write;
+            let text = asset_tools::read_text(&archive, &entry, max_kib as usize * 1024)?;
+            std::io::stdout().lock().write_all(text.as_bytes())?;
+            Ok(())
+        }
         Command::Extract {
             archive,
             output,

@@ -11,6 +11,11 @@ struct Args {
 }
 #[derive(Subcommand)]
 enum Task {
+    /// Read one bounded UTF-8 string by RVA, without loading the module.
+    String {
+        #[arg(long,value_parser=parse_rva)]
+        rva: u32,
+    },
     Symbols {
         #[arg(long, default_value = "")]
         contains: String,
@@ -40,6 +45,7 @@ fn main() -> Result<()> {
     let args = Args::parse();
     let pe = Pe32::open(&args.module)?;
     match args.task {
+        Task::String { rva } => println!("{}", pe.string(rva)?.escape_default()),
         Task::Symbols { contains } => {
             for symbol in pe.exports()?.iter().filter(|s| s.name.contains(&contains)) {
                 println!("export +0x{:x} {}", symbol.rva, symbol.name);
