@@ -1,5 +1,7 @@
 //! Windows x86 controller, run in the same Wine/Proton prefix as the target.
 #[cfg(windows)]
+mod launcher_session;
+#[cfg(windows)]
 fn main() -> anyhow::Result<()> {
     use anyhow::{Context, ensure};
     use clap::{Parser, Subcommand, ValueEnum};
@@ -45,6 +47,39 @@ fn main() -> anyhow::Result<()> {
         },
         Stop,
         Unload,
+        /// attach, pump, render, draw, connect --mode drawn and visual-show, in order.
+        SessionStart {
+            #[arg(long)]
+            server: SocketAddr,
+            #[arg(long, default_value = "all", value_parser = parse_player)]
+            player: u32,
+            #[arg(long, num_args = 3, allow_hyphen_values = true, default_values_t = [0.0f32, 0.0, 0.0])]
+            offset: Vec<f32>,
+            /// engine_fixture info line saved to a file (bench only, with --fixture).
+            #[arg(long)]
+            fixture_info: Option<PathBuf>,
+            /// NEW folder: copy saves and hash originals+saves before touching the game.
+            #[arg(long)]
+            backup: Option<PathBuf>,
+            /// Saves folder (default: %USERPROFILE%Documents8 WoS Across Americasaves).
+            #[arg(long)]
+            saves: Option<PathBuf>,
+        },
+        /// Client, visual, draw and relayed players in one JSON report.
+        SessionStatus,
+        /// Compare originals and saves with a session-start backup; no DLL calls.
+        SessionVerify {
+            #[arg(long)]
+            backup: PathBuf,
+        },
+        /// Hide, wait for a safe release, remove probes, stop and verify slots.
+        SessionStop {
+            #[arg(long, default_value_t = 30, value_parser = clap::value_parser!(u64).range(1..=600))]
+            timeout: u64,
+            /// Backup folder from session-start: originals and saves must be unchanged.
+            #[arg(long)]
+            verify: Option<PathBuf>,
+        },
     }
     #[derive(Subcommand)]
     enum EngineTask {
@@ -160,6 +195,86 @@ fn main() -> anyhow::Result<()> {
             name.eq_ignore_ascii_case("prism3d.exe"),
             "target must be prism3d.exe"
         );
+    }
+    match &args.command {
+        Task::SessionStart {
+            server,
+            player,
+            offset,
+            fixture_info,
+            backup,
+            saves,
+        } => {
+            let backup = match backup {
+                Some(directory) => {
+                    let saves = match saves {
+                        Some(path) => path.clone(),
+                        None => {
+                            PathBuf::from(std::env::var_os("USERPROFILE").context("USERPROFILE")?)
+                                .join("Documents/18 WoS Across America/saves")
+                        }
+                    };
+                    let root = (!args.fixture)
+                        .then(|| executable.parent().map(PathBuf::from))
+                        .flatten();
+                    Some(launcher_session::backup(
+                        directory,
+                        root.as_deref(),
+                        &saves,
+                    )?)
+                }
+                None => None,
+            };
+            ensure!(
+                args.fixture == fixture_info.is_some(),
+                "--fixture-info is required with --fixture and only allowed with it"
+            );
+            let fixture = fixture_info
+                .as_ref()
+                .map(|path| -> anyhow::Result<serde_json::Value> {
+                    Ok(serde_json::from_str(&std::fs::read_to_string(path)?)?)
+                })
+                .transpose()?;
+            let options = launcher_session::Options {
+                server: *server,
+                player: *player,
+                offset: [offset[0], offset[1], offset[2]],
+                fixture,
+            };
+            let mut report = launcher_session::start(&controller, &dll, &options)?;
+            if let Some(manifest) = backup {
+                report["backup_files"] = manifest["files"].as_array().map_or(0, Vec::len).into();
+            }
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            return Ok(());
+        }
+        Task::SessionVerify { backup } => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&launcher_session::verify(backup)?)?
+            );
+            return Ok(());
+        }
+        Task::SessionStatus => {
+            let report = launcher_session::status(&controller, &dll)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            return Ok(());
+        }
+        Task::SessionStop { timeout, verify } => {
+            let mut report = launcher_session::stop(
+                &controller,
+                &dll,
+                args.pid,
+                std::time::Duration::from_secs(*timeout),
+                !args.fixture,
+            )?;
+            if let Some(directory) = verify {
+                report["files"] = launcher_session::verify(directory)?;
+            }
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            return Ok(());
+        }
+        _ => {}
     }
     let mut block = match args.command {
         Task::Engine { task } => {
@@ -419,6 +534,12 @@ fn main() -> anyhow::Result<()> {
                 std::thread::sleep(std::time::Duration::from_secs(1));
             }
             return Ok(());
+        }
+        Task::SessionStart { .. }
+        | Task::SessionStatus
+        | Task::SessionStop { .. }
+        | Task::SessionVerify { .. } => {
+            unreachable!("session tasks return early")
         }
         Task::Stop => Control::new(api::STOP),
         Task::Unload => {
