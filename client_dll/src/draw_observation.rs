@@ -135,6 +135,11 @@ pub struct Visual {
     /// Automatic release+recreate cycles after a player entity change.
     pub recreated: u32,
     pub recreate_pending: u32,
+    /// Cost of our draw calls per local exterior draw, EMA and maximum.
+    pub draw_cost_avg_ns: u32,
+    pub draw_cost_max_ns: u32,
+    /// EMA of the interval between local exterior draws (frame time).
+    pub frame_interval_avg_us: u32,
 }
 impl Visual {
     pub fn encode(&self, b: &mut EngineControl) {
@@ -153,6 +158,11 @@ impl Visual {
         b.executable_frame = self.skinned_parts;
         b.executable_base = self.recreated;
         b.frame_count = self.recreate_pending;
+        b.fixture[..3].copy_from_slice(&[
+            self.draw_cost_avg_ns,
+            self.draw_cost_max_ns,
+            self.frame_interval_avg_us,
+        ]);
     }
     pub fn decode(b: &EngineControl) -> Self {
         Self {
@@ -170,6 +180,9 @@ impl Visual {
             skinned_parts: b.executable_frame,
             recreated: b.executable_base,
             recreate_pending: b.frame_count,
+            draw_cost_avg_ns: b.fixture[0],
+            draw_cost_max_ns: b.fixture[1],
+            frame_interval_avg_us: b.fixture[2],
         }
     }
 }
@@ -253,6 +266,9 @@ mod tests {
             skinned_parts: 3,
             recreated: 2,
             recreate_pending: 1,
+            draw_cost_avg_ns: 1500,
+            draw_cost_max_ns: 9000,
+            frame_interval_avg_us: 16_667,
         };
         let mut b = crate::api::EngineControl::new(40);
         v.encode(&mut b);

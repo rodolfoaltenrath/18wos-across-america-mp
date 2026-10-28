@@ -48,6 +48,22 @@ static LAST_THIS: AtomicU32 = AtomicU32::new(0);
 /// Hidden after an entity change; the loop recreates it once release is safe.
 static RECREATE: AtomicBool = AtomicBool::new(false);
 static RECREATED: AtomicU32 = AtomicU32::new(0);
+/// Draw cost (ns, EMA and max) around our engine calls, and exterior frame
+/// interval (us, EMA) between local exterior draws. Diagnostics only.
+static COST_AVG: AtomicU32 = AtomicU32::new(0);
+static COST_MAX: AtomicU32 = AtomicU32::new(0);
+static FRAME_AVG: AtomicU32 = AtomicU32::new(0);
+static LAST_FRAME: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+/// Exponential moving average with weight 1/16, seeded by the first sample.
+fn ema(slot: &AtomicU32, sample: u32) {
+    let old = slot.load(Ordering::Relaxed);
+    let next = if old == 0 {
+        sample
+    } else {
+        old - old / 16 + sample / 16
+    };
+    slot.store(next.max(1), Ordering::Relaxed);
+}
 /// Show block used for creation, replayed on recreation (model, skin, mode).
 static CREATION: std::sync::Mutex<Option<EngineControl>> = std::sync::Mutex::new(None);
 /// 0 = local player plus offset; otherwise the relayed player id.
@@ -154,6 +170,15 @@ pub(crate) fn after_car_draw(this: u32, [world, _, path, viewport]: [u32; 4]) {
     if read(this.wrapping_add(0x1e9), &mut state).is_err() || matches!(state[0], 4 | 9 | 12) {
         return skip();
     }
+    if let Ok(mut last) = LAST_FRAME.try_lock() {
+        let now = std::time::Instant::now();
+        if let Some(previous) = last.replace(now) {
+            let micros = now.duration_since(previous).as_micros();
+            if micros < 1_000_000 {
+                ema(&FRAME_AVG, micros as u32);
+            }
+        }
+    }
     let Ok(top) = word(world) else {
         return skip();
     };
@@ -179,6 +204,7 @@ pub(crate) fn after_car_draw(this: u32, [world, _, path, viewport]: [u32; 4]) {
     let Some(count @ 1..) = count else {
         return skip();
     };
+    let started = std::time::Instant::now();
     let f = |i: usize| FUNCTIONS[i].load(Ordering::Acquire);
     let error = unsafe { GetLastError() };
     for (quaternion, mut position) in poses.into_iter().take(count) {
@@ -208,6 +234,9 @@ pub(crate) fn after_car_draw(this: u32, [world, _, path, viewport]: [u32; 4]) {
             break;
         }
     }
+    let cost = u32::try_from(started.elapsed().as_nanos()).unwrap_or(u32::MAX);
+    ema(&COST_AVG, cost);
+    COST_MAX.fetch_max(cost, Ordering::Relaxed);
     unsafe { SetLastError(error) };
     LAST_FLUSH.store(flush_calls(), Ordering::Release);
 }
@@ -450,6 +479,9 @@ fn fill(b: &mut EngineControl) {
         skinned_parts: SKINNED.load(Ordering::Acquire),
         recreated: RECREATED.load(Ordering::Acquire),
         recreate_pending: u32::from(RECREATE.load(Ordering::Acquire)),
+        draw_cost_avg_ns: COST_AVG.load(Ordering::Relaxed),
+        draw_cost_max_ns: COST_MAX.load(Ordering::Relaxed),
+        frame_interval_avg_us: FRAME_AVG.load(Ordering::Relaxed),
     }
     .encode(b);
 }

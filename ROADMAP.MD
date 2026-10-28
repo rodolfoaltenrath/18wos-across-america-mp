@@ -1440,7 +1440,11 @@ x86/nativo e rustfmt limpos.
    `1000000000 + id` (cabe em u32), para testar rede, interpolação e desenho
    num só PC com `session-start --offset 400 0 0`. Teste próprio do eco;
    `run` sem eco mantém o comportamento anterior. `dev_env verify` final: x86
-   41, nativos 47.
+. **Métricas de custo**: `draw_cost_avg_ns`/`draw_cost_max_ns` (EMA 1/16 e
+   máximo do tempo das nossas chamadas ao motor por desenho externo) e
+   `frame_interval_avg_us` (EMA do intervalo entre desenhos externos locais), em
+   `visual-status`/`session-status`. Servem para medir o impacto no FPS no jogo;
+   não substituem um profiler.
 
 Ainda não comprovado no jogo: o skin (textura e custo do primeiro desenho), a
 recriação depois de uma recarga real (a instância antiga atravessa o

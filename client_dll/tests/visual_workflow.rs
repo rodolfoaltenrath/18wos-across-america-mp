@@ -102,6 +102,11 @@ fn test_visual_draws_only_in_validated_context_and_releases_after_flush() {
     std::thread::sleep(Duration::from_millis(60));
     let drawing = status(&controller, &dll);
     assert!(drawing.drawn > 0);
+    // Diagnostics: our draw cost and the local exterior frame interval.
+    assert!(
+        drawing.draw_cost_avg_ns > 0 && drawing.draw_cost_max_ns >= drawing.draw_cost_avg_ns / 2
+    );
+    assert!((1..1_000_000).contains(&drawing.frame_interval_avg_us));
     let last: serde_json::Value =
         serde_json::from_str(&send(&mut host, &mut output, "visual-last")).unwrap();
     assert_eq!(last["item"], drawing.item);
