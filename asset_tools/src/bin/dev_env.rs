@@ -29,6 +29,8 @@ enum Task {
         #[arg(long, conflicts_with_all=["check", "tests"])]
         clippy: bool,
     },
+    /// Windows host: x86 release, both test benches, both Clippy runs and rustfmt.
+    Verify,
 }
 fn main() -> Result<()> {
     match Args::parse().command {
@@ -62,60 +64,144 @@ fn main() -> Result<()> {
             check,
             tests,
             clippy,
-        } => {
-            let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .parent()
-                .unwrap()
-                .to_path_buf();
-            let (mut command, target) = windows_command(&root, native)?;
-            command.current_dir(&root);
-            command.arg(if clippy {
-                "clippy"
-            } else if tests {
-                "test"
-            } else if check {
-                "check"
-            } else {
-                "build"
-            });
-            if native {
-                command.arg("--workspace");
-            } else {
-                command.args(["-p", "client_dll"]);
+        } => windows(native, check, tests, clippy)?,
+        Task::Verify => verify()?,
+    }
+    Ok(())
+}
+fn root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .to_path_buf()
+}
+fn windows(native: bool, check: bool, tests: bool, clippy: bool) -> Result<()> {
+    let root = root();
+    let (mut command, target) = windows_command(&root, native)?;
+    command.current_dir(&root);
+    command.arg(if clippy {
+        "clippy"
+    } else if tests {
+        "test"
+    } else if check {
+        "check"
+    } else {
+        "build"
+    });
+    if native {
+        command.arg("--workspace");
+    } else {
+        command.args(["-p", "client_dll"]);
+    }
+    command.args(["--target", target, "--locked"]);
+    if tests {
+        command.args(["--no-run", "--message-format=json-render-diagnostics"]);
+        command.stdout(Stdio::piped());
+        let mut child = command.spawn()?;
+        let mut paths = Vec::new();
+        for line in BufReader::new(child.stdout.take().unwrap()).lines() {
+            let message: serde_json::Value = serde_json::from_str(&line?)?;
+            if message["reason"] == "compiler-artifact"
+                && message["profile"]["test"] == true
+                && let Some(path) = message["executable"].as_str()
+            {
+                paths.push(path.to_string());
             }
-            command.args(["--target", target, "--locked"]);
-            if tests {
-                command.args(["--no-run", "--message-format=json-render-diagnostics"]);
-                command.stdout(Stdio::piped());
-                let mut child = command.spawn()?;
-                let mut paths = Vec::new();
-                for line in BufReader::new(child.stdout.take().unwrap()).lines() {
-                    let message: serde_json::Value = serde_json::from_str(&line?)?;
-                    if message["reason"] == "compiler-artifact"
-                        && message["profile"]["test"] == true
-                        && let Some(path) = message["executable"].as_str()
-                    {
-                        paths.push(path.to_string());
-                    }
-                }
-                ensure!(child.wait()?.success(), "Windows test build failed");
-                ensure!(!paths.is_empty(), "Cargo returned no test artifacts");
-                let manifest = root.join(if native {
-                    "target/windows-native-tests.json"
-                } else {
-                    "target/windows-tests.json"
-                });
-                fs::write(&manifest, serde_json::to_vec_pretty(&paths)?)?;
-                println!("Windows test manifest: {}", manifest.display());
-                return Ok(());
-            } else if clippy {
-                command.args(["--all-targets", "--", "-D", "warnings"]);
-            } else if !check {
-                command.arg("--release");
-            }
-            ensure!(command.status()?.success(), "Windows build failed");
+        }
+        ensure!(child.wait()?.success(), "Windows test build failed");
+        ensure!(!paths.is_empty(), "Cargo returned no test artifacts");
+        let manifest = root.join(manifest(native));
+        fs::write(&manifest, serde_json::to_vec_pretty(&paths)?)?;
+        println!("Windows test manifest: {}", manifest.display());
+        return Ok(());
+    } else if clippy {
+        command.args(["--all-targets", "--", "-D", "warnings"]);
+    } else if !check {
+        command.arg("--release");
+    }
+    ensure!(command.status()?.success(), "Windows build failed");
+    Ok(())
+}
+fn manifest(native: bool) -> &'static str {
+    if native {
+        "target/windows-native-tests.json"
+    } else {
+        "target/windows-tests.json"
+    }
+}
+#[cfg_attr(not(windows), allow(dead_code))]
+/// Totals parsed from libtest summary lines ("test result: ok. N passed; M failed").
+fn totals(line: &str) -> Option<(u32, u32)> {
+    let rest = line.trim().strip_prefix("test result: ")?;
+    let number = |label: &str| -> Option<u32> {
+        let end = rest.find(label)?;
+        rest[..end]
+            .trim_end()
+            .rsplit([' ', ';', '.'])
+            .next()?
+            .parse()
+            .ok()
+    };
+    Some((number(" passed")?, number(" failed")?))
+}
+#[cfg_attr(not(windows), allow(dead_code))]
+/// Run one bench through this project's test_host, echoing output and summing results.
+fn bench(native: bool) -> Result<(u32, u32)> {
+    let root = root();
+    let host = root.join(if native {
+        "target/x86_64-pc-windows-gnu/debug/test_host.exe"
+    } else {
+        "target/i686-pc-windows-gnu/release/test_host.exe"
+    });
+    ensure!(host.is_file(), "missing {}", host.display());
+    let mut child = Command::new(host)
+        .arg(manifest(native))
+        .current_dir(&root)
+        .stdout(Stdio::piped())
+        .spawn()?;
+    let (mut passed, mut failed) = (0, 0);
+    for line in BufReader::new(child.stdout.take().unwrap()).lines() {
+        let line = line?;
+        if let Some((p, f)) = totals(&line) {
+            passed += p;
+            failed += f;
+        }
+        if line.starts_with("test ") || line.contains("FAILED") {
+            println!("{line}");
         }
     }
+    let ok = child.wait()?.success();
+    ensure!(
+        ok && failed == 0,
+        "bench failed: {passed} passed, {failed} failed"
+    );
+    Ok((passed, failed))
+}
+#[cfg(not(windows))]
+fn verify() -> Result<()> {
+    anyhow::bail!(
+        "verify runs the Windows benches; on Linux use proton_host/test_host as documented"
+    )
+}
+#[cfg(windows)]
+fn verify() -> Result<()> {
+    // The bench loads the release DLL, so build it before the test artifacts.
+    windows(false, false, false, false)?;
+    windows(false, false, true, false)?;
+    let x86 = bench(false)?;
+    windows(true, false, true, false)?;
+    let native = bench(true)?;
+    windows(false, false, false, true)?;
+    windows(true, false, false, true)?;
+    let format = Command::new("cargo")
+        .args(["fmt", "--all", "--check"])
+        .current_dir(root())
+        .status()?;
+    ensure!(format.success(), "rustfmt reported differences");
+    println!(
+        "verify: x86 {} passed, native {} passed, Clippy x86/native clean, rustfmt clean",
+        x86.0, native.0
+    );
     Ok(())
 }
 
@@ -251,4 +337,20 @@ fn windows_command(root: &Path, native: bool) -> Result<(Command, &'static str)>
             "i686-pc-windows-gnu"
         },
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn parses_libtest_summaries_only() {
+        assert_eq!(
+            super::totals("test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured"),
+            Some((23, 0))
+        );
+        assert_eq!(
+            super::totals("test result: FAILED. 0 passed; 1 failed; 0 ignored"),
+            Some((0, 1))
+        );
+        assert_eq!(super::totals("test foo ... ok"), None);
+    }
 }

@@ -635,6 +635,32 @@ depois de ocultar, de ≥8 flushes e com o contador de acesso do item em zero;
 se recusar, repita após alguns frames. `stop`/`pump-remove`/`render-remove`
 recusam enquanto a instância existir, e `draw-remove` enquanto estiver visível.
 
+### Teste no jogo com sessão (um comando)
+
+Compile e verifique tudo antes: `.\target\debug\dev_env.exe verify`. Abra o
+jogo, carregue o save e deixe a janela em primeiro plano. Em outro terminal:
+
+```text
+multiplayer_server --bind 0.0.0.0:39000
+mp_launcher.exe --pid PID --dll CAMINHO\client_dll.dll session-start --server IP:39000 --backup target\analysis\sessao-NOVA
+mp_launcher.exe --pid PID --dll CAMINHO\client_dll.dll session-status
+mp_launcher.exe --pid PID --dll CAMINHO\client_dll.dll session-stop --verify target\analysis\sessao-NOVA
+```
+
+`session-start` instala as sondas, conecta no modo `drawn` e mostra todos os
+remotos (`--player all`), com o skin do caminhão de IA (`--no-skin` para o
+fallback). A pasta de `--backup` precisa ser nova; ela guarda cópias dos saves
+e o SHA-256 dos cinco originais e dos saves. `session-status` lista os IDs dos
+remotos. `session-stop` só termina depois de liberar o visual com segurança
+(mantenha a janela em foco), remove as sondas e confere os slots e os arquivos.
+Depois disso, feche o jogo normalmente: a DLL fica fixada até ele encerrar.
+Para testar num só PC, inicie o servidor com `--echo`: ele também devolve a
+cada cliente a própria pose como o jogador `1000000000 + id`. Com
+`session-start --server 127.0.0.1:39000 --offset 400 0 0`, o seu caminhão
+aparece espelhado 4 m ao lado. O caminho passa por rede, histórico,
+interpolação (100 ms atrás) e desenho. Sem `--echo`, use dois PCs na LAN, cada
+um com sua sessão apontando para o mesmo servidor.
+
 ### Caminhão remoto pela rede (`--mode drawn` e `--player`)
 
 O protocolo agora aceita um campo opcional `rotation` (quaternion x, y, z, w;

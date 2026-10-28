@@ -177,10 +177,13 @@ só oculta, após ≥8 flushes e com o item em `[1,1,0]`. A bancada passou
 (32 x86, 38 nativos). Validado no jogo (PID histórico 10056): o caminhão
 apareceu sem textura acompanhando o jogador, liberou e reapareceu após recarga;
 slots restaurados e hashes preservados. A janela fora de foco não renderiza.
-Pose pela rede entregue na bancada: rotação opcional no protocolo (v1 compatível),
-`connect --mode drawn` envia a pose vista no `draw`, `visual-show --player ID`
-desenha o remoto (amostra >1 s não desenha). 34 x86, 39 nativos. Próximo: listar
-IDs remotos, testar em LAN com o proprietário, depois skins e recarga automática.
+Entregues na bancada, sem jogo: rotação opcional no protocolo (v1 compatível),
+fonte `drawn`, `visual-show --player ID|all`, interpolação (100 ms, extrapolação
+≤200 ms, snap em teleporte), `engine remotes`, `session-start/status/stop/verify`
+com backup SHA-256, skin `truck.shd` via `psm_set_shader`, recriação automática
+após troca de entidade e servidor `--echo`. Verificar tudo com `dev_env verify`
+(41 x86, 47 nativos). Próximo: teste no jogo pelo procedimento "Teste no jogo com
+sessão" do README (eco num PC, depois LAN), priorizando skin e recarga real.
 `psm_draw` põe protos na fila e aumenta referências de pacotes: não desenhar e
 liberar a instância imediatamente sem comprovar o consumo desses recursos.
 Não refazer instância/descritor/setter/lifetime sem necessidade concreta.

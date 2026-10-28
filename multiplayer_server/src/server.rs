@@ -12,10 +12,25 @@ struct Peer {
     latest: ClientUpdate,
 }
 
+/// Player ids at or above this value are echoes of the receiving client itself.
+pub const ECHO_ID_BASE: u64 = 1_000_000_000;
+
 pub async fn run(
     socket: UdpSocket,
     max_clients: usize,
     timeout: Duration,
+    shutdown: impl Future<Output = ()>,
+) -> Result<()> {
+    run_with_echo(socket, max_clients, timeout, false, shutdown).await
+}
+
+/// `echo` also returns each client's own update under `ECHO_ID_BASE + id`, so a
+/// single PC can exercise relay, interpolation and drawing of a remote.
+pub async fn run_with_echo(
+    socket: UdpSocket,
+    max_clients: usize,
+    timeout: Duration,
+    echo: bool,
     shutdown: impl Future<Output = ()>,
 ) -> Result<()> {
     ensure!(
@@ -70,6 +85,11 @@ pub async fn run(
                     for destination in peers.keys().filter(|addr| *addr != source) {
                         // A failed recipient must not stop relaying to other clients.
                         let _ = socket.send_to(&bytes, destination).await;
+                    }
+                    if echo {
+                        let mirrored = ServerUpdate { player_id: ECHO_ID_BASE + peer.id, ..update };
+                        let bytes = protocol::encode(&mirrored).map_err(anyhow::Error::msg)?;
+                        let _ = socket.send_to(&bytes, source).await;
                     }
                 }
             }
@@ -128,6 +148,53 @@ mod tests {
         assert!(from_a.rotation.is_none());
         assert_eq!(from_a.sequence, 10);
         assert_ne!(from_a.player_id, from_b.player_id);
+        stop.send(()).unwrap();
+        task.await.unwrap().unwrap();
+    }
+}
+
+#[cfg(test)]
+mod echo_tests {
+    use super::*;
+    use crate::protocol::Position;
+    use tokio::sync::oneshot;
+
+    #[tokio::test]
+    async fn echo_returns_own_pose_under_a_distinct_id() {
+        let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let address = socket.local_addr().unwrap();
+        let (stop, stopped) = oneshot::channel();
+        let task = tokio::spawn(run_with_echo(
+            socket,
+            2,
+            Duration::from_secs(5),
+            true,
+            async {
+                let _ = stopped.await;
+            },
+        ));
+        let a = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let packet = protocol::encode(&ClientUpdate {
+            version: VERSION,
+            sequence: 4,
+            position: Position {
+                x: 7.0,
+                y: 8.0,
+                z: 9.0,
+            },
+            rotation: None,
+        })
+        .unwrap();
+        a.send_to(&packet, address).await.unwrap();
+        let mut buffer = [0; MAX_PACKET];
+        let (len, _) = time::timeout(Duration::from_secs(2), a.recv_from(&mut buffer))
+            .await
+            .unwrap()
+            .unwrap();
+        let echoed = protocol::decode_server(&buffer[..len]).unwrap();
+        assert_eq!(echoed.player_id, ECHO_ID_BASE + 1);
+        assert_eq!((echoed.sequence, echoed.position.x), (4, 7.0));
+        assert!(u32::try_from(echoed.player_id).is_ok());
         stop.send(()).unwrap();
         task.await.unwrap().unwrap();
     }

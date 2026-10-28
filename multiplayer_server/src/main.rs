@@ -13,6 +13,9 @@ struct Args {
     max_clients: u16,
     #[arg(long, default_value_t = 5, value_parser = clap::value_parser!(u64).range(1..))]
     timeout_secs: u64,
+    /// Also send each client its own pose as player 1000000000+id (single-PC tests).
+    #[arg(long)]
+    echo: bool,
 }
 
 #[tokio::main]
@@ -20,14 +23,16 @@ async fn main() -> Result<()> {
     let args = Args::parse();
     let socket = UdpSocket::bind(args.bind).await?;
     println!(
-        "UDP {} | 60 Hz | max {} clients | Ctrl+C to stop",
+        "UDP {} | 60 Hz | max {} clients | echo {} | Ctrl+C to stop",
         socket.local_addr()?,
-        args.max_clients
+        args.max_clients,
+        args.echo
     );
-    server::run(
+    server::run_with_echo(
         socket,
         usize::from(args.max_clients),
         Duration::from_secs(args.timeout_secs),
+        args.echo,
         async {
             let _ = tokio::signal::ctrl_c().await;
         },

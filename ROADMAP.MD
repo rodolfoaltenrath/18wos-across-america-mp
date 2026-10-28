@@ -1375,8 +1375,75 @@ Entregue sem teste no jogo, a pedido do proprietário:
 Pendente no jogo: dois computadores na LAN, cada um com `connect --mode drawn`
 ao servidor e `visual-show --player <id do outro>`. Antes disso, um teste
 local: o mesmo PC com um par falso, ou espelhando o próprio jogador via servidor.
-O ID do outro jogador é atribuído pelo servidor; ainda não há comando para
-listá-lo, o que é necessário antes do teste em LAN.
+O ID do outro jogador é atribuído pelo servidor; `engine remotes` (abaixo)
+passou a listá-lo.
+
+**Correção:** `profile::POSITION` (fonte `game`) termina em
+`…->0x1d0->0x3e4->0x30`, a mesma posição do corpo lida pela sonda de `draw`.
+As duas fontes usam o mesmo sistema de coordenadas; `drawn` acrescenta a
+rotação e só envia com um `draw` recente.
+
+### M4/M5 — Blocos sem jogo: interpolação, sessão, skin, recarga — 28/10/2026
+
+Entregues e validados somente na bancada própria; cada bloco teve commit
+automático. `dev_env verify` terminou com 41 testes x86, 46 nativos, Clippy
+x86/nativo e rustfmt limpos.
+
+1. **Interpolação e vários remotos** (`interpolation.rs`). Histórico de 16
+   amostras por jogador, com tempo local de recepção, desenhado 100 ms atrás:
+   lerp de posição e nlerp de quaternion pelo arco curto. Extrapola no máximo
+   200 ms e faz snap em teleporte (>20.000 cm/s). `visual-show --player all`
+   desenha todos os remotos frescos com a **mesma** instância, até 16 por frame
+   (o jogo desenha uma instância de roda várias vezes por frame). A pilha é
+   conferida após cada desenho. `engine remotes` (comando 40) lista ID,
+   sequência, idade, amostras, posição e rotação. A bancada provou valor estável
+   após amostras repetidas, sequência antiga ignorada, parada após 1 s, jogador
+   desconhecido sem desenho, razão de 2 desenhos por frame com dois jogadores e
+   a listagem pela CLI.
+2. **Sessão em um comando** (`launcher_session`).
+   - `session-start --server A:P [--player all] [--offset ...] [--backup NOVA]
+     [--saves DIR] [--no-skin]` executa load, attach, pump, render, draw,
+     `connect --mode drawn` e `visual-show`, parando no primeiro passo recusado e
+     relatando qual foi.
+   - `--backup` copia os saves para uma pasta nova e grava SHA-256 dos cinco
+     originais e dos saves.
+   - `session-status` reúne cliente, visual, draw e remotos.
+   - `session-stop [--timeout s] [--verify DIR]` oculta, repete a liberação
+     guardando as mensagens de recusa, remove draw/render/pump, para o cliente e
+     confere os três slots por leitura (perfil do jogo).
+   - `session-verify --backup DIR` compara os arquivos sem chamar a DLL.
+
+   Na bancada, a fixture passa seus descritores com `--fixture-info`. Foram
+   cobertos a segunda partida recusada, status, parada com liberação e um save
+   alterado sendo detectado com a cópia preservada.
+3. **Skin.** Análise estática: o jogo cria modelos com `psm_alloc(path, NULL, 0,
+   16)` e aplica `psm_set_shader(item, parte, caminho)` (`psm+0x3a60`, slot
+   `+0x16102c`). Essa função faz `mm_precache` e `psm_set_shader_item`
+   (`+0x39e0`), que libera o shader anterior da parte com `ci_dec_refs` e
+   **consome** a nova referência. O `car.def` de IA declara um único
+   `shaders/truck.shd`. `visual-show --shader` aplica-o a todas as partes na
+   criação; no jogo só aceita `models/ai/truck/shaders/truck.shd`. Uma falha
+   libera a instância ainda não desenhada. `session-start` aplica o skin por
+   padrão, e `--no-skin` mantém o fallback. O status informa `skinned_parts`.
+   Não foi feito o `gfx_shader_precache` que o carro do jogo faz antes
+   (possível carga tardia de textura no primeiro desenho).
+4. **Recarga automática.** Uma mudança de `this` do `actors.car` oculta o visual
+   na hora. A manutenção no gancho do loop (após as tarefas) libera quando é
+   seguro e recria com o mesmo bloco de criação (modelo, skin, modo, alvo,
+   offset), exibindo de novo. Ocultar manualmente cancela; uma recusa
+   inesperada marca `fault=2`. O status informa `recreated` e
+   `recreate_pending`. A fixture simula a recarga com uma segunda entidade; as
+   instâncias criadas ficaram iguais às liberadas mais uma.
+. **Servidor `--echo`**: devolve a cada cliente a própria pose como
+   `1000000000 + id` (cabe em u32), para testar rede, interpolação e desenho
+   num só PC com `session-start --offset 400 0 0`. Teste próprio do eco;
+   `run` sem eco mantém o comportamento anterior. `dev_env verify` final: x86
+   41, nativos 47.
+
+Ainda não comprovado no jogo: o skin (textura e custo do primeiro desenho), a
+recriação depois de uma recarga real (a instância antiga atravessa o
+carregamento até ser liberada), vários remotos e a interpolação com tráfego real
+de LAN.
 
 ## 3. Primeira versão jogável e limites
 
@@ -1553,13 +1620,18 @@ correta e ela aparece/desaparece com a sessão sem duplicatas ou referências in
 
 ### M5 — Movimento remoto suave e apresentação
 
-- [ ] Manter buffer por jogador com timestamps e limite de memória.
+- [x] Manter buffer por jogador com timestamps e limite de memória (16 amostras,
+  tempo de recepção local; bancada).
 - [ ] Interpolar posição e orientação; confirmar convenção de quaternion e tratar
-  rotações equivalentes para não girar pelo caminho longo.
+  rotações equivalentes para não girar pelo caminho longo. Implementado (lerp +
+  nlerp pelo arco curto, bancada); falta confirmar a convenção no jogo.
 - [ ] Definir atraso de interpolação, extrapolação curta e comportamento quando
   os dados param de chegar. Medir em vez de escolher tolerâncias cegamente.
-- [ ] Separar teleporte/correção de movimento normal; não atravessar o mapa com
-  interpolação longa após reconexão ou carregamento.
+  Valores iniciais na bancada: atraso 100 ms, extrapolação ≤200 ms, sem desenho
+  após 1 s; ainda precisam de medição na LAN.
+- [x] Separar teleporte/correção de movimento normal; não atravessar o mapa com
+  interpolação longa após reconexão ou carregamento (velocidade implícita
+  >20.000 cm/s faz snap, na interpolação e na extrapolação; bancada).
 - [ ] Sincronizar modelo/cabine, reboque e sinais visuais conforme descoberta:
   direção, rodas, freio, faróis e setas, sem exigir todos para o primeiro teste.
 - [ ] Tratar visibilidade, LOD, nomes e estados de desconexão sem poluir a interface.
@@ -1915,12 +1987,14 @@ e [seleção de toolchain com rustup](https://rust-lang.github.io/rustup/overrid
 
 ## 9. Registro de passagem para a próxima etapa
 
-**Próxima entrega:** o visual de teste passou na partida (apareceu, acompanhou
-o jogador, liberou e reapareceu após recarga). Próximos passos, em ordem:
-(1) pose independente do jogador, vinda de um alvo explícito (posição +
-quaternion) e depois da rede LAN; (2) skins/textura (`psm_alloc_inst` com a
-lista de shaders do `car.def`); (3) política de recarga: ocultar/liberar
-automaticamente quando a entidade do jogador mudar; (4) vários visuais.
+**Próxima entrega:** validar no jogo o que a bancada já cobre. Usar o
+procedimento "Teste no jogo com sessão" do README, num PC (servidor local e o
+próprio jogador espelhado) e depois em LAN com dois PCs. A ordem de risco é:
+skin, recriação após recarga real, vários remotos e interpolação com tráfego
+real. Pose pela rede, interpolação, sessão, backup/verificação, skin e recarga
+automática já estão implementados (seção "Blocos sem jogo"). Itens seguintes
+sem jogo: medir custo/tempo de frame (M5/M8), mais sinais visuais (rodas,
+reboque) depois de identificar suas partes.
 Contexto anterior — a sonda `draw-*` passou na
 partida (parado, movimento, menu/recarga): o `draw` de `actors.car` com estado
 6, profundidade 0, enfileira no passe do mundo esvaziado em `game+0xf3a24`.
