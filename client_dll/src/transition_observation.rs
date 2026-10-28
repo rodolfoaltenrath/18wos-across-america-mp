@@ -5,10 +5,43 @@ pub const CAPACITY: usize = 512;
 pub const ACTIVE: u32 = 1;
 pub const TRUNCATED: u32 = 4;
 pub const LOST: u32 = 32;
+/// Per-record readability bits (separate from Summary.flags).
+pub const COMMAND_READ: u32 = 1 << 5;
+pub const COMMAND_UNREADABLE: u32 = 1 << 6;
+pub const COMMAND_UNTERMINATED: u32 = 1 << 7;
+/// Copies argv[0] only, including a terminator within 32 bytes. On failure no
+/// partial name is retained. Does not read argv[1] or any command arguments.
+pub fn command_name(
+    argv: u32,
+    mut read: impl FnMut(u32, &mut [u8]) -> Result<(), String>,
+) -> ([u8; 32], u32) {
+    let mut pointer = [0; 4];
+    if argv == 0 || read(argv, &mut pointer).is_err() {
+        return ([0; 32], COMMAND_UNREADABLE);
+    }
+    let pointer = u32::from_le_bytes(pointer);
+    if pointer == 0 {
+        return ([0; 32], COMMAND_UNREADABLE);
+    }
+    let mut name = [0; 32];
+    for i in 0..name.len() {
+        let Some(at) = pointer.checked_add(i as u32) else {
+            return ([0; 32], COMMAND_UNREADABLE);
+        };
+        if read(at, &mut name[i..i + 1]).is_err() {
+            return ([0; 32], COMMAND_UNREADABLE);
+        }
+        if name[i] == 0 {
+            return (name, COMMAND_READ);
+        }
+    }
+    ([0; 32], COMMAND_UNTERMINATED)
+}
 #[derive(Clone, Copy, Default, Debug, PartialEq, Serialize)]
 pub struct Record {
     /// 1/2 init enter/return, 3/4 done enter/return, 5 first subsequent draw;
-    /// 6/7 block init enter/return, 8/9 destruction REQUEST enter/return.
+    /// 6/7 block init enter/return, 8/9 destruction REQUEST enter/return;
+    /// 10 profiled command dispatch (after cmd_argv, before command execution).
     pub kind: u32,
     pub thread: u32,
     pub caller: u32,
@@ -21,6 +54,7 @@ pub struct Record {
     pub values: [u32; 4],
     pub readable: u32,
     /// Block data/context/strong/residency/access, observed car, queue raw words.
+    /// For kind 10, context[0] is the handler's scene pointer (+0x14c), not block data.
     pub context: [u32; 8],
     pub returned: u32,
     pub models: [u32; 16],
@@ -65,11 +99,25 @@ impl Record {
         let value = |i: usize| (self.readable & (1 << i) != 0).then_some(self.values[i]);
         let context = |i: usize| (self.readable & (1 << (8 + i)) != 0).then_some(self.context[i]);
         let block = (6..=9).contains(&self.kind);
-        let command = (self.kind == 10 && self.readable & 32 != 0)
+        let command = (self.kind == 10 && self.readable & COMMAND_READ != 0)
             .then(|| crate::api::text(&self.command).ok())
             .flatten();
-        serde_json::json!({"kind":match self.kind {1=>"init_enter",2=>"init_return",3=>"done_enter",4=>"done_return",5=>"first_draw",6=>"block_init_enter",7=>"block_init_return",8=>"destroy_request_enter",9=>"destroy_request_return",10=>"command_dispatch",_=>"unknown"},"command":command,"thread":self.thread,"caller":self.caller,"this":self.this,"argument":self.argument,"phase":(self.kind<=4).then_some(self.argument as i32),"depth":self.depth,"flushes_seen":self.flushes,"scene":value(0),"physics":value(1),"first_model":value(2),"model_count":value(3),"readable":self.readable,
-        "observed_car":self.context[5],"block":block.then_some(self.argument),"block_data":context(0),"block_context":context(1),"block_strong":context(2),"block_residency":context(3),"block_access":context(4),"queue_words":[context(6),context(7)],"returned":matches!(self.kind,7|9).then_some(self.returned != 0),"models":(self.readable & 16 != 0).then(|| &self.models[..(self.values[3] as usize).min(16)]),"models_truncated":self.readable & 8 != 0 && self.values[3]>16})
+        let command_status = (self.kind == 10).then_some(if self.readable & COMMAND_READ != 0 {
+            if command.is_some() {
+                "complete"
+            } else {
+                "invalid_utf8"
+            }
+        } else if self.readable & COMMAND_UNTERMINATED != 0 {
+            "unterminated"
+        } else if self.readable & COMMAND_UNREADABLE != 0 {
+            "unreadable"
+        } else {
+            "not_recorded"
+        });
+        let block_context = |i| if block { context(i) } else { None };
+        serde_json::json!({"kind":match self.kind {1=>"init_enter",2=>"init_return",3=>"done_enter",4=>"done_return",5=>"first_draw",6=>"block_init_enter",7=>"block_init_return",8=>"destroy_request_enter",9=>"destroy_request_return",10=>"command_dispatch",_=>"unknown"},"command":command,"command_status":command_status,"handler_scene":(self.kind==10).then(||context(0)).flatten(),"thread":self.thread,"caller":self.caller,"this":self.this,"argument":self.argument,"phase":(1..=4).contains(&self.kind).then_some(self.argument as i32),"depth":self.depth,"flushes_seen":self.flushes,"scene":value(0),"physics":value(1),"first_model":value(2),"model_count":value(3),"readable":self.readable,
+        "observed_car":self.context[5],"block":block.then_some(self.argument),"block_data":block_context(0),"block_context":block_context(1),"block_strong":block_context(2),"block_residency":block_context(3),"block_access":block_context(4),"queue_words":[block_context(6),block_context(7)],"returned":matches!(self.kind,7|9).then_some(self.returned != 0),"models":(self.readable & 16 != 0).then(|| &self.models[..(self.values[3] as usize).min(16)]),"models_truncated":self.readable & 8 != 0 && self.values[3]>16})
     }
 }
 #[derive(Serialize)]
@@ -110,6 +158,89 @@ impl Summary {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn command_capture_reads_only_argv_zero_and_drops_partial_or_unterminated_names() {
+        let capture = |text: &[u8]| {
+            let mut reads = Vec::new();
+            let result = command_name(64, |at, out| {
+                reads.push((at, out.len()));
+                if at == 64 {
+                    assert_eq!(out.len(), 4);
+                    out.copy_from_slice(&128u32.to_le_bytes());
+                    return Ok(());
+                }
+                assert!((128..160).contains(&at));
+                assert_eq!(out.len(), 1);
+                out.copy_from_slice(
+                    text.get(at as usize - 128..at as usize - 127)
+                        .ok_or("unreadable name")?,
+                );
+                Ok(())
+            });
+            (result, reads)
+        };
+        let ((name, flags), reads) = capture(b"load\0");
+        assert_eq!(flags, COMMAND_READ);
+        assert_eq!(crate::api::text(&name).unwrap(), "load");
+        assert_eq!(reads.len(), 6); // One pointer and exactly five bytes, never argv[1].
+        assert_eq!(capture(b"lo").0, ([0; 32], COMMAND_UNREADABLE));
+        assert_eq!(capture(&[b'x'; 32]).0, ([0; 32], COMMAND_UNTERMINATED));
+        let mut maximal = [b'x'; 32];
+        maximal[31] = 0;
+        assert_eq!(capture(&maximal).0, (maximal, COMMAND_READ));
+        assert_eq!(
+            command_name(0, |_, _| unreachable!()),
+            ([0; 32], COMMAND_UNREADABLE)
+        );
+        assert_eq!(
+            command_name(64, |_, _| Err("unmapped".into())),
+            ([0; 32], COMMAND_UNREADABLE)
+        );
+        assert_eq!(
+            command_name(64, |_, out| {
+                out.fill(0);
+                Ok(())
+            }),
+            ([0; 32], COMMAND_UNREADABLE)
+        );
+        assert_eq!(
+            command_name(64, |at, out| {
+                if at == 64 {
+                    out.copy_from_slice(&(u32::MAX - 1).to_le_bytes());
+                } else {
+                    out.fill(b'x');
+                }
+                Ok(())
+            }),
+            ([0; 32], COMMAND_UNREADABLE)
+        );
+    }
+    #[test]
+    fn command_record_preserves_scene_and_distinguishes_invalid_data_from_a_name() {
+        let mut r = Record {
+            kind: 10,
+            readable: COMMAND_READ | 0x100,
+            context: [0x7000, 0, 0, 0, 0, 0x6000, 0, 0],
+            ..Record::default()
+        };
+        crate::api::put(&mut r.command, "load").unwrap();
+        let mut b = EngineControl::new(46);
+        r.encode(&mut b);
+        assert_eq!(Record::decode(&b), r);
+        let j = r.json();
+        assert_eq!(j["command"], "load");
+        assert_eq!(j["command_status"], "complete");
+        assert_eq!(j["handler_scene"], 0x7000);
+        assert!(j["block_data"].is_null());
+        assert!(j["phase"].is_null());
+        r.command[0] = 0xff;
+        assert_eq!(r.json()["command_status"], "invalid_utf8");
+        assert!(r.json()["command"].is_null());
+        r.readable = COMMAND_UNTERMINATED;
+        assert_eq!(r.json()["command_status"], "unterminated");
+        r.readable = COMMAND_UNREADABLE;
+        assert_eq!(r.json()["command_status"], "unreadable");
+    }
     #[test]
     fn lifecycle_record_preserves_argument_and_unreadable_fields() {
         let r = Record {

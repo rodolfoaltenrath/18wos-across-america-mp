@@ -45,7 +45,9 @@ fn phase_virtuals_forward_arguments_result_and_error_then_restore_on_detach() {
     controller.load(&dll).unwrap();
     let call = |command| {
         let mut b = EngineControl::new(command);
-        controller.engine_control(&dll, &mut b).unwrap();
+        controller
+            .engine_control(&dll, &mut b)
+            .unwrap_or_else(|error| panic!("engine command {command}: {error:?}"));
         b
     };
     let mut attach = EngineControl::new(api::UI_ATTACH);
@@ -89,6 +91,24 @@ fn phase_virtuals_forward_arguments_result_and_error_then_restore_on_detach() {
     b = blocks;
     controller.engine_control(&dll, &mut b).unwrap();
     assert!(Summary::decode(&call(api::TRANSITION_STATUS)).blocks_installed);
+    let mut commands = EngineControl::new(api::UI_TRANSITION_COMMANDS_FIXTURE);
+    commands.fixture =
+        std::array::from_fn(|i| info["command_descriptors"][i].as_u64().unwrap() as u32);
+    b = commands;
+    b.fixture[1] += 1;
+    assert!(controller.engine_control(&dll, &mut b).is_err());
+    assert!(!Summary::decode(&call(api::TRANSITION_STATUS)).commands_installed);
+    b = commands;
+    b.fixture[0] = blocks.fixture[0];
+    assert!(controller.engine_control(&dll, &mut b).is_err());
+    b = commands;
+    b.fixture[2] = 0;
+    assert!(controller.engine_control(&dll, &mut b).is_err());
+    b = commands;
+    controller.engine_control(&dll, &mut b).unwrap();
+    assert!(Summary::decode(&call(api::TRANSITION_STATUS)).commands_installed);
+    b = commands;
+    assert!(controller.engine_control(&dll, &mut b).is_err());
     b = EngineControl::new(api::VISUAL_SHOW_FIXTURE);
     assert!(
         controller
@@ -269,6 +289,61 @@ fn phase_virtuals_forward_arguments_result_and_error_then_restore_on_detach() {
         2
     );
     assert_eq!(Summary::decode(&call(api::TRANSITION_STATUS)).records, 14);
+    // The profiled C call returns exactly once, keeping ECX's entry identity,
+    // EAX and LastError, but only its owner-thread/callsite enters the trace.
+    call(api::TRANSITION_ARM);
+    wait(1);
+    let argv_before: u32 = send(&mut host, &mut output, "transition-command-stats")
+        .parse()
+        .unwrap();
+    send(&mut host, &mut output, "transition-command-unrelated");
+    send(&mut host, &mut output, "transition-command-foreign");
+    let filtered = Summary::decode(&call(api::TRANSITION_STATUS));
+    assert_eq!(
+        (
+            filtered.records,
+            filtered.command_calls,
+            filtered.foreign_calls
+        ),
+        (1, 0, 3)
+    );
+    let old = rows(&filtered)[0];
+    send(&mut host, &mut output, "transition-command-reload");
+    std::thread::sleep(Duration::from_millis(80));
+    let ordered = rows(&wait(21));
+    assert_eq!(ordered.len(), 21);
+    assert_eq!(ordered[1].kind, 10);
+    assert_eq!(ordered[1].this, commands.fixture[3]);
+    assert_eq!(ordered[1].context[0], old.values[0]);
+    assert_eq!(ordered[1].context[5], old.this);
+    assert_eq!(ordered[1].json()["command"], "load");
+    assert_eq!(ordered[1].json()["command_status"], "complete");
+    assert!(ordered[1].json()["block_data"].is_null());
+    assert_eq!(ordered[2].kind, 8);
+    assert_eq!(ordered[4].kind, 6);
+    assert_ne!(ordered.last().unwrap().this, old.this);
+    for (action, status) in [
+        ("transition-command-invalid", "unreadable"),
+        ("transition-command-long", "unterminated"),
+        ("transition-command-null", "unreadable"),
+    ] {
+        call(api::TRANSITION_ARM);
+        wait(1);
+        send(&mut host, &mut output, action);
+        std::thread::sleep(Duration::from_millis(80));
+        let records = rows(&wait(3));
+        assert_eq!(
+            records.iter().map(|r| r.kind).collect::<Vec<_>>(),
+            [5, 10, 5]
+        );
+        assert_eq!(records[1].command, [0; 32]);
+        assert_eq!(records[1].json()["command_status"], status);
+        assert!(records[1].json()["command"].is_null());
+    }
+    let argv_after: u32 = send(&mut host, &mut output, "transition-command-stats")
+        .parse()
+        .unwrap();
+    assert_eq!(argv_after, argv_before + 6);
     call(api::TRANSITION_ARM);
     wait(1);
     assert_eq!(send(&mut host, &mut output, "transition-overflow"), "armed");
@@ -280,6 +355,16 @@ fn phase_virtuals_forward_arguments_result_and_error_then_restore_on_detach() {
     b.reserved = CAPACITY as u32;
     assert!(controller.engine_control(&dll, &mut b).is_err());
     // Refuse to overwrite a slot another owner changed; retry after it restores.
+    send(&mut host, &mut output, "transition-command-conflict");
+    b = EngineControl::new(api::UI_TRANSITION_REMOVE);
+    assert!(
+        controller
+            .engine_control(&dll, &mut b)
+            .unwrap_err()
+            .to_string()
+            .contains("owner changed")
+    );
+    send(&mut host, &mut output, "transition-command-unconflict");
     send(&mut host, &mut output, "transition-block-conflict");
     b = EngineControl::new(api::UI_TRANSITION_REMOVE);
     assert!(
@@ -304,8 +389,16 @@ fn phase_virtuals_forward_arguments_result_and_error_then_restore_on_detach() {
         "armed"
     );
     // Stop/detach must restore the transition hooks without a separate remove.
+    let observed_blocks = Summary::decode(&call(api::TRANSITION_STATUS)).block_init_calls;
+    let observed_commands = Summary::decode(&call(api::TRANSITION_STATUS)).command_calls;
     call(api::UI_DETACH);
     assert_eq!(Summary::decode(&call(api::TRANSITION_STATUS)).state, 2);
+    assert!(!Summary::decode(&call(api::TRANSITION_STATUS)).commands_installed);
+    send(&mut host, &mut output, "transition-command-foreign");
+    assert_eq!(
+        Summary::decode(&call(api::TRANSITION_STATUS)).command_calls,
+        observed_commands
+    );
     assert!(
         controller
             .unload(&dll)
@@ -341,7 +434,7 @@ fn phase_virtuals_forward_arguments_result_and_error_then_restore_on_detach() {
     );
     assert_eq!(
         Summary::decode(&call(api::TRANSITION_STATUS)).block_init_calls,
-        2
+        observed_blocks
     );
     drop(controller);
     let report = Command::new(env!("CARGO_BIN_EXE_mp_launcher"))

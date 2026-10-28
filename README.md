@@ -671,6 +671,7 @@ engine render-attach
 engine draw-attach
 engine transition-attach
 engine transition-blocks
+engine transition-commands
 engine transition-arm
 # Com a captura armada: ir ao menu, carregar save de teste existente e parar.
 engine transition-status
@@ -721,6 +722,32 @@ blocos passou na primeira recarga real: snapshot de 70 eventos, sem perdas,
 todos os retornos true e fases aninhadas até profundidade 3. As solicitações
 capturadas pertenciam a blocos da cena nova, depois da troca; não identificaram
 o início global do reload. Os modelos/física antigos foram zerados em destroy(0).
+
+`transition-commands` completa a captura com o binding `cmd_argv` do jogo.
+Instale após `transition-blocks`, antes de armar. A sonda encaminha o original
+uma vez e observa somente o retorno ao handler perfilado (`game+0xd3596`), na
+thread proprietária. Copia apenas `argv[0]`, limitado a 31 bytes mais terminador;
+não lê argumentos, nomes de saves ou caminhos de carregamento. Chamadas de
+outros pontos continuam encaminhadas; chamadas estrangeiras desse handler são
+contadas, sem serem incluídas na timeline. Retorno, pilha e LastError são
+preservados. O comando é passivo e continua incompatível com visual alocado.
+
+O evento `command_dispatch` ocorre após consultar argv e antes de executar o
+ramo do comando. Expõe `command`, `command_status` e `handler_scene`, a leitura
+de `this+0x14c` naquele instante. Cena/física/modelos do evento continuam sendo
+do último caminhão observado, possivelmente obsoleto. `command_status` distingue
+nome completo, ilegível, sem terminador e UTF-8 inválido; falhas de leitura não
+deixam um prefixo parcial como nome válido. O status inclui `command_calls` e
+`commands_installed`. Essas contagens são cumulativas desde a instalação, não
+apenas da geração atual. A remoção restaura cinco hooks de transição e
+`session-stop` verifica oito slots externos. Instalar a extensão é opcional;
+não muda o layout da ABI v3/664 bytes.
+
+A extensão de comandos foi validada em fixture própria sob Proton, incluindo
+filtro de caller/thread, ponteiros inválidos, limites, ordem anterior ao init,
+conflito de ownership e remoção automática. Ainda falta a captura no jogo:
+o nome `load` simulado pela fixture não identifica o comando real nem comprova
+um ponto seguro para liberar recursos durante uma recarga.
 
 ### Primeiro caminhão de teste (`visual-*`)
 

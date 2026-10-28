@@ -14,18 +14,24 @@ static PROC: AtomicU32 = AtomicU32::new(0);
 static ITEMS: [AtomicU32; 2] = [const { AtomicU32::new(0) }; 2];
 static BLOCK_CALLS: AtomicU32 = AtomicU32::new(0);
 static FAIL: AtomicU32 = AtomicU32::new(0);
-static ARGV_IMPORT:AtomicU32=AtomicU32::new(0);
-static ARGV:AtomicU32=AtomicU32::new(0);
-static ARGV_CALLS:AtomicU32=AtomicU32::new(0);
+static ARGV_IMPORT: AtomicU32 = AtomicU32::new(0);
+static ARGV: AtomicU32 = AtomicU32::new(0);
+static ARGV_CALLS: AtomicU32 = AtomicU32::new(0);
+static COMMAND_CONFLICT: AtomicUsize = AtomicUsize::new(0);
 type Phase = unsafe extern "thiscall" fn(*mut c_void, u32) -> u32;
 const OFFSETS: [usize; 2] = [0x5c / 4, 0x60 / 4];
 pub unsafe fn setup(page: *mut c_void) {
     PAGE.store(page as usize, Ordering::Release);
     CONFLICT.store(init as *const () as usize, Ordering::Release);
     BLOCK_CONFLICT.store(block_init as *const () as usize, Ordering::Release);
-    ARGV_IMPORT.store(page as u32+0x88,Ordering::Release);
-    ARGV.store(c"load".as_ptr() as u32,Ordering::Release);
-    unsafe {page.cast::<usize>().add(0x88/4).write(get_argv as *const () as usize)};
+    ARGV_IMPORT.store(page as u32 + 0x88, Ordering::Release);
+    ARGV.store(c"load".as_ptr() as u32, Ordering::Release);
+    COMMAND_CONFLICT.store(foreign_argv as *const () as usize, Ordering::Release);
+    unsafe {
+        page.cast::<usize>()
+            .add(0x88 / 4)
+            .write(get_argv as *const () as usize)
+    };
     for (offset, function) in OFFSETS
         .into_iter()
         .zip([init as *const () as usize, done as *const () as usize])
@@ -49,6 +55,7 @@ impl Blocks {
         let items = [super::words::<24>(), super::words::<24>()];
         let proc = super::address(&processor);
         PROC.store(proc, Ordering::Release);
+        processor[0x14c / 4].store(cars[0][0x84 / 4].load(Ordering::Acquire), Ordering::Release);
         for i in 0..2 {
             items[i][8 / 4].store(super::address(&cars[i]), Ordering::Release);
             items[i][0x28 / 4].store(proc, Ordering::Release);
@@ -72,29 +79,48 @@ pub fn block_descriptors(page: *mut c_void) -> [u32; 6] {
         0,
     ]
 }
-pub fn command_descriptors(page:*mut c_void)->[u32;6] {
-    [page as u32+0x88,get_argv as *const () as u32,argv_return_site as *const () as u32,0,0,0]
+pub fn command_descriptors(page: *mut c_void) -> [u32; 6] {
+    [
+        page as u32 + 0x88,
+        get_argv as *const () as u32,
+        argv_return_site as *const () as u32,
+        PROC.load(Ordering::Acquire),
+        0,
+        0,
+    ]
 }
 #[unsafe(naked)]
-unsafe extern "C" fn argv_return_site(){core::arch::naked_asm!("ret");}
-#[unsafe(naked)]
-unsafe extern "thiscall" fn command_dispatch(_: *mut c_void)->*const *const u8 {
-    core::arch::naked_asm!("mov eax,dword ptr [{slot}]","push {site}","jmp dword ptr [eax]",slot=sym ARGV_IMPORT,site=sym argv_return_site);
+unsafe extern "C" fn argv_return_site() {
+    core::arch::naked_asm!("add esp,12", "ret");
 }
-unsafe extern "C" fn get_argv()->*const *const u8 {
-    assert_eq!(unsafe {GetLastError()},0x1850);
-    ARGV_CALLS.fetch_add(1,Ordering::AcqRel);
-    unsafe {SetLastError(0x1851)};
+#[unsafe(naked)]
+unsafe extern "thiscall" fn command_dispatch(_: *mut c_void) -> *const *const u8 {
+    // Match a GNU x86 call boundary: before pushing the synthetic return
+    // address ESP is 16-byte aligned. The continuation removes this padding.
+    core::arch::naked_asm!("sub esp,12","mov eax,dword ptr [{slot}]","lea edx,[{site}]","push edx","jmp dword ptr [eax]",slot=sym ARGV_IMPORT,site=sym argv_return_site);
+}
+unsafe extern "C" fn get_argv() -> *const *const u8 {
+    assert_eq!(unsafe { GetLastError() }, 0x1850);
+    ARGV_CALLS.fetch_add(1, Ordering::AcqRel);
+    unsafe { SetLastError(0x1851) };
     &ARGV as *const AtomicU32 as *const *const u8
 }
-fn dispatch_command(filtered:bool) {
+unsafe extern "C" fn foreign_argv() -> *const *const u8 {
+    std::ptr::null()
+}
+fn dispatch_command(filtered: bool) {
     unsafe {
         SetLastError(0x1850);
-        let result=if filtered {command_dispatch(PROC.load(Ordering::Acquire) as *mut c_void)} else {
-            let f:unsafe extern "C" fn()->*const *const u8=std::mem::transmute(word(ARGV_IMPORT.load(Ordering::Acquire)).load(Ordering::Acquire));f()
+        let result = if filtered {
+            command_dispatch(PROC.load(Ordering::Acquire) as *mut c_void)
+        } else {
+            let f: unsafe extern "C" fn() -> *const *const u8 = std::mem::transmute(
+                word(ARGV_IMPORT.load(Ordering::Acquire)).load(Ordering::Acquire),
+            );
+            f()
         };
-        assert_eq!(result,&ARGV as *const AtomicU32 as *const *const u8);
-        assert_eq!(GetLastError(),0x1851);
+        assert_eq!(result, &ARGV as *const AtomicU32 as *const *const u8);
+        assert_eq!(GetLastError(), 0x1851);
     }
 }
 fn word(at: u32) -> &'static AtomicU32 {
@@ -220,8 +246,10 @@ pub fn frame(car: u32) {
             }
             super::CAR.store(next, Ordering::Release);
         }
-        kind @ (5 | 6 | 7) => {
-            if kind==7 {dispatch_command(true);}
+        kind @ 5..=7 => {
+            if kind == 7 {
+                dispatch_command(true);
+            }
             let old = super::CARS
                 .iter()
                 .position(|c| c.load(Ordering::Acquire) == car)
@@ -244,7 +272,24 @@ pub fn frame(car: u32) {
                 );
             }
         }
-        8=>{ARGV.store(1,Ordering::Release);dispatch_command(true);ARGV.store(c"load".as_ptr() as u32,Ordering::Release);}
+        8 => {
+            ARGV.store(1, Ordering::Release);
+            dispatch_command(true);
+            ARGV.store(c"load".as_ptr() as u32, Ordering::Release);
+        }
+        9 => {
+            ARGV.store(
+                c"abcdefghijklmnopqrstuvwxyzabcdef".as_ptr() as u32,
+                Ordering::Release,
+            );
+            dispatch_command(true);
+            ARGV.store(c"load".as_ptr() as u32, Ordering::Release);
+        }
+        10 => {
+            ARGV.store(0, Ordering::Release);
+            dispatch_command(true);
+            ARGV.store(c"load".as_ptr() as u32, Ordering::Release);
+        }
         _ => {}
     }
 }
@@ -261,11 +306,16 @@ pub fn command(line: &str, car: u32) -> bool {
             println!("{}", BLOCK_CALLS.load(Ordering::Acquire));
             return true;
         }
-        "transition-command-reload"=>REQUEST.store(7,Ordering::Release),
-        "transition-command-invalid"=>REQUEST.store(8,Ordering::Release),
-        "transition-command-unrelated"=>dispatch_command(false),
-        "transition-command-foreign"=>dispatch_command(true),
-        "transition-command-stats"=>{println!("{}",ARGV_CALLS.load(Ordering::Acquire));return true;}
+        "transition-command-reload" => REQUEST.store(7, Ordering::Release),
+        "transition-command-invalid" => REQUEST.store(8, Ordering::Release),
+        "transition-command-long" => REQUEST.store(9, Ordering::Release),
+        "transition-command-null" => REQUEST.store(10, Ordering::Release),
+        "transition-command-unrelated" => dispatch_command(false),
+        "transition-command-foreign" => dispatch_command(true),
+        "transition-command-stats" => {
+            println!("{}", ARGV_CALLS.load(Ordering::Acquire));
+            return true;
+        }
         "transition-foreign" => call(1, car, 1),
         "transition-stats" => {
             println!("{}", CALLS.load(Ordering::Acquire));
@@ -274,8 +324,12 @@ pub fn command(line: &str, car: u32) -> bool {
         "transition-conflict"
         | "transition-unconflict"
         | "transition-block-conflict"
-        | "transition-block-unconflict" => {
-            let (offset, saved) = if line.contains("block") {
+        | "transition-block-unconflict"
+        | "transition-command-conflict"
+        | "transition-command-unconflict" => {
+            let (offset, saved) = if line.contains("command") {
+                (0x88 / 4, &COMMAND_CONFLICT)
+            } else if line.contains("block") {
                 (0x84 / 4, &BLOCK_CONFLICT)
             } else {
                 (OFFSETS[1], &CONFLICT)
@@ -304,13 +358,16 @@ pub fn command(line: &str, car: u32) -> bool {
 static CONFLICT: AtomicUsize = AtomicUsize::new(0);
 static BLOCK_CONFLICT: AtomicUsize = AtomicUsize::new(0);
 pub fn check_restored(page: *mut c_void) {
-    for (slot, original) in [0x5c / 4, 0x60 / 4, 0x80 / 4, 0x84 / 4,0x88/4].into_iter().zip([
-        init as *const () as usize,
-        done as *const () as usize,
-        block_init as *const () as usize,
-        block_request as *const () as usize,
-        get_argv as *const () as usize,
-    ]) {
+    for (slot, original) in [0x5c / 4, 0x60 / 4, 0x80 / 4, 0x84 / 4, 0x88 / 4]
+        .into_iter()
+        .zip([
+            init as *const () as usize,
+            done as *const () as usize,
+            block_init as *const () as usize,
+            block_request as *const () as usize,
+            get_argv as *const () as usize,
+        ])
+    {
         assert_eq!(
             unsafe { AtomicUsize::from_ptr(page.cast::<usize>().add(slot)) }
                 .load(Ordering::Acquire),

@@ -288,3 +288,12 @@ Snapshot inicial preservado; relatório integral pós-stop foi recusado porque
 o jogo já havia encerrado. Não afirmar que os 91 registros foram preservados.
 Seguir o procedimento transition-* do README; não liberar visual nessa fase
 sem relacionar blocos/cenas/flushes e início global do carregamento.
+
+Revisão do commit parcial `9587a15`: a extensão `transition-commands` (49/50)
+agora tem captura limitada de argv[0], diagnóstico de nome ilegível/sem
+terminador, cena do handler em `this+0x14c`, testes de ABI/filtro/ownership e
+documentação. Cinco hooks de transição; `session-stop` verifica oito slots.
+Conferidos estaticamente `game+0xd3596` e `prism3d+0xe210`. Ainda sem nova
+captura no jogo: `load` é somente o comando da fixture. Não automatizar teardown
+com base nesse nome. Preservar o carregamento preparado e separar os resultados
+da bancada Fedora/Proton das provas Windows anteriores.

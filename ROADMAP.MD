@@ -1742,6 +1742,60 @@ destroy não comprova início global da recarga nem seu término. Correlacionar
 blocos, cenas, calls do ator e flushes antes de escolher uma fase de liberação.
 Não repetir reload com visual retido com base apenas nessa observação.
 
+### M4 — Conclusão da extensão de comandos do commit 9587a15 — 28/10/2026
+
+O commit recebido iniciou os comandos 49/50 (`transition-commands` e fixture),
+o shim cdecl de `cmd_argv` e a inclusão do slot na verificação da sessão, mas
+não completou testes/documentação. A revisão manteve a ABI v3/664 bytes e
+completou o bloco, sem ativar liberação automática nem alterar os originais.
+
+O callsite foi conferido estaticamente na instalação local: no handler
+`game+0xd3570`, ECX ainda contém o receptor ao chamar `game+0x160930`, com retorno
+em `+0xd3596`. O destino do perfil `prism3d+0xe210` lê um global e retorna o
+ponteiro argv, sem argumentos na pilha. A fixture comprova forwarding único,
+retorno EAX/ponteiro, identidade de entrada ECX, pilha e LastError. A sonda
+filtra caller e thread e registra antes do despacho efetivo do comando.
+
+A captura de nome agora é limitada, testável no host e lê só `argv[0]`:
+32 bytes incluindo terminador, sem consultar argv[1] ou quaisquer argumentos.
+Falha de leitura/overflow/ponteiro nulo ou ausência de terminador descarta o
+prefixo parcial. O JSON distingue `complete`, `unreadable`, `unterminated` e
+`invalid_utf8`, sem inventar um comando. O evento também lê `handler_scene`
+em `this+0x14c`; esse campo não é confundido com dados de bloco. As demais
+leituras referem-se ao último ator observado e não fixam sua memória.
+
+Foram adicionados testes de instalação inválida/duplicada, caller não
+perfilado, thread estrangeira, comando antes de blocos e fases do ator,
+ponteiros inválidos/nulos, string no limite/sem terminador, conflito no quinto
+slot e restauração no detach. A fixture continua encaminhando chamadas depois
+da remoção sem acrescentar eventos. A verificação de sessão abrange agora
+oito slots, incluindo `cmd_argv`; os cinco hooks de transição são removidos.
+Também foram corrigidas as falhas de formatação/Clippy do commit recebido.
+
+O novo teste expôs uma falha executável na fixture: `push {site}` carregava a
+palavra no endereço do símbolo (os bytes `ret`/padding), não seu endereço.
+A captura SEH local mostrou salto para `0x0f2e66c3`, a palavra formada por esses
+bytes, durante o comando da fixture. Foi substituído por `lea`/`push` de um
+registrador e corrigido o alinhamento GNU x86/limpeza da continuação. A recusa
+posterior de enumeração de módulos era consequência da saída desse processo,
+não prova de falha de permissão. Isso não explica a falha histórica do jogo ao
+recarregar com visual retido; são caminhos diferentes.
+
+Validação desta revisão no **Fedora**: **46 testes nativos e 46 testes x86
+sob Proton passaram**, build release cruzado, Clippy nativo/x86 e rustfmt.
+Inclui a bancada completa, com o teste de transição exercitando também o quinto
+hook. Logs em `target/analysis/command-*` (ignorados).
+Não houve teste novo no jogo, e as validações Windows anteriores permanecem
+separadas. O processo do jogo foi procurado antes do build e não estava ativo.
+
+**Limite:** o `load` da fixture é simulado; não se conhece ainda o comando real
+da recarga nem se esse ponto precede todas as liberações globais. A extensão
+continua passiva, incompatível com visual retido. Manter `session-prepare-load`
+antes de carregar e `visual-show` depois. Próximo bloco: analisar a timeline
+de forma reproduzível, relacionando comandos, cenas, pares enter/return,
+rollback e primeiro draw; nunca converter observação isolada em autorização
+para liberar recursos do motor.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,

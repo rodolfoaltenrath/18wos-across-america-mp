@@ -66,10 +66,12 @@ fn main() -> anyhow::Result<()> {
         .map_or([0; 6], fixture_draw::Fixture::block_descriptors);
     #[cfg(not(target_arch = "x86"))]
     let block_descriptors = [0u32; 6];
-    #[cfg(target_arch="x86")]
-    let command_descriptors=drawer.as_ref().map_or([0;6],fixture_draw::Fixture::command_descriptors);
-    #[cfg(not(target_arch="x86"))]
-    let command_descriptors=[0u32;6];
+    #[cfg(target_arch = "x86")]
+    let command_descriptors = drawer
+        .as_ref()
+        .map_or([0; 6], fixture_draw::Fixture::command_descriptors);
+    #[cfg(not(target_arch = "x86"))]
+    let command_descriptors = [0u32; 6];
     #[cfg(target_arch = "x86")]
     let visual_descriptors = fixture_draw::Fixture::visual_descriptors();
     #[cfg(not(target_arch = "x86"))]

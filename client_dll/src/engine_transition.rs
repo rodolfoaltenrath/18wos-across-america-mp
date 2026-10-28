@@ -153,21 +153,16 @@ fn record(kind: u32, this: u32, argument: u32, caller: u32, depth: u32, returned
         }
     }
     if kind == 10 {
-        // Copy ONLY argv[0]. Never inspect save names, paths or other arguments.
-        let mut pointer = [0; 4];
-        if read(argument, &mut pointer).is_ok() {
-            let at = u32::from_le_bytes(pointer);
-            for i in 0..32 {
-                if let Some(at) = at.checked_add(i as u32)
-                    && read(at, &mut row.command[i..i + 1]).is_ok()
-                {
-                    if row.command[i] == 0 {
-                        row.readable |= 32;
-                        break;
-                    }
-                } else {
-                    break;
-                }
+        let (name, flags) = observation::command_name(argument, |at, out| {
+            read(at, out).map_err(|_| "command byte unreadable".into())
+        });
+        row.command = name;
+        row.readable |= flags;
+        if let Some(at) = this.checked_add(0x14c) {
+            let mut bytes = [0; 4];
+            if read(at, &mut bytes).is_ok() {
+                row.context[0] = u32::from_le_bytes(bytes);
+                row.readable |= 1 << 8;
             }
         }
     }
