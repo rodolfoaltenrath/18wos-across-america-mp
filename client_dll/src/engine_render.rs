@@ -85,7 +85,7 @@ impl Trace {
         }
     }
 }
-fn read(at: u32, out: &mut [u8]) -> Result<(), ()> {
+pub(crate) fn read(at: u32, out: &mut [u8]) -> Result<(), ()> {
     if at == 0 || at.checked_add(out.len() as u32).is_none() {
         return Err(());
     }
@@ -387,6 +387,10 @@ pub fn install(thread: u32, b: &EngineControl) -> Result<(), String> {
         }
     }
     Ok(())
+}
+/// Owner-thread flush count, used by other passive probes to order their events.
+pub(crate) fn flush_calls() -> u32 {
+    FLUSHES.load(Ordering::Acquire)
 }
 pub fn remove() -> Result<(), String> {
     if STATE.load(Ordering::Acquire) != 1 {

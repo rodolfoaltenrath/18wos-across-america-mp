@@ -1173,6 +1173,74 @@ e o momento de submissão adequado, contexto de câmera/matrizes, skins e
 ownership dos pacotes antes de introduzir um visual persistente. Não repetir
 criação/liberação privada já comprovada sem mudança que exija a regressão.
 
+### M4 — Passe 3D e ponto de submissão (estático + sonda) — 28/10/2026
+
+**Ferramenta:** `engine_report disassemble --resolver RVA` (repetível) anota
+operandos absolutos com nomes de bindings recuperados; `Instruction.slot` traz
+o RVA absoluto decodificado. Teste próprio cobre IAT e stores atrasados.
+Resolver do núcleo em `game.dll+0xcdce0`: **151 bindings** `gfx_*` (mapa local
+em `target/analysis/game_core_bindings.*`, não versionado). Resolvers de
+`psm.dll` em `+0x11d6/+0x12b6/+0x15f6/+0x16c6/+0x1e86/+0x1fc6`.
+
+**Conclusões estáticas** (somente leitura de arquivos; endereços desta versão):
+
+- O retorno `game.dll+0x800f2` está em `+0x7ffc0`, chamado por `+0x7fa90`,
+  que sobrescreve `entity_t::draw` numa vtable (`+0x12618c`): `gfx_push_identity`,
+  translação até a câmera, `gfx_cache_data`/`gfx_sprite` e flush. É um passe de
+  céu/sol, não "o passe 3D" inteiro. O núcleo não chama `gfx_path_flush`
+  internamente; todos os flushes vêm de `game.dll` (`+0x800ec`, `+0x8018b`,
+  `+0x8e660`, `+0xccb43`, `+0xccd1c`, `+0xf3a24`). `begin/end_frame`/swap em
+  `game.dll` aparecem só em telas de carregamento.
+- Submissão: `psm_draw` é cdecl `(instância, bool cull, ARGB)` (`-1` = branco;
+  interior usa `[this+0x304]|0xff000000`). Aloca protos, define pacotes/shader
+  e chama `gfx_queue_proto` no path corrente, liberando a referência local.
+  `gfx_queue_proto` (núcleo `+0x4740`) copia o topo das pilhas world
+  (`+0x5e000`), camera (`+0x5e848`) e viewport (`+0x5ee2c`) para o proto e
+  insere via ponteiro `path+0x88`; sem viewport/info registra `[r_path] NULL ...`.
+  Path corrente `+0x5ea7c`, info `+0x5ea74` (`gfx_path_select` grava ambos).
+- Pilha world: topo em `+0x5e000`, 16 entradas de `0x84` (matriz, inversa,
+  cache) em `+0x5e004..+0x5e844`. `gfx_push` satura sem erro no limite, mas
+  `gfx_pop` decrementa: um draw próprio precisa conferir profundidade antes.
+  `gfx_translate(vec3*)`, `gfx_qrotate(quat*)` (pula w=1) e `gfx_mult(m, inv)`
+  são cdecl e multiplicam o topo.
+- Padrão do jogo em ~26 sítios: `gfx_push → gfx_translate → gfx_qrotate/rotate
+  → psm_draw(inst,1,cor) → gfx_pop`.
+- `actors.car`: vtable `game.dll+0x1257a0` (construtor `+0x50b40`);
+  `pre_draw` `+0x68` → `+0x64e20`; `draw` `+0x6c` → `+0x5a6a0`. Com estado
+  `+0x1e9 == 4` desenha o interior em espaço de câmera; caso contrário chama
+  `+0x64ea0`: corpo `[[this+0x1d0]+0x3e4]`, quaternion `+0x14`, posição `+0x30`;
+  `gfx_push → gfx_translate(pos) → gfx_mult(get_matrix, get_imatrix)` e partes
+  (rodas `+0x30c/+0x310`, ossos via `psm_bone_get_matrix`).
+
+Logo, o ponto candidato para um visual remoto é logo após o retorno do `draw`
+original de `actors.car`, na mesma thread/pilha, antes do flush do frame. Isso
+ainda é inferência estática: precisa da sonda abaixo na partida.
+
+**Sonda passiva entregue:** `engine draw-attach/arm/status/report/remove`,
+comandos 29–34, ABI v3/664 bytes preservada, módulo separado `engine_draw`
+(a sonda de render validada não mudou, só expôs leitura/contador). Detalhes
+de campos no README. `pump-remove`/`stop` removem a sonda de draw antes da de
+render. Instalação uma vez por processo; slot conferido; compare-exchange e
+proteção original restaurada; outro proprietário impede sobrescrita.
+
+**Bancada própria:** fixture `--draw` com vtable em página somente leitura,
+objeto com cadeia de corpo, pilha world com cabeçalho e profundidade 2, path/
+info/viewport e flush da fixture de render após cada `draw`. Passaram:
+pré-requisito de pump, original incorreto recusado sem instalar, instalação
+dupla recusada, 32 registros alternados na thread esperada, `this`/vtable/
+estado/path/viewport/profundidade, pose e matrizes coerentes por frame, mesmo
+`flushes_seen` em entrada/retorno e +1 entre frames, chamada estrangeira só
+contada, corpo ilegível sem quebrar o encaminhamento, geração antiga e índice
+inválido recusados, `draw-arm/report/status` pela CLI, remoção restaurando o
+original (chamadas continuam, contador da sonda para) e PAGE_READONLY no fim.
+30 testes x86 e 37 nativos passaram; Clippy x86/nativo e formatação limpos.
+
+**Validação na partida:** pendente; requer o proprietário com a partida em
+primeiro plano. O que a captura deve responder: quantos `this` distintos
+(jogador/IA), profundidade world em que o `draw` roda, se `flushes_seen` muda
+entre `draw` e o flush do frame (ordem), path/viewport não nulos, e se a
+posição/quaternion do corpo acompanha a matriz world do proto.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -1708,13 +1776,16 @@ e [seleção de toolchain com rustup](https://rust-lang.github.io/rustup/overrid
 
 ## 9. Registro de passagem para a próxima etapa
 
-**Próxima entrega:** identificar o passe 3D e o ponto de submissão, comprovar
-matrizes/câmera, skins e lifetime dos pacotes antes de um draw. A sonda passiva
-passou na partida parada, após movimento e após menu/recarga: três flushes,
-24 registros, duas filas `9 → 9 → 0` e `1 → 1 → 0`, sem flags de perda.
-Foi observado somente o passe cujo retorno é `game.dll+0x800f2`; não atribuir
-ao relatório cobertura de todo o render. Usar `render-status` para diagnosticar
-captura pendente e manter a partida em primeiro plano para renderizar.
+**Próxima entrega:** validar `engine draw-*` na partida (parado, movimento,
+interior/exterior se possível, menu/recarga), registrar `this` distintos,
+profundidade world, ordem relativa ao flush e coerência pose/matriz; restaurar
+o slot e conferir por leitura externa. Com isso comprovado, o draw ativo de
+teste é: após o `draw` original, conferir profundidade < 15, `gfx_push →
+gfx_translate → gfx_qrotate → psm_draw(inst,1,-1) → gfx_pop`, com instância
+retida entre frames e liberada só após um flush posterior completo.
+O passe identificado pela sonda de render (`game.dll+0x800f2`) é o draw do
+céu/sol (`+0x7fa90`), não todo o render. Usar `render-status`/`draw-status`
+para captura pendente e manter a partida em primeiro plano.
 Depois manter um único visual e
 validar transform/remoção em menus e reload. Lifetime, ownership, metadados,
 setter PMD, descritor e instância PSM privados já têm provas registradas;

@@ -49,6 +49,8 @@ pub struct RecordCandidate {
 pub struct Instruction {
     pub rva: u32,
     pub text: String,
+    /// RVA of an absolute (no base/index) memory operand inside this image.
+    pub slot: Option<u32>,
 }
 #[derive(Debug, Serialize)]
 pub struct PointerOccurrence {
@@ -279,6 +281,15 @@ impl Pe32 {
                 .into_iter()
             })
     }
+    fn absolute_slot(&self, i: &iced_x86::Instruction) -> Option<u32> {
+        let memory = (0..i.op_count()).any(|n| i.op_kind(n) == OpKind::Memory);
+        (memory
+            && i.memory_base() == Register::None
+            && i.memory_index() == Register::None
+            && i.memory_displ_size() == 4)
+            .then(|| self.rva(i.memory_displacement32()).ok())
+            .flatten()
+    }
     pub fn disassemble(&self, rva: u32, length: usize) -> Result<Vec<Instruction>> {
         ensure!(length <= 65536, "disassembly limited to 64 KiB");
         let bytes = self.bytes(rva, length)?;
@@ -296,6 +307,7 @@ impl Pe32 {
             Instruction {
                 rva: (i.ip() - u64::from(self.base)) as u32,
                 text,
+                slot: self.absolute_slot(&i),
             }
         })
         .collect())
@@ -371,6 +383,7 @@ impl Pe32 {
                 Instruction {
                     rva: (i.ip() - u64::from(self.base)) as u32,
                     text,
+                    slot: None,
                 }
             })
             .collect()
@@ -477,6 +490,20 @@ mod tests {
         assert!(pe.dynamic_bindings(0x1000, 13).unwrap().is_empty());
         assert!(pe.dynamic_bindings(0x1000, 16385).is_err());
         assert!(pe.dynamic_bindings(0x2040, 32).is_err());
+    }
+    #[test]
+    fn disassembly_reports_absolute_image_slots_only() {
+        let pe = Pe32::parse(binding_fixture()).unwrap();
+        let rows = pe.disassemble(0x1000, 0x22).unwrap();
+        let slots: Vec<_> = rows
+            .iter()
+            .filter_map(|i| i.slot.map(|s| (i.rva, s)))
+            .collect();
+        // IAT load and both delayed result stores; pushes of name VAs are immediates.
+        assert_eq!(
+            slots,
+            [(0x1000, 0x20c0), (0x1014, 0x2060), (0x101c, 0x2064)]
+        );
     }
     #[test]
     fn resolver_candidates_stop_on_clobbers_branches_unknown_calls_and_bad_slots() {

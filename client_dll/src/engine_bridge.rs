@@ -172,6 +172,10 @@ fn execute(mut block: EngineControl) -> Result<EngineControl, String> {
         }
         #[cfg(target_arch = "x86")]
         api::UI_RENDER_REMOVE => crate::engine_render::remove()?,
+        #[cfg(target_arch = "x86")]
+        api::UI_DRAW_ATTACH | api::UI_DRAW_FIXTURE => crate::engine_draw::install(tid, &block)?,
+        #[cfg(target_arch = "x86")]
+        api::UI_DRAW_REMOVE => crate::engine_draw::remove()?,
         api::UI_PROBE => {}
         api::UI_TRACE => {
             let mut frames = [ptr::null_mut(); 32];
@@ -401,6 +405,8 @@ pub fn control(block: &mut EngineControl) -> Result<(), String> {
         api::RENDER_ARM | api::RENDER_STATUS | api::RENDER_READ => {
             crate::engine_render::control(block)
         }
+        #[cfg(target_arch = "x86")]
+        api::DRAW_ARM | api::DRAW_STATUS | api::DRAW_READ => crate::engine_draw::control(block),
         api::UI_DETACH => detach_locked(),
         api::UI_PROBE
         | api::UI_REGISTRY
@@ -411,7 +417,10 @@ pub fn control(block: &mut EngineControl) -> Result<(), String> {
         | api::UI_PUMP_REMOVE
         | api::UI_RENDER_ATTACH
         | api::UI_RENDER_FIXTURE
-        | api::UI_RENDER_REMOVE => dispatch(*block).map(|response| {
+        | api::UI_RENDER_REMOVE
+        | api::UI_DRAW_ATTACH
+        | api::UI_DRAW_FIXTURE
+        | api::UI_DRAW_REMOVE => dispatch(*block).map(|response| {
             *block = response;
         }),
         _ => Err("unknown engine control command".into()),

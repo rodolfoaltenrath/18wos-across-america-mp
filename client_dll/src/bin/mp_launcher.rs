@@ -54,6 +54,12 @@ fn main() -> anyhow::Result<()> {
         RenderStatus,
         RenderReport,
         RenderRemove,
+        /// Passive actors.car draw observation; pins with the pump like render-attach.
+        DrawAttach,
+        DrawArm,
+        DrawStatus,
+        DrawReport,
+        DrawRemove,
         PhaseProbe,
         /// Private container-backed actor, immediately released; never inserted.
         ItemCycle {
@@ -138,6 +144,7 @@ fn main() -> anyhow::Result<()> {
     let mut block = match args.command {
         Task::Engine { task } => {
             let render_status_only = matches!(task, EngineTask::RenderStatus);
+            let draw_status_only = matches!(task, EngineTask::DrawStatus);
             if matches!(task, EngineTask::Attach { .. }) {
                 controller.load(&dll)?;
             }
@@ -153,6 +160,12 @@ fn main() -> anyhow::Result<()> {
                 EngineTask::RenderStatus => api::EngineControl::new(api::RENDER_STATUS),
                 EngineTask::RenderReport => api::EngineControl::new(api::RENDER_STATUS),
                 EngineTask::RenderRemove => api::EngineControl::new(api::UI_RENDER_REMOVE),
+                EngineTask::DrawAttach => api::EngineControl::new(api::UI_DRAW_ATTACH),
+                EngineTask::DrawArm => api::EngineControl::new(api::DRAW_ARM),
+                EngineTask::DrawStatus | EngineTask::DrawReport => {
+                    api::EngineControl::new(api::DRAW_STATUS)
+                }
+                EngineTask::DrawRemove => api::EngineControl::new(api::UI_DRAW_REMOVE),
                 EngineTask::Trace => api::EngineControl::new(api::UI_TRACE),
                 EngineTask::PumpAttach => api::EngineControl::new(api::UI_PUMP_ATTACH),
                 EngineTask::PumpStatus => api::EngineControl::new(api::UI_PUMP_STATUS),
@@ -225,6 +238,33 @@ fn main() -> anyhow::Result<()> {
                     row.reserved = i;
                     controller.engine_control(&dll, &mut row)?;
                     records.push(client_dll::render_observation::Record::decode(&row).json());
+                }
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(
+                        &serde_json::json!({"summary":summary,"records":records})
+                    )?
+                );
+                return Ok(());
+            }
+            if block.command == api::DRAW_STATUS {
+                use client_dll::draw_observation::{Record, Summary};
+                let summary = Summary::decode(&block);
+                if draw_status_only {
+                    println!("{}", serde_json::to_string_pretty(&summary)?);
+                    return Ok(());
+                }
+                ensure!(
+                    summary.flags & 3 == 0,
+                    "capture pending; let the game draw the truck, then retry"
+                );
+                let mut records = Vec::new();
+                for i in 0..summary.records {
+                    let mut row = api::EngineControl::new(api::DRAW_READ);
+                    row.cycles = summary.generation;
+                    row.reserved = i;
+                    controller.engine_control(&dll, &mut row)?;
+                    records.push(Record::decode(&row).json());
                 }
                 println!(
                     "{}",

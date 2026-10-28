@@ -574,6 +574,50 @@ problemas relatados. As capturas observaram o mesmo passe (`game.dll+0x800f2`),
 sem provar todos os passes ou a convenção das matrizes. Ainda não há desenho
 de caminhões remotos.
 
+### Ponto de submissão 3D: sonda passiva do `draw` do caminhão
+
+A análise estática (roadmap, seção "Passe 3D e ponto de submissão") mostrou
+que o flush observado acima pertence ao `draw` de uma entidade de céu/sol, e
+que caminhões entram na fila pelo `entity_t::draw` virtual de `actors.car`.
+Para comprovar esse ponto na partida, sem desenhar nada:
+
+```text
+engine attach
+engine pump-attach
+engine render-attach
+engine draw-attach
+engine draw-arm
+engine draw-status
+engine draw-report
+engine draw-remove
+engine render-remove
+engine pump-remove
+stop
+```
+
+`draw-attach` substitui somente o slot `+0x6c` da vtable de `actors.car`
+(`game.dll+0x12580c`, original `+0x5a6a0`), depois de conferir hashes de
+núcleo/jogo e o valor original. O shim thiscall encaminha a chamada uma vez,
+preserva `LastError` e apenas lê memória. Cada captura registra 16 pares
+entrada/retorno (32 registros) na thread da janela, com `this`, vtable, byte
+de estado `+0x1e9`, retorno do chamador, profundidade da pilha world do núcleo,
+path/informação/viewport correntes, quaternion/posição do corpo físico
+(`[[this+0x1d0]+0x3e4]+0x14/+0x30`) e cópias das matrizes world/camera.
+`flushes_seen` é o contador de flushes da sonda de render (instale-a antes);
+ele ordena cada `draw` em relação ao flush do frame. `summary.flags` segue a
+convenção do render: zero = completa; 1/2 armada/em andamento; 16 aninhado;
+32 perda por disputa. Comandos 29–34, sem mudar a ABI v3/664 bytes.
+
+Para anotar uma desmontagem com os nomes de bindings recuperados:
+
+```text
+engine_report aa/lib/game.dll disassemble --rva 0x5a6a0 --length 300 --resolver 0xcdce0 --resolver 0xce970
+```
+
+`--resolver` (repetível) recebe o início de uma rotina de `GetProcAddress` e
+anota cada operando absoluto que coincide com um slot recuperado. O resolver
+do núcleo em `game.dll+0xcdce0` tem 151 bindings `gfx_*`; o de PSM, 87.
+
 ## Retomada no Windows com Rust 1.99.0
 
 O toolchain fixado também se aplica ao Windows GNU x64. O `dev_env windows`

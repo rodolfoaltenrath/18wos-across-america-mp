@@ -2,6 +2,8 @@
 #[cfg(all(windows, target_arch = "x86"))]
 mod fixture_actor;
 #[cfg(all(windows, target_arch = "x86"))]
+mod fixture_draw;
+#[cfg(all(windows, target_arch = "x86"))]
 mod fixture_render;
 #[cfg(windows)]
 static PEEK_SLOT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
@@ -42,6 +44,16 @@ fn main() -> anyhow::Result<()> {
         .map_or([0; 6], fixture_render::Fixture::descriptors);
     #[cfg(not(target_arch = "x86"))]
     let render_descriptors = [0u32; 6];
+    #[cfg(target_arch = "x86")]
+    let draw_enabled = std::env::args().any(|a| a == "--draw");
+    #[cfg(target_arch = "x86")]
+    let mut drawer = draw_enabled.then(fixture_draw::Fixture::new);
+    #[cfg(target_arch = "x86")]
+    let (draw_descriptors, draw_car) = drawer
+        .as_ref()
+        .map_or(([0; 6], 0), |d| (d.descriptors(), d.car()));
+    #[cfg(not(target_arch = "x86"))]
+    let (draw_descriptors, draw_car) = ([0u32; 6], 0u32);
     #[cfg(target_arch = "x86")]
     let actor = fixture_actor::Fixture::new();
     #[cfg(target_arch = "x86")]
@@ -142,7 +154,7 @@ fn main() -> anyhow::Result<()> {
     ensure!(!window.is_null(), "cannot create fixture window");
     println!(
         "{}",
-        serde_json::json!({"pid":unsafe{GetCurrentProcessId()},"window":window as usize,"thread":unsafe{GetCurrentThreadId()}, "peek_slot": peek_slot, "factory": bindings, "item_descriptors": item_descriptors, "model_definitions": model_definitions, "model_setter": model_setter,"info_descriptors":info_descriptors,"instance_descriptors":instance_descriptors,"render_descriptors":render_descriptors})
+        serde_json::json!({"pid":unsafe{GetCurrentProcessId()},"window":window as usize,"thread":unsafe{GetCurrentThreadId()}, "peek_slot": peek_slot, "factory": bindings, "item_descriptors": item_descriptors, "model_definitions": model_definitions, "model_setter": model_setter,"info_descriptors":info_descriptors,"instance_descriptors":instance_descriptors,"render_descriptors":render_descriptors,"draw_descriptors":draw_descriptors,"draw_car":draw_car})
     );
     std::io::stdout().flush()?;
     let address = window as usize;
@@ -151,6 +163,11 @@ fn main() -> anyhow::Result<()> {
             let Ok(line) = line else {
                 break;
             };
+            #[cfg(target_arch = "x86")]
+            if draw_enabled && fixture_draw::command(&line) {
+                let _ = std::io::stdout().flush();
+                continue;
+            }
             #[cfg(target_arch = "x86")]
             if render_enabled && fixture_render::command(&line) {
                 let _ = std::io::stdout().flush();
@@ -216,6 +233,10 @@ fn main() -> anyhow::Result<()> {
     });
     let mut message = MSG::default();
     loop {
+        #[cfg(target_arch = "x86")]
+        if let Some(drawer) = drawer.as_mut() {
+            drawer.frame();
+        }
         #[cfg(target_arch = "x86")]
         if let Some(renderer) = renderer.as_mut() {
             renderer.frame();

@@ -37,6 +37,13 @@ pub const UI_RENDER_REMOVE: u32 = 25;
 pub const RENDER_ARM: u32 = 26;
 pub const RENDER_STATUS: u32 = 27;
 pub const RENDER_READ: u32 = 28;
+/// Passive actors.car draw observation; records use draw_observation fields.
+pub const UI_DRAW_ATTACH: u32 = 29;
+pub const UI_DRAW_FIXTURE: u32 = 30;
+pub const UI_DRAW_REMOVE: u32 = 31;
+pub const DRAW_ARM: u32 = 32;
+pub const DRAW_STATUS: u32 = 33;
+pub const DRAW_READ: u32 = 34;
 pub const ENGINE_ABI_VERSION: u32 = 3;
 /// Separate extension ABI; does not change the original Control v1 layout.
 #[repr(C)]

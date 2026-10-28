@@ -17,10 +17,13 @@ pub mod addresses;
 pub mod api;
 #[cfg(windows)]
 pub mod controller;
+pub mod draw_observation;
 #[cfg(windows)]
 mod engine_bridge;
 pub mod engine_contract;
 pub mod engine_discovery;
+#[cfg(all(windows, target_arch = "x86"))]
+mod engine_draw;
 #[cfg(all(windows, target_arch = "x86"))]
 mod engine_info;
 #[cfg(all(windows, target_arch = "x86"))]

@@ -25,6 +25,9 @@ enum Task {
         rva: u32,
         #[arg(long, default_value_t = 256)]
         length: usize,
+        /// Annotate absolute slots with names recovered from these resolver routines.
+        #[arg(long,value_parser=parse_rva)]
+        resolver: Vec<u32>,
     },
     References {
         #[arg(long,value_parser=parse_rva)]
@@ -90,9 +93,30 @@ fn main() -> Result<()> {
                 );
             }
         }
-        Task::Disassemble { rva, length } => {
+        Task::Disassemble {
+            rva,
+            length,
+            resolver,
+        } => {
+            let mut names = std::collections::BTreeMap::<u32, Vec<String>>::new();
+            for start in resolver {
+                for binding in pe.dynamic_bindings(start, 16384)? {
+                    names
+                        .entry(binding.slot_rva)
+                        .or_default()
+                        .push(binding.symbol);
+                }
+            }
             for instruction in pe.disassemble(rva, length)? {
-                println!("+0x{:08x}: {}", instruction.rva, instruction.text);
+                match instruction.slot.and_then(|s| names.get(&s)) {
+                    Some(symbols) => println!(
+                        "+0x{:08x}: {} ; {}",
+                        instruction.rva,
+                        instruction.text,
+                        symbols.join("|")
+                    ),
+                    None => println!("+0x{:08x}: {}", instruction.rva, instruction.text),
+                }
             }
         }
         Task::References { rva } => {
