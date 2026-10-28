@@ -63,6 +63,13 @@ fn main() -> anyhow::Result<()> {
             #[arg(long, default_value_t=1, value_parser=clap::value_parser!(u32).range(1..=16))]
             cycles: u32,
         },
+        /// Allocate/release PSM info only; no model instance or rendering.
+        InfoCycle {
+            #[arg(long)]
+            model: String,
+            #[arg(long, default_value_t=1, value_parser=clap::value_parser!(u32).range(1..=16))]
+            cycles: u32,
+        },
         PrivateCycle {
             #[arg(long, default_value_t=1, value_parser=clap::value_parser!(u32).range(1..=16))]
             cycles: u32,
@@ -152,6 +159,12 @@ fn main() -> anyhow::Result<()> {
                 }
                 EngineTask::ModelCycle { model, cycles } => {
                     let mut b = api::EngineControl::new(api::PRIVATE_MODEL);
+                    b.cycles = cycles;
+                    api::put(&mut b.name, &model).map_err(anyhow::Error::msg)?;
+                    b
+                }
+                EngineTask::InfoCycle { model, cycles } => {
+                    let mut b = api::EngineControl::new(api::PRIVATE_INFO);
                     b.cycles = cycles;
                     api::put(&mut b.name, &model).map_err(anyhow::Error::msg)?;
                     b

@@ -27,6 +27,8 @@ pub const PRIVATE_ITEM_FIXTURE: u32 = 16;
 /// name carries the model path; no layout or ABI version change.
 pub const PRIVATE_MODEL: u32 = 17;
 pub const PRIVATE_MODEL_FIXTURE: u32 = 18;
+pub const PRIVATE_INFO: u32 = 19;
+pub const PRIVATE_INFO_FIXTURE: u32 = 20;
 pub const ENGINE_ABI_VERSION: u32 = 3;
 /// Separate extension ABI; does not change the original Control v1 layout.
 #[repr(C)]
@@ -66,6 +68,7 @@ pub struct EngineControl {
     pub object_destructor: u32,
     /// Own-fixture only. Private factory: record/create/destroy/heads/vtable.
     /// Private item: descriptor in [0]. Model: also metadata root [1], setter [2].
+    /// Private info: allocate [0], release [1], context head [2].
     pub fixture: [u32; 6],
     pub frames: [u32; 32],
     pub name: [u8; 128],

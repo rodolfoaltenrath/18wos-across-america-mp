@@ -15,6 +15,8 @@ A DLL x86 já foi carregada no jogo sob Proton e transmitiu coordenadas reais
 ao servidor nativo do Fedora, com recepção por outro cliente de teste.
 A criação e destruição imediata de um `actors.car` privado também passaram,
 incluindo repetição após recarregar uma partida.
+No Windows, o setter PMD e a carga/liberação privada de um descritor PSM
+também passaram após recarga; nenhuma instância visual é mantida na cena.
 A criação/movimentação de caminhões remotos continua pendente.
 
 O plano completo, os critérios de conclusão e o procedimento para continuar em
@@ -425,6 +427,45 @@ janela. Uma captura aceita não é um snapshot atômico do processo.
 
 O módulo PSM tem hash explícito no perfil. Relatórios completos e dados de
 endereços da sessão devem permanecer locais em `target/analysis/`, fora do Git.
+
+Para testar a carga privada do descritor de um modelo PSM, prepare o mesmo
+dispatcher/sonda (`engine attach`, `engine pump-attach`) e execute:
+
+```text
+engine phase-probe
+engine info-cycle --model models/ai/truck/models/truck.psm
+engine info-cycle --model models/ai/truck/models/truck.psm --cycles 16
+engine pump-remove
+stop
+```
+
+`info-cycle` usa `psm_alloc_info`/`psm_info_release` por cdecl na fila do loop.
+Confere os quatro hashes, os seis bindings PSM e quatro callbacks do provedor
+para recursos/alocador do núcleo. Aceita o mesmo caminho ASCII `models/*.psm`
+de até 63 bytes, com partida carregada. Confere descritor de 16 bytes, referência
+inicial 1, item de modelo, ausência de animações e identidade do contexto PSM.
+A liberação cabe ao provedor, inclusive quando uma verificação Rust falha;
+nenhum ponteiro do motor é liberado pelo alocador Rust.
+
+A referência forte do item está em `c_item_t+0x4c`. Após liberar o descritor,
+o comando tenta reler esse contador pela API de memória do sistema, sem
+dereferenciar o item em Rust nem assumir que ainda o possui. Memória ilegível
+ou valor divergente torna a prova inconclusiva/falha; não provoca nova liberação.
+O contador observado do contexto é direto (`+8`), sem prova de toda a árvore
+de módulos ou contabilização de todos os bytes do heap. A primeira repetição
+pode reter referências de recursos; crescimento nas repetições seguintes da
+mesma chamada é recusado após liberar o descritor. `retained module delta`
+informa esse saldo, sem classificá-lo automaticamente como cache legítimo.
+
+Passaram 18 ciclos no Windows, incluindo recarga: a primeira carga observou
+`922/924/923` referências de contexto; as 16 seguintes, `923/924/923`; após
+dirigir e carregar o save, `903/904/903`. As referências do item balancearam e
+a posição local não mudou dentro das operações. O saldo inicial de uma
+referência permanece registrado para investigação. Nenhum descritor fica vivo
+entre frames; instância PSM, desenho, init de PMD e veículo remoto continuam
+pendentes. ABI de diagnóstico v3/664 bytes preservada, com comandos 19/20;
+configuração/rede v1 preservada. Após a limpeza, feche o processo normalmente
+antes de reconstruir a DLL fixada pela sonda.
 
 ## Retomada no Windows com Rust 1.99.0
 

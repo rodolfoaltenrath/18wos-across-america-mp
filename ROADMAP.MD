@@ -56,7 +56,7 @@ repositório e orientar futuras sessões de desenvolvimento.
 | Host de teste | `client_probe`, controlador entre processos e `test_host`; bancada x86 passou sob Proton | Testes de sessão longa, saída abrupta e duas máquinas |
 | Investigação | `memory_tool` Rust: processos, regiões, busca, filtros, comparação, ponteiros, observação e envio externo | Perfis de versões e ciclo de vida do veículo |
 | Coordenadas | Cadeia validada após movimento, reinício e comparação exata com save | Escala física, outros estados/versões e amostragem consistente |
-| Multiplayer visual | Criação/destruição privada de `actors.car` validada; nenhum remoto no mundo | Inicialização, modelo, inserção, transform e remoção da entidade visual |
+| Multiplayer visual | Lifetime privado, setter PMD, auditoria PSM e carga/liberação de descritor PSM validados; nenhum remoto no mundo | Instância/modelo, render, inserção, transform e remoção da entidade visual |
 | GitHub | Remoto `rodolfoaltenrath/18wos-across-america-mp`, histórico inicial Apache-2.0 preservado, exclusão do jogo | Manter staging auditado e documentação atualizada em cada entrega |
 
 O estado atual **não é multiplayer jogável**. Transmitir números e recebê-los
@@ -859,6 +859,93 @@ neste bloco. O próximo passo é uma operação privada de info/release, com
 fixture e ownership comprovados antes da chamada. Não refazer o setter nem
 os ciclos vazios anteriores.
 
+### M4 — Descritor PSM privado: carga e liberação — 28/10/2026
+
+Entregue `engine info-cycle --model models/ai/truck/models/truck.psm
+[--cycles 1..16]`. O comando usa somente `psm_alloc_info`/`psm_info_release`,
+sempre na fila do loop externo, e libera cada descritor na mesma operação.
+Não chama `psm_alloc`, `psm_draw`, init de PMD ou APIs de inserção no mundo.
+A ABI continua v3/664 bytes, comandos 19/20; configuração/rede v1 preservada.
+Callbacks arbitrários permanecem restritos à bancada própria, sem opção na CLI.
+
+**Contrato delimitado e verificado:**
+
+- `psm.dll+0x20e0`: cdecl com um caminho C; o caminho binário `.psm` resulta em
+  descritor de 16 bytes, referência inicial 1, item de modelo em `+4`, array e
+  contagem de animações nulos em `+8/+12`. `.psl` não é aceito pela ferramenta.
+- `psm.dll+0x2650`: cdecl com um descritor; decrementa sua referência e, ao
+  zerar, libera recursos, executa unlock e devolve o armazenamento ao provedor.
+  Uma guarda Rust pareia essa chamada em todas as saídas de erro posteriores
+  à alocação. O alocador Rust nunca recebe memória comercial para desalocar.
+- Cabeça do contexto em `psm.dll+0xeb84`, contador direto em `contexto+8` e pai
+  em `+12`; ponteiro/pai devem permanecer iguais dentro de cada operação.
+- Referência forte do modelo em `c_item_t+0x4c`, confirmada pela implementação
+  de `ci_dec_refs` em `prism3d.exe+0x13520`, e não em `+0x50`. Depois de soltar
+  o descritor, há somente releitura pela API do sistema para verificar o
+  decremento; não há dereferência Rust nem nova liberação do item. Se o pool
+  resetar/devolver memória ilegível, o resultado é falha/inconclusivo.
+- Além dos quatro hashes e seis exports PSM, conferir slots internos do PSM:
+  `+0xe9d4` → núcleo `+0x13520` (`ci_dec_refs`), `+0xeb00` → `+0x13060`
+  (`mm_precache`), `+0xea58` → `+0x13630` (`mem_sys_alloc`), `+0xeb28` →
+  `+0x13700` (`mem_sys_free`). Callback executável e perfil exato são exigidos.
+
+**Bancada:** provedor cdecl escrito em Rust, isolado dos assets comerciais,
+com descritor, item e contexto próprios. A prova completa criou e liberou
+23 descritores: 4 normais, 16 incluindo retenção inicial simulada, 2 para
+detectar retenção repetida e 1 de recuperação. Cobriu retorno nulo, caminho
+inválido, callback fora do módulo, modo jogo/fixture incompatível e tarefa
+cancelada dentro de pump aninhado, sem execução tardia. Referência do modelo
+voltou a 3, contexto ficou em 7 + 5 referências simuladas explicitamente
+retidas e contador de criações igual ao de liberações. Os contextos dessa
+fixture não constituem uma simulação completa do gerenciador de recursos.
+
+**Verificações gerais:** build release x86, 25 testes x86 (incluindo DLL release
+real na bancada), 34 testes nativos, Clippy x86/nativo e formatação passaram.
+O aviso conhecido de resolução dos exports stdcall no GNU ld permanece; a ABI
+foi exercitada pela bancada. Nenhum asset comercial entrou nos testes.
+
+**Partida real:** mesmo processo Windows 9888, thread 11320; bindings rechecados
+antes/depois e os quatro hashes do perfil intactos. Foram concluídos 18 ciclos:
+
+| Cenário | Ciclos | Contexto antes/criado/depois | Saldo retido |
+| --- | --- | --- | --- |
+| Primeira carga do caminho escolhido | 1 | 922 / 924 / 923 | +1 |
+| Repetições sem mudar de partida | 16 | 923 / 924 / 923 | 0 |
+| Após dirigir, curva, menu e carregar save existente | 1 | 903 / 904 / 903 | 0 |
+
+Todas as liberações balancearam a referência forte observada do item; a cadeia
+de posição do jogador permaneceu igual dentro de cada operação. A primeira
+carga deixou uma referência adicional no contexto: o recurso do modelo foi
+acessado, mas não foi comprovada a liberação de todo cache/heap nem de toda a
+árvore de módulos. O verificador aceita o primeiro saldo e recusa crescimento
+repetido dentro de uma chamada, após liberar o descritor. Não interpretar a
+queda de 923 para 903 entre cenários como responsabilidade desta operação;
+houve recarga do mundo entre as capturas. Logs somente locais em
+`target/analysis/resource-info/`.
+
+As duas partidas de teste foram copiadas para backup ignorado antes de carregar
+a DLL. Ao terminar, seus hashes e os quatro originais continuaram iguais.
+A sonda foi restaurada (`pump_state=2`), dispatcher removido (`active=0`), sem
+pendências/inflight e com 4 tarefas de fase completas (sonda + três comandos).
+A DLL fica fixada até o processo terminar; o proprietário confirmou o fechamento
+normal e a enumeração posterior não encontrou `prism3d.exe`. Nenhum descritor
+fica vivo entre frames. Reenumerar processos antes do próximo build/ensaio.
+
+**Próxima dependência:** investigar e provar o par de instância PSM/teardown
+sem desenhar, com skins, capacidade, item e contexto contabilizados. As RVAs
+`psm_alloc +0x3160`, `psm_alloc_simple +0x31a0` e `psm_free +0x3750` são pontos
+de investigação; nomes/exports não autorizam reutilizar assinaturas do PMD.
+A leitura estática mostra quatro argumentos de pilha no primeiro, três no
+wrapper simple (que acrescenta 1) e um na liberação. A rotina `+0x31c0`
+incrementa a referência do info e obtém outro item pelo callback `+0xeb40`;
+`psm_free` acessa `+8/+0x50/+0x58` desse item e termina em `ci_dec_refs`.
+Isso exige comprovar item versus bloco de instância, residência/acesso e
+callbacks antes de qualquer chamada; não tratar seu retorno como o descritor
+de 16 bytes nem como um ponteiro para memória a liberar diretamente.
+Depois comprovar estado de render e transform, inserção/remoção e retenção
+entre frames. Não inicializar `actors.car` com HUD nem preencher os slots PMD
+nulos para contornar essa dependência. Caminhões remotos continuam pendentes.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -1391,12 +1478,14 @@ e [seleção de toolchain com rustup](https://rust-lang.github.io/rustup/overrid
 
 ## 9. Registro de passagem para a próxima etapa
 
-**Próxima entrega:** identificar e validar um caminho de modelo/render sem HUD,
-controle local ou colisão; comprovar inicialização e inserção/remoção no mundo.
-Lifetime privado independente, ownership do `c_item_t` e metadados estão validados.
-O processo do último teste PMD foi encerrado pelo proprietário após restaurar a
-sonda e parar a DLL; conferir novamente processos antes de reconstruí-la. Ampliar
-a matriz de estados de M1 e a robustez de M2, sem refazer a busca ampla inicial.
+**Próxima entrega:** provar o par de instância PSM/liberação, seus recursos e
+skins antes de render, sem HUD, controle local ou colisão. Depois comprovar
+transform, inserção/remoção e retenção entre frames. Lifetime, ownership,
+metadados, setter PMD e descritor PSM já têm provas registradas; não repeti-las
+sem necessidade. A última sessão PSM teve sonda/dispatcher removidos e worker
+parado; o fechamento normal foi confirmado e o processo deixou de existir.
+Reenumerar antes do próximo build. Ampliar a matriz de M1 e a robustez de M2 sem refazer a
+busca ampla inicial.
 
 **Antes de começar:** ler os três documentos, conferir Git e toolchain, localizar
 a instalação local e conferir hash. Não refazer a busca ampla de memória se a

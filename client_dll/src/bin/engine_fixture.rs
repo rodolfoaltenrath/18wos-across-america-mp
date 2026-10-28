@@ -44,6 +44,10 @@ fn main() -> anyhow::Result<()> {
     let (model_definitions, model_setter) = (actor.model_definitions(), actor.model_setter());
     #[cfg(not(target_arch = "x86"))]
     let (model_definitions, model_setter) = ([0u32; 9], 0u32);
+    #[cfg(target_arch = "x86")]
+    let info_descriptors = actor.info_descriptors();
+    #[cfg(not(target_arch = "x86"))]
+    let info_descriptors = [0u32; 3];
     PEEK_SLOT.store(
         PeekMessageA as *const () as usize,
         std::sync::atomic::Ordering::Release,
@@ -122,7 +126,7 @@ fn main() -> anyhow::Result<()> {
     ensure!(!window.is_null(), "cannot create fixture window");
     println!(
         "{}",
-        serde_json::json!({"pid":unsafe{GetCurrentProcessId()},"window":window as usize,"thread":unsafe{GetCurrentThreadId()}, "peek_slot": peek_slot, "factory": bindings, "item_descriptors": item_descriptors, "model_definitions": model_definitions, "model_setter": model_setter})
+        serde_json::json!({"pid":unsafe{GetCurrentProcessId()},"window":window as usize,"thread":unsafe{GetCurrentThreadId()}, "peek_slot": peek_slot, "factory": bindings, "item_descriptors": item_descriptors, "model_definitions": model_definitions, "model_setter": model_setter,"info_descriptors":info_descriptors})
     );
     std::io::stdout().flush()?;
     let address = window as usize;
@@ -132,14 +136,16 @@ fn main() -> anyhow::Result<()> {
                 break;
             };
             #[cfg(target_arch = "x86")]
-            if matches!(
-                line.as_str(),
-                "item-fail-fix"
-                    | "item-fail-create"
-                    | "model-fail-set"
-                    | "model-no-write"
-                    | "model-side-effect"
-            ) {
+            if line.starts_with("info-")
+                || matches!(
+                    line.as_str(),
+                    "item-fail-fix"
+                        | "item-fail-create"
+                        | "model-fail-set"
+                        | "model-no-write"
+                        | "model-side-effect"
+                )
+            {
                 fixture_actor::fail_item_step(&line);
                 println!("armed");
                 continue;

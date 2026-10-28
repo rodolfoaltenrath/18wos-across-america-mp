@@ -1,5 +1,5 @@
-//! One private, uninitialized car at a time. Engine allocation and engine destruction
-//! stay paired on the profiled outer loop; no object is inserted into the world.
+//! Private factory/item/model/resource diagnostics on the profiled outer loop.
+//! Engine allocation and destruction stay paired; nothing enters the world.
 use crate::{
     api::{self, EngineControl},
     engine_contract::{Counters, word},
@@ -173,6 +173,9 @@ impl Drop for PrivateEntity {
     }
 }
 pub fn run(mut block: EngineControl, is_fixture: bool) -> Result<EngineControl, String> {
+    if matches!(block.command, api::PRIVATE_INFO | api::PRIVATE_INFO_FIXTURE) {
+        return crate::engine_info::run(block, is_fixture);
+    }
     if matches!(
         block.command,
         api::PRIVATE_ITEM

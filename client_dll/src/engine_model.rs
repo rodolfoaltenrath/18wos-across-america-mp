@@ -15,6 +15,9 @@ type SetString = unsafe extern "C" fn(*mut c_void, *const u32, u32, *const c_cha
 
 pub(super) struct ModelName(CString);
 impl ModelName {
+    pub(super) fn as_cstr(&self) -> &std::ffi::CStr {
+        &self.0
+    }
     pub(super) fn parse(path: &str) -> Result<Self, String> {
         // A deliberately small game-relative path contract. No truncation,
         // platform path normalization, or arbitrary engine resource names.

@@ -378,7 +378,9 @@ pub fn control(block: &mut EngineControl) -> Result<(), String> {
         | api::PRIVATE_ITEM
         | api::PRIVATE_ITEM_FIXTURE
         | api::PRIVATE_MODEL
-        | api::PRIVATE_MODEL_FIXTURE => {
+        | api::PRIVATE_MODEL_FIXTURE
+        | api::PRIVATE_INFO
+        | api::PRIVATE_INFO_FIXTURE => {
             crate::engine_phase::dispatch(*block, WINDOW.load(Ordering::Acquire) as HWND).map(
                 |response| {
                     *block = response;

@@ -121,7 +121,17 @@ seis slots PSM e os dois candidatos PMD sem injetar. Foram recuperados 87 bindin
 da rotina `game.dll+0xce970`, usada com `lib/psm`. O provedor tem hash explícito.
 A auditoria passou nas fixtures e no jogo: seis PSM corresponderam aos exports,
 os dois PMD permaneceram nulos, resultados x64/x86 iguais. Correspondência
-slot/export não comprova ABI/thread/ownership. Investigar primeiro o par
-`psm_alloc_info`/`psm_info_release` e o lock/unlock do contexto `psm.dll+0xeb84`;
-considerar cache e referências dos itens antes de permitir chamadas reais.
+slot/export não comprova ABI/thread/ownership.
+`engine info-cycle --model models/ai/truck/models/truck.psm` foi entregue e
+validado 18 vezes na partida, incluindo recarga. O par cdecl
+`psm_alloc_info`/`psm_info_release` libera cada descritor na mesma operação;
+referência forte do item em `+0x4c`, contexto PSM em `psm.dll+0xeb84`.
+A primeira carga reteve +1 no contexto; as repetições e a prova após recarga
+ficaram estáveis. Não declarar todo cache/heap liberado. A fixture detecta
+crescimento repetido e cancelamento sem executar trabalho atrasado.
+Sonda/dispatcher foram removidos, o proprietário confirmou o fechamento e a
+enumeração posterior não encontrou o jogo. Reenumerar antes de reconstruir.
+Investigar agora o par
+de instância PSM/liberação e seus recursos, antes de draw, init ou inserção.
+Não refazer descritor/setter/lifetime já validados sem necessidade concreta.
 A criação e a movimentação de caminhões remotos ainda não foram implementadas.

@@ -22,6 +22,158 @@ fn call(controller: &Controller, dll: &Path, command: u32) -> EngineControl {
     b
 }
 #[test]
+fn private_info_balances_provider_references_and_detects_repeated_retention() {
+    let dll = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../target/i686-pc-windows-gnu/release/client_dll.dll")
+        .canonicalize()
+        .unwrap();
+    let mut host = Host(
+        Command::new(env!("CARGO_BIN_EXE_engine_fixture"))
+            .args(["--ansi", "--peek"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap(),
+    );
+    let mut output = BufReader::new(host.0.stdout.take().unwrap());
+    let mut line = String::new();
+    output.read_line(&mut line).unwrap();
+    let info: serde_json::Value = serde_json::from_str(&line).unwrap();
+    let controller = Controller::open(host.0.id()).unwrap();
+    controller.load(&dll).unwrap();
+    let mut attach = EngineControl::new(api::UI_ATTACH);
+    attach.window = info["window"].as_u64().unwrap() as u32;
+    controller.engine_control(&dll, &mut attach).unwrap();
+    let mut pump = EngineControl::new(api::UI_PUMP_FIXTURE);
+    pump.entity = info["peek_slot"].as_u64().unwrap() as u32;
+    controller.engine_control(&dll, &mut pump).unwrap();
+    let mut request = EngineControl::new(api::PRIVATE_INFO_FIXTURE);
+    for i in 0..3 {
+        request.fixture[i] = info["info_descriptors"][i].as_u64().unwrap() as u32;
+    }
+    api::put(&mut request.name, "models/fixture/truck.psm").unwrap();
+    request.cycles = 4;
+    let mut result = request;
+    controller.engine_control(&dll, &mut result).unwrap();
+    assert_eq!(result.cycles, 4);
+    assert_eq!(result.object_size, 16);
+    assert_eq!(result.executed_thread, attach.window_thread);
+    assert_eq!(
+        (
+            result.count_before,
+            result.count_created,
+            result.count_after
+        ),
+        (7, 8, 7)
+    );
+    writeln!(host.0.stdin.as_mut().unwrap(), "info-cold").unwrap();
+    line.clear();
+    output.read_line(&mut line).unwrap();
+    assert_eq!(line.trim(), "armed");
+    result = request;
+    result.cycles = 16;
+    controller.engine_control(&dll, &mut result).unwrap();
+    assert_eq!(result.cycles, 16);
+    assert_eq!(
+        (
+            result.count_before,
+            result.count_created,
+            result.count_after
+        ),
+        (10, 11, 10)
+    );
+    assert!(
+        api::text(&result.message)
+            .unwrap()
+            .contains("retained module delta=3")
+    );
+    writeln!(host.0.stdin.as_mut().unwrap(), "info-null").unwrap();
+    line.clear();
+    output.read_line(&mut line).unwrap();
+    assert_eq!(line.trim(), "armed");
+    result = request;
+    result.cycles = 1;
+    assert!(
+        controller
+            .engine_control(&dll, &mut result)
+            .unwrap_err()
+            .to_string()
+            .contains("allocation returned null")
+    );
+    result = request;
+    api::put(&mut result.name, "models/../truck.psm").unwrap();
+    assert!(controller.engine_control(&dll, &mut result).is_err());
+    result = request;
+    result.command = api::PRIVATE_INFO;
+    assert!(controller.engine_control(&dll, &mut result).is_err());
+    result = request;
+    result.fixture[0] = 1;
+    assert!(controller.engine_control(&dll, &mut result).is_err());
+    writeln!(host.0.stdin.as_mut().unwrap(), "info-repeat-growth").unwrap();
+    line.clear();
+    output.read_line(&mut line).unwrap();
+    assert_eq!(line.trim(), "armed");
+    result = request;
+    result.cycles = 2;
+    assert!(
+        controller
+            .engine_control(&dll, &mut result)
+            .unwrap_err()
+            .to_string()
+            .contains("module/cache delta requires analysis")
+    );
+    writeln!(host.0.stdin.as_mut().unwrap(), "info-normal").unwrap();
+    line.clear();
+    output.read_line(&mut line).unwrap();
+    assert_eq!(line.trim(), "armed");
+    result = request;
+    result.cycles = 1;
+    controller.engine_control(&dll, &mut result).unwrap();
+    assert_eq!(
+        (
+            result.count_before,
+            result.count_created,
+            result.count_after
+        ),
+        (12, 13, 12)
+    );
+    // A timed-out task cannot allocate later from inside a nested window pump.
+    writeln!(host.0.stdin.as_mut().unwrap(), "nested-pump").unwrap();
+    line.clear();
+    output.read_line(&mut line).unwrap();
+    assert_eq!(line.trim(), "nested");
+    result = request;
+    result.cycles = 1;
+    assert!(
+        controller
+            .engine_control(&dll, &mut result)
+            .unwrap_err()
+            .to_string()
+            .contains("canceled before execution")
+    );
+    std::thread::sleep(Duration::from_millis(2400));
+    writeln!(host.0.stdin.as_mut().unwrap(), "actor-stats").unwrap();
+    line.clear();
+    output.read_line(&mut line).unwrap();
+    let stats: serde_json::Value = serde_json::from_str(&line).unwrap();
+    assert_eq!(stats["info"]["created"], 23);
+    assert_eq!(stats["info"]["freed"], 23);
+    assert_eq!(stats["info"]["cache"], 5);
+    assert_eq!(stats["info"]["context"], 12);
+    assert_eq!(stats["info"]["model_refs"], 3);
+    assert_eq!(stats["created"], 0);
+    call(&controller, &dll, api::UI_PUMP_REMOVE);
+    assert!(
+        controller
+            .unload(&dll)
+            .unwrap_err()
+            .to_string()
+            .contains("pins DLL")
+    );
+    writeln!(host.0.stdin.as_mut().unwrap(), "quit").unwrap();
+    assert!(host.0.wait().unwrap().success());
+}
+#[test]
 fn dispatcher_uses_window_thread_cancels_timeout_and_restores_before_unload() {
     exercise(false, false);
     exercise(true, false);
