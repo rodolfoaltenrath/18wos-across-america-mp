@@ -165,9 +165,14 @@ pilha world de 16 entradas, `gfx_push` satura sem erro. `engine_report
 disassemble --resolver 0xcdce0` nomeia os 151 bindings gfx.
 `engine draw-attach/arm/status/report/remove` (comandos 29–34, ABI v3/664)
 observa esse `draw` passivamente; bancada própria passou (30 x86, 37 nativos).
-Próximo bloco: validar `draw-*` na partida com o proprietário; só então um
-draw ativo de teste após o `draw` original, conferindo profundidade e
-liberando a instância somente após um flush posterior completo.
+A sonda passou na partida (parado/movimento/recarga): único `this` do jogador,
+chamado de `game+0xf3785`; estados alternados 6 (profundidade 0, desenha) e 12
+(profundidade 1, não desenha); o passe do mundo é esvaziado em `+0xf3a24`.
+A recarga recria a entidade do jogador. Slots restaurados por leitura externa,
+hashes preservados; DLL fixada até o proprietário fechar o jogo.
+Próximo bloco: draw ativo de teste após o `draw` original só no estado 6,
+conferindo profundidade/path/viewport e liberando a instância somente após um
+flush posterior completo do mundo.
 `psm_draw` põe protos na fila e aumenta referências de pacotes: não desenhar e
 liberar a instância imediatamente sem comprovar o consumo desses recursos.
 Não refazer instância/descritor/setter/lifetime sem necessidade concreta.

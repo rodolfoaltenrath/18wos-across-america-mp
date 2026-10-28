@@ -608,6 +608,13 @@ ele ordena cada `draw` em relação ao flush do frame. `summary.flags` segue a
 convenção do render: zero = completa; 1/2 armada/em andamento; 16 aninhado;
 32 perda por disputa. Comandos 29–34, sem mudar a ABI v3/664 bytes.
 
+No Windows, a sonda passou em três capturas reais (parado, após dirigir e
+após recarga), sem flags nem chamadas estrangeiras. O único caminhão
+observado foi o do jogador. Seu `draw` alterna o estado 6 (pilha world na
+profundidade 0, desenha no passe do mundo) e o estado 12 (profundidade 1, não
+desenha). A recarga criou outra entidade. O slot original foi restaurado,
+conferido por leitura externa, e os hashes de originais/saves se mantiveram.
+
 Para anotar uma desmontagem com os nomes de bindings recuperados:
 
 ```text

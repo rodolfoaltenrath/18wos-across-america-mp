@@ -1235,11 +1235,42 @@ inválido recusados, `draw-arm/report/status` pela CLI, remoção restaurando o
 original (chamadas continuam, contador da sonda para) e PAGE_READONLY no fim.
 30 testes x86 e 37 nativos passaram; Clippy x86/nativo e formatação limpos.
 
-**Validação na partida:** pendente; requer o proprietário com a partida em
-primeiro plano. O que a captura deve responder: quantos `this` distintos
-(jogador/IA), profundidade world em que o `draw` roda, se `flushes_seen` muda
-entre `draw` e o flush do frame (ordem), path/viewport não nulos, e se a
-posição/quaternion do corpo acompanha a matriz world do proto.
+**Validação nativa na partida (28/10/2026):** processo histórico 7828, thread
+da janela 7892, `game.dll` em `0x4cb0000`. Hashes de núcleo/jogo/p3shared/
+gfxshared/psm e dos dois saves conferidos antes e depois; saves copiados para
+`target/analysis/draw-observation/` (não versionado). Pump, render e draw
+instalados nessa ordem. Três capturas completas (`flags=0`, 32 registros,
+`foreign_calls=0`):
+
+| Estado confirmado pelo proprietário | `this` | Pose |
+| --- | --- | --- |
+| Partida parada | `0xc578b7c` | fixa, igual ao save |
+| Após dirigir e fazer curva | `0xc578b7c` | `z` +~1/frame; quaternion mudou |
+| Após menu e recarga do save | `0xd9b49a8` (novo) | voltou à pose do save |
+
+- Um único `actors.car` desenhado (o jogador), sempre do laço de entidades
+  `game.dll+0xf3782` (retorno `+0xf3785`), na thread da janela.
+- O `draw` ocorre duas vezes por ciclo, alternando: estado `+0x1e9 = 6` com
+  pilha world na profundidade 0, viewport `núcleo+0x5ea80`; e estado 12 com
+  profundidade 1, viewport `+0x5eae8`. Pelo código estático, 12 retorna sem
+  desenhar. Path corrente igual nas duas; ~4 flushes entre `draw`s.
+- World = identidade na entrada (o `draw` aplica a posição absoluta). Pose
+  igual em entrada/retorno; muda uma vez por frame, entre o estado 12 e o 6.
+- Amostras da sonda de render na mesma sessão: o flush do céu (`+0x800f2`,
+  filas 9/1) e, numa geração, o flush do mundo no mesmo laço de entidades
+  (retorno `game.dll+0xf3a2a`, quatro filas com 144/9/30/61 protos). Logo, o
+  `draw` de estado 6 enfileira no passe do mundo esvaziado em `+0xf3a24`.
+- **A recarga recria a entidade do jogador**: nunca guardar o ponteiro do
+  caminhão local entre carregamentos; localizar novamente pelo `draw`.
+
+Limpeza: `draw-remove`, `render-remove`, `pump-remove`, `stop`. Leitura externa
+mostrou `game+0x12580c → game+0x5a6a0`, `núcleo+0x22240 → gfxshared+0x3690`,
+`game+0x160ea0 → núcleo+0x4820`; o contador de draws da sonda parou. A DLL
+continua fixada até o jogo encerrar (regra da sonda do loop).
+
+Não comprovado: o significado exato de 6/12 (espelho/sombra/outro passe), a
+convenção da matriz de câmera, interior (estado 4) e caminhões de IA (outro
+tipo ou ausentes nesta cena).
 
 ## 3. Primeira versão jogável e limites
 
@@ -1776,13 +1807,14 @@ e [seleção de toolchain com rustup](https://rust-lang.github.io/rustup/overrid
 
 ## 9. Registro de passagem para a próxima etapa
 
-**Próxima entrega:** validar `engine draw-*` na partida (parado, movimento,
-interior/exterior se possível, menu/recarga), registrar `this` distintos,
-profundidade world, ordem relativa ao flush e coerência pose/matriz; restaurar
-o slot e conferir por leitura externa. Com isso comprovado, o draw ativo de
-teste é: após o `draw` original, conferir profundidade < 15, `gfx_push →
-gfx_translate → gfx_qrotate → psm_draw(inst,1,-1) → gfx_pop`, com instância
-retida entre frames e liberada só após um flush posterior completo.
+**Próxima entrega:** primeiro visual de teste. A sonda `draw-*` passou na
+partida (parado, movimento, menu/recarga): o `draw` de `actors.car` com estado
+6, profundidade 0, enfileira no passe do mundo esvaziado em `game+0xf3a24`.
+Plano: após o `draw` original **somente com estado 6**, conferir profundidade
+< 15 e path/viewport não nulos, então `gfx_push → gfx_translate → gfx_qrotate →
+psm_draw(inst,1,-1) → gfx_pop` a uma distância fixa do jogador. Instância criada
+pela fila do loop, retida entre frames, liberada só após um flush posterior
+completo do mundo; nada de ponteiro do jogador entre recargas.
 O passe identificado pela sonda de render (`game.dll+0x800f2`) é o draw do
 céu/sol (`+0x7fa90`), não todo o render. Usar `render-status`/`draw-status`
 para captura pendente e manter a partida em primeiro plano.
