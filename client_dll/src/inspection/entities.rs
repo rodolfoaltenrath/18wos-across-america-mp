@@ -31,23 +31,24 @@ pub fn registered(process: &Process) -> Result<Vec<EntityRecord>> {
     .map_err(anyhow::Error::msg)
 }
 /// Decode metadata without calling get_evalue_root or any getter/setter.
-pub fn car_values(process: &Process) -> Result<Vec<crate::engine_values::EntityValue>> {
+pub fn values(process: &Process, name: &str) -> Result<Vec<crate::engine_values::EntityValue>> {
+    let kind = profile::entity_type(name).map_err(anyhow::Error::msg)?;
     let records = registered(process)?;
     let car = records
         .iter()
-        .find(|r| r.name == "actors.car")
-        .context("actors.car not registered")?;
+        .find(|r| r.name == kind.name)
+        .context("profiled type not registered")?;
     let modules = process.modules()?;
     let game = modules
         .iter()
         .find(|m| m.name.eq_ignore_ascii_case("game.dll"))
         .context("game.dll disappeared")?;
     ensure!(
-        u64::from(car.address) == game.base + u64::from(profile::CAR_RECORD),
-        "game module changed or car record differs from profile"
+        u64::from(car.address) == game.base + u64::from(kind.record),
+        "game module changed or entity record differs from profile"
     );
     let root = u32::try_from(game.base)?
-        .checked_add(profile::CAR_VALUES)
+        .checked_add(kind.values)
         .context("car schema address overflow")?;
     crate::engine_values::schema(root, 2048, |at, out| {
         process.read(at.into(), out).map_err(|e| e.to_string())

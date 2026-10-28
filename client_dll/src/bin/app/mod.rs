@@ -26,10 +26,12 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Decode actors.car value metadata, including inherited definitions; no engine calls.
+    /// Decode profiled value metadata, including inherited definitions; no engine calls.
     Values {
         #[arg(long)]
         pid: u32,
+        #[arg(long, default_value = "actors.car")]
+        entity: String,
     },
     /// Read hash-identified entity type records; never creates or calls an entity.
     Entities {
@@ -233,9 +235,9 @@ fn cadence(next: &mut Instant, interval: Duration) {
 
 pub fn main() -> Result<()> {
     match Cli::parse().command {
-        Command::Values { pid } => {
+        Command::Values { pid, entity } => {
             let process = Process::open(pid)?;
-            let rows = client_dll::inspection::entities::car_values(&process)?;
+            let rows = client_dll::inspection::entities::values(&process, &entity)?;
             println!("{}", serde_json::to_string_pretty(&rows)?);
         }
         Command::Entities { pid } => {

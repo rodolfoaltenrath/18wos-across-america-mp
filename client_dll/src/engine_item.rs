@@ -70,7 +70,8 @@ fn bindings(
         (factory, values[6..].try_into().unwrap())
     } else if !fixture && block.command == api::PRIVATE_ITEM {
         // actor::game verifies all three images, exact record, factories and ABI branch.
-        let factory = actor::game(process)?;
+        let kind = crate::profile::entity_type(api::text(&block.name)?)?;
+        let factory = actor::game_type(process, kind)?;
         let engine = get("p3shared.dll")?;
         let exe = get("prism3d.exe")?;
         let addresses = [

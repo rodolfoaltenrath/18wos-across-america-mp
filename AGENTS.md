@@ -87,5 +87,10 @@ recarga: memória fornecida pelo contêiner, referências e bytes equilibrados,
 retorno ao pool. Não refazer essa prova sem necessidade. O init completo de
 `actors.car` inclui criação de HUD; investigar um caminho visual sem controles/
 HUD/colisão antes da próxima chamada de inicialização. O processo dessa prova
-voltou a fixar a DLL e precisa encerrar antes de reconstruí-la.
+voltou a fixar a DLL; foi encerrado pelo proprietário após a limpeza.
+`decals.pmd` já possui perfil explícito de metadados e lifetime privado:
+`values --entity decals.pmd` leu 13 propriedades, e `item-cycle --kind pmd`
+passou 17 vezes no jogo com 2700 bytes/referências equilibrados. O proprietário
+dirigiu, recarregou e fechou o último processo. Prosseguir para setters/modelo e
+init/teardown de recursos, antes de inserir/manter um visual entre frames.
 A criação e a movimentação de caminhões remotos ainda não foram implementadas.

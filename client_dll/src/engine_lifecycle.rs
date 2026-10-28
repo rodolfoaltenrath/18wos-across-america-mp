@@ -60,6 +60,9 @@ pub(super) fn add(module: &Module, rva: u32) -> Result<u32, String> {
     u32::try_from(module.base + u64::from(rva)).map_err(|e| e.to_string())
 }
 pub(super) fn game(process: &Process) -> Result<Factory, String> {
+    game_type(process, profile::CAR)
+}
+pub(super) fn game_type(process: &Process, kind: profile::EntityType) -> Result<Factory, String> {
     let modules = process.modules().map_err(|e| e.to_string())?;
     let get = |name: &str| {
         modules
@@ -76,17 +79,24 @@ pub(super) fn game(process: &Process) -> Result<Factory, String> {
     let records = crate::inspection::entities::registered(process).map_err(|e| e.to_string())?;
     let record = records
         .iter()
-        .find(|r| r.name == "actors.car")
-        .ok_or("actors.car not registered")?;
-    if record.address != add(game, profile::CAR_RECORD)?
-        || record.false_size != profile::CAR_SIZE
-        || record.false_constructor != add(game, profile::CAR_CONSTRUCTOR)?
-        || record.false_destructor != add(game, profile::CAR_DESTRUCTOR)?
+        .find(|r| r.name == kind.name)
+        .ok_or("profiled type not registered")?;
+    if record.address != add(game, kind.record)?
+        || record.false_size != kind.size
+        || record.false_constructor != add(game, kind.constructor)?
+        || record.false_destructor != add(game, kind.destructor)?
         || record.true_constructor != 0
         || record.true_destructor != 0
         || record.true_size != 0
     {
-        return Err("actors.car registration differs from the verified profile".into());
+        return Err("entity registration differs from the verified profile".into());
+    }
+    if kind.name == "decals.pmd" {
+        for (slot, expected) in [(0x1665e4, 0xcedf0), (0x1665e0, 0xcee00)] {
+            if word(&mut |a, b| read(process, a, b), add(game, slot)?)? != add(game, expected)? {
+                return Err("PMD module lock callbacks differ from profile".into());
+            }
+        }
     }
     let create = add(engine, profile::CREATE_FACTORY)?;
     let destroy = add(engine, profile::DESTROY_FACTORY)?;
@@ -114,7 +124,7 @@ pub(super) fn game(process: &Process) -> Result<Factory, String> {
             add(engine, profile::ENGINE_CONTEXT)?,
             add(game, profile::GAME_CONTEXT)?,
         ],
-        vtable: add(game, profile::CAR_VTABLE)?,
+        vtable: add(game, kind.vtable)?,
         constructor: record.false_constructor,
         destructor: record.false_destructor,
         size: record.false_size,

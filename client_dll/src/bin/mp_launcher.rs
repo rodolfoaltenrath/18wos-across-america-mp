@@ -53,6 +53,8 @@ fn main() -> anyhow::Result<()> {
         ItemCycle {
             #[arg(long, default_value_t=1, value_parser=clap::value_parser!(u32).range(1..=16))]
             cycles: u32,
+            #[arg(long, value_enum, default_value = "car")]
+            kind: ItemKind,
         },
         PrivateCycle {
             #[arg(long, default_value_t=1, value_parser=clap::value_parser!(u32).range(1..=16))]
@@ -73,6 +75,11 @@ fn main() -> anyhow::Result<()> {
         },
         Detach,
         Status,
+    }
+    #[derive(Clone, Copy, ValueEnum)]
+    enum ItemKind {
+        Car,
+        Pmd,
     }
     #[derive(Clone, Copy, ValueEnum)]
     enum Mode {
@@ -118,9 +125,17 @@ fn main() -> anyhow::Result<()> {
                 EngineTask::PumpStatus => api::EngineControl::new(api::UI_PUMP_STATUS),
                 EngineTask::PumpRemove => api::EngineControl::new(api::UI_PUMP_REMOVE),
                 EngineTask::PhaseProbe => api::EngineControl::new(api::PHASE_PROBE),
-                EngineTask::ItemCycle { cycles } => {
+                EngineTask::ItemCycle { cycles, kind } => {
                     let mut b = api::EngineControl::new(api::PRIVATE_ITEM);
                     b.cycles = cycles;
+                    api::put(
+                        &mut b.name,
+                        match kind {
+                            ItemKind::Car => "actors.car",
+                            ItemKind::Pmd => "decals.pmd",
+                        },
+                    )
+                    .map_err(anyhow::Error::msg)?;
                     b
                 }
                 EngineTask::PrivateCycle { cycles } => {

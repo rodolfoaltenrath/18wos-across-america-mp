@@ -30,6 +30,11 @@ enum Task {
         #[arg(long,value_parser=parse_rva)]
         rva: u32,
     },
+    /// Candidate register-based accesses to a field offset, not a type proof.
+    Field {
+        #[arg(long,value_parser=parse_rva)]
+        offset: u32,
+    },
     Records,
     Words {
         #[arg(long,value_parser=parse_rva)]
@@ -64,6 +69,11 @@ fn main() -> Result<()> {
         }
         Task::References { rva } => {
             println!("{}", serde_json::to_string_pretty(&pe.references(rva)?)?)
+        }
+        Task::Field { offset } => {
+            for instruction in pe.field_references(offset) {
+                println!("+0x{:08x}: {}", instruction.rva, instruction.text);
+            }
         }
         Task::Records => println!(
             "{}",

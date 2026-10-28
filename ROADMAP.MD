@@ -570,6 +570,66 @@ de modelo/render ou um tipo visual já disponível (por exemplo `decals.pmd`),
 com teardown próprio, sem chamar o init completo nem clonar o objeto local.
 Não há ainda um caminhão remoto visível.
 
+### M4 — Perfil do candidato visual `decals.pmd` — 27/10/2026
+
+O perfil passou a descrever tipos explicitamente, com uma lista permitida de
+`actors.car` e `decals.pmd`. `memory_tool values --entity` seleciona metadados;
+`engine item-cycle --kind car|pmd` seleciona somente o ciclo privado. Nome
+desconhecido é recusado; não é possível fornecer RVAs/callbacks arbitrários ao
+comando do jogo. O layout das ABIs foi preservado. A criação independente antiga
+continua restrita ao carro. O novo tipo é candidato a visual; o perfil não
+comprova seu contrato de init/render.
+
+Contrato de `decals.pmd`: registro `game.dll+0x12a318`, tamanho `0xa8c` (2700),
+construtor false `+0xf9c70`, destrutor `+0xf9980`, vtable `+0x12ac68`, metadados
+runtime `+0x15bd00`. A inicialização do módulo instala em `+0x1665e4`/`+0x1665e0`
+os callbacks de lock/unlock `+0xcedf0`/`+0xcee00`; esses ponteiros também são
+verificados antes do ciclo. Assim a cadeia do contexto do jogo validada no carro
+permanece aplicável a esse wrapper, sem presumir isso para qualquer tipo futuro.
+
+O decoder retornou **13 definições**, sendo sete novas em relação à base comum:
+
+| Propriedade do PMD | Offset | Tamanho de elemento observado |
+| --- | --- | ---: |
+| `model_name` | `+0x200` | 64 |
+| `model_skins` | `+0x240` | 64, limite inline 16 |
+| `model_rotation` | `+0x640` | 12 |
+| `model_scale` | `+0x64c` | 12 |
+| `play_animation` | `+0x658` | 1024 |
+| `rand_rotation` | `+0xa58` | 3 |
+| `clip2plane` | `+0xa5b` | 1 |
+
+As demais são `useable`, `rotation`, `position`, `volume`, `rid` e `name`.
+Os metadados continuam sendo observações, não uma API pública de escrita. A
+análise de `me_gen_insert` corrigiu dois rótulos no relatório JSON: `+0x18` é
+`element_size`; `+0x1c` é `table_bound`, capacidade inline ou parâmetro de
+crescimento da tabela indireta. O antigo nome `table_offset` não descrevia esse
+campo. O offset da contagem de `model_skins` é `+0xa5c`. Não escrever escala,
+rotação ou array sem validar os callbacks e suas regras de atualização.
+
+Entregue ainda `engine_report field --offset`: consulta nativa de acessos a
+membros em memória baseada em registradores, excluindo imediatos e referências
+absolutas. A fixture própria cobre essa distinção. Uma ocorrência continua
+podendo pertencer a outro tipo ou a dados decodificados como código; consultar
+o contexto antes de usar os resultados como evidência.
+
+**Validação:** 23 testes nativos e 19 x86 sob Proton, build release, Clippy
+nativo/x86 e formatação passaram. Na nova partida foi enumerado o PID Windows
+396; hashes, registro, callbacks e thread 400 conferidos. Um ciclo PMD e depois
+16 ciclos passaram, sempre um item/objeto por vez, com referências
+`1826 / 1827 / 1826`, item limpo no pool e 2700 bytes alocados/liberados por ciclo.
+A posição local permaneceu igual em cada operação. A sonda foi restaurada,
+`stop` removeu o procedimento, fila vazia, nenhuma operação ativa e contador
+parado em 666181 hits. Save e seis originais mantiveram os hashes. O proprietário
+confirmou dirigir/menu/recarga e encerrou o processo após o teste.
+
+**Limite/próximo bloco:** nenhum PMD foi inicializado ou inserido. Não há ainda
+modelo carregado, veículo visível ou contrato de colisão/transform comprovado.
+Validar setters em fixture, configuração de um modelo original disponível,
+init/destruição e ownership dos recursos antes de manter um objeto entre frames.
+O arquivo local `models/ai/truck/models/truck.psm` é um candidato existente no SCS;
+o projeto não transporta esse asset nem presume que ele carrega sozinho.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -711,6 +771,8 @@ mundo ainda precisam de contratos e testes próprios.
 - [x] Descobrir o registro de tipos e consultar 80 entradas na partida.
 - [x] Decodificar a cadeia de valores de `actors.car` e consultar as sete
   definições herdadas na partida sem chamar getters/setters.
+- [x] Perfilar metadados e lifetime privado de `decals.pmd` como candidato visual;
+  13 propriedades lidas e 17 ciclos com contêiner passaram no jogo.
 - [x] Observar retornos exatos do loop principal na thread da janela, incluindo
   movimento/menu/recarga; restaurar a instrumentação e conferir a parada.
 - [ ] Comprovar a thread/fase e a propriedade das operações de inicialização e
@@ -1100,8 +1162,8 @@ e [seleção de toolchain com rustup](https://rust-lang.github.io/rustup/overrid
 **Próxima entrega:** identificar e validar um caminho de modelo/render sem HUD,
 controle local ou colisão; comprovar inicialização e inserção/remoção no mundo.
 Lifetime privado independente, ownership do `c_item_t` e metadados estão validados.
-O processo atual voltou a usar a sonda fixada no teste do contêiner; encerrá-lo
-antes de reconstruir a DLL, mesmo após `stop`. Ampliar
+O processo do último teste PMD foi encerrado pelo proprietário após restaurar a
+sonda e parar a DLL; conferir novamente processos antes de reconstruí-la. Ampliar
 a matriz de estados de M1 e a robustez de M2, sem refazer a busca ampla inicial.
 
 **Antes de começar:** ler os três documentos, conferir Git e toolchain, localizar

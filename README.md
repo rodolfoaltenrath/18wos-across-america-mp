@@ -346,6 +346,22 @@ máximo 1024). Confere tamanho declarado e efetivo, rejeita caminhos inválidos,
 entradas duplicadas e links/arquivos especiais. Nenhum arquivo é extraído.
 Relatórios com conteúdo comercial permanecem locais, fora do Git.
 
+O candidato visual `decals.pmd` também tem um perfil de leitura e lifetime:
+`memory_tool.exe values --pid PID --entity decals.pmd` e
+`mp_launcher.exe ... engine item-cycle --kind pmd`. Este último continua criando
+somente um objeto privado não inicializado, destruído na mesma operação. Foram
+validados 17 ciclos reais e 13 propriedades, incluindo `model_name`,
+`model_skins`, `model_scale`, `model_rotation` e `play_animation`. Isso ainda não
+comprova carregamento do modelo nem presença/ausência de colisão após init.
+O formato JSON expõe `element_size` e `table_bound`: o segundo é capacidade de
+array inline ou parâmetro de crescimento, conforme o tipo de tabela; não é
+um offset no objeto. Os campos brutos continuam disponíveis.
+
+Para investigar acessos candidatos a membros, sem executar uma imagem:
+`engine_report ARQUIVO field --offset 0x200`. A busca distingue memória baseada
+em registrador de imediatos/endereços absolutos, mas não prova o tipo do
+registrador nem se a instrução é alcançada.
+
 ## Ambiente e compilação Windows (registro anterior)
 
 Ambiente encontrado: Windows, Rust **1.98.1**, host `x86_64-pc-windows-gnu`.

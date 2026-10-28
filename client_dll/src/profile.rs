@@ -23,6 +23,42 @@ pub const CAR_DESTRUCTOR: u32 = 0xd1820;
 pub const CAR_SIZE: u32 = 0x2118;
 pub const CAR_VTABLE: u32 = 0x1257a0;
 pub const CAR_VALUES: u32 = 0x15fdb8;
+#[derive(Clone, Copy)]
+pub struct EntityType {
+    pub name: &'static str,
+    pub record: u32,
+    pub size: u32,
+    pub constructor: u32,
+    pub destructor: u32,
+    pub vtable: u32,
+    pub values: u32,
+}
+pub const CAR: EntityType = EntityType {
+    name: "actors.car",
+    record: CAR_RECORD,
+    size: CAR_SIZE,
+    constructor: CAR_CONSTRUCTOR,
+    destructor: CAR_DESTRUCTOR,
+    vtable: CAR_VTABLE,
+    values: CAR_VALUES,
+};
+/// Candidate visual type: only private lifetime is enabled; no init/render ABI.
+pub const PMD: EntityType = EntityType {
+    name: "decals.pmd",
+    record: 0x12a318,
+    size: 0xa8c,
+    constructor: 0xf9c70,
+    destructor: 0xf9980,
+    vtable: 0x12ac68,
+    values: 0x15bd00,
+};
+pub fn entity_type(name: &str) -> Result<EntityType, String> {
+    match name {
+        "" | "actors.car" => Ok(CAR),
+        "decals.pmd" => Ok(PMD),
+        _ => Err("entity type is not profiled".into()),
+    }
+}
 pub const POSITION: &str = "game.dll+0x160df0->0x14c->0x4610->0x8->0x8->0x1d0->0x3e4->0x30";
 
 pub fn verify_module(path: &Path) -> Result<(), String> {

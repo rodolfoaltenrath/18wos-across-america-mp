@@ -312,6 +312,26 @@ impl Pe32 {
             .map(|i| (i.ip() - u64::from(self.base)) as u32)
             .collect())
     }
+    /// Candidate accesses to a member offset through a register. This does not
+    /// prove the register points to a particular type or that the code is reached.
+    pub fn field_references(&self, offset: u32) -> Vec<Instruction> {
+        let mut formatter = IntelFormatter::new();
+        self.instructions()
+            .filter(|i| {
+                i.memory_base() != Register::None
+                    && i.memory_displacement32() == offset
+                    && (0..i.op_count()).any(|n| i.op_kind(n) == OpKind::Memory)
+            })
+            .map(|i| {
+                let mut text = String::new();
+                formatter.format(&i, &mut text);
+                Instruction {
+                    rva: (i.ip() - u64::from(self.base)) as u32,
+                    text,
+                }
+            })
+            .collect()
+    }
     /// Structural candidates, not permission to call the constructors. Layout
     /// follows inspected entity_create/get_struct and must be checked live too.
     pub fn entity_candidates(&self) -> Result<Vec<RecordCandidate>> {
@@ -424,6 +444,20 @@ mod tests {
         assert_eq!(candidates[0].name, "truck");
         assert!(pe.bytes(0x3000, 1).is_err());
         assert!(pe.bytes(u32::MAX, 4).is_err());
+    }
+    #[test]
+    fn member_candidates_exclude_immediates_and_absolute_addresses() {
+        let mut bytes = fixture();
+        // LEA eax,[ecx+0x12c8], PUSH 0x12c8, MOV eax,[0x12c8].
+        let code = [
+            0x8d, 0x81, 0xc8, 0x12, 0, 0, 0x68, 0xc8, 0x12, 0, 0, 0xa1, 0xc8, 0x12, 0, 0,
+        ];
+        bytes[0x210..0x210 + code.len()].copy_from_slice(&code);
+        let pe = Pe32::parse(bytes).unwrap();
+        let hits = pe.field_references(0x12c8);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].rva, 0x1010);
+        assert!(hits[0].text.contains("ecx+12C8h"));
     }
     #[test]
     fn rejects_truncated_architecture_and_ambiguous_sections() {
