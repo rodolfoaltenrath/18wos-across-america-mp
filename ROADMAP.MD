@@ -51,7 +51,7 @@ repositório e orientar futuras sessões de desenvolvimento.
 | Workspace | Cargo com `asset_tools`, `multiplayer_server`, `client_dll` | Reproduzir o ambiente em outra máquina e automatizar o preparo |
 | Assets | Varredura, listagem, extração ZIP/SCS, conversão de texturas, reempacotamento e inspeção binária/PE | Testar instalação de pacote no jogo, manifesto, restauração e distribuição só das alterações próprias |
 | Servidor | Tokio UDP, retransmissão com alvo de 60 Hz, IDs, timeout, limites e validação básica | Sessão explícita, sincronização de relógio, rotação, controle de tráfego e mundo compartilhado |
-| DLL | x86 carregada no jogo sob Proton, perfil por hash, configuração ABI, worker, UDP e diagnóstico | Matriz completa de estados do jogo e APIs de entidades |
+| DLL | x86 no jogo sob Proton, perfil por hash, configuração ABI, worker, UDP, dispatcher e sonda do loop | Matriz completa de estados do jogo e APIs de entidades |
 | Host de teste | `client_probe`, controlador entre processos e `test_host`; bancada x86 passou sob Proton | Testes de sessão longa, saída abrupta e duas máquinas |
 | Investigação | `memory_tool` Rust: processos, regiões, busca, filtros, comparação, ponteiros, observação e envio externo | Perfis de versões e ciclo de vida do veículo |
 | Coordenadas | Cadeia validada após movimento, reinício e comparação exata com save | Escala física, outros estados/versões e amostragem consistente |
@@ -339,9 +339,19 @@ somente leitura; verifica observações na thread correta, remoção, interrupç
 dos contadores, proteção restaurada, recusa de descarga e funcionamento da
 janela até sua saída. Os cenários anteriores ANSI/Unicode continuam passando.
 
-**Observação inicial na partida:** PID 412/thread 416, mais de 779 mil retornos
-contados em `prism3d.exe+0x1476e`; o processo continuou disponível. O teste de
-movimento/menu/recarga e a remoção da sonda são registrados ao concluir o cenário.
+**Validação na partida:** PID 412/thread 416, **3.414.859 retornos** observados
+antes da remoção, incluindo `prism3d.exe+0x1476e` e `+0x1473b`. Com a sonda
+ativa, o proprietário dirigiu, voltou ao menu e carregou novamente o save de
+teste; confirmou funcionamento normal, sem travamento. `pump-remove` retornou
+estado 2. A leitura externa da IAT confirmou o ponteiro restaurado em USER32
+(`0x7ba17d00` nesta sessão). Após `stop`, `active=0`, `inflight=0`, status 2;
+o total permaneceu exatamente 3.414.859. `unload` recusou a descarga com o
+diagnóstico previsto de módulo fixado, antes de chamar `FreeLibrary`.
+O jogo continuou aberto; a DLL está parada, sem sonda/procedimento instalados,
+mas residente até encerrar esse processo. Os seis hashes do manifesto de
+originais foram conferidos novamente e continuaram iguais. Não houve escrita
+em salvamentos pelas ferramentas. A primeira saída indeterminada registrada no
+bloco anterior continua sem causa determinada; esse cenário não a reproduziu.
 O contador de referências do contexto em `p3shared.dll+0x51314 -> +0x8` foi
 somente lido (1845 nesta amostra); não se presume que seja uma trava.
 
@@ -488,6 +498,9 @@ Não há ainda uma API do motor identificada e validada para essas operações.
 
 - [ ] Investigar criação de veículo/modelo, atualização de transform e remoção,
   usando somente a instalação local e registrando conclusões próprias.
+- [x] Descobrir o registro de tipos e consultar 80 entradas na partida.
+- [x] Observar retornos exatos do loop principal na thread da janela, incluindo
+  movimento/menu/recarga; restaurar a instrumentação e conferir a parada.
 - [ ] Identificar a thread/fase correta para chamadas e a propriedade dos objetos.
 - [ ] Confirmar ABI x86: calling convention, `this`, alinhamento, tamanhos,
   registradores e regras de alocação/liberação antes de chamadas `unsafe`.
@@ -868,8 +881,9 @@ e [seleção de toolchain com rustup](https://rust-lang.github.io/rustup/overrid
 
 ## 9. Registro de passagem para a próxima etapa
 
-**Próxima entrega:** comprovar a fase do motor e o ownership dos objetos para
-testar criação/remoção privada, usando o registro e dispatcher já entregues. Ampliar
+**Próxima entrega:** comprovar ABI/ownership dos factories em bancada e adicionar
+fila até o ponto observado do loop para testar criação/remoção privada. O último
+processo usou a sonda fixada; encerrá-lo antes de reconstruir a DLL. Ampliar
 a matriz de estados de M1 e a robustez de M2, sem refazer a busca ampla inicial.
 
 **Antes de começar:** ler os três documentos, conferir Git e toolchain, localizar

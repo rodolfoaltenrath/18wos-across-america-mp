@@ -243,6 +243,12 @@ continua permitindo descarga completa. Estados: 0 nunca instalada, 1 instalada,
 2 restaurada com módulo residente. A sonda não pode ser reinstalada no mesmo
 processo. Qualquer entrada já modificada é recusada.
 
+Na partida sob Proton foram observados 3.414.859 retornos do loop. O proprietário
+dirigiu, voltou ao menu e recarregou o save sem travamentos. A entrada original
+foi restaurada, os contadores pararam e o procedimento da janela foi removido;
+o módulo permaneceu residente conforme previsto. Passaram 16 testes nativos e
+14 testes x86. Isso ainda não valida criação/remoção de objetos do motor.
+
 Referências da implementação: [assembly em Rust](https://doc.rust-lang.org/reference/inline-assembly.html),
 [proteção de páginas Win32](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualprotect)
 e [referências ao módulo e fixação](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandleexw).
