@@ -212,8 +212,8 @@ sessão" do README (eco num PC, depois LAN), priorizando skin e recarga real.
 liberar a instância imediatamente sem comprovar o consumo desses recursos.
 Não refazer instância/descritor/setter/lifetime sem necessidade concreta.
 Distinção obrigatória: o visual sem textura seguindo o jogador foi visto no
-jogo; o eco real posterior também recebeu/desenhou poses. Skin correta,
-suavização na LAN e recarga automática ainda não foram validadas. Não afirmar
+jogo; o eco real posterior também recebeu/desenhou poses e a skin com luz foi
+confirmada no reteste. Suavização na LAN e recarga automática seguem pendentes. Não afirmar
 ausência de visual de teste nem multiplayer LAN pronto.
 
 Retomada após primeiro eco real: PID histórico 15768, thread 3584. Rede/rotação
@@ -226,8 +226,16 @@ Novos caminhos: luz da cena emprestada apenas durante o draw (callback apagado
 depois), `session-prepare-load` para liberar ANTES de carregar e `visual-show`
 depois, `session-verify` independente do PID/DLL para conferir após saída/crash.
 Fixtures verificam luz/contexto/remoção, cena inválida, preparação e verificação
-após saída. A luz ainda precisa de prova visual e o contorno de prova no jogo;
-automação completa exige fase comprovada anterior à destruição do mundo.
-O teste seguinte é textura e recarga PREPARADA, não recarga automática.
+após saída. O reteste real (PID histórico 5956, thread 18744) passou: usuário
+confirmou textura correta dirigindo e depois de carregar/recriar explicitamente.
+`session-prepare-load` provou instância ausente ANTES da carga (primeira
+tentativa, sem recusas). `session-stop --verify` também passou: três slots
+restaurados, worker parado, sondas removidas, tarefas zeradas e sete hashes
+iguais. O usuário fechou normalmente; enumeração posterior não encontrou o
+jogo, e a verificação pós-saída também retornou sete arquivos iguais. Servidor
+encerrado. Não há processo do jogo com a DLL residente nessa conclusão.
+Próximo bloco: observar uma fase ANTERIOR à destruição do mundo e comprovar
+ABI/thread/ordem antes de automatizar a liberação/recriação. Não repetir reload
+retido só porque a luz foi corrigida: a causa do crash não foi isolada.
 Essa revisão passou em build release x86/nativo, 41 testes x86, 47 nativos,
-Clippy x86/nativo e rustfmt. Nova prova visual ainda pendente.
+Clippy x86/nativo e rustfmt. LAN com dois PCs e sessões longas seguem pendentes.

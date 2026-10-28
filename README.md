@@ -18,13 +18,13 @@ incluindo repetição após recarregar uma partida.
 No Windows, o proprietário já confirmou um caminhão de teste sem textura,
 4 m ao lado do seu, copiando seus movimentos e rotação. É um visual PSM,
 sem física/colisão próprias, não outro jogador conectado.
-Os avanços seguintes (pose pela rede e os sete blocos de suavização/vários
-remotos, sessão com backup, skin, recarga automática, verificação, eco e
-métricas) têm provas na bancada própria; a última verificação registrada
-passou com 41 testes x86 e 47 nativos, Clippy e formatação.
-Textura, recarga automática com instância
-retida e movimento pela rede ainda aguardam teste no jogo, primeiro com eco
-num PC e depois na LAN entre dois PCs. Ainda não há multiplayer LAN validado.
+Os avanços seguintes têm provas na bancada própria; a última verificação
+registrada passou com 41 testes x86 e 47 nativos, Clippy e formatação.
+O eco num PC já transmitiu/desenhou poses com rotação na partida; após fornecer
+iluminação da cena, o usuário confirmou a textura correta durante movimento.
+Carregar com liberação prévia e recriar explicitamente também passou no jogo.
+Recarga automática com instância retida, vários remotos e LAN entre dois PCs
+continuam sem validação. Ainda não há multiplayer LAN validado.
 O primeiro teste com eco já desenhou poses recebidas, mas o usuário relatou
 material preto e atraso; carregar um save com o visual retido fechou o jogo.
 A recarga automática permanece sem validação real. Ver o procedimento abaixo:
@@ -726,10 +726,12 @@ um com sua sessão apontando para o mesmo servidor.
   O primeiro teste real ficou preto mesmo com três partes configuradas;
   `skinned_parts` não comprova textura correta. O código agora fornece a
   iluminação da cena durante o draw e remove o callback/contexto da instância
-  logo depois; ainda exige nova validação visual.
+  logo depois. O usuário confirmou a textura correta após movimento e após
+  carregar/recriar com liberação prévia; não houve travamento relatado no reteste.
 - **Recarga:** a recriação ao detectar uma entidade nova passou somente na
   bancada; o primeiro reload real com a instância retida fechou o processo.
-  Use `session-prepare-load` antes de carregar e `visual-show` depois.
+  `session-prepare-load` antes de carregar e `visual-show` depois passaram no
+  reteste real, com limpeza e hashes conferidos. Manter esse procedimento.
   `recreated`/`recreate_pending` são diagnósticos da tentativa automática;
   `fault=2` indica interrupção, não cobertura de todos os riscos do carregamento.
 - **Métricas:** `draw_cost_avg_ns`/`draw_cost_max_ns` (custo das nossas chamadas

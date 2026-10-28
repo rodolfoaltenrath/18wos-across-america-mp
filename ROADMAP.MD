@@ -56,15 +56,15 @@ repositório e orientar futuras sessões de desenvolvimento.
 | Host de teste | `client_probe`, controlador entre processos e `test_host`; bancada x86 passou sob Proton | Testes de sessão longa, saída abrupta e duas máquinas |
 | Investigação | `memory_tool` Rust: processos, regiões, busca, filtros, comparação, ponteiros, observação e envio externo | Perfis de versões e ciclo de vida do veículo |
 | Coordenadas | Cadeia validada após movimento, reinício e comparação com save; pose de draw no mesmo corpo, escala em centímetros identificada | Outros estados/versões e amostragem consistente |
-| Multiplayer visual | Visual seguindo o jogador e eco com pose/rotação vistos no jogo; luz e preparação do load em investigação | Material preto e crash no primeiro reload retido; validar luz e liberação antes do load, depois LAN |
+| Multiplayer visual | Eco com pose/rotação e textura iluminada vistos no jogo; liberação antes do load/recriação explícita passaram | Automatizar transição prévia ao unload, testar vários remotos e dois PCs na LAN |
 | GitHub | Remoto `rodolfoaltenrath/18wos-across-america-mp`, histórico inicial Apache-2.0 preservado, exclusão do jogo | Manter staging auditado e documentação atualizada em cada entrega |
 
 O estado atual **não é multiplayer LAN validado entre dois computadores**.
 O proprietário confirmou um visual sem textura ao lado do seu caminhão,
 copiando movimento e rotação; isso não foi um segundo jogador conectado.
 As implementações posteriores têm testes próprios (último registro:
-41 x86/47 nativos, Clippy e formatação), mas aguardam teste de skin, eco,
-recarga automática e suavização na partida. Não rebaixar esse visual a mera
+41 x86/47 nativos, Clippy e formatação). Eco/skin já passaram no reteste abaixo;
+recarga automática e suavização na LAN seguem pendentes. Não rebaixar esse visual a mera
 alocação privada, nem promover resultados da bancada a validação no jogo.
 
 ### Evidência de memória que deve acompanhar o código
@@ -1529,6 +1529,29 @@ os passes e o evento de troca de entidade, sozinhos, são insuficientes. Uma
 sonda de lifecycle deve comprovar ABI/thread/ordem antes de chamar liberações.
 Dois PCs, vários remotos e estabilidade prolongada seguem pendentes.
 
+**Reteste nativo com luz e carregamento preparado:** processo histórico 5956,
+thread 18744. Novo `session-start` com backup de sete arquivos. O proprietário
+dirigiu e confirmou que a aparência funcionou perfeitamente. Antes de carregar,
+`session-prepare-load` liberou na primeira tentativa, sem recusas; status
+`state=0`, `item=0`, `shown=0`, rede ainda ativa, hashes iguais. O proprietário
+carregou o save existente; o processo permaneceu ativo. `visual-show` criou
+outra instância, recebeu poses do eco com quaternion e desenhou novamente.
+O usuário confirmou textura/movimento corretos após essa carga. Antes da
+preparação foram 8.672 desenhos, `fault=0` e `foreign_calls=0`; após a recriação,
+a captura inicial já tinha 43 desenhos e três partes com shader. EMA das
+chamadas próprias ~4–5 µs, máximo 161,4 µs; continua sem baseline de FPS.
+
+`session-stop --verify` também liberou na primeira tentativa, sem recusas:
+cliente parado, três slots restaurados por leitura externa, dispatcher inativo,
+sonda do loop removida e trabalho pendente/em execução zerado. Os sete arquivos
+continuaram iguais. O usuário fechou normalmente; enumeração posterior não
+encontrou o jogo, e `session-verify` ainda retornou sete inalterados com o PID
+já morto. Servidor de teste encerrado. Relatórios em `lighting/` sob a pasta
+local do eco. Este resultado valida luz e carregamento PREPARADO com recriação
+explícita, não a retenção automática durante load. Luz e preparo mudaram nessa
+revisão; o sucesso não isola a causa do crash anterior. A investigação da
+transição pré-destruição continua necessária antes de repetir a automação.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -1717,7 +1740,7 @@ Se algum método exigir alteração de arquivo, documentar e testar restauraçã
 - [ ] Acrescentar rotação, tick/timestamp, modelo e velocidade com formatos e
   unidades documentados. Tratar compatibilidade e valores inválidos.
   Progresso: rotação opcional (quaternion unitário, tolerância 2%, v1
-  compatível) entregue e testada na bancada; tick, modelo e velocidade pendentes.
+  compatível) entregue e testada na bancada e no eco real; tick, modelo e velocidade pendentes.
 - [ ] Separar eventos que exigem confirmação/reenvio de snapshots descartáveis.
   Definir IDs, deduplicação e prazos para eventos confiáveis sobre UDP.
 - [ ] Medir RTT, estimar diferença de relógios e ordenar snapshots para interpolação.
@@ -1773,12 +1796,16 @@ para o MVP visual sem colisão.
   usando assets originais disponíveis localmente e física/colisões desativadas.
   Validado em 28/10/2026: `visual-show` desenhou o truck.psm de IA 4 m ao lado,
   sem textura (fallback), liberado com segurança e recriado após recarga.
+- [x] Aplicar shader e iluminação emprestada da cena ao visual, com callback
+  removido após cada draw; aparência confirmada no jogo, inclusive após
+  liberação prévia/carregamento/recriação explícita. Não valida reload retido.
 - [ ] Mapear jogador → entidade, atualizar transform, remover na saída e limpar
   referências ao carregar outro mapa/save ou encerrar a sessão.
-  Progresso (bancada): ID remoto → visual (`--player ID|all`), pose interpolada,
+  Progresso: ID remoto → visual (`--player ID|all`), pose interpolada,
   sem desenho após 1 s, recriação automática na troca da entidade local e
-  `session-stop` com liberação segura. No jogo, falta validar com tráfego real e
-  recarga real.
+  `session-stop` com liberação segura. Eco no jogo e carregamento preparado
+  passaram; retenção/recriação automática durante carga falhou no primeiro
+  teste e continua em investigação. Faltam tráfego LAN real e saída de pares.
 - [ ] Confirmar que mudar o remoto não muda o caminhão local nem os dados do save.
   Progresso: nas sessões de 28/10 os hashes de originais e saves ficaram iguais
   e o caminhão local não foi afetado, mas o visual seguia o próprio jogador.
@@ -2191,13 +2218,16 @@ e [seleção de toolchain com rustup](https://rust-lang.github.io/rustup/overrid
 
 ## 9. Registro de passagem para a próxima etapa
 
-**Próxima entrega:** repetir textura com luz e validar recarga PREPARADA.
-O primeiro eco real funcionou, mas ficou preto e fechou ao carregar com o visual
-retido; ver registro "Primeiro eco real". Antes de abrir/carregar um save,
+**Próxima entrega:** comprovar uma fase de lifecycle anterior à destruição do
+mundo e automatizar a liberação/recriação nessa transição. A textura com luz
+e o carregamento PREPARADO passaram no jogo, com confirmação visual, limpeza
+e hashes iguais. O primeiro eco sem luz ficou preto e fechou ao carregar com
+o visual retido; a causa não foi isolada. Ver registro "Primeiro eco real".
+Antes de abrir/carregar um save,
 executar `session-prepare-load` e aguardar `prepared=true`; após carregar,
 recriar via `visual-show`. Não repetir retenção durante load como se a
 recriação automática estivesse validada. Mapear a fase pré-destruição para
-retomar essa automação. O processo da falha já terminou e os arquivos
+retomar essa automação. Ambos os processos históricos já terminaram e os arquivos
 conservaram os hashes; reenumerar antes de qualquer nova ação.
 
 Contexto do procedimento anterior: validar no jogo o que a bancada já cobre. Usar o
@@ -2224,8 +2254,9 @@ O passe identificado pela sonda de render (`game.dll+0x800f2`) é o draw do
 céu/sol (`+0x7fa90`), não todo o render. Usar `render-status`/`draw-status`
 para captura pendente e manter a partida em primeiro plano.
 O primeiro visual foi retido/liberado e recriado manualmente após recarga no
-jogo. Manutenção/recriação automática durante reload, skin e pose pela rede
-ainda precisam da validação descrita acima. Lifetime, ownership, metadados,
+jogo. Eco com pose pela rede e skin com luz passaram posteriormente; manutenção/
+recriação automática durante reload continua dependente da fase pré-destruição.
+Lifetime, ownership, metadados,
 setter PMD, descritor e instância PSM privados já têm provas registradas;
 não repeti-las sem necessidade. A última sessão teve sonda/dispatcher removidos,
 worker parado e encerramento normal confirmado, sem processo restante.
