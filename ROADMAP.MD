@@ -1434,7 +1434,9 @@ x86/nativo e rustfmt limpos.
    inesperada marca `fault=2`. O status informa `recreated` e
    `recreate_pending`. A fixture simula a recarga com uma segunda entidade; as
    instâncias criadas ficaram iguais às liberadas mais uma.
-. **Servidor `--echo`**: devolve a cada cliente a própria pose como
+5. **`dev_env verify`**: build release x86, bancada x86, bancada nativa, Clippy
+   x86/nativo e rustfmt, com soma de passados/falhos (parser testado).
+6. **Servidor `--echo`**: devolve a cada cliente a própria pose como
    `1000000000 + id` (cabe em u32), para testar rede, interpolação e desenho
    num só PC com `session-start --offset 400 0 0`. Teste próprio do eco;
    `run` sem eco mantém o comportamento anterior. `dev_env verify` final: x86
