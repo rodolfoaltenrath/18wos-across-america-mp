@@ -1314,10 +1314,32 @@ liberação depois do consumo (instâncias criadas = liberadas), recriação,
 `visual-hide` pela CLI e liberação depois de assentar. 32 testes x86 e 38
 nativos, com Clippy e formatação limpos.
 
-**Partida:** pendente, com o proprietário. Riscos ainda abertos: visibilidade
-padrão das partes da instância nova, fallback de shader, altura do corpo em
-relação ao solo, e se a recarga do save invalida recursos PSM retidos (por
-isso o primeiro teste oculta e libera antes de recarregar).
+**Validação nativa na partida (28/10/2026):** processo histórico 10056, thread
+da janela 2360, sem DLL do projeto antes do teste. Hashes e saves conferidos
+antes e depois (cópias em `target/analysis/visual-test/`, não versionadas).
+Sequência: pump, render, draw, `visual-show --offset 400 0 0`.
+
+- O proprietário viu **um segundo caminhão ao lado do seu**, sem textura (shader
+  de fallback, como previsto), acompanhando posição e rotação do jogador.
+- Com a janela fora de foco, o jogo não renderizou (flushes parados) e nada foi
+  desenhado; ao voltar o foco, o desenho começou.
+- Primeira exibição: 3268 desenhos, 3268 pulados (as chamadas de estado 12),
+  `fault=0`, acesso do item `0` entre frames. Oculto e liberado; as primeiras
+  ~21 tentativas de liberação (~10 s) foram recusadas, com mensagem não
+  capturada pelo script (provável foco/fila do loop). Depois liberou com
+  `state=0`.
+- Recarga do save **depois** da liberação; `visual-show` recriou a instância e
+  desenhou ao lado da nova entidade do jogador (o proprietário confirmou).
+  8059 desenhos totais, sem falha. Ocultar + liberar passou na primeira
+  tentativa, sem recusas registradas.
+- Limpeza: `draw-remove`, `render-remove`, `pump-remove`, `stop`. Leitura
+  externa: `game+0x12580c → game+0x5a6a0`, `núcleo+0x22240 → gfxshared+0x3690`,
+  `game+0x160ea0 → núcleo+0x4820`. Hashes de originais e saves iguais.
+
+Ainda não comprovado: skins/textura corretas, ajuste ao solo (o
+proprietário não relatou desvio de altura), interior (estado 4), manter a
+instância durante uma recarga, e mais de um visual. A pose ainda é a do
+jogador mais um deslocamento: falta alimentá-la pela rede.
 
 ## 3. Primeira versão jogável e limites
 
@@ -1479,8 +1501,10 @@ mundo ainda precisam de contratos e testes próprios.
   do motor fora do núcleo de rede; ampliar somente com operações comprovadas.
 - [x] Encaminhar diagnóstico e lifecycle por fila limitada até o ponto observado
   do loop, fora de callbacks/reentrância; nenhum objeto é manipulado pelo UDP.
-- [ ] Criar primeiro um único veículo visual de teste a distância controlada,
+- [x] Criar primeiro um único veículo visual de teste a distância controlada,
   usando assets originais disponíveis localmente e física/colisões desativadas.
+  Validado em 28/10/2026: `visual-show` desenhou o truck.psm de IA 4 m ao lado,
+  sem textura (fallback), liberado com segurança e recriado após recarga.
 - [ ] Mapear jogador → entidade, atualizar transform, remover na saída e limpar
   referências ao carregar outro mapa/save ou encerrar a sessão.
 - [ ] Confirmar que mudar o remoto não muda o caminhão local nem os dados do save.
@@ -1854,8 +1878,12 @@ e [seleção de toolchain com rustup](https://rust-lang.github.io/rustup/overrid
 
 ## 9. Registro de passagem para a próxima etapa
 
-**Próxima entrega:** validar `visual-*` na partida (implementado; bancada
-passou): ver o caminhão, dirigir, ocultar, liberar, depois recarregar e repetir.
+**Próxima entrega:** o visual de teste passou na partida (apareceu, acompanhou
+o jogador, liberou e reapareceu após recarga). Próximos passos, em ordem:
+(1) pose independente do jogador, vinda de um alvo explícito (posição +
+quaternion) e depois da rede LAN; (2) skins/textura (`psm_alloc_inst` com a
+lista de shaders do `car.def`); (3) política de recarga: ocultar/liberar
+automaticamente quando a entidade do jogador mudar; (4) vários visuais.
 Contexto anterior — a sonda `draw-*` passou na
 partida (parado, movimento, menu/recarga): o `draw` de `actors.car` com estado
 6, profundidade 0, enfileira no passe do mundo esvaziado em `game+0xf3a24`.
