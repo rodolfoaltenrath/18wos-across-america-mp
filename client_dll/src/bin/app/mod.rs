@@ -564,6 +564,12 @@ fn fixture() -> Result<()> {
         if line == "quit" {
             break;
         }
+        if line == "unavailable" {
+            values[0].store(f32::NAN.to_bits(), Ordering::SeqCst);
+            println!("unavailable");
+            io::stdout().flush()?;
+            continue;
+        }
         let args: Vec<_> = line.split_whitespace().collect();
         ensure!(args.len() == 4 && args[0] == "set", "expected: set X Y Z");
         for index in 0..3 {

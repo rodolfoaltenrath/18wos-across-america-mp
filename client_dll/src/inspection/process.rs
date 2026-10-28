@@ -42,6 +42,7 @@ pub struct Identity {
 #[derive(Clone, Debug)]
 pub struct Module {
     pub name: String,
+    pub path: String,
     pub base: u64,
     pub size: u64,
 }
@@ -228,6 +229,7 @@ impl Process {
             if base <= self.max_address() {
                 output.push(Module {
                     name: wide(&entry.szModule),
+                    path: wide(&entry.szExePath),
                     base,
                     size: entry.modBaseSize.into(),
                 });

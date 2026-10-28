@@ -1,3 +1,4 @@
+use crate::SampleError;
 use crate::addresses::Address;
 use multiplayer_server::protocol::Position;
 
@@ -78,6 +79,65 @@ pub fn position(addresses: &[Address; 3]) -> Result<Position, String> {
 #[cfg(not(windows))]
 pub fn position(_addresses: &[Address; 3]) -> Result<Position, String> {
     Err("game memory reading is available only on Windows".into())
+}
+
+#[cfg(windows)]
+pub fn game_position(verified_base: &mut usize) -> Result<Position, SampleError> {
+    use windows_sys::Win32::System::LibraryLoader::{GetModuleFileNameW, GetModuleHandleW};
+    let name: Vec<u16> = "game.dll".encode_utf16().chain(Some(0)).collect();
+    // SAFETY: NUL-terminated filename; this only queries an already loaded module.
+    let module = unsafe { GetModuleHandleW(name.as_ptr()) };
+    if module.is_null() {
+        *verified_base = 0;
+        return Err(SampleError::Unavailable("waiting for game.dll".into()));
+    }
+    if module as usize != *verified_base {
+        let mut filename = vec![0u16; 32768];
+        let len =
+            unsafe { GetModuleFileNameW(module, filename.as_mut_ptr(), filename.len() as u32) }
+                as usize;
+        if len == 0 || len >= filename.len() {
+            return Err(SampleError::Fatal(
+                "cannot identify loaded game.dll path".into(),
+            ));
+        }
+        use std::os::windows::ffi::OsStringExt;
+        let path = std::path::PathBuf::from(std::ffi::OsString::from_wide(&filename[..len]));
+        crate::profile::verify_module(&path).map_err(SampleError::Fatal)?;
+        *verified_base = module as usize;
+    }
+    let address: Address = crate::profile::POSITION
+        .parse()
+        .map_err(SampleError::Fatal)?;
+    let at = resolve(&address).map_err(SampleError::Unavailable)?;
+    let mut bytes = [0; 12];
+    read_bytes(at, &mut bytes).map_err(SampleError::Unavailable)?;
+    // Re-resolving catches pointer-chain changes around capture, not concurrent physics writes.
+    if resolve(&address).map_err(SampleError::Unavailable)? != at {
+        return Err(SampleError::Unavailable(
+            "vehicle changed during capture".into(),
+        ));
+    }
+    let values: [f32; 3] =
+        std::array::from_fn(|i| f32::from_le_bytes(bytes[i * 4..i * 4 + 4].try_into().unwrap()));
+    let position = Position {
+        x: values[0],
+        y: values[1],
+        z: values[2],
+    };
+    if !position.is_valid() {
+        return Err(SampleError::Unavailable(
+            "vehicle coordinates unavailable".into(),
+        ));
+    }
+    Ok(position)
+}
+
+#[cfg(not(windows))]
+pub fn game_position(_verified_base: &mut usize) -> Result<Position, SampleError> {
+    Err(SampleError::Fatal(
+        "game profile requires Windows x86".into(),
+    ))
 }
 
 #[cfg(all(test, windows))]

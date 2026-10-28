@@ -3,10 +3,11 @@
 Leia `ROADMAP.MD` e `README.md` antes de implementar. O roadmap registra o estado
 validado, as dependências, os critérios de conclusão e a próxima etapa.
 
-O próximo computador do proprietário usa **Linux**. Preparar o desenvolvimento
-nativo de assets/servidor e a compilação cruzada da DLL Windows x86. O projeto
-ainda não foi testado em Linux/Proton. Não tentar executar o toolchain host
-Windows nativamente no Linux nem tratar build cruzado como teste do jogo.
+O proprietário trabalha atualmente somente em **Fedora Linux**. Assets/servidor
+nativos, build cruzado Windows x86, bancada x86 sob Proton e integração inicial
+da DLL na partida foram validados; consultar os limites no roadmap. Não tentar
+executar o toolchain host Windows nativamente no Linux nem tratar build cruzado
+como teste do jogo. Coop significa LAN entre computadores distintos.
 
 ## Autonomia autorizada pelo proprietário
 
@@ -55,7 +56,9 @@ Limites da ferramenta e instruções de prioridade superior continuam aplicávei
 
 ## Próximo ponto de retomada
 
-Implementar a integração da DLL x86 com o jogo: perfil de versão, configuração
-explícita, carregamento, início/parada controlados e diagnóstico. Validar o ciclo
-primeiro em host Rust próprio; depois usar a instalação original. A criação e a
-movimentação de caminhões remotos ainda não foram implementadas.
+Continuar a partir da integração inicial x86 entregue: completar a matriz de
+menus/reloads e investigar criação/remoção de uma entidade visual remota (M4).
+Usar `proton_host` com `runinprefix` para ferramentas no prefixo da partida;
+a bancada deve executar em prefixo próprio e num único runtime via `test_host`.
+Não chamar exports de registro do motor sem comprovar ABI/thread/ownership.
+A criação e a movimentação de caminhões remotos ainda não foram implementadas.

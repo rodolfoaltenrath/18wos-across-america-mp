@@ -9,8 +9,10 @@ e não será distribuído pelo projeto.
 
 **Ambiente de continuidade informado pelo proprietário: Linux.** Ferramentas e
 servidor nativos e DLL para Windows x86 têm fluxos de compilação diferentes.
-A seção 8 contém o procedimento Linux. Os testes de integração registrados até
-aqui foram realizados em Windows; jogo, DLL e inspeção sob Proton não foram testados.
+A seção 8 contém o procedimento Linux. A análise de continuidade abaixo registra
+build e testes nativos em Fedora. A entrega de integração abaixo acrescenta
+build cruzado, bancada Win32 sob Proton e carga/controle da DLL no jogo original.
+Ainda não houve teste de coop entre computadores distintos.
 
 ## 1. Forma de trabalho e autonomia
 
@@ -49,8 +51,8 @@ repositório e orientar futuras sessões de desenvolvimento.
 | Workspace | Cargo com `asset_tools`, `multiplayer_server`, `client_dll` | Reproduzir o ambiente em outra máquina e automatizar o preparo |
 | Assets | Varredura, listagem, extração ZIP/SCS, conversão de texturas, reempacotamento e inspeção binária/PE | Testar instalação de pacote no jogo, manifesto, restauração e distribuição só das alterações próprias |
 | Servidor | Tokio UDP, retransmissão com alvo de 60 Hz, IDs, timeout, limites e validação básica | Sessão explícita, sincronização de relógio, rotação, controle de tráfego e mundo compartilhado |
-| DLL | `cdylib` x86, `DllMain` mínimo, worker, UDP, leitura local e estados remotos | Carregar e operar dentro do jogo real |
-| Host de teste | `client_probe` carrega a DLL real em processo próprio | Testes de integração com o ciclo do jogo |
+| DLL | x86 carregada no jogo sob Proton, perfil por hash, configuração ABI, worker, UDP e diagnóstico | Matriz completa de estados do jogo e APIs de entidades |
+| Host de teste | `client_probe`, controlador entre processos e `test_host`; bancada x86 passou sob Proton | Testes de sessão longa, saída abrupta e duas máquinas |
 | Investigação | `memory_tool` Rust: processos, regiões, busca, filtros, comparação, ponteiros, observação e envio externo | Perfis de versões e ciclo de vida do veículo |
 | Coordenadas | Cadeia validada após movimento, reinício e comparação exata com save | Escala física, outros estados/versões e amostragem consistente |
 | Multiplayer visual | Nenhuma entidade remota criada no jogo | Descobrir e integrar criação, atualização e remoção |
@@ -100,6 +102,132 @@ um formato universal de save. Capturas, dumps, disassembly e logs estão em
 `target/` e não irão para o Git. A evidência resumida acima permite retomar sem
 transportar esses arquivos. PIDs e endereços absolutos são históricos.
 
+### Análise de continuidade no Linux — 27/10/2026
+
+- Ambiente: Fedora 44, `rustc`/Cargo 1.99.0 da distribuição, host
+  `x86_64-unknown-linux-gnu`. É uma validação adicional com compilador diferente
+  do Windows registrado; não houve fixação/migração do toolchain.
+- Passaram `cargo build --workspace --locked`, `cargo fmt --all -- --check`,
+  `cargo clippy --workspace --all-targets --locked -- -D warnings` e
+  `cargo test --workspace --all-targets --locked`: **nove testes**, sendo cinco
+  de assets, dois do cliente portável e dois de protocolo/servidor, incluindo
+  relay UDP entre sockets locais. Os testes Win32 e `memory_workflow` são
+  excluídos por `cfg(windows)`; os 14 testes históricos não foram repetidos aqui.
+- `target/debug/asset_tools scan ..` abriu os três SCS sem extrair ou modificar
+  arquivos: `aa/base.scs` (7118 entradas), `aa/patch_1_10.scs` (403) e `data.scs`
+  (76). `inspect-pe` confirmou `prism3d.exe` e `aa/lib/game.dll` como x86.
+  O SHA-256 de `game.dll` coincide com a referência acima; a cadeia não foi
+  lida num processo nesta análise, portanto não está validada sob Proton.
+- Não foram encontrados `rustup`, bibliotecas Rust para `i686-pc-windows-gnu`
+  ou `i686-w64-mingw32-gcc`. Build cruzado não executado. Wine está disponível,
+  mas nenhum teste do jogo/host Win32 foi feito neste Linux.
+- O clone já aponta para o remoto oficial. Não precisa ficar na raiz Steam;
+  as ferramentas aceitam caminhos externos. Nenhum original/save foi alterado
+  e nenhuma operação de commit/push foi feita.
+
+A revisão confirma as prioridades M1/M2 → M4: a configuração atual depende de
+variáveis de ambiente e não verifica o hash; uma falha em `Source::sample`
+encerra o worker, sem distinguir carregamento temporário; X/Y/Z são resolvidos
+e lidos separadamente. O protocolo transporta posição e sequência, identifica
+clientes pelo endereço UDP e não negocia sessões. Reiniciar com o mesmo endereço
+e sequência menor causa descarte enquanto o peer anterior existir. Essas
+limitações pertencem a M1–M3. Nenhum caminho de criação/atualização/remoção de
+entidades do motor está implementado; esse continua sendo o principal risco
+para o MVP visual.
+
+**Próximo bloco:** preparar o build cruzado e o perfil/configuração/ciclo
+controlado da DLL em host Rust próprio; depois validar no jogo e investigar uma
+entidade visual mínima. Os marcos M0–M4 permanecem incompletos.
+
+### Entrega da integração x86 no Fedora/Proton — 27/10/2026
+
+**Entregue:** perfil `steam-aa-1.10-ccb327c2`, configuração explícita ABI v1,
+carregador/controlador x86 e captura real no processo do jogo. O desenvolvimento
+passa a usar Rust 1.99.0, fixado em `rust-toolchain.toml`. O host nativo Fedora
+e o toolchain rustup local têm o mesmo commit de compilador; o Windows 1.98.1
+anterior permanece como evidência histórica, não como requisito do fluxo atual.
+
+Arquivos principais: `api.rs`, `profile.rs`, `controller.rs`, `pe_exports.rs`,
+`mp_launcher`, `proton_host`, `test_host`, `dev_env` e os dois testes entre
+processos. Nenhum crate adicional foi necessário. SHA-256 usa `sha2` e suas
+dependências registradas no lockfile.
+
+- MinGW local em `target/toolchain/`, sem instalação administrativa: GCC
+  16.2.1, binutils 2.46.0, CRT/headers 13.0.0. `dev_env` extrai RPMs confiáveis
+  num destino novo e executa build/check/Clippy x86; não modifica `.cargo`.
+- `client_control` recebe um bloco sem ponteiros, de 1536 bytes, com versão,
+  tamanho, comando, configuração de 976 bytes, contadores e diagnóstico.
+  O layout é testado nativamente e em x86. O host mantém a propriedade do bloco
+  até o retorno; a DLL não devolve alocações Rust pela ABI.
+- Carregamento via `LoadLibraryW`, controle via export próprio e descarga via
+  `FreeLibrary`, sempre fora de `DllMain`. O controlador resolve exports PE32
+  nas imagens remotas, incluindo forwarders. Aloca somente dados graváveis,
+  sem shellcode, hooks ou alteração de executáveis. Um mutex nomeado por PID
+  serializa os controladores próprios. Timeout retém o payload remoto e exige
+  reabrir o alvo antes de novas operações, sem terminar threads à força.
+- No modo jogo, hash/arquitetura são verificados antes de transmitir. Posição
+  é lida em 12 bytes após resolver a cadeia e a resolução é repetida para detectar
+  troca de estrutura. Isso não garante atomicidade da física nem valida orientação.
+  Indisponibilidade temporária suspende envios e permite retomada; falha fatal
+  de perfil é diagnosticada. A recepção permanece ativa durante indisponibilidade.
+- Validação: 12 testes nativos passaram; nove testes unitários x86 e os dois
+  testes entre processos passaram sob Proton Experimental
+  `experimental-11.0-20261014-x86_64`. A bancada testa carga idempotente, ABI
+  incompatível, início duplicado, captura real de fixture, recepção UDP,
+  indisponibilidade/recuperação, parada, reinício, descarga e nova carga.
+  Formatação e Clippy nativo/x86 passaram com avisos tratados como erros.
+- No jogo original, a DLL transmitiu ao relay nativo Fedora e recebeu dados de
+  `client_probe`. Um probe recebeu 3599 atualizações em cerca de 60 segundos.
+  Houve parada/descarga e nova carga no mesmo processo, sem substituir arquivos.
+
+Leituras reais, também recebidas pelo probe via relay:
+
+| Cenário | X | Y | Z |
+| --- | ---: | ---: | ---: |
+| Primeira partida parada | 90120.0 | 18187.958984375 | 665086.125 |
+| Após dirigir/fazer curva | 95039.0625 | 18208.150390625 | 662728.375 |
+| Após menu e outra partida, com movimento | 1109895.125 | 23576.103515625 | 814360.4375 |
+
+No ciclo menu → outra partida, o endereço de X mudou de `0x0c27c8f0` para
+`0x0f0945a8` (históricos, nunca configuração). O worker permaneceu executando,
+registrou 497 amostragens indisponíveis e manteve o contador de envios em 10453
+durante o intervalo observado. Resolveu a nova cadeia e retomou automaticamente,
+sem reiniciar a DLL. Trocas de veículo/reboque, todas as câmeras, menu mantendo
+objetos legíveis, saída abrupta e sessão longa continuam pendentes.
+
+Cuidados de ambiente comprovados nesta sessão:
+
+- Wine 11 do sistema ficou na inicialização de um prefixo novo; a tentativa foi
+  encerrada somente nesse prefixo. A execução validada usa Proton da Steam.
+- Bancada com fixtures deve nascer com seu wineserver em um único runtime e
+  prefixo exclusivo. Chamadas em namespaces distintos reutilizando o wineserver
+  da partida falharam com acesso negado; `test_host` resolveu o cenário.
+- Uma chamada inicial a `proton run` sem o ambiente completo da Steam removeu
+  S: do prefixo. O link foi restaurado do backup, e `proton_host` passou a usar
+  `runinprefix`; a validação bem-sucedida ocorreu depois da restauração.
+- Foram preservadas cópias locais do prefixo e de `aa/` em `target/backups/`.
+  Para restaurar, fechar jogo e wineserver desse prefixo, preservar o estado
+  atual em outro destino e copiar de volta a árvore de backup correspondente;
+  não mesclar um prefixo em uso. S: foi restaurado isoladamente da cópia.
+  Os hashes de `aa.exe`, `prism3d.exe`, `game.dll` e dos três SCS foram conferidos
+  iguais ao final. Ferramentas não gravaram saves. Não houve commit/push.
+
+**M4 iniciado por inspeção estática:** `game.dll` exporta `DLL_game_init`,
+`DLL_register`, `DLL_shutdown` e `DLL_uiedit_init`. `p3shared.dll` tem SHA-256
+`7df43b55e6b34e3ac2017af9566665bd935895ff02a2a916b099bb34045d30a3` e exporta
+símbolos C++ de `entity_create`, `entity_destroy`, `entity_get_struct`,
+`entity_list_structs` e `entity_register`, além de métodos de `entity_t`.
+Isso fornece pontos de investigação, sem comprovar que uma entidade genérica
+possa representar um caminhão. Nenhum desses exports foi chamado.
+Disassembly permanece local em `target/analysis/`.
+
+**Próximo bloco:** seguir os registros de tipos e construtores do caminhão,
+identificar o tick/thread do motor e ownership; só então experimentar uma
+entidade visual sem colisão. M1 precisa ampliar a matriz de estados, M2 precisa
+testar saída abrupta/rede prolongada e M3 ainda não define sessões/reconexão.
+Não há caminhões remotos nem teste LAN entre computadores; M0/M1/M3/M4 não
+estão concluídos. O ciclo controlado central de M2 está entregue.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -142,7 +270,7 @@ visíveis. Internet pública, contas e matchmaking ficam depois da LAN funcional
 
 - [x] Criar workspace, lockfile, README e exclusão do jogo por padrão.
 - [x] Registrar roadmap e autonomia em arquivos versionáveis.
-- [ ] Fixar um toolchain testado em `rust-toolchain.toml`, após verificar os
+- [x] Fixar um toolchain testado em `rust-toolchain.toml`, após verificar os
   componentes necessários para x64 e x86; preservar o `Cargo.lock`.
 - [ ] Criar preparo/diagnóstico de ambiente em Rust, com caminhos detectados,
   sem depender de um script de outra linguagem nem sobrescrever configuração
@@ -166,9 +294,9 @@ da execução no jogo; não considerar um build cruzado prova de integração fu
 ### M1 — Perfil do jogo e leitura de estado confiável
 
 - [x] Encontrar uma cadeia e validá-la contra save após reinício.
-- [ ] Transformar a descoberta em perfil nomeado, com hash e diagnóstico de
+- [x] Transformar a descoberta em perfil nomeado, com hash e diagnóstico de
   versão incompatível; não aplicar offsets por semelhança do nome do arquivo.
-- [ ] Resolver a base do módulo no processo alvo e cada cadeia por sessão.
+- [x] Resolver a base do módulo no processo alvo e cada cadeia por sessão.
 - [ ] Identificar estados em que veículo/módulos ainda não existem. Suspender
   amostragem durante menus, carregamento e troca de veículo sem matar o jogo.
 - [ ] Ler posição/orientação como um estado consistente: agrupar leituras quando
@@ -184,20 +312,22 @@ sem inventar posições e passa por toda a matriz de estados documentada.
 
 ### M2 — Carregar e controlar a DLL x86 no jogo
 
-- [ ] Implementar launcher/carregador em Rust, com alvo explícito, DLL por
+- [x] Implementar launcher/carregador em Rust, com alvo explícito, DLL por
   caminho absoluto e verificações de arquitetura/perfil.
-- [ ] Escolher e documentar uma estratégia de carregamento; usar apenas o
+- [x] Escolher e documentar uma estratégia de carregamento; usar apenas o
   mecanismo necessário. Resolver exports e módulos no processo correto,
   sem transportar endereços locais de funções para outro processo por hipótese.
-- [ ] Definir API de configuração com versão/tamanho de estrutura e ABI estável.
+- [x] Definir API de configuração com versão/tamanho de estrutura e ABI estável.
   Não depender de alterar variáveis de ambiente de um jogo já iniciado pela Steam.
-- [ ] Iniciar após o carregamento e fora de `DllMain`; evitar início duplicado.
-- [ ] Expor estado, contadores e último erro de forma consultável. Logs locais
+- [x] Iniciar após o carregamento e fora de `DllMain`; evitar início duplicado.
+- [x] Expor estado, contadores e último erro de forma consultável. Logs locais
   devem indicar modo real/simulado e perfil selecionado.
-- [ ] Encerrar worker e referências ao motor antes de descarregar. Tratar saída
-  do jogo, falha de rede, DLL já carregada e inicialização incompleta.
-- [ ] Separar falha de leitura temporária de uma versão realmente incompatível.
-- [ ] Validar o ciclo em host Rust próprio e depois no processo original, com
+- [x] Encerrar worker antes de descarregar; tratar DLL já carregada e início
+  duplicado. Não há referências persistentes a entidades do motor nesta etapa.
+- [ ] Ampliar validação de saída do jogo, falha de rede prolongada e
+  inicialização incompleta. Cobrir referências ao motor quando M4 as introduzir.
+- [x] Separar falha de leitura temporária de uma versão realmente incompatível.
+- [x] Validar o ciclo em host Rust próprio e depois no processo original, com
   dados reais enviados e recebidos por outro cliente.
 
 **Concluído quando:** é possível iniciar e parar o cliente no jogo real de forma
@@ -355,10 +485,11 @@ projeto e jogar o escopo LAN documentado sem assistência de desenvolvimento.
   de confiança definidos antes de exposição pública.
 - [ ] Persistência e gameplay compartilhado mais amplo, quando especificados.
 - [ ] Compatibilidade com outras versões via novos perfis comprovados.
-- [ ] Validar ferramentas/servidor nativos em Linux e build cruzado Windows x86
-  já no fluxo inicial do segundo PC. O uso do jogo/DLL sob Proton é uma frente
-  adicional de compatibilidade, ainda não comprovada; não depende de portar
-  o jogo original nem de substituir a DLL por uma biblioteca Linux.
+- [x] Validar ferramentas/servidor nativos em Linux e build cruzado Windows x86
+  no Fedora; a integração inicial do jogo/DLL sob Proton também passou.
+- [ ] Ampliar a matriz Proton para outras configurações e sessões longas;
+  não depende de portar o jogo original nem de substituir a DLL por uma
+  biblioteca Linux. Coop LAN entre máquinas ainda precisa de teste real.
 
 ## 6. Ordem de execução recomendada e riscos
 
@@ -367,8 +498,8 @@ M6 amplia gameplay; M7 melhora o pipeline; M8 acompanha cada mudança de risco;
 M9 depende de resultados estáveis. Isso expressa dependências técnicas, não uma
 instrução para criar agentes paralelos.
 
-Prioridade imediata: integração x86 controlada e perfil de versão, seguida da
-descoberta de criação de entidade remota. Investigar cedo esse ponto evita
+Prioridade imediata: descobrir criação de entidade remota sobre a integração
+x86 controlada e o perfil entregues. Investigar cedo esse ponto evita
 polir um transporte de rede sem uma forma de representar os jogadores no motor.
 Não é preciso concluir toda a economia ou sincronizar todo o trânsito para
 testar dois caminhões visuais na LAN.
@@ -452,12 +583,15 @@ Set-Location C:\dev\across-america-mp
 git status
 ```
 
-4. Reproduza primeiro o ambiente registrado: `1.98.1-x86_64-pc-windows-gnu`.
+4. Use o toolchain fixado atual: `1.99.0-x86_64-pc-windows-gnu`. O registro
+   anterior era 1.98.1; a migração 1.99.0 foi testada no Fedora/Proton, e uma
+   execução no Windows nativo ainda deve ser repetida. Esses comandos não
+   devem ser usados como toolchain host no Linux.
    Esses comandos selecionam o toolchain para o diretório do clone:
 
 ```powershell
-rustup toolchain install 1.98.1-x86_64-pc-windows-gnu
-rustup override set 1.98.1-x86_64-pc-windows-gnu
+rustup toolchain install 1.99.0-x86_64-pc-windows-gnu
+rustup override set 1.99.0-x86_64-pc-windows-gnu
 rustup target add i686-pc-windows-gnu
 rustup component add rustfmt clippy
 rustup show active-toolchain
@@ -519,10 +653,10 @@ quando for gerar a DLL Windows. Não copie a configuração `.cargo` desta máqu
 
 | Componente | Uso no Linux | Validação já realizada |
 | --- | --- | --- |
-| `asset_tools` | Build/execução nativos; fornecer caminho local dos assets | Somente Windows até este registro |
-| `multiplayer_server` | Build/execução nativos; pode atender clientes Windows por UDP | Somente Windows até este registro |
-| Protocolo e lógica portável do cliente | Build/testes nativos, com testes Win32 excluídos por `cfg` | Somente Windows até este registro |
-| `client_dll` no jogo | Gerar DLL PE x86 por compilação cruzada e executá-la em ambiente Win32 | Testada no host de teste Windows; carregamento no jogo pendente |
+| `asset_tools` | Build/execução nativos; fornecer caminho local dos assets | Fedora 44: build, cinco testes e varredura dos três SCS |
+| `multiplayer_server` | Build/execução nativos; pode atender clientes Windows por UDP | Fedora 44: build e relay local; LAN entre máquinas pendente |
+| Protocolo e lógica portável do cliente | Build/testes nativos, com testes Win32 excluídos por `cfg` | Fedora 44: testes portáveis passaram; integração Win32 não executada |
+| `client_dll` no jogo | Gerar DLL PE x86 e executar no prefixo Proton da Steam | Carga, captura, movimento, menu/outra partida e descarga passaram nesta instalação |
 | `memory_tool` e `client_probe` | Binários Windows via ambiente compatível ou PC Windows | Versões nativas Linux não implementam essas funções |
 
 Após instalar Git, rustup e as ferramentas de compilação nativas da distribuição,
@@ -531,8 +665,8 @@ use, num terminal Linux x86_64:
 ```sh
 git clone https://github.com/rodolfoaltenrath/18wos-across-america-mp.git "$HOME/dev/across-america-mp"
 cd "$HOME/dev/across-america-mp"
-rustup toolchain install 1.98.1
-rustup override set 1.98.1
+rustup toolchain install 1.99.0
+rustup override set 1.99.0
 rustup component add rustfmt clippy
 cargo build -p asset_tools -p multiplayer_server --locked
 cargo test --workspace --all-targets --locked
@@ -542,8 +676,10 @@ cargo run -p multiplayer_server --locked -- --bind 0.0.0.0:39000
 ```
 
 Use a mesma ressalva sobre disponibilidade/versão do toolchain descrita no fluxo
-Windows. Os comandos Linux acima são instruções a validar no destino, não testes
-já executados nesta máquina. A distribuição determina os pacotes de compilador
+Windows. Build, testes, formatação e Clippy passaram com Rust 1.99.0 do Fedora,
+conforme os registros de continuidade e integração; o preparo local rustup/MinGW
+está no fluxo principal do README. Sessão LAN entre máquinas continua pendente.
+A distribuição determina os pacotes de compilador
 e linker; não instalar pacotes de outra distribuição por suposição.
 
 O servidor Linux pode se comunicar com o jogo no PC Windows: configure o cliente
@@ -569,8 +705,9 @@ Execute testes Windows num Windows ou com um runner compatível configurado;
 
 Para testar o jogo no próprio Linux, a opção a investigar é a instalação Steam
 original com Proton, que fornece compatibilidade para jogos Windows. Isso não
-garante suporte a este jogo, ao carregador futuro ou às APIs de inspeção usadas.
-Será necessário validar arquitetura, dependências, versão do Proton, prefixo,
+garante suporte a outras instalações/configurações. A integração inicial nesta
+instalação passou conforme o registro acima. Ampliar a matriz de arquitetura,
+dependências, versão do Proton, prefixo,
 enumeração de processos/módulos, carregamento da DLL e limpeza de hooks/threads.
 Manter ferramentas Windows e jogo no ambiente compatível apropriado; não presumir
 que um Wine separado vê o processo lançado pelo Proton. Registrar o hash local
@@ -607,8 +744,9 @@ e [seleção de toolchain com rustup](https://rust-lang.github.io/rustup/overrid
 
 ## 9. Registro de passagem para a próxima etapa
 
-**Próxima entrega:** perfil versionado e ciclo de carregamento/configuração/
-início/parada da DLL x86 dentro do jogo; depois, uma entidade remota visual.
+**Próxima entrega:** investigar os registros de entidades e a thread do motor
+para criar uma entidade remota visual, sobre o ciclo x86 já entregue. Ampliar
+a matriz de estados de M1 e a robustez de M2, sem refazer a busca ampla inicial.
 
 **Antes de começar:** ler os três documentos, conferir Git e toolchain, localizar
 a instalação local e conferir hash. Não refazer a busca ampla de memória se a

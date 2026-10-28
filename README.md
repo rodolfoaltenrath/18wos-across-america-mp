@@ -11,8 +11,9 @@ são comandos de terminal para compilar e executar os programas.
 O projeto contém ferramentas de assets, transporte de coordenadas e uma bancada
 de descoberta de memória em Rust. Uma cadeia de posição foi validada na instalação
 local com movimento, reinício do jogo e comparação exata com o salvamento.
-O carregamento da DLL no
-processo do jogo e a criação/movimentação de caminhões remotos são etapas futuras.
+A DLL x86 já foi carregada no jogo sob Proton e transmitiu coordenadas reais
+ao servidor nativo do Fedora, com recepção por outro cliente de teste.
+A criação/movimentação de caminhões remotos continua pendente.
 
 O plano completo, os critérios de conclusão e o procedimento para continuar em
 outro computador estão em [ROADMAP.MD](ROADMAP.MD). As orientações de autonomia
@@ -20,8 +21,12 @@ e continuidade do desenvolvimento estão em [AGENTS.md](AGENTS.md).
 
 O computador de continuidade usa Linux. Assets/servidor têm um fluxo nativo;
 a DLL do jogo continua sendo Windows x86 e pode ser gerada por compilação
-cruzada. O roadmap contém os comandos e as limitações; Linux/Proton ainda não
-foram validados neste projeto. As instruções GNU abaixo descrevem o host Windows
+cruzada. Build, testes portáveis, formatação, Clippy e varredura dos assets foram
+validados em Fedora 44 com Rust 1.99.0. O build cruzado e a bancada x86 completa
+passaram sob Proton Experimental; a integração inicial no jogo também foi
+executada. Isso não valida coop entre dois computadores. O roadmap registra
+os resultados e limites.
+As instruções GNU abaixo descrevem o host Windows
 usado nos testes e não devem ser copiadas como configuração nativa Linux.
 
 ## Estrutura
@@ -34,6 +39,9 @@ multiplayer_server/        servidor Tokio e biblioteca do protocolo compartilhad
 client_dll/                cdylib Win32, leitura local de memória e cliente UDP
   src/bin/client_probe.rs  host Rust que carrega a DLL real para testes
   src/bin/memory_tool.rs   busca/comparação de memória e telemetria externa
+  src/bin/mp_launcher.rs   controlador Windows x86 para um PID explícito
+  src/bin/proton_host.rs   entrada nativa Linux no prefixo Proton escolhido
+  src/bin/test_host.rs     executa a bancada Windows num único runtime
   tests/                  teste entre processos com fixture própria em Rust
 ```
 
@@ -62,7 +70,109 @@ Extração e conversão exigem saídas novas; reempacotamento também recusa sub
 arquivos existentes. Uma operação que falhe pode deixar uma saída parcial:
 inspecione-a e use outro destino ao tentar novamente.
 
-## Ambiente e compilação
+## Fluxo principal no Fedora
+
+O toolchain atual é **Rust 1.99.0**, fixado em `rust-toolchain.toml`; os registros
+Windows com 1.98.1 abaixo são históricos. A migração foi validada por build,
+testes nativos e execução dos testes x86 sob Proton. Nenhum toolchain host
+Windows é executado nativamente no Linux.
+
+Para reproduzir o preparo local sem acesso administrativo, com Cargo nativo,
+`curl`, `dnf download`, `rpm2cpio` e `cpio` disponíveis:
+
+```sh
+mkdir -p target/toolchain
+curl -fL https://static.rust-lang.org/rustup/dist/x86_64-unknown-linux-gnu/rustup-init -o target/toolchain/rustup-init
+chmod +x target/toolchain/rustup-init
+RUSTUP_HOME="$PWD/target/toolchain/rustup" CARGO_HOME="$PWD/target/toolchain/cargo" \
+  RUSTUP_INIT_SKIP_PATH_CHECK=yes target/toolchain/rustup-init -y --no-modify-path \
+  --default-toolchain 1.99.0 --profile minimal --component rustfmt --component clippy \
+  --target i686-pc-windows-gnu
+dnf download --destdir=target/toolchain/rpms mingw32-gcc mingw32-binutils mingw32-crt mingw32-headers mingw32-winpthreads-static
+cargo run -p asset_tools --bin dev_env -- unpack target/toolchain/rpms target/toolchain/mingw
+cargo run -p asset_tools --bin dev_env -- windows
+cargo run -p asset_tools --bin dev_env -- windows --clippy
+cargo run -p asset_tools --bin dev_env -- windows --tests
+cargo build --workspace --locked
+```
+
+`unpack` exige um destino novo e deve receber somente RPMs confiáveis da
+distribuição. `dev_env` usa caminhos locais e não sobrescreve configuração Cargo.
+Nesta validação: MinGW GCC 16.2.1, binutils 2.46.0 e runtime/headers 13.0.0.
+GNU ld emite avisos de aliases stdcall ao exportar nomes sem decoração; a tabela
+de exports e as chamadas x86 reais foram verificadas. Não confundir esses avisos
+com uma troca da ABI para `extern "C"`.
+
+Prepare um prefixo exclusivo da bancada a partir de uma cópia de um prefixo
+Proton já inicializado, com todos os processos de teste anteriores encerrados.
+Não use esse prefixo de teste para sua partida. Configure os caminhos locais:
+
+```sh
+AA_STEAM="$HOME/.local/share/Steam"
+AA_COMPAT="$AA_STEAM/steamapps/compatdata/514160"
+AA_PROTON="$AA_STEAM/steamapps/common/Proton - Experimental/proton"
+AA_RUNTIME="$AA_STEAM/steamapps/common/SteamLinuxRuntime_4"
+# Primeira cópia, com o jogo fechado; preservar também como backup antes de testes.
+cp -a --no-clobber "$AA_COMPAT" target/proton-tests
+WINEPREFIX="$PWD/target/proton-tests/pfx" "${AA_PROTON%/proton}/files/bin/wineserver" -k
+target/debug/proton_host --steam "$AA_STEAM" --compat target/proton-tests \
+  --proton "$AA_PROTON" --runtime "$AA_RUNTIME" -- \
+  target/i686-pc-windows-gnu/release/test_host.exe target/windows-tests.json
+```
+
+`dev_env windows --tests` gera o manifesto dos executáveis de teste retornados
+pelo Cargo. `test_host` os executa no mesmo runtime que seu wineserver, inclusive
+as fixtures filhas. Nesta máquina, reutilizar um wineserver de outro namespace
+do runtime fez a inspeção de fixtures retornar acesso negado. Encerre o wineserver
+exclusivo dos testes antes de repetir a bancada em outro runtime; nunca encerre
+o wineserver da partida para limpar a bancada.
+
+Para o jogo, abra a instalação original pela Steam, entre numa partida de teste
+e localize o **PID Windows** atual (não o PID Linux):
+
+```sh
+target/debug/proton_host --steam "$AA_STEAM" --compat "$AA_COMPAT" \
+  --proton "$AA_PROTON" --runtime "$AA_RUNTIME" -- \
+  target/i686-pc-windows-gnu/release/memory_tool.exe processes
+```
+
+Com o servidor nativo iniciado (`cargo run -p multiplayer_server -- --bind
+0.0.0.0:39000`), substitua o PID e o endereço pelo destino correto:
+
+```sh
+AA_GAME_PID=1234 # substituir pelo PID Windows mostrado acima
+target/debug/proton_host --steam "$AA_STEAM" --compat "$AA_COMPAT" \
+  --proton "$AA_PROTON" --runtime "$AA_RUNTIME" -- \
+  target/i686-pc-windows-gnu/release/mp_launcher.exe \
+  --pid "$AA_GAME_PID" --dll target/i686-pc-windows-gnu/release/client_dll.dll \
+  connect --server 127.0.0.1:39000
+```
+
+`127.0.0.1` serve somente à bancada no mesmo computador. O objetivo do coop é
+LAN **entre computadores distintos**; configure o IP LAN do servidor nesses
+clientes. Essa matriz entre máquinas permanece pendente.
+
+Na última linha do comando de controle, substitua `connect --server ...` por
+`status`, `watch --seconds 30`, `stop` ou `unload`. `unload` primeiro para e
+aguarda o worker. Faça `unload` antes de reconstruir/substituir a DLL em uso.
+O launcher valida alvo x86, caminho absoluto da DLL e o perfil
+`steam-aa-1.10-ccb327c2`; o worker verifica o arquivo do módulo carregado antes
+de transmitir. Carga usa `LoadLibraryW`, controle usa `client_control`, descarga
+usa `FreeLibrary`, em threads fora de `DllMain`. Os endereços dos exports são
+resolvidos nas imagens do alvo, incluindo forwarders, sem presumir endereços
+iguais entre processos. Não há alteração de executáveis nem hooks do motor.
+
+O wrapper usa **`runinprefix`**. Não substitua por `run` para ferramentas numa
+partida aberta: `run` pode refazer os drives S:/T: sem o ambiente completo da
+Steam. Uma chamada inicial assim removeu S: nesta sessão; o link foi restaurado
+do backup antes da integração bem-sucedida.
+
+Se uma chamada remota exceder 30 segundos, o launcher retém sua alocação para
+evitar liberar dados ainda usados pelo alvo. Ele não termina a thread à força;
+encerre/reabra o alvo antes de novas operações de controle nesse caso. Saída
+abrupta, menus/reloads e perda de rede prolongada ainda exigem uma matriz maior.
+
+## Ambiente e compilação Windows (registro anterior)
 
 Ambiente encontrado: Windows, Rust **1.98.1**, host `x86_64-pc-windows-gnu`.
 Os cabeçalhos PE locais de `aa.exe` e `prism3d.exe` indicam **x86, 32 bits**.
@@ -277,6 +387,7 @@ Exports principais, todos com ABI `extern "system"`:
 
 | Função | Resultado |
 | --- | --- |
+| `client_control(block) -> u32` | API explícita v1: iniciar, consultar ou parar; 0: sucesso, 1: erro |
 | `client_start() -> i32` | 0: iniciado; 1: erro ou já em execução |
 | `client_stop() -> i32` | sinaliza e aguarda a thread; 0: sucesso, 1: erro |
 | `client_status() -> u32` | 0: nunca iniciado; 1: executando; 2: parado; 3: falha na thread |
@@ -287,6 +398,14 @@ Exports principais, todos com ABI `extern "system"`:
 `RemoteState` tem `#[repr(C)]` e está definido em `client_dll/src/lib.rs`. O host
 deve fornecer um ponteiro válido e alinhado; o índice percorre os jogadores por
 ID. As amostras remotas expiram após cinco segundos sem atualização nova.
+
+O controle novo está em `client_dll/src/api.rs`: `Control` tem 1536 bytes,
+alinhamento de oito bytes e `ClientConfig` tem 976 bytes. São estruturas
+`repr(C)` sem ponteiros, com versão/tamanho verificados e strings UTF-8
+terminadas em NUL. O buffer pertence ao host até a chamada retornar.
+`sample_state`: 0 sem amostra, 1 disponível, 2 temporariamente indisponível,
+3 falha fatal. Os exports antigos e `AA_MP_*` permanecem para o probe anterior;
+`mp_launcher` usa somente a configuração explícita.
 
 Uma cadeia de coordenadas `f32` foi validada nesta instalação, conforme a seção
 "Referência validada nesta instalação" abaixo. O modo `memory` exige
@@ -302,7 +421,7 @@ com outras versões ou todos os estados de carregamento. As três leituras não
 constituem uma captura atômica do estado do jogo.
 
 O probe executa em seu próprio processo: seus endereços não são os do caminhão.
-A leitura real exige a DLL no processo correto. A integração futura também deve
+A leitura real exige a DLL no processo correto. As próximas etapas devem
 criar e atualizar entidades remotas, interpolar posições e sincronizar rotação,
 veículo e estado de sessão. O jogo ainda não oferece multiplayer jogável com
 esta base.
@@ -547,7 +666,7 @@ processo, encontra seus valores, aplica filtros, resolve uma cadeia de ponteiros
 lê `f64` e recebe via UDP as coordenadas efetivamente lidas. Ele também verifica
 a recusa de capturas de outra sessão e a preservação de saídas já existentes.
 
-Validação realizada nesta instalação:
+Registro anterior de validação no Windows (antes da integração Fedora/Proton):
 
 - Quatorze testes do workspace passaram em 64 bits e sete testes do cliente passaram
   em 32 bits; Clippy passou com avisos tratados como erros.
@@ -571,6 +690,10 @@ Validação realizada nesta instalação:
 - Os arquivos originais, as saídas de teste, os binários e a configuração local
   do compilador permanecem excluídos pelas regras do Git.
 
-O pacote reempacotado e a integração da DLL ainda precisam ser testados dentro
-do jogo. A leitura externa de posição está validada nesta versão local; carregar
-a DLL no processo do jogo e representar caminhões remotos continuam pendentes.
+O pacote reempacotado ainda precisa de teste dentro do jogo. A integração inicial
+da DLL foi validada posteriormente no Fedora/Proton: 12 testes nativos e 11 testes
+Windows x86 passaram, além de leitura/envio/recepção reais no jogo, movimento,
+menu/outra partida, parada e descarga. O envio suspendeu durante a cadeia
+indisponível e retomou automaticamente nos novos endereços. Caminhões remotos
+e teste LAN entre computadores continuam pendentes; consulte o roadmap para
+evidência e limitações.

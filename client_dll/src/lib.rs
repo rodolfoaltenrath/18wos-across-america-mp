@@ -14,15 +14,23 @@ use std::{
 };
 
 pub mod addresses;
+pub mod api;
+#[cfg(windows)]
+pub mod controller;
 #[cfg(windows)]
 pub mod inspection;
 mod memory;
+pub mod pe_exports;
+pub mod profile;
 
 static WORKER: Mutex<Option<JoinHandle<Result<(), String>>>> = Mutex::new(None);
 static STOP: AtomicBool = AtomicBool::new(false);
 static STATUS: AtomicU32 = AtomicU32::new(0);
 static SENT: AtomicU64 = AtomicU64::new(0);
 static RECEIVED: AtomicU64 = AtomicU64::new(0);
+static SAMPLE_STATE: AtomicU32 = AtomicU32::new(0);
+static READ_FAILURES: AtomicU64 = AtomicU64::new(0);
+static MESSAGE: Mutex<String> = Mutex::new(String::new());
 static REMOTES: Mutex<BTreeMap<u64, (RemoteState, Instant)>> = Mutex::new(BTreeMap::new());
 
 /// C ABI result layout. Coordinates are the most recent relayed samples;
@@ -40,17 +48,36 @@ pub struct RemoteState {
 enum Source {
     Simulated { phase: f32 },
     Memory { addresses: [addresses::Address; 3] },
+    Game { verified_base: usize },
+}
+
+#[derive(Debug)]
+enum SampleError {
+    Unavailable(String),
+    Fatal(String),
+}
+
+fn diagnostic(message: &str) {
+    if let Ok(mut value) = MESSAGE.lock() {
+        if *value != message {
+            eprintln!("client_dll: {message}");
+        }
+        *value = message.into();
+    }
 }
 
 impl Source {
-    fn sample(&self, elapsed: f32) -> Result<Position, String> {
+    fn sample(&mut self, elapsed: f32) -> Result<Position, SampleError> {
         match self {
             Self::Simulated { phase } => Ok(Position {
-                x: (elapsed + phase).cos() * 100.0,
+                x: (elapsed + *phase).cos() * 100.0,
                 y: 0.0,
-                z: (elapsed + phase).sin() * 100.0,
+                z: (elapsed + *phase).sin() * 100.0,
             }),
-            Self::Memory { addresses } => memory::position(addresses),
+            Self::Memory { addresses } => {
+                memory::position(addresses).map_err(SampleError::Unavailable)
+            }
+            Self::Game { verified_base } => memory::game_position(verified_base),
         }
     }
 }
@@ -74,8 +101,9 @@ fn configuration() -> Result<(SocketAddr, Source), String> {
         }
         "memory" => {
             let parse = |key| -> Result<addresses::Address, String> {
-                let text = std::env::var(key)
-                    .map_err(|_| format!("missing {key}; no game addresses are known yet"))?;
+                let text = std::env::var(key).map_err(|_| {
+                    format!("missing {key}; memory mode requires explicit addresses")
+                })?;
                 text.parse().map_err(|error| format!("{key}: {error}"))
             };
             Source::Memory {
@@ -87,32 +115,51 @@ fn configuration() -> Result<(SocketAddr, Source), String> {
     Ok((server, source))
 }
 
-fn run(socket: UdpSocket, source: Source) -> Result<(), String> {
+fn run(socket: UdpSocket, mut source: Source) -> Result<(), String> {
     let tick = Duration::from_secs_f64(1.0 / f64::from(TICK_HZ));
     let start = Instant::now();
     let mut next_tick = start;
     let mut sequence = 0u64;
     let mut buffer = [0; MAX_PACKET + 1];
     while !STOP.load(Ordering::Acquire) {
-        let position = source.sample(start.elapsed().as_secs_f32())?;
-        if !position.is_valid() {
-            return Err("coordinate sample contains NaN/infinity".into());
-        }
-        let bytes = protocol::encode(&ClientUpdate {
-            version: VERSION,
-            sequence,
-            position,
-        })?;
-        match socket.send(&bytes) {
-            Ok(_) => {
-                SENT.fetch_add(1, Ordering::Relaxed);
+        let position = match source.sample(start.elapsed().as_secs_f32()) {
+            Ok(value) => {
+                if SAMPLE_STATE.swap(1, Ordering::AcqRel) != 1 {
+                    diagnostic("coordinate capture available");
+                }
+                Some(value)
             }
-            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
-            // Windows can report a previous ICMP port-unreachable response.
-            Err(error) if error.raw_os_error() == Some(10054) => {}
-            Err(error) => return Err(error.to_string()),
+            Err(SampleError::Unavailable(message)) => {
+                READ_FAILURES.fetch_add(1, Ordering::Relaxed);
+                SAMPLE_STATE.store(2, Ordering::Release);
+                diagnostic(&message);
+                None
+            }
+            Err(SampleError::Fatal(message)) => {
+                SAMPLE_STATE.store(3, Ordering::Release);
+                return Err(message);
+            }
+        };
+        if let Some(position) = position {
+            if !position.is_valid() {
+                return Err("coordinate sample contains NaN/infinity".into());
+            }
+            let bytes = protocol::encode(&ClientUpdate {
+                version: VERSION,
+                sequence,
+                position,
+            })?;
+            match socket.send(&bytes) {
+                Ok(_) => {
+                    SENT.fetch_add(1, Ordering::Relaxed);
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
+                // Windows can report a previous ICMP port-unreachable response.
+                Err(error) if error.raw_os_error() == Some(10054) => {}
+                Err(error) => return Err(error.to_string()),
+            }
+            sequence = sequence.checked_add(1).ok_or("sequence exhausted")?;
         }
-        sequence = sequence.checked_add(1).ok_or("sequence exhausted")?;
         // Bound work per tick so incoming traffic cannot prevent shutdown.
         for _ in 0..256 {
             match socket.recv(&mut buffer) {
@@ -162,6 +209,53 @@ fn run(socket: UdpSocket, source: Source) -> Result<(), String> {
 }
 
 fn start() -> Result<(), String> {
+    let (server, source) = configuration()?;
+    start_source(server, source)
+}
+
+fn explicit_configuration(config: &api::ClientConfig) -> Result<(SocketAddr, Source), String> {
+    if config.version != api::ABI_VERSION
+        || config.size != std::mem::size_of::<api::ClientConfig>() as u32
+    {
+        return Err("incompatible configuration ABI version/size".into());
+    }
+    let server: SocketAddr = api::text(&config.server)?
+        .parse()
+        .map_err(|_| "server must be IP:port")?;
+    if server.port() == 0 || server.ip().is_unspecified() || server.ip().is_multicast() {
+        return Err("server must be a unicast destination with nonzero port".into());
+    }
+    let source = match config.mode {
+        api::SIMULATED if config.phase.is_finite() => Source::Simulated {
+            phase: config.phase,
+        },
+        api::GAME => {
+            if api::text(&config.profile)? != profile::ID {
+                return Err("unknown game profile".into());
+            }
+            if !cfg!(all(windows, target_pointer_width = "32")) {
+                return Err("game profile requires Windows x86 DLL".into());
+            }
+            Source::Game { verified_base: 0 }
+        }
+        api::MEMORY => Source::Memory {
+            addresses: [
+                api::text(&config.addresses[0])?.parse()?,
+                api::text(&config.addresses[1])?.parse()?,
+                api::text(&config.addresses[2])?.parse()?,
+            ],
+        },
+        _ => return Err("invalid source mode or simulation phase".into()),
+    };
+    eprintln!(
+        "client_dll: server={server} mode={} profile={}",
+        config.mode,
+        api::text(&config.profile)?
+    );
+    Ok((server, source))
+}
+
+fn start_source(server: SocketAddr, source: Source) -> Result<(), String> {
     let mut worker = WORKER.lock().map_err(|_| "worker mutex poisoned")?;
     if worker.as_ref().is_some_and(|handle| !handle.is_finished()) {
         return Err("client already running".into());
@@ -169,7 +263,6 @@ fn start() -> Result<(), String> {
     if let Some(handle) = worker.take() {
         let _ = handle.join();
     }
-    let (server, source) = configuration()?;
     let bind = if server.is_ipv4() {
         "0.0.0.0:0"
     } else {
@@ -185,6 +278,9 @@ fn start() -> Result<(), String> {
     STOP.store(false, Ordering::Release);
     SENT.store(0, Ordering::Relaxed);
     RECEIVED.store(0, Ordering::Relaxed);
+    READ_FAILURES.store(0, Ordering::Relaxed);
+    SAMPLE_STATE.store(0, Ordering::Release);
+    diagnostic("starting client");
     STATUS.store(1, Ordering::Release);
     *worker = Some(
         thread::Builder::new()
@@ -194,7 +290,7 @@ fn start() -> Result<(), String> {
                     .unwrap_or_else(|_| Err("worker panicked".into()));
                 STATUS.store(if result.is_ok() { 2 } else { 3 }, Ordering::Release);
                 if let Err(error) = &result {
-                    eprintln!("client_dll: {error}");
+                    diagnostic(error);
                 }
                 result
             })
@@ -212,7 +308,7 @@ pub extern "system" fn client_start() -> i32 {
     match panic::catch_unwind(start) {
         Ok(Ok(())) => 0,
         Ok(Err(error)) => {
-            eprintln!("client_dll: {error}");
+            diagnostic(&error);
             1
         }
         Err(_) => 1,
@@ -227,10 +323,16 @@ pub extern "system" fn client_stop() -> i32 {
             return 1;
         };
         STOP.store(true, Ordering::Release);
-        match worker.take().map(|handle| handle.join()) {
+        let result = match worker.take().map(|handle| handle.join()) {
             None | Some(Ok(Ok(()))) => 0,
             _ => 1,
+        };
+        if let Ok(mut remotes) = REMOTES.lock() {
+            remotes.clear();
         }
+        STATUS.store(2, Ordering::Release);
+        SAMPLE_STATE.store(0, Ordering::Release);
+        result
     })
     .unwrap_or(1)
 }
@@ -249,6 +351,61 @@ pub extern "system" fn client_packets_sent() -> u64 {
 #[unsafe(no_mangle)]
 pub extern "system" fn client_packets_received() -> u64 {
     RECEIVED.load(Ordering::Relaxed)
+}
+
+/// Explicit control, callable as a Win32 remote-thread procedure. No Rust
+/// allocations or pointers cross the ABI. Never call from DllMain.
+///
+/// # Safety
+/// `block` must be aligned, exclusively owned writable storage for a Control,
+/// alive until return. A mismatched version/size returns before reading payload.
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn client_control(block: *mut api::Control) -> u32 {
+    if block.is_null() || !(block as usize).is_multiple_of(std::mem::align_of::<api::Control>()) {
+        return 1;
+    }
+    // SAFETY: caller guarantees readable header; payload is read only after validation.
+    let header = block.cast::<u32>();
+    if unsafe { header.read() } != api::ABI_VERSION
+        || unsafe { header.add(1).read() } != std::mem::size_of::<api::Control>() as u32
+    {
+        return 1;
+    }
+    panic::catch_unwind(AssertUnwindSafe(|| {
+        // SAFETY: validated header and caller's exclusive writable buffer contract.
+        let block = unsafe { &mut *block };
+        let result = match block.command {
+            api::START => explicit_configuration(&block.config)
+                .and_then(|(server, source)| start_source(server, source)),
+            api::STATUS => Ok(()),
+            api::STOP => {
+                if client_stop() == 0 {
+                    Ok(())
+                } else {
+                    Err("worker joined after failure".into())
+                }
+            }
+            _ => Err("unknown control command".into()),
+        };
+        block.result = u32::from(result.is_err());
+        if let Err(message) = result {
+            diagnostic(&message);
+        }
+        block.status = client_status();
+        block.sample_state = SAMPLE_STATE.load(Ordering::Acquire);
+        block.sent = client_packets_sent();
+        block.received = client_packets_received();
+        block.read_failures = READ_FAILURES.load(Ordering::Relaxed);
+        if let Ok(message) = MESSAGE.lock() {
+            let mut end = message.len().min(block.message.len() - 1);
+            while !message.is_char_boundary(end) {
+                end -= 1;
+            }
+            let _ = api::put(&mut block.message, &message[..end]);
+        }
+        block.result
+    }))
+    .unwrap_or(1)
 }
 
 /// Copy a remote player by sorted index. Returns 1 when found, 0 otherwise.

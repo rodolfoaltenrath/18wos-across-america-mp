@@ -12,7 +12,11 @@ use std::{
     time::Duration,
 };
 
-const TOOL: &str = env!("CARGO_BIN_EXE_memory_tool");
+fn tool() -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_BIN_EXE_memory_tool"))
+        .canonicalize()
+        .unwrap()
+}
 
 struct Fixture {
     process: Child,
@@ -23,7 +27,7 @@ struct Fixture {
 
 impl Fixture {
     fn new() -> Self {
-        let mut process = Command::new(TOOL)
+        let mut process = Command::new(tool())
             .arg("fixture")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -59,7 +63,7 @@ impl Drop for Fixture {
 }
 
 fn run(args: &[&str]) -> String {
-    let output = Command::new(TOOL).args(args).output().unwrap();
+    let output = Command::new(tool()).args(args).output().unwrap();
     assert!(
         output.status.success(),
         "{args:?}: {}",
@@ -193,7 +197,7 @@ fn discovers_remote_changes_resolves_pointers_and_streams_actual_readings() {
     receiver
         .set_read_timeout(Some(Duration::from_secs(3)))
         .unwrap();
-    let stream = Command::new(TOOL)
+    let stream = Command::new(tool())
         .args([
             "stream",
             "--pid",
@@ -228,7 +232,7 @@ fn discovers_remote_changes_resolves_pointers_and_streams_actual_readings() {
 
     // Reusing an existing output must fail without changing its previous data.
     let bytes = std::fs::read(&baseline).unwrap();
-    let failure = Command::new(TOOL)
+    let failure = Command::new(tool())
         .args([
             "scan",
             "--pid",
