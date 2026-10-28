@@ -382,3 +382,4 @@ mod tests {
     }
 }
 pub mod binary;
+pub mod pe32;

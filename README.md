@@ -257,6 +257,21 @@ originais.
 
 ## Ferramenta de assets
 
+Para investigação estática do motor, `engine_report` é um binário Rust nativo
+que lê PE32 e não carrega o módulo:
+
+```sh
+cargo run -p asset_tools --bin engine_report -- ../p3shared.dll symbols --contains entity_
+cargo run -p asset_tools --bin engine_report -- ../aa/lib/game.dll records
+cargo run -p asset_tools --bin engine_report -- ../aa/lib/game.dll disassemble --rva 0xcef70 --length 144
+```
+
+Use o caminho real do jogo quando o clone estiver em outra pasta. Relatórios de
+originais ficam locais em `target/analysis/`. No Windows/Proton, o comando
+`memory_tool.exe entities --pid PID_ATUAL` captura os registros de tipos após
+verificar os hashes. Essas ferramentas não criam entidades nem confirmam que um
+construtor já possa ser chamado; o roadmap separa descoberta e validação de ABI.
+
 O `data.scs` local tem assinatura ZIP. A ferramenta abre arquivos `.scs` que sejam
 ZIP e informa erro para outros formatos; ela não presume que todo SCS seja ZIP.
 

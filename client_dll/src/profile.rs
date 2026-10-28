@@ -7,10 +7,15 @@ use std::{
 };
 pub const ID: &str = "steam-aa-1.10-ccb327c2";
 pub const SHA256: &str = "ccb327c2a5c2f7d01d74d94629cf65847ee1535ca9020b3a5fc5d412a8ffbc7d";
+pub const ENGINE_SHA256: &str = "7df43b55e6b34e3ac2017af9566665bd935895ff02a2a916b099bb34045d30a3";
+pub const ENTITY_REGISTRY_HEAD: u32 = 0x49a7c;
 pub const POSITION: &str = "game.dll+0x160df0->0x14c->0x4610->0x8->0x8->0x1d0->0x3e4->0x30";
 
 pub fn verify_module(path: &Path) -> Result<(), String> {
     verify(path, SHA256)
+}
+pub fn verify_engine(path: &Path) -> Result<(), String> {
+    verify(path, ENGINE_SHA256)
 }
 fn verify(path: &Path, expected: &str) -> Result<(), String> {
     let mut file = File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;

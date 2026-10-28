@@ -17,6 +17,7 @@ pub mod addresses;
 pub mod api;
 #[cfg(windows)]
 pub mod controller;
+pub mod engine_discovery;
 #[cfg(windows)]
 pub mod inspection;
 mod memory;

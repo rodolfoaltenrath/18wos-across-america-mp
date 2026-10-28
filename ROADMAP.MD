@@ -228,6 +228,37 @@ testar saída abrupta/rede prolongada e M3 ainda não define sessões/reconexão
 Não há caminhões remotos nem teste LAN entre computadores; M0/M1/M3/M4 não
 estão concluídos. O ciclo controlado central de M2 está entregue.
 
+### M4 — Descoberta reproduzível dos registros — 27/10/2026
+
+`engine_report` nativo Rust analisa PE32 sem carregar código: imports/exports,
+RVA → arquivo, disassembly x86 com `iced-x86`, referências e candidatos a
+registros de entidades. Limites: arquivo de 64 MiB, 96 seções, tabelas/string
+limitadas, recusa de RVAs fora dos bytes e de seções ambíguas. Fixtures próprias
+cobrem os formatos e registros que possuem somente uma variante de construtor.
+
+`memory_tool entities --pid PID_ATUAL` verifica os hashes de `game.dll` e
+`p3shared.dll` e percorre a lista identificada em `p3shared.dll+0x49a7c`, sem
+chamar APIs do motor. Há limites de 4096 nós, detecção de ciclo/alinhamento,
+checagem de strings e rejeição de troca da cabeça durante a leitura.
+Foram encontrados **80 registros** na imagem do jogo e os mesmos 80 tipos
+na partida aberta sob Proton, incluindo `actors.car`, `actors.trailer` e
+`actors.ai`. As alocações da variante selecionada pelo booleano `false` têm
+respectivamente `0x2118`, `0x1244` e `0x1f80` bytes. A variante `true` desses
+tipos é nula e não deve ser chamada. O significado de produto dessas variantes
+ainda não foi identificado; os nomes do código refletem somente o booleano.
+
+O factory exportado recebe registro, booleano e armazenamento opcional; registra
+o destrutor no objeto e chama uma inicialização virtual. Os destrutores observados
+distinguem armazenamento fornecido pelo chamador de alocação do motor. Essas são
+conclusões da inspeção, ainda sem autorização técnica para executar os callbacks
+numa thread arbitrária. Relatórios e disassembly permanecem em `target/analysis/`.
+Validação deste bloco: 16 testes nativos; Clippy nativo/x86; bancada x86 sob
+Proton com os testes de parsing e integração. Nenhum construtor foi chamado.
+
+Próximo bloco: dispatcher para a thread da janela, validado em janela Rust própria,
+com fila limitada, cancelamento e teardown; depois confrontar a fase do motor
+antes de testar a criação privada de uma entidade. Sem veículo visual nesta etapa.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
