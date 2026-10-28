@@ -1567,6 +1567,8 @@ Se algum método exigir alteração de arquivo, documentar e testar restauraçã
 - [ ] Definir mensagens de entrada, saída, heartbeat, timeout e reconexão.
 - [ ] Acrescentar rotação, tick/timestamp, modelo e velocidade com formatos e
   unidades documentados. Tratar compatibilidade e valores inválidos.
+  Progresso: rotação opcional (quaternion unitário, tolerância 2%, v1
+  compatível) entregue e testada na bancada; tick, modelo e velocidade pendentes.
 - [ ] Separar eventos que exigem confirmação/reenvio de snapshots descartáveis.
   Definir IDs, deduplicação e prazos para eventos confiáveis sobre UDP.
 - [ ] Medir RTT, estimar diferença de relógios e ordenar snapshots para interpolação.
@@ -1590,6 +1592,10 @@ mundo ainda precisam de contratos e testes próprios.
 
 - [ ] Investigar criação de veículo/modelo, atualização de transform e remoção,
   usando somente a instalação local e registrando conclusões próprias.
+  Progresso: o caminho escolhido é visual, não entidade. Uma instância PSM é
+  desenhada após o `draw` do jogador, com transform por push/translate/qrotate
+  e remoção segura após flush (validado no jogo). A inserção como entidade do
+  mundo continua sem contrato.
 - [x] Descobrir o registro de tipos e consultar 80 entradas na partida.
 - [x] Decodificar a cadeia de valores de `actors.car` e consultar as sete
   definições herdadas na partida sem chamar getters/setters.
@@ -1618,7 +1624,15 @@ mundo ainda precisam de contratos e testes próprios.
   sem textura (fallback), liberado com segurança e recriado após recarga.
 - [ ] Mapear jogador → entidade, atualizar transform, remover na saída e limpar
   referências ao carregar outro mapa/save ou encerrar a sessão.
+  Progresso (bancada): ID remoto → visual (`--player ID|all`), pose interpolada,
+  sem desenho após 1 s, recriação automática na troca da entidade local e
+  `session-stop` com liberação segura. No jogo, falta validar com tráfego real e
+  recarga real.
 - [ ] Confirmar que mudar o remoto não muda o caminhão local nem os dados do save.
+  Progresso: nas sessões de 28/10 os hashes de originais e saves ficaram iguais
+  e o caminhão local não foi afetado, mas o visual seguia o próprio jogador.
+  Repetir com remoto real; `session-start --backup` + `session-stop --verify`
+  automatizam a conferência.
 - [ ] Usar overlay/indicador apenas como diagnóstico se necessário; isso não
   substitui a entrega de um caminhão remoto no mundo 3D.
 
@@ -1693,12 +1707,18 @@ verificada e removida em outra instalação original sem distribuir o jogo.
 
 - [ ] Cobrir parsing/limites, protocolo, mudança de versão, sessões e interpolação
   com fixtures próprias e testes que verifiquem comportamento relevante.
+  Progresso: protocolo (rotação válida/inválida, v1 sem rotação), eco do
+  servidor, interpolação/teleporte/extrapolação, fonte `drawn`, visual remoto
+  ponta a ponta e sessão com backup têm testes próprios; `dev_env verify` roda
+  tudo. Faltam mudança de versão e sessões com várias conexões.
 - [ ] Simular perda, duplicação, jitter, atraso e reordenação com uma ferramenta
   Rust controlada; registrar parâmetros e resultado reproduzível.
 - [ ] Testar sessão longa, menus, reload, encerramento abrupto e reconexão, com
   verificações de vazamento e remoção de entidades.
 - [ ] Ter logs com versão/perfil/estado e coleta opcional de métricas, sem dumps
   completos ou conteúdo do jogo nos relatórios públicos.
+  Progresso: `session-status` (cliente, visual, draw, remotos) e métricas de
+  custo do desenho/intervalo de frame; logs com versão/perfil pendentes.
 - [ ] Configurar CI de formatação, Clippy, testes e build x86. Builds de integração
   com o jogo continuam locais; CI não deve baixar assets comerciais.
 - [ ] Auditar parsers e caminhos de arquivo/extração; limitar origem de pacotes,

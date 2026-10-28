@@ -661,6 +661,30 @@ aparece espelhado 4 m ao lado. O caminho passa por rede, histórico,
 interpolação (100 ms atrás) e desenho. Sem `--echo`, use dois PCs na LAN, cada
 um com sua sessão apontando para o mesmo servidor.
 
+### Comportamento do caminhão remoto (referência)
+
+- **Suavização:** cada jogador remoto guarda 16 amostras (tempo de recepção
+  local). O desenho fica 100 ms atrás da mais recente, com interpolação linear
+  de posição e de quaternion pelo arco curto (nlerp). Se faltar amostra, prevê
+  no máximo 200 ms à frente. Acima de 20.000 cm/s implícitos, salta direto ao
+  destino (teleporte). Sem amostra há mais de 1 s, não desenha.
+- **Vários remotos:** `--player all` desenha cada remoto fresco com a mesma
+  instância (até 16 por frame). `engine remotes` lista ID, sequência, idade,
+  amostras, posição e rotação.
+- **Skin:** `visual-show --shader models/ai/truck/shaders/truck.shd` aplica o
+  shader do `car.def` de IA a todas as partes via `psm_set_shader`.
+  `session-start` faz isso por padrão (`--no-skin` mantém o fallback); o status
+  informa `skinned_parts`.
+- **Recarga:** se a entidade do jogador local mudar (recarga do save), o visual
+  some na hora, é liberado quando seguro e recriado sozinho com os mesmos
+  parâmetros. O status mostra `recreated`/`recreate_pending`; `fault=2` indica
+  que a recriação foi interrompida.
+- **Métricas:** `draw_cost_avg_ns`/`draw_cost_max_ns` (custo das nossas chamadas
+  ao motor por frame) e `frame_interval_avg_us` (tempo médio de frame local) em
+  `visual-status`/`session-status`.
+- **Arquivos:** `session-verify --backup DIR` compara originais e saves com o
+  backup sem chamar a DLL; as cópias dos saves ficam na pasta do backup.
+
 ### Caminhão remoto pela rede (`--mode drawn` e `--player`)
 
 O protocolo agora aceita um campo opcional `rotation` (quaternion x, y, z, w;
@@ -719,6 +743,10 @@ cargo build -p asset_tools --bin dev_env --locked
 ```
 
 `--tests` gera os artefatos e o manifesto; `test_host` efetivamente os executa.
+Para a verificação completa num comando (build release x86, bancada x86,
+bancada nativa, Clippy x86/nativo e rustfmt, com a soma de testes passados):
+`.\target\debug\dev_env.exe verify`. Ele substitui a sequência manual acima no
+Windows; no Linux continue com `proton_host`/`test_host`.
 O build release deve vir antes da bancada, que carrega a DLL release real.
 `windows --native --tests` cobre o workspace x64 e grava
 `target/windows-native-tests.json`; execute-o com
