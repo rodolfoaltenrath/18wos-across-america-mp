@@ -396,6 +396,36 @@ Para investigar acessos candidatos a membros, sem executar uma imagem:
 em registrador de imediatos/endereços absolutos, mas não prova o tipo do
 registrador nem se a instrução é alcançada.
 
+Para investigar a resolução dos recursos sem carregar a DLL do projeto:
+
+```text
+engine_report aa/lib/game.dll pointers --rva 0x160e20
+engine_report aa/lib/game.dll bindings --rva 0xce970 --length 4096 --contains psm_
+memory_tool resources --pid PID_ATUAL
+```
+
+`pointers` encontra os quatro bytes de um VA preferido, inclusive sem alinhamento
+e em dados; retorna o RVA do início desses bytes, não o início de uma instrução.
+O limite de ocorrências falha explicitamente em vez de truncar o resultado.
+`bindings` parte de uma fronteira de instrução fornecida e reconhece somente
+uma rotina linear `GetProcAddress` → armazenamento de EAX em slot global.
+Reconhece a escrita atrasada após os próximos argumentos e a restauração do
+registrador do resolver antes da última escrita. Retornos, branches, chamadas
+desconhecidas e operações não suportadas encerram a análise. Não é um grafo de
+fluxo completo nem prova de que uma rotina foi executada ou de sua ABI.
+
+`resources` verifica os hashes de executável, engine, jogo e do `psm.dll` quando
+carregado. Compara seis slots PSM com RVAs perfilados e os exports nomeados do
+módulo remoto, relê os slots e confere se os módulos continuam iguais. O JSON
+distingue `matched_export`, `unbound`, `unexpected_target`, `unprofiled_target`
+e `provider_missing`. `psm_exports_match` resume somente as seis comparações;
+não autoriza chamadas. Os rótulos PMD são candidatos, sem assinatura atribuída.
+O comando apenas lê memória; não injeta, não instala sonda e não exige foco na
+janela. Uma captura aceita não é um snapshot atômico do processo.
+
+O módulo PSM tem hash explícito no perfil. Relatórios completos e dados de
+endereços da sessão devem permanecer locais em `target/analysis/`, fora do Git.
+
 ## Retomada no Windows com Rust 1.99.0
 
 O toolchain fixado também se aplica ao Windows GNU x64. O `dev_env windows`

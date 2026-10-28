@@ -26,6 +26,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Read profiled PSM/PMD slots and target exports; never calls engine APIs.
+    Resources {
+        #[arg(long)]
+        pid: u32,
+    },
     /// Decode profiled value metadata, including inherited definitions; no engine calls.
     Values {
         #[arg(long)]
@@ -235,6 +240,11 @@ fn cadence(next: &mut Instant, interval: Duration) {
 
 pub fn main() -> Result<()> {
     match Cli::parse().command {
+        Command::Resources { pid } => {
+            let process = Process::open(pid)?;
+            let report = client_dll::inspection::resources::inspect(&process)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        }
         Command::Values { pid, entity } => {
             let process = Process::open(pid)?;
             let rows = client_dll::inspection::entities::values(&process, &entity)?;

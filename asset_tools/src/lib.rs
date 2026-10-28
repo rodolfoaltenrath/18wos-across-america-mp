@@ -1,3 +1,4 @@
+pub mod bindings;
 use anyhow::{Context, Result, ensure};
 use image::{ImageFormat, imageops::FilterType};
 use std::{

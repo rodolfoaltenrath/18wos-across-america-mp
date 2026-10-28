@@ -2,5 +2,6 @@
 pub mod differences;
 pub mod entities;
 pub mod process;
+pub mod resources;
 pub mod scanner;
 pub mod snapshot;

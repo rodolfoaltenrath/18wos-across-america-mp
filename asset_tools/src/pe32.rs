@@ -50,6 +50,13 @@ pub struct Instruction {
     pub rva: u32,
     pub text: String,
 }
+#[derive(Debug, Serialize)]
+pub struct PointerOccurrence {
+    /// Start of four matching bytes, not necessarily an instruction boundary.
+    pub rva: u32,
+    pub section: String,
+    pub executable: bool,
+}
 fn u16at(b: &[u8], offset: usize) -> Result<u16> {
     Ok(u16::from_le_bytes(
         b.get(offset..offset.checked_add(2).context("offset overflow")?)
@@ -312,6 +319,42 @@ impl Pe32 {
             .map(|i| (i.ip() - u64::from(self.base)) as u32)
             .collect())
     }
+    /// All unaligned occurrences of a preferred image VA in file-backed sections.
+    /// Unlike decoded references, this includes data and operands missed by
+    /// linear decoding. A match alone never proves an instruction or a pointer.
+    pub fn pointer_occurrences(&self, rva: u32, limit: usize) -> Result<Vec<PointerOccurrence>> {
+        ensure!(rva < self.size, "target RVA outside image");
+        ensure!(
+            (1..=65536).contains(&limit),
+            "pointer occurrence limit must be 1..=65536"
+        );
+        let va = self
+            .base
+            .checked_add(rva)
+            .context("pointer VA overflow")?
+            .to_le_bytes();
+        let mut hits = Vec::new();
+        for section in &self.sections {
+            if section.raw_size < 4 {
+                continue;
+            }
+            for (offset, bytes) in self
+                .bytes(section.rva, section.raw_size as usize)?
+                .windows(4)
+                .enumerate()
+            {
+                if bytes == va {
+                    ensure!(hits.len() < limit, "pointer occurrence limit exceeded");
+                    hits.push(PointerOccurrence {
+                        rva: section.rva + offset as u32,
+                        section: section.name.clone(),
+                        executable: section.executable(),
+                    });
+                }
+            }
+        }
+        Ok(hits)
+    }
     /// Candidate accesses to a member offset through a register. This does not
     /// prove the register points to a particular type or that the code is reached.
     pub fn field_references(&self, offset: u32) -> Vec<Instruction> {
@@ -386,6 +429,121 @@ impl Pe32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn binding_fixture() -> Vec<u8> {
+        let mut b = fixture();
+        for (at, value) in [
+            (0x100, 0x2080u32),
+            (0x104, 40),
+            (0x480, 0x20b0),
+            (0x48c, 0x20e0),
+            (0x490, 0x20c0),
+            (0x4b0, 0x21c0),
+            (0x1c4, 0xc0000040),
+        ] {
+            b[at..at + 4].copy_from_slice(&value.to_le_bytes());
+        }
+        for (at, s) in [
+            (0x4e0, &b"KERNEL32.dll\0"[..]),
+            (0x5c2, &b"GetProcAddress\0"[..]),
+            (0x440, &b"fixture_alloc\0"[..]),
+            (0x450, &b"fixture_free\0"[..]),
+        ] {
+            b[at..at + s.len()].copy_from_slice(s);
+        }
+        let code = [
+            0x8b, 0x3d, 0xc0, 0x20, 0, 0x10, // mov edi,[IAT]
+            0x68, 0x40, 0x20, 0, 0x10, 0x56, 0xff, 0xd7, // push name; push esi; call edi
+            0x68, 0x50, 0x20, 0, 0x10, 0x56, // next arguments before previous result store
+            0xa3, 0x60, 0x20, 0, 0x10, 0xff, 0xd7, 0x5f, 0xa3, 0x64, 0x20, 0, 0x10,
+            0xc3, // pop edi before final EAX store
+        ];
+        b[0x200..0x200 + code.len()].copy_from_slice(&code);
+        b
+    }
+    #[test]
+    fn reconstructs_delayed_named_resolver_stores_without_crossing_returns() {
+        let mut b = binding_fixture();
+        // Another resolver after RET must not be attributed to this routine.
+        let code = b[0x200..0x222].to_vec();
+        b[0x230..0x252].copy_from_slice(&code);
+        let pe = Pe32::parse(b).unwrap();
+        let rows = pe.dynamic_bindings(0x1000, 128).unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].symbol, "fixture_alloc");
+        assert_eq!(rows[1].symbol, "fixture_free");
+        assert_eq!((rows[0].slot_rva, rows[1].slot_rva), (0x2060, 0x2064));
+        assert_eq!((rows[0].lookup_rva, rows[0].store_rva), (0x100c, 0x1014));
+        assert_eq!(rows[1].resolver_iat_rva, 0x20c0);
+        assert!(pe.dynamic_bindings(0x1000, 13).unwrap().is_empty());
+        assert!(pe.dynamic_bindings(0x1000, 16385).is_err());
+        assert!(pe.dynamic_bindings(0x2040, 32).is_err());
+    }
+    #[test]
+    fn resolver_candidates_stop_on_clobbers_branches_unknown_calls_and_bad_slots() {
+        for replacement in [&[0x40][..], &[0xeb, 0][..], &[0x8b, 0xfe][..]] {
+            let mut b = binding_fixture();
+            b[0x20e..0x20e + replacement.len()].copy_from_slice(replacement);
+            assert!(
+                Pe32::parse(b)
+                    .unwrap()
+                    .dynamic_bindings(0x1000, 64)
+                    .unwrap()
+                    .is_empty()
+            );
+        }
+        let mut b = binding_fixture();
+        b[0x20d] = 0xd0; // call eax is not our tracked GetProcAddress resolver
+        assert!(
+            Pe32::parse(b)
+                .unwrap()
+                .dynamic_bindings(0x1000, 64)
+                .unwrap()
+                .is_empty()
+        );
+        let mut b = binding_fixture();
+        b[0x1c4..0x1c8].copy_from_slice(&0x40000040u32.to_le_bytes());
+        assert!(
+            Pe32::parse(b)
+                .unwrap()
+                .dynamic_bindings(0x1000, 64)
+                .is_err()
+        );
+        let mut b = binding_fixture();
+        b[0x215..0x219].copy_from_slice(&0x10003000u32.to_le_bytes());
+        assert!(
+            Pe32::parse(b)
+                .unwrap()
+                .dynamic_bindings(0x1000, 64)
+                .is_err()
+        );
+        let mut b = binding_fixture();
+        b[0x5c2] = b'X'; // Do not infer resolver ABI from another imported function.
+        assert!(
+            Pe32::parse(b)
+                .unwrap()
+                .dynamic_bindings(0x1000, 64)
+                .is_err()
+        );
+    }
+    #[test]
+    fn unaligned_pointer_bytes_include_data_without_claiming_decoded_references() {
+        let mut bytes = fixture();
+        bytes[0x411..0x415].copy_from_slice(&0x10002020u32.to_le_bytes());
+        let pe = Pe32::parse(bytes).unwrap();
+        let hits = pe.pointer_occurrences(0x2020, 8).unwrap();
+        assert_eq!(
+            hits.iter().map(|h| h.rva).collect::<Vec<_>>(),
+            [0x1001, 0x2011]
+        );
+        assert!(hits[0].executable);
+        assert_eq!(hits[1].section, ".rdata");
+        assert!(!hits[1].executable);
+        assert_eq!(pe.references(0x2020).unwrap(), [0x1000]);
+        assert!(pe.pointer_occurrences(0x2020, 1).is_err());
+        assert!(pe.pointer_occurrences(0x2020, 0).is_err());
+        assert!(pe.pointer_occurrences(0x2020, 65537).is_err());
+        assert!(pe.pointer_occurrences(pe.size, 8).is_err());
+    }
     fn fixture() -> Vec<u8> {
         let mut b = vec![0; 0x600];
         b[..2].copy_from_slice(b"MZ");

@@ -787,6 +787,78 @@ Depois de comprovar os pré-requisitos, validar init/teardown em fixture e no
 processo antes de inserir ou manter um visual entre frames. Não repetir os
 ciclos de alocação/setter já comprovados sem uma mudança que justifique isso.
 
+### M4 — Resolução estática e auditoria externa de recursos — 28/10/2026
+
+Entregues dois comandos offline em Rust e uma auditoria externa somente de
+leitura, sem novas chamadas de motor ou alteração da ABI da DLL:
+
+- `engine_report MODULE pointers --rva RVA`: ocorrências sem alinhamento dos
+  quatro bytes do VA preferido, separando seção executável/dados. Retorna o
+  início dos bytes e falha se exceder o limite; não presume fronteira de código.
+- `engine_report MODULE bindings --rva RVA --length N [--contains TEXTO]`:
+  candidatos do padrão linear `GetProcAddress`/EAX/slot absoluto gravável.
+  Aceita stores atrasados e a restauração do resolver antes do último store;
+  interrompe em retorno, branch, chamada desconhecida ou operação não suportada.
+- `memory_tool resources --pid PID`: confere quatro hashes quando o provedor
+  está carregado, compara slots e exports nomeados do alvo, relê os slots e
+  confere a identidade dos módulos ao terminar. Não injeta nem instala sonda.
+
+**Evidência estática:** `DLL_register` de `game.dll` consulta o literal
+`lib/psm` em `+0x15651c` e encaminha o resultado para a rotina `+0xce970`.
+Nela, o decoder recuperou **87 associações** nome/slot. Seis foram incluídas no
+perfil de auditoria, cruzadas com os exports do `lib/psm.dll` original:
+
+| Export PSM | Slot em game.dll | RVA no provedor |
+| --- | --- | --- |
+| `psm_alloc_info` | `+0x16111c` | `+0x20e0` |
+| `psm_info_release` | `+0x160ec8` | `+0x2650` |
+| `psm_alloc` | `+0x160b4c` | `+0x3160` |
+| `psm_alloc_simple` | `+0x160998` | `+0x31a0` |
+| `psm_free` | `+0x160d80` | `+0x3750` |
+| `psm_draw` | `+0x160ba4` | `+0x6a10` |
+
+SHA-256 perfilado de `lib/psm.dll`:
+`707ff239d5da3975c91b32fc6973e5d11627f18cfe79e1e3021b2ea56357d9b6`.
+Para cada slot PMD anterior (`+0x160e20`, `+0x16114c`), a varredura de bytes
+achou somente um operando de chamada no arquivo. Eles não aparecem entre os
+87 bindings desse resolver. Isso reforça a investigação do caminho PSM usado
+pelo jogo; não prova ausência de toda possível escrita indireta ou módulo
+opcional. Não preencher os slots PMD com funções PSM por semelhança de nomes.
+
+A auditoria distingue export correspondente, slot nulo, alvo inesperado,
+ponteiro sem perfil e provedor ausente. Ponteiro em outro export do próprio
+PSM também é inesperado. Um PMD não nulo continua sem ABI definida e não ganha
+permissão de chamada. `psm_exports_match` significa apenas que as seis
+comparações passaram; nenhuma prontidão de render é inferida.
+
+**Validação automatizada:** 34 testes nativos e 24 x86 passaram, incluindo a
+bancada da DLL release e as provas anteriores. Build release x86, Clippy
+nativo/x86 e formatação passaram. Fixtures próprias cobrem operandos/dados
+sem alinhamento, resultado atrasado, término da rotina, clobber de EAX/resolver,
+branch, chamada estranha, slot inválido, rebasing, callback trocado, provedor
+ausente, export alterado, mudança dos slots durante captura e memória ilegível.
+Os relatórios comerciais completos ficam somente em
+`target/analysis/resource-bindings/`.
+
+**Contrato candidato seguinte, ainda sem chamada:** `psm_alloc_info` lê um
+caminho por cdecl e retorna um descritor com referência inicial 1. O construtor
+em `psm.dll+0x2070` chama `+0x1000`, que executa `vprocess_t::lock` sobre o
+contexto em `+0xeb84`. `psm_info_release` decrementa a referência e, ao zerar,
+passa por `+0x2090`: solta recursos do descritor e chama `+0x1010`, pareado a
+`vprocess_t::unlock`, antes de liberar seu armazenamento. Essa análise delimita
+uma futura prova do par, sem init de `decals.pmd`, HUD ou inserção no mundo.
+ABI, referência do item carregado, efeito de cache e thread precisam de fixture
+e validação no processo antes de habilitar a operação.
+
+**Conferência real:** partida Windows PID 9888, aberta/carregada pelo
+proprietário. A auditoria externa x64 e a release x86 produziram os mesmos
+oito registros: seis `matched_export`, `psm_exports_match=true` e dois PMD
+`unbound`, `pmd_slots_unbound=true`. Nenhuma DLL do projeto foi carregada no
+alvo por essa auditoria. Não houve prova adicional de alocação, init ou render
+neste bloco. O próximo passo é uma operação privada de info/release, com
+fixture e ownership comprovados antes da chamada. Não refazer o setter nem
+os ciclos vazios anteriores.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,

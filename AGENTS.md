@@ -115,4 +115,13 @@ Antes de init/render, resolver os slots `game.dll+0x160e20`/`+0x16114c`, que
 estavam nulos na partida inclusive após recarga, e o ownership compartilhado da
 base (`+0xf3fe0`/`+0xf40b0`, contador `+0x166598`). Não chamar init da fase 0 com
 esses bindings nulos; investigar pré-requisitos ou outro candidato visual.
+`engine_report pointers` e `bindings` agora investigam bytes/associações de
+GetProcAddress sem executar a imagem; `memory_tool resources --pid PID` audita
+seis slots PSM e os dois candidatos PMD sem injetar. Foram recuperados 87 bindings
+da rotina `game.dll+0xce970`, usada com `lib/psm`. O provedor tem hash explícito.
+A auditoria passou nas fixtures e no jogo: seis PSM corresponderam aos exports,
+os dois PMD permaneceram nulos, resultados x64/x86 iguais. Correspondência
+slot/export não comprova ABI/thread/ownership. Investigar primeiro o par
+`psm_alloc_info`/`psm_info_release` e o lock/unlock do contexto `psm.dll+0xeb84`;
+considerar cache e referências dos itens antes de permitir chamadas reais.
 A criação e a movimentação de caminhões remotos ainda não foram implementadas.

@@ -37,6 +37,7 @@ pub mod pe_exports;
 #[cfg(any(all(windows, target_arch = "x86"), test))]
 mod phase_queue;
 pub mod profile;
+pub mod resource_bindings;
 
 static WORKER: Mutex<Option<JoinHandle<Result<(), String>>>> = Mutex::new(None);
 static STOP: AtomicBool = AtomicBool::new(false);

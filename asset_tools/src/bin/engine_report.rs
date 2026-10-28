@@ -30,6 +30,22 @@ enum Task {
         #[arg(long,value_parser=parse_rva)]
         rva: u32,
     },
+    /// Unaligned VA byte matches in code/data; not proof of an instruction.
+    Pointers {
+        #[arg(long,value_parser=parse_rva)]
+        rva: u32,
+        #[arg(long, default_value_t=4096, value_parser=clap::value_parser!(u32).range(1..=65536))]
+        limit: u32,
+    },
+    /// Straight-line named GetProcAddress/EAX store candidates; no image execution.
+    Bindings {
+        #[arg(long,value_parser=parse_rva)]
+        rva: u32,
+        #[arg(long, default_value_t = 4096)]
+        length: usize,
+        #[arg(long, default_value = "")]
+        contains: String,
+    },
     /// Candidate register-based accesses to a field offset, not a type proof.
     Field {
         #[arg(long,value_parser=parse_rva)]
@@ -50,6 +66,18 @@ fn main() -> Result<()> {
     let args = Args::parse();
     let pe = Pe32::open(&args.module)?;
     match args.task {
+        Task::Bindings {
+            rva,
+            length,
+            contains,
+        } => {
+            let rows = pe.dynamic_bindings(rva, length)?;
+            let rows: Vec<_> = rows
+                .into_iter()
+                .filter(|b| b.symbol.contains(&contains))
+                .collect();
+            println!("{}", serde_json::to_string_pretty(&rows)?);
+        }
         Task::String { rva } => println!("{}", pe.string(rva)?.escape_default()),
         Task::Symbols { contains } => {
             for symbol in pe.exports()?.iter().filter(|s| s.name.contains(&contains)) {
@@ -75,6 +103,10 @@ fn main() -> Result<()> {
                 println!("+0x{:08x}: {}", instruction.rva, instruction.text);
             }
         }
+        Task::Pointers { rva, limit } => println!(
+            "{}",
+            serde_json::to_string_pretty(&pe.pointer_occurrences(rva, limit as usize)?)?
+        ),
         Task::Records => println!(
             "{}",
             serde_json::to_string_pretty(&pe.entity_candidates()?)?
