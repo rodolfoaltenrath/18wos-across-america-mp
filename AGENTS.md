@@ -140,7 +140,18 @@ tentativa foi recusada antes de criar recursos por perfil incorreto, corrigido
 após leitura externa. Não substituir por `mm_alloc_mem +0x13380`.
 O processo da prova corrigida também foi encerrado normalmente após a limpeza.
 O ciclo é privado, sem skins fornecidas/draw/física/HUD; usa shader de fallback.
-Próximo bloco: observar fase gráfica, matrizes/câmera, skins e drenagem de filas.
+`render-attach`/`render-arm`/`render-report`/`render-remove` estão implementados:
+sonda passiva do import thiscall de render_pool no núcleo e binding cdecl de
+path_flush no jogo. A bancada própria passou: ABI/LastError, fila `2→2→0`,
+matriz ilegível, chamada estrangeira, limite de registros, conflito de ownership,
+recuperação e restauração automática no stop. Mantém ABI v3/664 bytes (23–28).
+Foram executados 28 testes x86 e 35 nativos, além de build/Clippy/formatação.
+A pré-conferência externa no processo 9044 passou (hashes/slots/matrizes),
+mas a sonda ainda não foi instalada no jogo: aguarda resposta de prontidão do
+proprietário. Esse processo está aberto sem a DLL do projeto; não inferir
+validação gráfica real a partir da fixture. Reenumerar antes da próxima ação.
+Próximo bloco: validar a sonda em partida/movimento/menu/recarga e sua limpeza;
+depois comprovar matrizes/câmera, skins e drenagem de filas para um draw.
 `psm_draw` põe protos na fila e aumenta referências de pacotes: não desenhar e
 liberar a instância imediatamente sem comprovar o consumo desses recursos.
 Não refazer instância/descritor/setter/lifetime sem necessidade concreta.

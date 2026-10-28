@@ -507,6 +507,59 @@ dirigir/menu/recarga, com bloco de dados de 26.268 bytes e contadores estáveis
 nas repetições. Os módulos originais e os dois saves conservaram seus hashes;
 a sonda/dispatcher foram removidos e o jogo encerrado normalmente.
 
+Para observar as chamadas gráficas existentes, sem pedir novos desenhos:
+
+```text
+engine attach
+engine pump-attach
+engine render-attach
+engine render-arm
+engine render-report
+engine render-remove
+engine pump-remove
+stop
+```
+
+Deixe a partida renderizar um flush completo entre `render-arm` e
+`render-report`. O relatório retorna JSON; mantenha-o local em
+`target/analysis/`. Se a captura ainda estiver armada/em andamento, o comando
+pede uma nova consulta. Pode usar `render-arm` novamente para outra captura,
+com geração nova; a instalação da sonda só pode ocorrer uma vez por processo.
+`stop` também restaura os slots gráficos antes de remover o dispatcher.
+O processo permanece com a DLL fixada até encerrar, pela regra da sonda do loop.
+
+A observação intercepta o import thiscall `r_device_t::render_pool` no núcleo
+e o binding cdecl `gfx_path_flush` no jogo, conferindo hashes e exports antes
+de alterar os dois ponteiros. Encaminha cada chamada original uma vez, preserva
+`LastError` na entrada/saída e apenas lê dados para diagnóstico. Não invoca
+PSM/draw, não insere entidades e não muda filas ou matrizes do motor.
+
+Cada captura acompanha um flush externo na thread da janela: entrada, pools
+antes/depois de render, pools após retornar do flush e retorno final. Guarda
+até 128 registros e 16 pools distintos, com orçamento de 256 nós por leitura
+da fila. `prototype_prefix`/`bucket_prefix` são contagens da parte lida. Só
+`queue_readable=true` sem `truncated` permite interpretar `empty_observed`.
+Uma leitura inválida/cíclica ou truncada nunca é apresentada como fila vazia.
+
+O `summary.flags` deve ser zero para uma captura completa: bits 1/2 indicam
+armada/em andamento; 4/8 indicam limite de registros/pools; 16 indica flush
+aninhado; 32 indica perda por disputa do buffer. Chamadas de outras threads
+continuam sendo encaminhadas, mas são somente contadas em `foreign_calls`.
+`generation` impede misturar registros de capturas diferentes.
+
+As matrizes são cópias de 16 `f32` dos ponteiros de `gfx_world_matrix` e
+`gfx_camera_matrix`, sem normalização ou interpretação de eixos/origem. Leitura
+inválida ou valores não finitos aparecem como `null`. O estado pode representar
+um passe de interface ou outro contexto; ainda não é um contrato de câmera 3D.
+Fila CPU observada vazia não comprova conclusão da GPU, outras filas/passes
+ou autorização para liberar imediatamente uma instância desenhada.
+
+O perfil acrescenta o hash de `gfxshared.dll`. A ABI de diagnóstico continua
+v3/664 bytes, comandos 23–28; nos registros gráficos `frames` transporta bits
+das matrizes, com codificação em `render_observation`, sem mudar comandos
+anteriores. Configuração/rede v1 preservadas. A bancada gráfica é própria,
+sem assets comerciais; os resultados no jogo ficam registrados no roadmap.
+
 ## Retomada no Windows com Rust 1.99.0
 
 O toolchain fixado também se aplica ao Windows GNU x64. O `dev_env windows`

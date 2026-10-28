@@ -19,6 +19,10 @@ pub const CREATE_FACTORY: u32 = 0xcba0;
 pub const DESTROY_FACTORY: u32 = 0xcc40;
 pub const STRING_SETTER: u32 = 0x1b10;
 pub const PSM_SHA256: &str = "707ff239d5da3975c91b32fc6973e5d11627f18cfe79e1e3021b2ea56357d9b6";
+pub const GFX_SHA256: &str = "947d76cf3a905079ed7ac75b5dea35a2734582db35ad194aec8a130c606898ba";
+pub fn verify_gfx(path: &Path) -> Result<(), String> {
+    verify(path, GFX_SHA256)
+}
 pub fn verify_psm(path: &Path) -> Result<(), String> {
     verify(path, PSM_SHA256)
 }

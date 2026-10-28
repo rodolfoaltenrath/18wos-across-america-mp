@@ -1054,6 +1054,91 @@ fronteira de render. Investigar observação passiva antes de chamadas gráficas
 Depois validar um único visual persistente, transform, remoção em menus/reload
 e integração de jogadores. Não repetir estes 18 ciclos sem mudança que exija.
 
+### M4 — Observação passiva do render e das filas — 28/10/2026
+
+Entregues `engine render-attach`, `render-arm`, `render-report` e
+`render-remove`. A sonda observa somente chamadas já feitas pelo jogo, sem
+solicitar draw nem criar recursos. Exige dispatcher e sonda de loop instalada,
+que já fixa a DLL até o processo terminar. O controle usa ABI v3/664 bytes,
+comandos 23–28; registros/matrizes usam campos com codificação própria em
+`render_observation`, sem alterar layouts/comandos anteriores ou a rede v1.
+
+**Contrato estático usado pela observação:**
+
+- Núcleo `+0x22240`: import de
+  `gfxshared.dll!?render_pool@r_device_t@@QAEXPAUr_pool_t@@@Z`, export `+0x3690`.
+  ABI thiscall com `this` em ECX, um pool na pilha, retorno void e `ret 4`.
+  O shim Rust naked captura o retorno real antes do prólogo, alinha a pilha e
+  encaminha a chamada exatamente uma vez, preservando os registradores não
+  voláteis pela ABI. O getter de `LastError` é salvo/restaurado antes do original
+  e depois dele, inclusive quando leituras da observação falham.
+- Jogo `+0x160ea0`: binding de `gfx_path_flush`, núcleo `+0x4820`, cdecl sem
+  argumentos de pilha. Callers não consomem retorno. A rotina percorre os pools,
+  chama render e depois `gfx_pool_remove_all +0x3b60`; no final chama `+0x1070`.
+- O render do pool não esvazia a lista observada. `gfx_pool_remove_all` percorre
+  buckets/protótipos, decrementa referências e chama `r_proto_t::free` quando
+  necessário, depois limpa a lista interna via `vptrlist_t::remove_all`.
+  A sonda não chama essas funções diretamente e não modifica seus dados.
+- Matrizes lidas dos ponteiros do núcleo `+0x5e000` (world, getter `+0x3190`)
+  e `+0x5e848` (camera, getter `+0x3560`), 64 bytes de cada, sem interpretação
+  de convenção ou origem. Não chamar getters do motor a partir da sonda.
+
+Além dos hashes já perfilados de núcleo/engine/jogo, acrescentado SHA-256
+de `gfxshared.dll`:
+`947d76cf3a905079ed7ac75b5dea35a2734582db35ad194aec8a130c606898ba`.
+Exports e valores dos dois slots são conferidos antes de qualquer alteração.
+Troca/restauração usam compare-exchange e preservam a proteção original de
+memória, com rollback/estado retido em falha parcial. Outro proprietário de
+slot impede sobrescrita. Os originais e dados estáticos permanecem válidos
+após remover, pois outra thread pode ter carregado o shim antes da restauração.
+`engine pump-remove`/`stop` removem primeiro a sonda gráfica; erro impede
+prosseguir com a limpeza como se tivesse passado.
+
+**Captura:** uma geração acompanha o próximo flush externo completo da thread
+selecionada. Registra entrada, render enter/return, cada pool depois do flush e
+retorno final. Limites: 128 registros, 16 pools distintos, 256 nós compartilhados
+entre as duas listas por leitura. Truncamento, ciclo, leitura inválida, nesting
+e perda por disputa do buffer ficam explícitos. Callbacks usam `try_lock`,
+sem espera no mutex nem alocação por registro; falha durante uma captura a
+invalida. A CLI consulta uma geração fixa e recusa mistura com outra captura.
+O relatório completo deve ter `summary.flags=0`; campos `empty_observed` só
+descrevem uma fila lida integralmente naquele ponto da thread observada.
+
+**Bancada própria:** host Rust com slots em página somente de leitura, cdecl
+flush e thiscall render, duas listas e dois protótipos próprios, além de world/
+camera. Passagem de `this`, pool, pilha e `LastError` foram exercitados pela DLL
+release real. Captura de cinco eventos: fila `2 → 2 → 0`, com matrizes copiadas.
+Foram cobertos pré-requisito de pin, callback/modo inválidos sem instalação,
+matriz ilegível sem quebrar o encaminhamento, chamada de outra thread sem
+incluir seus dados, geração antiga/índice inválidos e restauração automática
+no stop. Após remover, o host continuou renderizando; ao sair, conferiu ambos
+os originais e `PAGE_READONLY`. O decoder próprio cobre listas vazias/vivas,
+ciclos, ponteiro inválido, orçamento, bits exatos das matrizes e NaN.
+O host também provocou 100 renders no mesmo flush: a captura parou de ler
+novos registros no limite de 128 e marcou o relatório incompleto; uma nova
+geração recuperou a captura normal. Ao simular outro proprietário do slot,
+remoção/stop recusaram sobrescrevê-lo, sem descarregar a DLL; devolver o slot
+à sonda permitiu concluir a limpeza e restaurar sua proteção.
+
+**Verificações gerais:** build release x86, Clippy x86/nativo, formatação,
+28 testes x86 e 35 nativos passaram. A bancada não usa arquivos comerciais.
+Não houve chamada nova de render pela ferramenta.
+
+**Pré-conferência externa na partida:** processo 9044, sem DLL do projeto
+carregada. Os hashes de núcleo/engine/jogo/gfxshared conferiram; o import do
+núcleo apontou para `gfxshared+0x3690`, e o slot do jogo para núcleo `+0x4820`.
+Os dois ponteiros globais de matriz puderam ser lidos. Foram preparadas cópias
+dos saves em diretório ignorado. Isso é somente leitura externa; a validação
+da sonda na partida ainda aguarda confirmação de que o caminhão está parado
+em uma partida carregada. Não atribuir à partida o resultado da fixture.
+
+**Limites e próxima dependência:** conferir esta observação na partida, durante
+movimento/menu/recarga, antes de concluir sobre uma fase real. Mesmo que a fila
+CPU fique vazia, isso não é fence da GPU nem prova de outras filas/passes.
+Determinar contexto de câmera/matrizes, skins e ownership dos pacotes antes
+de introduzir um visual persistente. Não repetir criação/liberação privada
+já comprovada sem mudança que exija a regressão.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -1589,8 +1674,13 @@ e [seleção de toolchain com rustup](https://rust-lang.github.io/rustup/overrid
 
 ## 9. Registro de passagem para a próxima etapa
 
-**Próxima entrega:** observar a fase gráfica e comprovar matrizes/câmera,
-skins e drenagem das filas antes de um draw. Depois manter um único visual e
+**Próxima entrega:** validar a sonda gráfica já implementada em uma partida,
+durante movimento/menu/recarga, com limpeza e conferência dos slots originais.
+A bancada passou; a pré-conferência externa do processo 9044 passou, mas a
+instalação/observação no jogo aguarda sinal do proprietário. Reenumerar alvo
+e módulos; a DLL do projeto ainda não foi carregada nesse processo.
+Depois comprovar matrizes/câmera, skins e drenagem das filas antes de um draw.
+Depois manter um único visual e
 validar transform/remoção em menus e reload. Lifetime, ownership, metadados,
 setter PMD, descritor e instância PSM privados já têm provas registradas;
 não repeti-las sem necessidade. A última sessão teve sonda/dispatcher removidos,

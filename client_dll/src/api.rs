@@ -31,6 +31,12 @@ pub const PRIVATE_INFO: u32 = 19;
 pub const PRIVATE_INFO_FIXTURE: u32 = 20;
 pub const PRIVATE_INSTANCE: u32 = 21;
 pub const PRIVATE_INSTANCE_FIXTURE: u32 = 22;
+pub const UI_RENDER_ATTACH: u32 = 23;
+pub const UI_RENDER_FIXTURE: u32 = 24;
+pub const UI_RENDER_REMOVE: u32 = 25;
+pub const RENDER_ARM: u32 = 26;
+pub const RENDER_STATUS: u32 = 27;
+pub const RENDER_READ: u32 = 28;
 pub const ENGINE_ABI_VERSION: u32 = 3;
 /// Separate extension ABI; does not change the original Control v1 layout.
 #[repr(C)]
@@ -72,6 +78,9 @@ pub struct EngineControl {
     /// Private item: descriptor in [0]. Model: also metadata root [1], setter [2].
     /// Private info: allocate [0], release [1], context head [2].
     /// Instance: info as above, allocate [3], free [4], operations identity [5].
+    /// Render fixture: render slot/original, flush slot/original, world/camera heads.
+    /// RENDER_READ reuses fields through render_observation::Record; frames are
+    /// matrix bits, not stack frames. No layout change for existing commands.
     pub fixture: [u32; 6],
     pub frames: [u32; 32],
     pub name: [u8; 128],

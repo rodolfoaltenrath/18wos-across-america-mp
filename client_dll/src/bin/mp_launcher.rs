@@ -48,6 +48,10 @@ fn main() -> anyhow::Result<()> {
     }
     #[derive(Subcommand)]
     enum EngineTask {
+        RenderAttach,
+        RenderArm,
+        RenderReport,
+        RenderRemove,
         PhaseProbe,
         /// Private container-backed actor, immediately released; never inserted.
         ItemCycle {
@@ -141,6 +145,10 @@ fn main() -> anyhow::Result<()> {
                     b
                 }
                 EngineTask::Probe => api::EngineControl::new(api::UI_PROBE),
+                EngineTask::RenderAttach => api::EngineControl::new(api::UI_RENDER_ATTACH),
+                EngineTask::RenderArm => api::EngineControl::new(api::RENDER_ARM),
+                EngineTask::RenderReport => api::EngineControl::new(api::RENDER_STATUS),
+                EngineTask::RenderRemove => api::EngineControl::new(api::UI_RENDER_REMOVE),
                 EngineTask::Trace => api::EngineControl::new(api::UI_TRACE),
                 EngineTask::PumpAttach => api::EngineControl::new(api::UI_PUMP_ATTACH),
                 EngineTask::PumpStatus => api::EngineControl::new(api::UI_PUMP_STATUS),
@@ -192,6 +200,32 @@ fn main() -> anyhow::Result<()> {
                 EngineTask::Status => api::EngineControl::new(api::UI_STATUS),
             };
             controller.engine_control(&dll, &mut block)?;
+            if block.command == api::RENDER_STATUS {
+                let summary = client_dll::render_observation::Summary::decode(&block);
+                ensure!(
+                    summary.flags & 3 == 0,
+                    "capture pending; let the game render a complete flush, then retry"
+                );
+                ensure!(
+                    summary.records <= client_dll::render_observation::CAPACITY as u32,
+                    "render record limit exceeded"
+                );
+                let mut records = Vec::new();
+                for i in 0..summary.records {
+                    let mut row = api::EngineControl::new(api::RENDER_READ);
+                    row.cycles = summary.generation;
+                    row.reserved = i;
+                    controller.engine_control(&dll, &mut row)?;
+                    records.push(client_dll::render_observation::Record::decode(&row).json());
+                }
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(
+                        &serde_json::json!({"summary":summary,"records":records})
+                    )?
+                );
+                return Ok(());
+            }
             let message = api::text(&block.message).map_err(anyhow::Error::msg)?;
             if !message.is_empty() {
                 println!("{message}");

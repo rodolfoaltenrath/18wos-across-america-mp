@@ -33,6 +33,8 @@ mod engine_lifecycle;
 mod engine_model;
 #[cfg(all(windows, target_arch = "x86"))]
 mod engine_phase;
+#[cfg(all(windows, target_arch = "x86"))]
+mod engine_render;
 pub mod engine_values;
 #[cfg(windows)]
 pub mod inspection;
@@ -41,6 +43,7 @@ pub mod pe_exports;
 #[cfg(any(all(windows, target_arch = "x86"), test))]
 mod phase_queue;
 pub mod profile;
+pub mod render_observation;
 pub mod resource_bindings;
 
 static WORKER: Mutex<Option<JoinHandle<Result<(), String>>>> = Mutex::new(None);

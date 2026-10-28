@@ -1,6 +1,8 @@
 //! A private message-pump host for dispatcher lifecycle tests. No game assets.
 #[cfg(all(windows, target_arch = "x86"))]
 mod fixture_actor;
+#[cfg(all(windows, target_arch = "x86"))]
+mod fixture_render;
 #[cfg(windows)]
 static PEEK_SLOT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 #[cfg(windows)]
@@ -30,6 +32,16 @@ fn main() -> anyhow::Result<()> {
     let instance = unsafe { GetModuleHandleW(ptr::null()) };
     let ansi = std::env::args().any(|a| a == "--ansi");
     let peek = std::env::args().any(|a| a == "--peek");
+    #[cfg(target_arch = "x86")]
+    let render_enabled = std::env::args().any(|a| a == "--render");
+    #[cfg(target_arch = "x86")]
+    let mut renderer = render_enabled.then(fixture_render::Fixture::new);
+    #[cfg(target_arch = "x86")]
+    let render_descriptors = renderer
+        .as_ref()
+        .map_or([0; 6], fixture_render::Fixture::descriptors);
+    #[cfg(not(target_arch = "x86"))]
+    let render_descriptors = [0u32; 6];
     #[cfg(target_arch = "x86")]
     let actor = fixture_actor::Fixture::new();
     #[cfg(target_arch = "x86")]
@@ -130,7 +142,7 @@ fn main() -> anyhow::Result<()> {
     ensure!(!window.is_null(), "cannot create fixture window");
     println!(
         "{}",
-        serde_json::json!({"pid":unsafe{GetCurrentProcessId()},"window":window as usize,"thread":unsafe{GetCurrentThreadId()}, "peek_slot": peek_slot, "factory": bindings, "item_descriptors": item_descriptors, "model_definitions": model_definitions, "model_setter": model_setter,"info_descriptors":info_descriptors,"instance_descriptors":instance_descriptors})
+        serde_json::json!({"pid":unsafe{GetCurrentProcessId()},"window":window as usize,"thread":unsafe{GetCurrentThreadId()}, "peek_slot": peek_slot, "factory": bindings, "item_descriptors": item_descriptors, "model_definitions": model_definitions, "model_setter": model_setter,"info_descriptors":info_descriptors,"instance_descriptors":instance_descriptors,"render_descriptors":render_descriptors})
     );
     std::io::stdout().flush()?;
     let address = window as usize;
@@ -139,6 +151,11 @@ fn main() -> anyhow::Result<()> {
             let Ok(line) = line else {
                 break;
             };
+            #[cfg(target_arch = "x86")]
+            if render_enabled && fixture_render::command(&line) {
+                let _ = std::io::stdout().flush();
+                continue;
+            }
             #[cfg(target_arch = "x86")]
             if matches!(
                 line.as_str(),
@@ -199,6 +216,10 @@ fn main() -> anyhow::Result<()> {
     });
     let mut message = MSG::default();
     loop {
+        #[cfg(target_arch = "x86")]
+        if let Some(renderer) = renderer.as_mut() {
+            renderer.frame();
+        }
         if peek {
             let function: unsafe extern "system" fn(
                 *mut MSG,
