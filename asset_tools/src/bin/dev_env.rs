@@ -29,7 +29,7 @@ enum Task {
         #[arg(long, conflicts_with_all=["check", "tests"])]
         clippy: bool,
     },
-    /// Windows host: x86 release, both test benches, both Clippy runs and rustfmt.
+    /// Windows host: x86/native release, both test benches, Clippy and rustfmt.
     Verify,
 }
 fn main() -> Result<()> {
@@ -187,6 +187,8 @@ fn verify() -> Result<()> {
 fn verify() -> Result<()> {
     // The bench loads the release DLL, so build it before the test artifacts.
     windows(false, false, false, false)?;
+    // Test artifacts do not refresh the standalone server/asset executables.
+    windows(true, false, false, false)?;
     windows(false, false, true, false)?;
     let x86 = bench(false)?;
     windows(true, false, true, false)?;

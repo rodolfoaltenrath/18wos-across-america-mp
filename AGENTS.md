@@ -81,6 +81,11 @@ São requisitos/plano, não funcionalidades já entregues. Ver detalhes em M6/M7
 No Windows, usar `dev_env windows` com GCC/GNU ld da versão ativa, conforme
 README. O antigo `rust-lld` x86 falhou na recuperação de panic neste host; não
 reutilizar sua configuração. O helper preserva `.cargo/config.toml` local.
+`dev_env verify` agora também compila o workspace nativo release: testes não
+atualizam os executáveis normais. Usar servidor/assets de
+`target/x86_64-pc-windows-gnu/release/` e launcher/DLL de
+`target/i686-pc-windows-gnu/release/`. O preparo com eco passou novamente com
+41 testes x86 e 47 nativos; não houve novo teste no jogo nessa preparação.
 A última validação Windows de setter terminou com sonda/dispatcher removidos,
 worker parado e processo encerrado normalmente. Não reutilizar PID/endereços
 absolutos do registro.

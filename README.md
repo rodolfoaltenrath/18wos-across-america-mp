@@ -778,11 +778,16 @@ cargo build -p asset_tools --bin dev_env --locked
 ```
 
 `--tests` gera os artefatos e o manifesto; `test_host` efetivamente os executa.
-Para a verificação completa num comando (build release x86, bancada x86,
+Para a verificação completa num comando (build release x86 e nativo, bancada x86,
 bancada nativa, Clippy x86/nativo e rustfmt, com a soma de testes passados):
 `.\target\debug\dev_env.exe verify`. Ele substitui a sequência manual acima no
 Windows; no Linux continue com `proton_host`/`test_host`.
 O build release deve vir antes da bancada, que carrega a DLL release real.
+O build nativo também atualiza os executáveis de servidor e assets em
+`target/x86_64-pc-windows-gnu/release/`; compilar testes não atualiza esses
+programas. No Windows, use esse servidor para `--echo` e o launcher/DLL de
+`target/i686-pc-windows-gnu/release/` para a partida. Não reutilize executáveis
+antigos de outro diretório apenas por terem o mesmo nome.
 `windows --native --tests` cobre o workspace x64 e grava
 `target/windows-native-tests.json`; execute-o com
 `target/x86_64-pc-windows-gnu/debug/test_host.exe`. O mesmo helper aceita

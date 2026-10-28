@@ -1439,7 +1439,7 @@ x86/nativo e rustfmt limpos.
    inesperada marca `fault=2`. O status informa `recreated` e
    `recreate_pending`. A fixture simula a recarga com uma segunda entidade; as
    instâncias criadas ficaram iguais às liberadas mais uma.
-5. **`dev_env verify`**: build release x86, bancada x86, bancada nativa, Clippy
+5. **`dev_env verify`**: build release x86 e nativo, bancada x86, bancada nativa, Clippy
    x86/nativo e rustfmt, com soma de passados/falhos (parser testado).
 6. **Servidor `--echo`**: devolve a cada cliente a própria pose como
    `1000000000 + id` (cabe em u32), para testar rede, interpolação e desenho
@@ -1456,6 +1456,19 @@ Ainda não comprovado no jogo: o skin (textura e custo do primeiro desenho), a
 recriação depois de uma recarga real (a instância antiga atravessa o
 carregamento até ser liberada), vários remotos e a interpolação com tráfego real
 de LAN.
+
+**Preparo da validação com eco — 28/10/2026:** a verificação dos testes passou,
+mas o executável nativo release existente era antigo e recusava `--echo`.
+Compilar os testes não o atualizava. `dev_env verify` agora também faz o build
+release do workspace nativo, antes da bancada, mantendo o build x86 da DLL.
+Os executáveis atuais ficam em `target/x86_64-pc-windows-gnu/release/`
+(servidor/assets) e `target/i686-pc-windows-gnu/release/` (launcher/DLL).
+O novo `verify` passou: 41 x86, 47 nativos, Clippy x86/nativo e rustfmt.
+O servidor nativo atual aceitou `--bind 127.0.0.1:39000 --echo` e iniciou.
+Os hashes dos cinco originais conferiram com o perfil. Não houve injeção nem
+validação visual nesta preparação: o jogo ainda não estava aberto. O teste
+real continua pendente da partida carregada; não promover esse preparo a
+evidência de skin, suavização ou recarga na partida.
 
 ## 3. Primeira versão jogável e limites
 
@@ -1537,8 +1550,12 @@ originais; não versionar pacotes comerciais reempacotados.
 **Inspeção preliminar local, somente leitura:** a listagem do `aa/base.scs`
 confirmou `defs/scenario_base.def` e os cinco arquivos em `defs/scenarios/`,
 incluindo `become_millionaire.def`; o patch contém uma definição de cenário.
-Isso localiza entradas para investigação, não comprova que a meta ou os menus
-sejam controlados só por esses arquivos. Não houve alteração/extração aplicada.
+A leitura posterior com o binário atual confirmou `win:"money:1000000"` no
+cenário e `none:0` como condição sem vitória na definição base. A interface de
+novo jogo está em `ui/mnewgame.esc`, com handler `ui.handler.menu.newgame`.
+Isso fornece candidatos concretos para meta/checkbox, sem comprovar a semântica
+de patrimônio/dívida, a persistência ou que somente editar o arquivo baste.
+Não houve alteração/extração aplicada aos arquivos do jogo.
 
 ## 4. Arquitetura e decisões a preservar
 
