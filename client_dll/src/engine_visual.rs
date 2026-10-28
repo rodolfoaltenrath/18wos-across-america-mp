@@ -404,6 +404,11 @@ pub fn run(mut block: EngineControl, fixture: bool) -> Result<EngineControl, Str
     Ok(block)
 }
 fn create(block: &EngineControl, fixture: bool) -> Result<(), String> {
+    if crate::engine_transition::installed() {
+        return Err(
+            "passive transition observation requires no retained visual; remove it first".into(),
+        );
+    }
     let path = api::text(&block.name)?;
     let model = ModelName::parse(path)?;
     if !fixture && path != "models/ai/truck/models/truck.psm" {

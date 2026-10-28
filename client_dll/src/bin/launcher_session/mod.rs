@@ -181,6 +181,8 @@ fn verify_slots(pid: u32) -> Result<Vec<Value>> {
     let mut rows = Vec::new();
     for (name, slot, expected) in [
         ("actors.car draw", game + 0x12580c, game + 0x5a6a0),
+        ("actors.car init", game + 0x1257fc, game + 0x50f40),
+        ("actors.car done", game + 0x125800, game + 0x515d0),
         ("render_pool import", core + 0x22240, gfx + 0x3690),
         ("gfx_path_flush binding", game + 0x160ea0, core + 0x4820),
     ] {
@@ -230,6 +232,7 @@ pub fn prepare_load(c: &Controller, dll: &Path, timeout: Duration) -> Result<Val
 pub fn stop(c: &Controller, dll: &Path, pid: u32, timeout: Duration, game: bool) -> Result<Value> {
     let mut report = prepare_load(c, dll, timeout)?;
     for command in [
+        api::UI_TRANSITION_REMOVE,
         api::UI_DRAW_REMOVE,
         api::UI_RENDER_REMOVE,
         api::UI_PUMP_REMOVE,

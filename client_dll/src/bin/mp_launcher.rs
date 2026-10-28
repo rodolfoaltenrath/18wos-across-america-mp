@@ -70,6 +70,13 @@ fn main() -> anyhow::Result<()> {
         },
         /// Client, visual, draw and relayed players in one JSON report.
         SessionStatus,
+        /// Read-only backup/hash snapshot without loading the DLL or creating a visual.
+        SessionBackup {
+            #[arg(long)]
+            backup: PathBuf,
+            #[arg(long)]
+            saves: Option<PathBuf>,
+        },
         /// Release the visual BEFORE opening/loading a save; keep probes/network.
         SessionPrepareLoad {
             #[arg(long, default_value_t = 30, value_parser = clap::value_parser!(u64).range(1..=600))]
@@ -103,6 +110,13 @@ fn main() -> anyhow::Result<()> {
         DrawStatus,
         DrawReport,
         DrawRemove,
+        /// Passive init/done(phase) capture; never frees mod resources.
+        TransitionAttach,
+        TransitionArm,
+        TransitionStatus,
+        /// Snapshot of the append-only capture, even while still armed.
+        TransitionReport,
+        TransitionRemove,
         /// Retained truck instance drawn after the player's exterior draw; needs draw+render.
         VisualShow {
             #[arg(long, default_value = "models/ai/truck/models/truck.psm")]
@@ -216,6 +230,17 @@ fn main() -> anyhow::Result<()> {
         );
     }
     match &args.command {
+        Task::SessionBackup { backup, saves } => {
+            let saves = match saves {
+                Some(path) => path.clone(),
+                None => PathBuf::from(std::env::var_os("USERPROFILE").context("USERPROFILE")?)
+                    .join("Documents/18 WoS Across America/saves"),
+            };
+            let root = (!args.fixture).then(|| executable.parent()).flatten();
+            let snapshot = launcher_session::backup(backup, root, &saves)?;
+            println!("{}", serde_json::to_string_pretty(&snapshot)?);
+            return Ok(());
+        }
         Task::SessionStart {
             server,
             player,
@@ -305,6 +330,7 @@ fn main() -> anyhow::Result<()> {
         Task::Engine { task } => {
             let render_status_only = matches!(task, EngineTask::RenderStatus);
             let draw_status_only = matches!(task, EngineTask::DrawStatus);
+            let transition_status_only = matches!(task, EngineTask::TransitionStatus);
             if matches!(task, EngineTask::Attach { .. }) {
                 controller.load(&dll)?;
             }
@@ -326,6 +352,12 @@ fn main() -> anyhow::Result<()> {
                     api::EngineControl::new(api::DRAW_STATUS)
                 }
                 EngineTask::DrawRemove => api::EngineControl::new(api::UI_DRAW_REMOVE),
+                EngineTask::TransitionAttach => api::EngineControl::new(api::UI_TRANSITION_ATTACH),
+                EngineTask::TransitionArm => api::EngineControl::new(api::TRANSITION_ARM),
+                EngineTask::TransitionStatus | EngineTask::TransitionReport => {
+                    api::EngineControl::new(api::TRANSITION_STATUS)
+                }
+                EngineTask::TransitionRemove => api::EngineControl::new(api::UI_TRANSITION_REMOVE),
                 EngineTask::VisualShow {
                     model,
                     offset,
@@ -414,6 +446,33 @@ fn main() -> anyhow::Result<()> {
                 EngineTask::Status => api::EngineControl::new(api::UI_STATUS),
             };
             controller.engine_control(&dll, &mut block)?;
+            if block.command == api::TRANSITION_STATUS {
+                use client_dll::transition_observation::{CAPACITY, Record, Summary};
+                let summary = Summary::decode(&block);
+                if transition_status_only {
+                    println!("{}", serde_json::to_string_pretty(&summary)?);
+                    return Ok(());
+                }
+                ensure!(
+                    summary.records <= CAPACITY as u32,
+                    "transition record limit exceeded"
+                );
+                let mut records = Vec::new();
+                for i in 0..summary.records {
+                    let mut row = api::EngineControl::new(api::TRANSITION_READ);
+                    row.cycles = summary.generation;
+                    row.reserved = i;
+                    controller.engine_control(&dll, &mut row)?;
+                    records.push(Record::decode(&row).json());
+                }
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(
+                        &serde_json::json!({"summary":summary,"records":records})
+                    )?
+                );
+                return Ok(());
+            }
             if block.command == api::RENDER_STATUS {
                 let summary = client_dll::render_observation::Summary::decode(&block);
                 if render_status_only {
@@ -565,6 +624,7 @@ fn main() -> anyhow::Result<()> {
             return Ok(());
         }
         Task::SessionStart { .. }
+        | Task::SessionBackup { .. }
         | Task::SessionPrepareLoad { .. }
         | Task::SessionStatus
         | Task::SessionStop { .. }

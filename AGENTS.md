@@ -239,3 +239,17 @@ ABI/thread/ordem antes de automatizar a liberação/recriação. Não repetir re
 retido só porque a luz foi corrigida: a causa do crash não foi isolada.
 Essa revisão passou em build release x86/nativo, 41 testes x86, 47 nativos,
 Clippy x86/nativo e rustfmt. LAN com dois PCs e sessões longas seguem pendentes.
+
+Bloco seguinte entregue na bancada: `engine transition-attach/arm/status/report/remove`
+(41–46, mesma ABI v3/664) observa passivamente os virtuais init/done(phase) de
+`actors.car`. Registra entrada/retorno, argumento, thread/caller, cena/física/
+modelo e primeiro draw subsequente; 128 eventos por geração, flags de perda/
+truncamento. Preserva forwarding, EAX e LastError. Não chama init/done adicional
+nem libera recursos próprios. Sonda e visual alocado são mutuamente exclusivos.
+`session-backup` copia/hasha sem injetar; parada/detach/pump-remove restauram os
+hooks, e session-stop confere cinco slots. `dev_env verify`: 43 x86/48 nativos,
+Clippy x86/nativo e rustfmt. Próximo: captura real SEM visual durante reload,
+comprovar a relação com a destruição global antes da liberação automática.
+Os candidatos estáticos init `game+0x50f40` e done `+0x515d0` são thiscall ret4,
+slots vtable `+0x5c/+0x60`; done(0) encadeia a liberação de modelos e física.
+Isso ainda não comprova o momento global de teardown. Ver seção nova do roadmap.

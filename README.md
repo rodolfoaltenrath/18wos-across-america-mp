@@ -653,6 +653,44 @@ profundidade 0, desenha no passe do mundo) e o estado 12 (profundidade 1, não
 desenha). A recarga criou outra entidade. O slot original foi restaurado,
 conferido por leitura externa, e os hashes de originais/saves se mantiveram.
 
+### Observação da transição de carregamento (`transition-*`)
+
+Esta sonda é passiva: observa os virtuais `actors.car::init(phase)` e
+`done(phase)`, sem chamar inicializações ou liberações adicionais. Não é a
+correção automática do reload. Exige o pump que fixa a DLL e recusa instalação
+com visual alocado; `visual-show` também recusa enquanto a sonda estiver instalada.
+Compile e execute a bancada antes de abrir o jogo. Em uma partida de teste,
+sem servidor e sem `session-start`, execute na ordem (prefixe cada linha
+`engine ...` com `mp_launcher.exe --pid PID --dll CAMINHO\client_dll.dll`):
+
+```text
+mp_launcher.exe --pid PID --dll CAMINHO\client_dll.dll session-backup --backup target\analysis\transicao-NOVA
+engine attach
+engine pump-attach
+engine render-attach
+engine draw-attach
+engine transition-attach
+engine transition-arm
+# Com a captura armada: ir ao menu, carregar save de teste existente e parar.
+engine transition-status
+engine transition-report
+mp_launcher.exe --pid PID --dll CAMINHO\client_dll.dll session-stop --verify target\analysis\transicao-NOVA
+```
+
+`session-backup` só copia os saves e registra hashes; não carrega a DLL nem
+cria um visual. `transition-report` lê um snapshot mesmo com captura ativa:
+até 128 registros append-only, entrada/retorno, argumento da fase, thread,
+callsite, entidade, cena/física/primeira entrada de modelo/quantidade de modelos,
+flushes vistos e primeiro draw após cada grupo de fases. Os valores são leituras
+de memória, não prova de ownership ou de que todas as filas foram consumidas.
+`flags & 1` indica captura ativa, `flags & 4` truncamento e `flags & 32` perda
+por contenção; uma captura incompleta não autoriza liberação. Rearmar troca a
+geração, e leituras de uma geração antiga são recusadas. Evite consultar
+repetidamente durante a transição. `transition-remove` restaura só os slots
+que ainda pertencem à sonda; `pump-remove`, `session-stop` e `stop` também
+removem a sonda. Feche o jogo normalmente após limpar, antes de reconstruir
+a DLL. A comprovação na partida e a automação da liberação ainda estão pendentes.
+
 ### Primeiro caminhão de teste (`visual-*`)
 
 Com pump, render e draw instalados (nessa ordem), em partida carregada:

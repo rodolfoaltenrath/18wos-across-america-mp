@@ -40,6 +40,8 @@ mod engine_model;
 mod engine_phase;
 #[cfg(all(windows, target_arch = "x86"))]
 mod engine_render;
+#[cfg(all(windows, target_arch = "x86"))]
+mod engine_transition;
 pub mod engine_values;
 #[cfg(all(windows, target_arch = "x86"))]
 mod engine_visual;
@@ -53,6 +55,7 @@ mod phase_queue;
 pub mod profile;
 pub mod render_observation;
 pub mod resource_bindings;
+pub mod transition_observation;
 
 static WORKER: Mutex<Option<JoinHandle<Result<(), String>>>> = Mutex::new(None);
 static STOP: AtomicBool = AtomicBool::new(false);

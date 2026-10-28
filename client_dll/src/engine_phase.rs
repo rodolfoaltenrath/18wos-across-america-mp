@@ -189,6 +189,7 @@ pub fn remove() -> Result<(), String> {
     if TASKS.stats().1 != 0 {
         return Err("phase operation still running; dispatcher and module retained".into());
     }
+    crate::engine_transition::remove()?;
     crate::engine_draw::remove()?;
     crate::engine_render::remove()?;
     if STATE.load(Ordering::Acquire) != 1 {

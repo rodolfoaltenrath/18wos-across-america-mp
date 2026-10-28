@@ -2,6 +2,7 @@
 //! and a world stack laid out like the observed core globals. Also provides
 //! cdecl gfx push/pop/translate/qrotate and a psm_draw that queues the item
 //! (+0x58 access) until the fixture's flush consumes it.
+mod lifecycle;
 use std::{
     ffi::c_void,
     ptr,
@@ -65,7 +66,7 @@ static DRAWN: Mutex<Drawn> = Mutex::new(Drawn {
 static LAST: Mutex<([f32; 3], [f32; 4])> = Mutex::new(([0.0; 3], [0.0; 4]));
 pub struct Fixture {
     page: *mut c_void,
-    cars: [Words<128>; 2],
+    cars: [Words<256>; 2],
     _scene: Words<1>,
     physics: Words<256>,
     body: Words<16>,
@@ -85,6 +86,7 @@ impl Fixture {
             unsafe { VirtualAlloc(ptr::null(), 4096, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE) };
         assert!(!page.is_null());
         unsafe {
+            lifecycle::setup(page);
             page.cast::<usize>()
                 .add(SLOT)
                 .write(draw as *const () as usize);
@@ -98,7 +100,7 @@ impl Fixture {
             0
         );
         let (cars, physics, body, world, camera, path) = (
-            [words::<128>(), words::<128>()],
+            [words::<256>(), words::<256>()],
             words::<256>(),
             words::<16>(),
             words::<STACK_WORDS>(),
@@ -108,6 +110,8 @@ impl Fixture {
         for (car, slot) in cars.iter().zip(&CARS) {
             car[0].store(page as u32, Ordering::Release);
             car[0x1d0 / 4].store(address(&physics), Ordering::Release);
+            car[0x200 / 4].store(0x11110000, Ordering::Release);
+            car[0x300 / 4].store(3, Ordering::Release);
             slot.store(address(car), Ordering::Release);
         }
         let scene = words::<1>();
@@ -159,6 +163,9 @@ impl Fixture {
             self.viewport.as_ref() as *const AtomicU32 as u32,
         ]
     }
+    pub fn transition_descriptors(&self) -> [u32; 6] {
+        lifecycle::descriptors(self.page)
+    }
     /// psm_draw, gfx_push, gfx_pop, gfx_translate, gfx_qrotate, psm_set_shader.
     pub fn visual_descriptors() -> [u32; 8] {
         [
@@ -176,6 +183,7 @@ impl Fixture {
         address(&self.cars[0])
     }
     pub fn frame(&mut self) {
+        lifecycle::frame(CAR.load(Ordering::Acquire));
         self.frame += 1;
         let depth = DEPTH.load(Ordering::Acquire);
         for car in &self.cars {
@@ -227,6 +235,7 @@ unsafe fn call(car: u32) {
 }
 impl Drop for Fixture {
     fn drop(&mut self) {
+        lifecycle::check_restored(self.page);
         assert!(DRAWN.lock().unwrap().pending.is_empty() || RETAIN.load(Ordering::Acquire));
         unsafe {
             assert_eq!(
@@ -244,6 +253,9 @@ impl Drop for Fixture {
     }
 }
 pub fn command(line: &str) -> bool {
+    if lifecycle::command(line, CAR.load(Ordering::Acquire)) {
+        return true;
+    }
     match line {
         "draw-invalid" => INVALID.store(true, Ordering::Release),
         "draw-light-invalid" => LIGHT_INVALID.store(true, Ordering::Release),

@@ -60,6 +60,28 @@ fn session_commands_compose_start_status_and_safe_stop() {
     std::fs::write(saves.join("b.sav"), b"second").unwrap();
     let backup = directory.path().join("backup");
     let (saves_path, backup_path) = (saves.to_str().unwrap(), backup.to_str().unwrap());
+    let passive_backup = directory.path().join("passive-backup");
+    let snapshot = launcher(&[
+        "session-backup",
+        "--backup",
+        passive_backup.to_str().unwrap(),
+        "--saves",
+        saves_path,
+    ]);
+    assert!(snapshot.status.success(), "{snapshot:?}");
+    // A backup must not load the DLL; starting below still performs a fresh load.
+    assert_eq!(
+        std::fs::read(passive_backup.join("saves/a.sav")).unwrap(),
+        b"first"
+    );
+    assert!(
+        !client_dll::inspection::process::Process::open(host.0.id())
+            .unwrap()
+            .modules()
+            .unwrap()
+            .iter()
+            .any(|m| m.name.eq_ignore_ascii_case("client_dll.dll"))
+    );
     // The fixture flag and the descriptor file must go together.
     let missing = Command::new(env!("CARGO_BIN_EXE_mp_launcher"))
         .args(["--pid", &pid, "--dll"])

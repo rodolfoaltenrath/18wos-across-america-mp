@@ -98,6 +98,14 @@ fn test_visual_draws_only_in_validated_context_and_releases_after_flush() {
     assert!(deep.skipped > 0 && deep.item != 0);
     assert_eq!(deep.offset, [400.0, 0.0, -50.0]);
     assert_eq!(deep.skinned_parts, 3);
+    let mut passive = EngineControl::new(api::UI_TRANSITION_FIXTURE);
+    assert!(
+        controller
+            .engine_control(&dll, &mut passive)
+            .unwrap_err()
+            .to_string()
+            .contains("release the visual")
+    );
     assert_eq!(send(&mut host, &mut output, "draw-shallow"), "armed");
     std::thread::sleep(Duration::from_millis(60));
     let drawing = status(&controller, &dll);

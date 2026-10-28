@@ -1552,6 +1552,54 @@ explícita, não a retenção automática durante load. Luz e preparo mudaram ne
 revisão; o sucesso não isola a causa do crash anterior. A investigação da
 transição pré-destruição continua necessária antes de repetir a automação.
 
+### M4 — Sonda passiva de init/done antes do reload — 28/10/2026
+
+Implementada `engine transition-attach/arm/status/report/remove` (comandos
+41–46, sem mudar ABI v3/664 nem rede/configuração v1). A sonda intercepta
+somente os dois virtuais existentes, repassa `this` e `phase` exatamente uma
+vez e preserva EAX/LastError. Não chama init/done por conta própria nem libera
+recursos. Instalação pela thread da janela, exigindo pump fixado; callbacks
+de outra thread apenas repassam o original e incrementam diagnóstico.
+O visual retido e esta observação são mutuamente exclusivos por guardas no
+código. `session-backup` prepara cópias/hashes sem carregar a DLL.
+
+**Candidato estático, específico dos hashes do perfil:** vtable de `actors.car`
+`game+0x1257a0`, slots `+0x5c` → `+0x50f40` (init) e `+0x60` → `+0x515d0`
+(done), thiscall com argumento na pilha e `ret 4`. A rotina done com fase zero
+encadeia `+0x67510`, que chama `+0x68330` antes de `+0x7ddf0`.
+`+0x68330` percorre o array de modelos em `this+0x200`, quantidade byte
+`+0x300`, libera recursos e zera entradas; `+0x7ddf0` libera a física em
+`this+0x1d0`. Isso identifica um candidato anterior à destruição dos recursos
+desse ator, não comprova a fase global de destruição do mundo nem autoriza
+chamar nossas liberações nesse callback.
+
+O trace guarda até 128 eventos de entrada/retorno, argumento, thread, caller,
+entidade, profundidade de chamada, flushes e leituras de cena (`+0x84`), física,
+primeira entrada de modelo e quantidade. Também marca o primeiro draw após
+armar e após cada grupo de callbacks. Memória ilegível vira campo ausente;
+não desreferencia ponteiros lidos. Não bloqueia callbacks no mutex, não aloca
+no trace e sinaliza perda por contenção/truncamento. Rearmar muda a geração;
+registros anteriores nunca são sobrescritos dentro de uma geração.
+
+Instalação confere hashes, páginas executáveis, alinhamento e ambos os slots
+antes da primeira escrita. Remoção restaura somente slots ainda pertencentes
+à sonda e sua proteção; conflito retém a DLL e permite nova tentativa. Parada,
+detach e remoção do pump removem a sonda, com referências de forwarding válidas
+até o fim do processo. `session-stop` passa a conferir cinco slots externos
+(draw/init/done/render/flush). A bancada própria acrescenta um ciclo de
+teardown/init com marcador de modelo, argumento/retorno/LastError, nested,
+foreign, limite de trace, geração antiga, conflito de ownership, restauração
+na parada e continuidade dos originais; também verifica exclusão com visual
+e backup sem injeção. `dev_env verify`: **43 testes x86, 48 nativos**,
+build release x86/nativo, Clippy dos dois alvos e rustfmt passaram.
+Log local ignorado: `target/analysis/transition-verify.log`.
+Observação real ainda pendente.
+
+**Dependência ainda aberta:** observar thread/argumentos/ordem na recarga real,
+relacionar com a destruição global e o consumo de filas, e só então definir
+liberação antecipada e recriação automática. Não repetir reload com instância
+retida com base apenas nesta sonda. O procedimento preparado continua válido.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,

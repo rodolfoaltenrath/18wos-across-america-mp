@@ -56,6 +56,13 @@ pub const VISUAL_RELEASE: u32 = 38;
 pub const VISUAL_STATUS: u32 = 39;
 /// One relayed player by sorted index in `reserved`; see draw_observation::Remote.
 pub const REMOTE_LIST: u32 = 40;
+/// Passive actors.car init/done(phase) observation. No engine calls are added.
+pub const UI_TRANSITION_ATTACH: u32 = 41;
+pub const UI_TRANSITION_FIXTURE: u32 = 42;
+pub const UI_TRANSITION_REMOVE: u32 = 43;
+pub const TRANSITION_ARM: u32 = 44;
+pub const TRANSITION_STATUS: u32 = 45;
+pub const TRANSITION_READ: u32 = 46;
 pub const ENGINE_ABI_VERSION: u32 = 3;
 /// Separate extension ABI; does not change the original Control v1 layout.
 #[repr(C)]

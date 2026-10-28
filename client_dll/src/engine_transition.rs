@@ -1,0 +1,321 @@
+//! Passive init/done(phase) virtual hooks. Never initialize or destroy anything
+//! on behalf of the mod. All originals are forwarded exactly once, including
+//! foreign-thread calls. The pump pins forwarding code until process exit.
+use crate::{
+    api::{self, EngineControl},
+    engine_lifecycle::{add, executable},
+    engine_render::{flush_calls, read},
+    inspection::process::Process,
+    profile,
+    transition_observation::{self as observation, CAPACITY, Record},
+};
+use std::{
+    ffi::c_void,
+    sync::{
+        Mutex,
+        atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering},
+    },
+};
+use windows_sys::Win32::{
+    Foundation::{GetLastError, SetLastError},
+    System::{
+        Memory::{PAGE_READWRITE, VirtualProtect},
+        Threading::{GetCurrentProcessId, GetCurrentThreadId},
+    },
+};
+type Phase = unsafe extern "thiscall" fn(*mut c_void, u32) -> u32;
+const SLOTS: [u32; 2] = [profile::CAR_VTABLE + 0x5c, profile::CAR_VTABLE + 0x60];
+const FUNCTIONS: [u32; 2] = [0x50f40, 0x515d0];
+static STATE: AtomicU32 = AtomicU32::new(0);
+static OWNER: AtomicU32 = AtomicU32::new(0);
+static SLOTS_AT: [AtomicUsize; 2] = [const { AtomicUsize::new(0) }; 2];
+static ORIGINALS: [AtomicUsize; 2] = [const { AtomicUsize::new(0) }; 2];
+static PROTECTION: [AtomicU32; 2] = [const { AtomicU32::new(0) }; 2];
+static CALLS: [AtomicU32; 2] = [const { AtomicU32::new(0) }; 2];
+static FOREIGN: AtomicU32 = AtomicU32::new(0);
+static DEPTH: AtomicU32 = AtomicU32::new(0);
+static ACTIVE: AtomicBool = AtomicBool::new(false);
+static LOST: AtomicBool = AtomicBool::new(false);
+static NEXT_DRAW: AtomicBool = AtomicBool::new(false);
+static TRACE: Mutex<Trace> = Mutex::new(Trace::new(0));
+struct Trace {
+    generation: u32,
+    len: usize,
+    flags: u32,
+    rows: [Record; CAPACITY],
+}
+impl Trace {
+    const fn new(generation: u32) -> Self {
+        Self {
+            generation,
+            len: 0,
+            flags: 0,
+            rows: [Record {
+                kind: 0,
+                thread: 0,
+                caller: 0,
+                this: 0,
+                argument: 0,
+                depth: 0,
+                flushes: 0,
+                values: [0; 4],
+                readable: 0,
+            }; CAPACITY],
+        }
+    }
+}
+fn record(kind: u32, this: u32, argument: u32, caller: u32, depth: u32) {
+    if !ACTIVE.load(Ordering::Acquire) || STATE.load(Ordering::Acquire) != 1 {
+        return;
+    }
+    let Ok(mut trace) = TRACE.try_lock() else {
+        LOST.store(true, Ordering::Release);
+        ACTIVE.store(false, Ordering::Release);
+        return;
+    };
+    if trace.len == CAPACITY {
+        trace.flags |= observation::TRUNCATED;
+        ACTIVE.store(false, Ordering::Release);
+        return;
+    }
+    let mut row = Record {
+        kind,
+        this,
+        argument,
+        caller,
+        depth,
+        thread: unsafe { GetCurrentThreadId() },
+        flushes: flush_calls(),
+        ..Record::default()
+    };
+    for (i, offset) in [0x84, 0x1d0, 0x200, 0x300].into_iter().enumerate() {
+        let mut bytes = [0; 4];
+        let len = if i == 3 { 1 } else { 4 };
+        if let Some(at) = this.checked_add(offset)
+            && read(at, &mut bytes[..len]).is_ok()
+        {
+            row.values[i] = u32::from_le_bytes(bytes);
+            row.readable |= 1 << i;
+        }
+    }
+    let index = trace.len;
+    trace.rows[index] = row;
+    trace.len += 1;
+}
+/// Called only after the original outer draw, on the proven owner thread.
+pub fn after_draw(this: u32) {
+    if unsafe { GetCurrentThreadId() } == OWNER.load(Ordering::Acquire)
+        && NEXT_DRAW.swap(false, Ordering::AcqRel)
+    {
+        record(5, this, 0, 0, 0);
+    }
+}
+#[unsafe(naked)]
+unsafe extern "thiscall" fn init_shim(_: *mut c_void, _: u32) -> u32 {
+    core::arch::naked_asm!("push ebp","mov ebp,esp","and esp,-16","push dword ptr [ebp+4]","push dword ptr [ebp+8]","push ecx","push 0","call {implementation}","mov esp,ebp","pop ebp","ret 4",implementation=sym phase_impl);
+}
+#[unsafe(naked)]
+unsafe extern "thiscall" fn done_shim(_: *mut c_void, _: u32) -> u32 {
+    core::arch::naked_asm!("push ebp","mov ebp,esp","and esp,-16","push dword ptr [ebp+4]","push dword ptr [ebp+8]","push ecx","push 1","call {implementation}","mov esp,ebp","pop ebp","ret 4",implementation=sym phase_impl);
+}
+unsafe extern "C" fn phase_impl(which: u32, this: *mut c_void, argument: u32, caller: u32) -> u32 {
+    let error = unsafe { GetLastError() };
+    let owner = unsafe { GetCurrentThreadId() } == OWNER.load(Ordering::Acquire);
+    let depth = if owner {
+        DEPTH.fetch_add(1, Ordering::AcqRel) + 1
+    } else {
+        0
+    };
+    if owner {
+        CALLS[which as usize].fetch_add(1, Ordering::Relaxed);
+        record(1 + which * 2, this as u32, argument, caller, depth);
+    } else {
+        FOREIGN.fetch_add(1, Ordering::Relaxed);
+    }
+    unsafe { SetLastError(error) };
+    let original: Phase =
+        unsafe { std::mem::transmute(ORIGINALS[which as usize].load(Ordering::Acquire)) };
+    let result = unsafe { original(this, argument) };
+    let error = unsafe { GetLastError() };
+    if owner {
+        record(2 + which * 2, this as u32, argument, caller, depth);
+        NEXT_DRAW.store(true, Ordering::Release);
+        DEPTH.fetch_sub(1, Ordering::AcqRel);
+    }
+    unsafe { SetLastError(error) };
+    result
+}
+fn shims() -> [usize; 2] {
+    [
+        init_shim as *const () as usize,
+        done_shim as *const () as usize,
+    ]
+}
+fn replace(index: usize, expected: usize, desired: usize) -> Result<(), String> {
+    let at = SLOTS_AT[index].load(Ordering::Acquire);
+    let mut old = 0;
+    if unsafe { VirtualProtect(at as *const c_void, 4, PAGE_READWRITE, &mut old) } == 0 {
+        return Err("cannot unlock transition slot".into());
+    }
+    if PROTECTION[index].load(Ordering::Acquire) == 0 {
+        PROTECTION[index].store(old, Ordering::Release);
+    }
+    let slot = unsafe { AtomicUsize::from_ptr(at as *mut usize) };
+    let exchanged = slot.compare_exchange(expected, desired, Ordering::AcqRel, Ordering::Acquire);
+    let mut ignored = 0;
+    if unsafe {
+        VirtualProtect(
+            at as *const c_void,
+            4,
+            PROTECTION[index].load(Ordering::Acquire),
+            &mut ignored,
+        )
+    } == 0
+    {
+        return Err(
+            "transition page protection not restored; keep DLL pinned and retry removal".into(),
+        );
+    }
+    PROTECTION[index].store(0, Ordering::Release);
+    exchanged
+        .map(|_| ())
+        .map_err(|_| "transition slot owner changed; refusing overwrite".into())
+}
+pub fn install(thread: u32, b: &EngineControl) -> Result<(), String> {
+    if crate::engine_visual::allocated() {
+        return Err("release the visual before passive transition observation".into());
+    }
+    if STATE.load(Ordering::Acquire) != 0 {
+        return Err("transition observer already used; restart process".into());
+    }
+    let mut pump = EngineControl::new(api::UI_PUMP_STATUS);
+    crate::engine_phase::fill(&mut pump);
+    if pump.phase != 1 {
+        return Err("install the process-pinned pump before transition observation".into());
+    }
+    let process = Process::open(unsafe { GetCurrentProcessId() }).map_err(|e| e.to_string())?;
+    let modules = process.modules().map_err(|e| e.to_string())?;
+    let get = |name: &str| {
+        modules
+            .iter()
+            .find(|m| m.name.eq_ignore_ascii_case(name))
+            .ok_or_else(|| format!("{name} missing"))
+    };
+    let (slots, originals) = if b.command == api::UI_TRANSITION_FIXTURE {
+        let module = get("engine_fixture.exe")?;
+        for at in [b.fixture[1], b.fixture[3]] {
+            executable(at, module)?;
+        }
+        ([b.fixture[0], b.fixture[2]], [b.fixture[1], b.fixture[3]])
+    } else if b.command == api::UI_TRANSITION_ATTACH {
+        profile::verify_executable(std::path::Path::new(&get("prism3d.exe")?.path))?;
+        let game = get("game.dll")?;
+        profile::verify_module(std::path::Path::new(&game.path))?;
+        let originals = [add(game, FUNCTIONS[0])?, add(game, FUNCTIONS[1])?];
+        for at in originals {
+            executable(at, game)?;
+        }
+        ([add(game, SLOTS[0])?, add(game, SLOTS[1])?], originals)
+    } else {
+        return Err("invalid transition observer mode".into());
+    };
+    if slots[0] == slots[1] {
+        return Err("transition slots must be distinct".into());
+    }
+    // Preflight BOTH virtuals before any mutation; fixture addresses are explicit.
+    for (slot, original) in slots.into_iter().zip(originals) {
+        if slot == 0 || !slot.is_multiple_of(4) {
+            return Err("invalid transition slot alignment".into());
+        }
+        let mut bytes = [0; 4];
+        process
+            .read(slot.into(), &mut bytes)
+            .map_err(|e| e.to_string())?;
+        if u32::from_le_bytes(bytes) != original {
+            return Err("transition slot already modified or incompatible".into());
+        }
+    }
+    OWNER.store(thread, Ordering::Release);
+    for i in 0..2 {
+        SLOTS_AT[i].store(slots[i] as usize, Ordering::Release);
+        ORIGINALS[i].store(originals[i] as usize, Ordering::Release);
+    }
+    STATE.store(1, Ordering::Release);
+    for (i, shim) in shims().into_iter().enumerate() {
+        if let Err(error) = replace(i, originals[i] as usize, shim) {
+            let rollback = remove();
+            return Err(format!("{error}; rollback={rollback:?}"));
+        }
+    }
+    Ok(())
+}
+pub fn remove() -> Result<(), String> {
+    if STATE.load(Ordering::Acquire) != 1 {
+        return Ok(());
+    }
+    if DEPTH.load(Ordering::Acquire) != 0 {
+        return Err("transition callback active; retry removal".into());
+    }
+    for (i, shim) in shims().into_iter().enumerate() {
+        let at = SLOTS_AT[i].load(Ordering::Acquire);
+        let original = ORIGINALS[i].load(Ordering::Acquire);
+        let current = unsafe { AtomicUsize::from_ptr(at as *mut usize) }.load(Ordering::Acquire);
+        replace(
+            i,
+            if current == original { original } else { shim },
+            original,
+        )?;
+    }
+    ACTIVE.store(false, Ordering::Release);
+    STATE.store(2, Ordering::Release);
+    Ok(())
+}
+pub(crate) fn installed() -> bool {
+    STATE.load(Ordering::Acquire) == 1
+}
+pub fn control(b: &mut EngineControl) -> Result<(), String> {
+    let mut trace = TRACE.lock().map_err(|_| "transition trace poisoned")?;
+    if b.command == api::TRANSITION_ARM {
+        if STATE.load(Ordering::Acquire) != 1 {
+            return Err("transition observer not installed".into());
+        }
+        if DEPTH.load(Ordering::Acquire) != 0 {
+            return Err("transition callback active; retry arming".into());
+        }
+        let generation = trace
+            .generation
+            .checked_add(1)
+            .ok_or("transition generation exhausted")?;
+        *trace = Trace::new(generation);
+        LOST.store(false, Ordering::Release);
+        NEXT_DRAW.store(true, Ordering::Release);
+        ACTIVE.store(true, Ordering::Release);
+    }
+    if b.command == api::TRANSITION_READ {
+        if b.cycles != trace.generation {
+            return Err("transition generation changed; retry report".into());
+        }
+        let row = trace
+            .rows
+            .get(b.reserved as usize)
+            .filter(|_| (b.reserved as usize) < trace.len)
+            .ok_or("transition record unavailable")?;
+        row.encode(b);
+        return Ok(());
+    }
+    b.object_size = STATE.load(Ordering::Acquire);
+    b.entity = OWNER.load(Ordering::Acquire);
+    b.cycles = trace.generation;
+    b.registry_count = trace.len as u32;
+    b.count_before = CALLS[0].load(Ordering::Acquire);
+    b.count_created = CALLS[1].load(Ordering::Acquire);
+    b.count_after = FOREIGN.load(Ordering::Acquire);
+    b.reserved = trace.flags
+        | u32::from(ACTIVE.load(Ordering::Acquire))
+        | if LOST.load(Ordering::Acquire) {
+            observation::LOST
+        } else {
+            0
+        };
+    Ok(())
+}

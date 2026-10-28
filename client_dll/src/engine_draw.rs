@@ -201,6 +201,7 @@ unsafe extern "C" fn draw_impl(this: *mut c_void, caller: u32) {
     if owner {
         if depth == 1 {
             record(2, this as u32, caller);
+            crate::engine_transition::after_draw(this as u32);
             crate::engine_visual::after_car_draw(this as u32, globals());
         }
         DEPTH.fetch_sub(1, Ordering::AcqRel);
