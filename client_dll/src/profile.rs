@@ -9,6 +9,10 @@ pub const ID: &str = "steam-aa-1.10-ccb327c2";
 pub const SHA256: &str = "ccb327c2a5c2f7d01d74d94629cf65847ee1535ca9020b3a5fc5d412a8ffbc7d";
 pub const ENGINE_SHA256: &str = "7df43b55e6b34e3ac2017af9566665bd935895ff02a2a916b099bb34045d30a3";
 pub const ENTITY_REGISTRY_HEAD: u32 = 0x49a7c;
+pub const EXECUTABLE_SHA256: &str =
+    "949be316b38eaf4d80d4f7f6a3e7ae040e6c6072c92267b3d10066140058f61e";
+pub const PEEK_MESSAGE_IAT: u32 = 0x22188;
+pub const PUMP_RETURN_SITES: [u32; 3] = [0x1473b, 0x1476e, 0x147a4];
 pub const POSITION: &str = "game.dll+0x160df0->0x14c->0x4610->0x8->0x8->0x1d0->0x3e4->0x30";
 
 pub fn verify_module(path: &Path) -> Result<(), String> {
@@ -16,6 +20,9 @@ pub fn verify_module(path: &Path) -> Result<(), String> {
 }
 pub fn verify_engine(path: &Path) -> Result<(), String> {
     verify(path, ENGINE_SHA256)
+}
+pub fn verify_executable(path: &Path) -> Result<(), String> {
+    verify(path, EXECUTABLE_SHA256)
 }
 fn verify(path: &Path, expected: &str) -> Result<(), String> {
     let mut file = File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -45,7 +52,7 @@ fn verify(path: &Path, expected: &str) -> Result<(), String> {
     let actual = format!("{:x}", hash.finalize());
     if actual != expected {
         return Err(format!(
-            "incompatible game.dll SHA-256: {actual}; expected {expected}"
+            "incompatible module SHA-256: {actual}; expected {expected}"
         ));
     }
     Ok(())

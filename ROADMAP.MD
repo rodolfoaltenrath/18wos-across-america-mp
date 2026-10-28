@@ -301,6 +301,56 @@ incrementa contadores em uma cadeia (`+0x31f20`); a remoção os decrementa
 fase, ABI, contadores e ownership antes de criar/remover uma entidade privada;
 só depois integrar modelo, mundo e transform. Ainda não há veículo remoto visual.
 
+### M4 — Sonda do ponto de retorno do loop principal — 27/10/2026
+
+`engine trace` captura até 32 frames com `RtlCaptureStackBackTrace`. Na bancada
+retorna frames; na partida Proton, o unwind terminou nas rotinas Win32/ntdll,
+sem alcançar o chamador do executável. Não foi usado para presumir uma fase.
+
+Foi implementada em Rust uma sonda x86 opcional na entrada IAT de `PeekMessageA`
+do executável. `engine pump-attach` exige os hashes dos três módulos, entrada
+original sem hooks de terceiros e execução do controle na thread da janela.
+O perfil acrescenta SHA-256 de `prism3d.exe`
+`949be316b38eaf4d80d4f7f6a3e7ae040e6c6072c92267b3d10066140058f61e`,
+IAT `+0x22188` e retornos `+0x1473b`, `+0x1476e`, `+0x147a4`. O shim
+`naked_asm!` captura o retorno antes do prólogo, realinha a stack para Rust,
+encaminha os cinco argumentos stdcall e preserva o resultado e `GetLastError`.
+Depois de `PeekMessageA` retornar, conta somente os pontos do perfil na thread
+esperada. Não executa construtores, filas de entidades ou comandos de rede.
+
+A entrada é trocada por compare/exchange alinhado, com restauração da proteção
+da página. A sonda é removida por `engine pump-remove` ou automaticamente por
+`stop`, na thread da janela. **O uso da sonda fixa a DLL até o fim do processo**:
+restaurar o import não prova que outra thread não tenha carregado seu valor
+anterior. Não se tenta descarregar código enquanto essa possibilidade existir.
+O controlador informa essa condição antes de chamar `FreeLibrary`. É necessário
+encerrar o jogo antes de reconstruir a DLL. Esse limite é específico da sonda;
+o dispatcher sem sonda continua permitindo carga/descarga completas.
+
+A ABI de diagnóstico evoluiu para v2/604 bytes; requer recompilar launcher e
+DLL juntos. A ABI v1 de configuração/rede permanece inalterada. Pedidos da
+extensão com a versão antiga são recusados antes de acessar o restante do bloco.
+
+**Validação automatizada:** 16 testes nativos; 14 testes x86 sob Proton;
+Clippy nativo/x86 e formatação. Um teste x86 chama o shim mil vezes com cinco
+argumentos diferentes, confere retorno/stack e erro Win32. A integração usa uma
+terceira janela Rust ANSI com loop PeekMessage e uma entrada própria numa página
+somente leitura; verifica observações na thread correta, remoção, interrupção
+dos contadores, proteção restaurada, recusa de descarga e funcionamento da
+janela até sua saída. Os cenários anteriores ANSI/Unicode continuam passando.
+
+**Observação inicial na partida:** PID 412/thread 416, mais de 779 mil retornos
+contados em `prism3d.exe+0x1476e`; o processo continuou disponível. O teste de
+movimento/menu/recarga e a remoção da sonda são registrados ao concluir o cenário.
+O contador de referências do contexto em `p3shared.dll+0x51314 -> +0x8` foi
+somente lido (1845 nesta amostra); não se presume que seja uma trava.
+
+**Próxima dependência:** correlacionar esse ponto com os estados de carregamento
+e comprovar o contrato de lifetime dos factories. Para executar entidades,
+adicionar uma fila própria até esse ponto do loop e validar ABI/ownership em
+fixture antes da criação/remoção privada. A fila de janela atual continua sendo
+somente de diagnóstico. M4 não está concluído e não há caminhões remotos.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,

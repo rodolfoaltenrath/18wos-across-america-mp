@@ -66,4 +66,8 @@ estão entregues. O dispatcher comprova a thread da janela, ainda não uma fase
 segura para criar objetos. Consultar o registro de validação e da saída
 indeterminada no roadmap. Remover o dispatcher e descarregar antes de reconstruir
 a DLL. Se a remoção falhar, manter a referência ao módulo e reabrir o processo.
+`engine pump-attach` é uma sonda opcional do import `PeekMessageA`: seu uso fixa
+a DLL até o fim do processo, mesmo após restaurar a entrada. Não reconstruir a
+DLL enquanto esse processo existir. A ABI de diagnóstico atual é v2/604 bytes;
+a ABI de configuração/rede v1 foi preservada. Ver o procedimento no README.
 A criação e a movimentação de caminhões remotos ainda não foram implementadas.

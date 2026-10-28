@@ -1,5 +1,7 @@
 //! A private message-pump host for dispatcher lifecycle tests. No game assets.
 #[cfg(windows)]
+static PEEK_SLOT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+#[cfg(windows)]
 fn main() -> anyhow::Result<()> {
     use anyhow::ensure;
     use std::{
@@ -9,6 +11,10 @@ fn main() -> anyhow::Result<()> {
     use windows_sys::Win32::{
         System::{
             LibraryLoader::GetModuleHandleW,
+            Memory::{
+                MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, MEMORY_BASIC_INFORMATION, PAGE_READONLY,
+                PAGE_READWRITE, VirtualAlloc, VirtualFree, VirtualProtect, VirtualQuery,
+            },
             Threading::{GetCurrentProcessId, GetCurrentThreadId},
         },
         UI::WindowsAndMessaging::*,
@@ -19,6 +25,28 @@ fn main() -> anyhow::Result<()> {
         .collect();
     let instance = unsafe { GetModuleHandleW(ptr::null()) };
     let ansi = std::env::args().any(|a| a == "--ansi");
+    let peek = std::env::args().any(|a| a == "--peek");
+    PEEK_SLOT.store(
+        PeekMessageA as *const () as usize,
+        std::sync::atomic::Ordering::Release,
+    );
+    let peek_slot = if peek {
+        let page =
+            unsafe { VirtualAlloc(ptr::null(), 4096, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE) };
+        ensure!(!page.is_null(), "cannot allocate fixture import page");
+        unsafe {
+            page.cast::<usize>()
+                .write(PeekMessageA as *const () as usize);
+        }
+        let mut old = 0;
+        ensure!(
+            unsafe { VirtualProtect(page, 4096, PAGE_READONLY, &mut old) } != 0,
+            "cannot protect fixture import page"
+        );
+        page as usize
+    } else {
+        &PEEK_SLOT as *const _ as usize
+    };
     let class = WNDCLASSW {
         lpfnWndProc: Some(procedure_w),
         hInstance: instance,
@@ -75,7 +103,7 @@ fn main() -> anyhow::Result<()> {
     ensure!(!window.is_null(), "cannot create fixture window");
     println!(
         "{}",
-        serde_json::json!({"pid":unsafe{GetCurrentProcessId()},"window":window as usize,"thread":unsafe{GetCurrentThreadId()}})
+        serde_json::json!({"pid":unsafe{GetCurrentProcessId()},"window":window as usize,"thread":unsafe{GetCurrentThreadId()}, "peek_slot": peek_slot})
     );
     std::io::stdout().flush()?;
     let address = window as usize;
@@ -115,10 +143,30 @@ fn main() -> anyhow::Result<()> {
     });
     let mut message = MSG::default();
     loop {
-        let result = unsafe { GetMessageW(&mut message, ptr::null_mut(), 0, 0) };
-        ensure!(result != -1, "fixture message loop failed");
-        if result == 0 {
-            break;
+        if peek {
+            let function: unsafe extern "system" fn(
+                *mut MSG,
+                windows_sys::Win32::Foundation::HWND,
+                u32,
+                u32,
+                u32,
+            ) -> i32 = unsafe {
+                let slot = std::sync::atomic::AtomicUsize::from_ptr(peek_slot as *mut usize);
+                std::mem::transmute(slot.load(std::sync::atomic::Ordering::Acquire))
+            };
+            if unsafe { function(&mut message, ptr::null_mut(), 0, 0, PM_REMOVE) } == 0 {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+                continue;
+            }
+            if message.message == WM_QUIT {
+                break;
+            }
+        } else {
+            let result = unsafe { GetMessageW(&mut message, ptr::null_mut(), 0, 0) };
+            ensure!(result != -1, "fixture message loop failed");
+            if result == 0 {
+                break;
+            }
         }
         unsafe {
             TranslateMessage(&message);
@@ -127,6 +175,23 @@ fn main() -> anyhow::Result<()> {
             } else {
                 DispatchMessageW(&message);
             }
+        }
+    }
+    if peek {
+        let mut region: MEMORY_BASIC_INFORMATION = unsafe { std::mem::zeroed() };
+        ensure!(
+            unsafe {
+                VirtualQuery(
+                    peek_slot as *const _,
+                    &mut region,
+                    std::mem::size_of_val(&region),
+                )
+            } != 0
+                && region.Protect == PAGE_READONLY,
+            "observer did not restore the import page protection"
+        );
+        unsafe {
+            VirtualFree(peek_slot as *mut _, 0, MEM_RELEASE);
         }
     }
     Ok(())

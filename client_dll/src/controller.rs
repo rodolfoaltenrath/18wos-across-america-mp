@@ -335,6 +335,13 @@ impl Controller {
             stop.status == 2,
             "stop did not confirm worker joined: {stopped:?}"
         );
+        let mut phase = api::EngineControl::new(api::UI_PUMP_STATUS);
+        if self.engine_control(dll, &mut phase).is_ok() {
+            ensure!(
+                phase.phase == 0,
+                "stop completed and pump import restored; observer pins DLL until process exit"
+            );
+        }
         let function = self.export("kernel32.dll", "FreeLibrary")?;
         ensure!(
             self.call(function, &mut [], Some(module.base as usize))? != 0,

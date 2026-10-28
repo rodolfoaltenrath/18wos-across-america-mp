@@ -193,8 +193,9 @@ processo; `engine attach --window HANDLE_DECIMAL` permite escolher explicitament
 As outras ações exigem a DLL já carregada. `probe` informa a thread da janela e
 a thread que executou o comando; `registry` verifica os hashes dos dois módulos
 e conta os tipos; `inspect` retorna tamanho, construtor e destrutor da variante
-`false`, sem executá-los. Esta extensão tem ABI própria de 448 bytes e preserva
-a ABI v1 de configuração/rede. Não cria nem move objetos.
+`false`, sem executá-los. Esta extensão usa `EngineControl` v2 de 604 bytes e
+preserva a ABI v1 de configuração/rede. Reconstrua launcher e DLL juntos; blocos
+antigos da extensão são recusados por versão/tamanho. Não cria nem move objetos.
 
 A fila tem limite de 16 comandos, identificadores sem reutilização e pedidos
 pertencentes à DLL. O timeout de 1 segundo cancela trabalho ainda não iniciado;
@@ -211,6 +212,40 @@ com 80 registros consultados. Uma primeira tentativa perdeu o processo antes
 da primeira consulta; a causa não foi determinada. A repetição passou, mas a
 estabilidade prolongada e a fase do motor continuam pendentes. Executar na thread
 da janela, por si só, não autoriza chamar construtores do jogo. Consulte o roadmap.
+
+Para investigar o ponto do loop principal, a extensão também oferece:
+
+```text
+engine attach
+engine trace
+engine pump-attach
+engine pump-status
+engine pump-remove
+stop
+```
+
+`trace` captura até 32 frames; sob o Proton desta instalação o unwind terminou
+no despachante Win32 sem alcançar o executável, portanto não comprova a fase.
+`pump-attach` verifica o executável e os dois módulos por SHA-256, exige a entrada
+original de `PeekMessageA` e instala uma sonda somente na entrada IAT do perfil.
+O shim stdcall é escrito em Rust com `naked_asm!`; preserva os cinco argumentos,
+o retorno e o erro Win32, e captura o endereço de retorno real do chamador.
+Ele conta retornos dos três pontos identificados do loop somente na thread da
+janela. Não chama funções do jogo nem escreve coordenadas/objetos.
+
+**Usar `pump-attach` fixa a DLL na memória até encerrar o jogo.** Remover uma
+entrada IAT não prova que outra thread não tenha carregado seu valor anterior.
+`pump-remove` e `stop` restauram a entrada e a proteção da página; `stop` também
+remove o procedimento da janela. `unload` informa que a DLL continua residente
+e recusa novas chamadas a `FreeLibrary`. Encerre o jogo antes de reconstruir essa
+DLL. A fixação só ocorre nessa sonda opcional; o ciclo normal do dispatcher
+continua permitindo descarga completa. Estados: 0 nunca instalada, 1 instalada,
+2 restaurada com módulo residente. A sonda não pode ser reinstalada no mesmo
+processo. Qualquer entrada já modificada é recusada.
+
+Referências da implementação: [assembly em Rust](https://doc.rust-lang.org/reference/inline-assembly.html),
+[proteção de páginas Win32](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualprotect)
+e [referências ao módulo e fixação](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandleexw).
 
 ## Ambiente e compilação Windows (registro anterior)
 

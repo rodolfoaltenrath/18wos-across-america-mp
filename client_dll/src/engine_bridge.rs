@@ -15,7 +15,10 @@ use std::{
 use windows_sys::Win32::{
     Foundation::{FreeLibrary, HWND, LPARAM, LRESULT, RECT, WPARAM},
     System::{
-        LibraryLoader::{GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, GetModuleHandleExW},
+        Diagnostics::Debug::RtlCaptureStackBackTrace,
+        LibraryLoader::{
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, GetModuleHandleExW, GetModuleHandleW,
+        },
         Threading::{GetCurrentProcessId, GetCurrentThreadId},
     },
     UI::WindowsAndMessaging::*,
@@ -41,6 +44,8 @@ fn error(context: &str) -> String {
     format!("{context}: {}", std::io::Error::last_os_error())
 }
 fn fill(block: &mut EngineControl) {
+    #[cfg(target_arch = "x86")]
+    crate::engine_phase::fill(block);
     block.window = WINDOW.load(Ordering::Acquire) as u32;
     block.window_thread = THREAD.load(Ordering::Acquire);
     block.active = u32::from(block.window != 0);
@@ -152,7 +157,50 @@ fn execute(mut block: EngineControl) -> Result<EngineControl, String> {
     }
     LAST_THREAD.store(tid, Ordering::Release);
     match block.command {
+        #[cfg(target_arch = "x86")]
+        api::UI_PUMP_ATTACH | api::UI_PUMP_FIXTURE => {
+            crate::engine_phase::install(
+                tid,
+                (block.command == api::UI_PUMP_FIXTURE).then_some(block.entity),
+            )?;
+        }
+        #[cfg(target_arch = "x86")]
+        api::UI_PUMP_REMOVE => crate::engine_phase::remove()?,
         api::UI_PROBE => {}
+        api::UI_TRACE => {
+            let mut frames = [ptr::null_mut(); 32];
+            block.frame_count = u32::from(unsafe {
+                RtlCaptureStackBackTrace(
+                    0,
+                    frames.len() as u32,
+                    frames.as_mut_ptr(),
+                    ptr::null_mut(),
+                )
+            });
+            for (out, frame) in block.frames.iter_mut().zip(frames) {
+                *out = frame as usize as u32;
+            }
+            let process =
+                crate::inspection::process::Process::open(unsafe { GetCurrentProcessId() })
+                    .map_err(|e| e.to_string())?;
+            block.executable_base = unsafe { GetModuleHandleW(ptr::null()) } as usize as u32;
+            if let Some(executable) = process
+                .modules()
+                .map_err(|e| e.to_string())?
+                .iter()
+                .find(|m| m.base == u64::from(block.executable_base))
+            {
+                block.executable_frame = block
+                    .frames
+                    .iter()
+                    .copied()
+                    .find(|&a| {
+                        u64::from(a) >= executable.base
+                            && u64::from(a) - executable.base < executable.size
+                    })
+                    .map_or(0, |a| a - block.executable_base);
+            }
+        }
         api::UI_REGISTRY | api::UI_INSPECT_TYPE => {
             let process =
                 crate::inspection::process::Process::open(unsafe { GetCurrentProcessId() })
@@ -172,6 +220,8 @@ fn execute(mut block: EngineControl) -> Result<EngineControl, String> {
             }
         }
         api::UI_DETACH => {
+            #[cfg(target_arch = "x86")]
+            crate::engine_phase::remove()?;
             let window = WINDOW.load(Ordering::Acquire) as HWND;
             if unsafe { GetWindowLongPtrW(window, GWLP_WNDPROC) } as usize
                 != window_proc as *const () as usize
@@ -318,13 +368,17 @@ pub fn control(block: &mut EngineControl) -> Result<(), String> {
     let _control = CONTROL.lock().map_err(|_| "dispatcher control poisoned")?;
     let result = match block.command {
         api::UI_ATTACH => attach(block.window),
-        api::UI_STATUS => Ok(()),
+        api::UI_STATUS | api::UI_PUMP_STATUS => Ok(()),
         api::UI_DETACH => detach_locked(),
-        api::UI_PROBE | api::UI_REGISTRY | api::UI_INSPECT_TYPE => {
-            dispatch(*block).map(|response| {
-                *block = response;
-            })
-        }
+        api::UI_PROBE
+        | api::UI_REGISTRY
+        | api::UI_INSPECT_TYPE
+        | api::UI_TRACE
+        | api::UI_PUMP_ATTACH
+        | api::UI_PUMP_FIXTURE
+        | api::UI_PUMP_REMOVE => dispatch(*block).map(|response| {
+            *block = response;
+        }),
         _ => Err("unknown engine control command".into()),
     };
     fill(block);

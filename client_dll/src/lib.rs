@@ -20,6 +20,8 @@ pub mod controller;
 #[cfg(windows)]
 mod engine_bridge;
 pub mod engine_discovery;
+#[cfg(all(windows, target_arch = "x86"))]
+mod engine_phase;
 #[cfg(windows)]
 pub mod inspection;
 mod memory;
@@ -435,7 +437,7 @@ pub unsafe extern "system" fn client_engine_control(block: *mut api::EngineContr
         return 1;
     }
     let header = block.cast::<u32>();
-    if unsafe { header.read() } != 1
+    if unsafe { header.read() } != api::ENGINE_ABI_VERSION
         || unsafe { header.add(1).read() } != std::mem::size_of::<api::EngineControl>() as u32
     {
         return 1;

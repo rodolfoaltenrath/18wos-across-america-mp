@@ -23,10 +23,11 @@ fn call(controller: &Controller, dll: &Path, command: u32) -> EngineControl {
 }
 #[test]
 fn dispatcher_uses_window_thread_cancels_timeout_and_restores_before_unload() {
-    exercise(false);
-    exercise(true);
+    exercise(false, false);
+    exercise(true, false);
+    exercise(true, true);
 }
-fn exercise(ansi: bool) {
+fn exercise(ansi: bool, peek: bool) {
     let dll = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../target/i686-pc-windows-gnu/release/client_dll.dll")
         .canonicalize()
@@ -37,6 +38,9 @@ fn exercise(ansi: bool) {
     let mut command = Command::new(fixture);
     if ansi {
         command.arg("--ansi");
+    }
+    if peek {
+        command.arg("--peek");
     }
     let mut host = Host(
         command
@@ -51,9 +55,23 @@ fn exercise(ansi: bool) {
     let info: serde_json::Value = serde_json::from_str(&line).unwrap();
     let controller = Controller::open(host.0.id()).unwrap();
     controller.load(&dll).unwrap();
+    let mut incompatible = EngineControl::new(api::UI_STATUS);
+    incompatible.version = 1;
+    assert!(controller.engine_control(&dll, &mut incompatible).is_err());
     let mut attach = EngineControl::new(api::UI_ATTACH);
     attach.window = info["window"].as_u64().unwrap() as u32;
     controller.engine_control(&dll, &mut attach).unwrap();
+    if peek {
+        let mut observer = EngineControl::new(api::UI_PUMP_FIXTURE);
+        observer.entity = info["peek_slot"].as_u64().unwrap() as u32;
+        controller.engine_control(&dll, &mut observer).unwrap();
+        assert_eq!(observer.phase, 1);
+        std::thread::sleep(Duration::from_millis(50));
+        let state = call(&controller, &dll, api::UI_PUMP_STATUS);
+        assert!(state.phase_hits > 0);
+        assert_eq!(state.phase_thread, attach.window_thread);
+        assert_ne!(state.phase_site, 0);
+    }
     assert_eq!(attach.active, 1);
     assert_eq!(
         attach.window_thread,
@@ -63,6 +81,9 @@ fn exercise(ansi: bool) {
         let probe = call(&controller, &dll, api::UI_PROBE);
         assert_eq!(probe.executed_thread, attach.window_thread);
     }
+    let trace = call(&controller, &dll, api::UI_TRACE);
+    assert!(trace.frame_count > 0 && trace.frame_count <= 32);
+    assert_ne!(trace.executable_base, 0);
     writeln!(host.0.stdin.as_mut().unwrap(), "ping").unwrap();
     line.clear();
     output.read_line(&mut line).unwrap();
@@ -83,14 +104,31 @@ fn exercise(ansi: bool) {
     std::thread::sleep(Duration::from_millis(2400));
     let probe = call(&controller, &dll, api::UI_PROBE);
     assert_eq!(probe.completed, previous + 1); // timed-out task was not executed later
-    controller.unload(&dll).unwrap(); // stop automatically detaches and releases the module lease
+    if peek {
+        call(&controller, &dll, api::UI_PUMP_REMOVE);
+        let previous = call(&controller, &dll, api::UI_PUMP_STATUS).phase_hits;
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(
+            call(&controller, &dll, api::UI_PUMP_STATUS).phase_hits,
+            previous
+        );
+        let retained = controller.unload(&dll).unwrap_err().to_string();
+        assert!(retained.contains("pins DLL until process exit"));
+        let state = call(&controller, &dll, api::UI_STATUS);
+        assert_eq!(state.active, 0);
+        assert_eq!(state.phase, 2);
+    } else {
+        controller.unload(&dll).unwrap(); // stop automatically detaches and releases the module lease
+    }
     writeln!(host.0.stdin.as_mut().unwrap(), "ping").unwrap();
     line.clear();
     output.read_line(&mut line).unwrap();
     assert_eq!(line.trim(), "pong");
-    controller.load(&dll).unwrap();
-    assert_eq!(call(&controller, &dll, api::UI_STATUS).active, 0);
-    controller.unload(&dll).unwrap();
+    if !peek {
+        controller.load(&dll).unwrap();
+        assert_eq!(call(&controller, &dll, api::UI_STATUS).active, 0);
+        controller.unload(&dll).unwrap();
+    }
     writeln!(host.0.stdin.as_mut().unwrap(), "quit").unwrap();
     assert!(host.0.wait().unwrap().success());
 }

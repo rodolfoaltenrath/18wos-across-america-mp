@@ -13,6 +13,12 @@ pub const UI_REGISTRY: u32 = 3;
 pub const UI_DETACH: u32 = 4;
 pub const UI_STATUS: u32 = 5;
 pub const UI_INSPECT_TYPE: u32 = 6;
+pub const UI_TRACE: u32 = 7;
+pub const UI_PUMP_ATTACH: u32 = 8;
+pub const UI_PUMP_FIXTURE: u32 = 9;
+pub const UI_PUMP_STATUS: u32 = 10;
+pub const UI_PUMP_REMOVE: u32 = 11;
+pub const ENGINE_ABI_VERSION: u32 = 2;
 /// Separate extension ABI; does not change the original Control v1 layout.
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -33,13 +39,21 @@ pub struct EngineControl {
     pub object_size: u32,
     pub constructor: u32,
     pub destructor: u32,
+    pub frame_count: u32,
+    pub executable_base: u32,
+    pub executable_frame: u32,
+    pub phase: u32,
+    pub phase_thread: u32,
+    pub phase_site: u32,
+    pub phase_hits: u32,
+    pub frames: [u32; 32],
     pub name: [u8; 128],
     pub message: [u8; 256],
 }
 impl EngineControl {
     pub fn new(command: u32) -> Self {
         Self {
-            version: 1,
+            version: ENGINE_ABI_VERSION,
             size: std::mem::size_of::<Self>() as u32,
             command,
             result: 0,
@@ -55,6 +69,14 @@ impl EngineControl {
             object_size: 0,
             constructor: 0,
             destructor: 0,
+            frame_count: 0,
+            executable_base: 0,
+            executable_frame: 0,
+            phase: 0,
+            phase_thread: 0,
+            phase_site: 0,
+            phase_hits: 0,
+            frames: [0; 32],
             name: [0; 128],
             message: [0; 256],
         }
@@ -140,8 +162,8 @@ mod tests {
     use super::*;
     #[test]
     fn stable_layout_and_bounded_strings() {
-        assert_eq!(std::mem::size_of::<EngineControl>(), 448);
-        assert_eq!(std::mem::offset_of!(EngineControl, name), 64);
+        assert_eq!(std::mem::size_of::<EngineControl>(), 604);
+        assert_eq!(std::mem::offset_of!(EngineControl, name), 220);
         assert_eq!(std::mem::size_of::<ClientConfig>(), 976);
         assert_eq!(std::mem::size_of::<Control>(), 1536);
         assert_eq!(std::mem::offset_of!(Control, sent), 24);

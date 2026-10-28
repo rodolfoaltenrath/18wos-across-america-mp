@@ -48,6 +48,10 @@ fn main() -> anyhow::Result<()> {
     }
     #[derive(Subcommand)]
     enum EngineTask {
+        PumpAttach,
+        PumpStatus,
+        PumpRemove,
+        Trace,
         Attach {
             #[arg(long)]
             window: Option<u32>,
@@ -99,6 +103,10 @@ fn main() -> anyhow::Result<()> {
                     b
                 }
                 EngineTask::Probe => api::EngineControl::new(api::UI_PROBE),
+                EngineTask::Trace => api::EngineControl::new(api::UI_TRACE),
+                EngineTask::PumpAttach => api::EngineControl::new(api::UI_PUMP_ATTACH),
+                EngineTask::PumpStatus => api::EngineControl::new(api::UI_PUMP_STATUS),
+                EngineTask::PumpRemove => api::EngineControl::new(api::UI_PUMP_REMOVE),
                 EngineTask::Registry => api::EngineControl::new(api::UI_REGISTRY),
                 EngineTask::Inspect { name } => {
                     let mut b = api::EngineControl::new(api::UI_INSPECT_TYPE);
@@ -121,6 +129,18 @@ fn main() -> anyhow::Result<()> {
                 block.object_size,
                 block.constructor,
                 block.destructor
+            );
+            if block.frame_count != 0 {
+                println!(
+                    "exe=0x{:x} callsite=+0x{:x} frames={:x?}",
+                    block.executable_base,
+                    block.executable_frame,
+                    &block.frames[..block.frame_count.min(32) as usize]
+                );
+            }
+            println!(
+                "pump_state={} phase_thread={} phase_site=+0x{:x} phase_hits={}",
+                block.phase, block.phase_thread, block.phase_site, block.phase_hits
             );
             return Ok(());
         }
