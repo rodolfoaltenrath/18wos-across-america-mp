@@ -717,7 +717,10 @@ Isso permite observar outras entradas quando a primeira está vazia. As duas
 assinaturas de bloco são thiscall com argumento ponteiro, bool em AL e ret4;
 nunca são chamadas adicionalmente pela sonda. A parada remove os quatro hooks
 de transição e confere sete slots externos no perfil do jogo. A extensão de
-blocos ainda depende da primeira validação na partida.
+blocos passou na primeira recarga real: snapshot de 70 eventos, sem perdas,
+todos os retornos true e fases aninhadas até profundidade 3. As solicitações
+capturadas pertenciam a blocos da cena nova, depois da troca; não identificaram
+o início global do reload. Os modelos/física antigos foram zerados em destroy(0).
 
 ### Primeiro caminhão de teste (`visual-*`)
 

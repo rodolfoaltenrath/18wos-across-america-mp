@@ -277,6 +277,14 @@ contadores diretos, words crus da fila, último caminhão observado e até 16
 entradas cruas de modelo. Não interpretar solicitação como destruição concluída
 nem cobertura desses imports como cobertura de todo o motor. Remoção desfaz
 quatro hooks e session-stop verifica sete slots. `dev_env verify`: 44 x86,
-49 nativos, Clippy x86/nativo e rustfmt. A extensão ainda aguarda prova real.
+49 nativos, Clippy x86/nativo e rustfmt. A extensão passou na recarga real:
+snapshot de 70 eventos, sem perdas/foreign/truncamento, 20 init de bloco/três
+solicitações, profundidade até 3; novos init antes de destroy antigo, modelos
+e física antigos zerados em destroy(0). Solicitações capturadas vieram depois
+da troca, caller game+0xf2ff4; NÃO são o começo global do reload. No stop, status
+91 registros, sete slots restaurados, filas zeradas e sete hashes iguais.
+Proprietário fechou normalmente, enumeração e hashes pós-saída conferidos.
+Snapshot inicial preservado; relatório integral pós-stop foi recusado porque
+o jogo já havia encerrado. Não afirmar que os 91 registros foram preservados.
 Seguir o procedimento transition-* do README; não liberar visual nessa fase
 sem relacionar blocos/cenas/flushes e início global do carregamento.

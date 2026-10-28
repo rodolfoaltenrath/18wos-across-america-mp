@@ -1694,7 +1694,47 @@ preflight sem mutação, ownership de import/vtable, restauração, continuidade
 dos originais, serialização e limites de modelos/trace. `dev_env verify` passou:
 **44 testes x86 e 49 nativos**, build release x86/nativo, Clippy dos dois alvos,
 rustfmt e saída zero. Log local `target/analysis/transition-blocks-verify.log`.
-Primeira captura real ainda em andamento.
+**Primeira captura real:** processo histórico 11496/thread 8456, proprietário
+confirmou recarga normal. Snapshot preservado de **70 eventos**, 20 init de
+bloco, três solicitações de destroy, quatro init/três destroy do ator e dez
+marcadores de primeiro draw. Uma só thread, profundidade máxima 3, 30 pares
+enter/return correspondentes e completos, todos os bools true, `flags=1`, sem
+foreign, perda, truncamento de trace ou de modelos. Artefatos ignorados em
+`target/analysis/transition-blocks-20261028-01/`.
+
+Primeiro novo processador/cena observado em `block_init_enter`, caller
+`game+0xcc68a`, flush 13272. Em seguida, `game+0xcc8be` inicializou outro bloco
+na mesma cena e as fases `-10,-1,0,10` do novo ator ficaram aninhadas nesse
+init, profundidade 2; fase zero criou cinco blocos adicionais em profundidade 3.
+Somente depois veio destroy do ator antigo, no mesmo flush. As doze entradas
+antigas não nulas (índices 1,2,6–15) e a física foram zeradas durante destroy(0),
+com quantidade declarada ainda 16. Primeiro draw novo no flush 13275, com doze
+entradas e física novas. Contagem declarada não equivale a recursos vivos.
+
+As três solicitações registradas apareceram DEPOIS da troca, caller
+`game+0xf2ff4`, na cena nova; nenhuma delas precedeu o destroy do ator antigo.
+Logo, esse import não identificou a solicitação global responsável pela troca.
+Não usar qualquer destroy_request como gatilho de reload: há tráfego normal
+de blocos enquanto se joga. Nenhum rollback real foi visto; esse caso continua
+validado somente na fixture.
+
+Na parada, status chegou a 91 registros (24 init de bloco/seis solicitações),
+ainda sem foreign/perdas/truncamento. Esse total posterior foi consultado como
+status; só o snapshot inicial de 70 registros foi preservado integralmente.
+Sete slots restaurados por leitura, dispatcher/pump removidos, worker parado,
+sem operações pendentes/em execução e sete hashes iguais. Proprietário fechou
+normalmente; enumeração confirmou saída e verificação pós-saída repetiu sete
+inalterados. A tentativa de relatório completo posterior ao fechamento foi
+recusada; não reconstruir dados ausentes a partir do status.
+
+**Nova pista estática:** os callers correspondem a `game+0xcc5f0` e `+0xcc8a0`;
+essas rotinas são chamadas pelo handler em `game+0xd3570`. O handler começa
+consultando `cmd_argv` pelo binding `game+0x160930` (retorno `+0xd3596`) e
+despacha comandos textuais; há ramos de criação, carga e encerramento que
+trocam `this+0x14c`. O núcleo exporta `cmd_argv` em `prism3d+0xe210`.
+Esse começo é um candidato anterior à troca; falta observar seu contrato,
+identificar o comando real e provar a correlação antes de qualquer adiamento
+ou liberação automática.
 
 **Limites:** os imports interceptados pertencem somente ao jogo; chamadas
 diretas dentro de p3shared ou por outros módulos podem não aparecer. Solicitar
