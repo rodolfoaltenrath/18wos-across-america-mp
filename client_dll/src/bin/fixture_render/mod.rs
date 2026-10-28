@@ -30,6 +30,7 @@ static INVALID: AtomicBool = AtomicBool::new(false);
 static CALLS: AtomicU32 = AtomicU32::new(0);
 static SAVED_SHIM: AtomicUsize = AtomicUsize::new(0);
 static REPEATS: AtomicU32 = AtomicU32::new(1);
+static PAUSED: AtomicBool = AtomicBool::new(false);
 pub struct Fixture {
     page: *mut c_void,
     world: Words<16>,
@@ -123,6 +124,9 @@ impl Fixture {
         ]
     }
     pub fn frame(&mut self) {
+        if PAUSED.load(Ordering::Acquire) {
+            return;
+        }
         self.frame += 1;
         self.world[12].store((self.frame as f32).to_bits(), Ordering::Release);
         self.camera[12].store((-(self.frame as f32)).to_bits(), Ordering::Release);
@@ -175,6 +179,8 @@ impl Drop for Fixture {
 }
 pub fn command(line: &str) -> bool {
     match line {
+        "render-pause" => PAUSED.store(true, Ordering::Release),
+        "render-resume" => PAUSED.store(false, Ordering::Release),
         "render-many" => REPEATS.store(100, Ordering::Release),
         "render-one" => REPEATS.store(1, Ordering::Release),
         "render-steal" | "render-return" => unsafe {

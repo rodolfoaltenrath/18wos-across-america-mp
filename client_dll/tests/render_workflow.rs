@@ -100,6 +100,35 @@ fn passive_render_preserves_abi_error_state_observes_drain_and_restores_slots_on
     b.command = api::UI_RENDER_ATTACH;
     assert!(controller.engine_control(&dll, &mut b).is_err());
     controller.engine_control(&dll, &mut observer).unwrap();
+    // A background-like pause must remain diagnosable without resetting capture.
+    writeln!(host.0.stdin.as_mut().unwrap(), "render-pause").unwrap();
+    line.clear();
+    output.read_line(&mut line).unwrap();
+    assert_eq!(line.trim(), "armed");
+    arm(&controller, &dll);
+    let pending = Summary::decode(&call(&controller, &dll, api::RENDER_STATUS));
+    assert_eq!((pending.flags, pending.records), (1, 0));
+    // The CLI must take the per-PID control mutex; the module stays loaded.
+    drop(controller);
+    let status = Command::new(env!("CARGO_BIN_EXE_mp_launcher"))
+        .args(["--pid", &host.0.id().to_string(), "--dll"])
+        .arg(&dll)
+        .args(["--fixture", "engine", "render-status"])
+        .output()
+        .unwrap();
+    assert!(status.status.success(), "{:?}", status);
+    let json: serde_json::Value = serde_json::from_slice(&status.stdout).unwrap();
+    assert_eq!(json["flags"], 1);
+    assert_eq!(json["generation"], pending.generation);
+    assert_eq!(json["records"], 0);
+    let controller = Controller::open(host.0.id()).unwrap();
+    let unchanged = Summary::decode(&call(&controller, &dll, api::RENDER_STATUS));
+    assert_eq!(unchanged.generation, pending.generation);
+    assert_eq!(unchanged.flags, 1);
+    writeln!(host.0.stdin.as_mut().unwrap(), "render-resume").unwrap();
+    line.clear();
+    output.read_line(&mut line).unwrap();
+    assert_eq!(line.trim(), "armed");
     let (first, rows) = capture(&controller, &dll);
     assert_eq!(first.owner_thread, attach.window_thread);
     assert_eq!(

@@ -1124,20 +1124,54 @@ remoção/stop recusaram sobrescrevê-lo, sem descarregar a DLL; devolver o slot
 28 testes x86 e 35 nativos passaram. A bancada não usa arquivos comerciais.
 Não houve chamada nova de render pela ferramenta.
 
-**Pré-conferência externa na partida:** processo 9044, sem DLL do projeto
-carregada. Os hashes de núcleo/engine/jogo/gfxshared conferiram; o import do
-núcleo apontou para `gfxshared+0x3690`, e o slot do jogo para núcleo `+0x4820`.
-Os dois ponteiros globais de matriz puderam ser lidos. Foram preparadas cópias
-dos saves em diretório ignorado. Isso é somente leitura externa; a validação
-da sonda na partida ainda aguarda confirmação de que o caminhão está parado
-em uma partida carregada. Não atribuir à partida o resultado da fixture.
+**Validação nativa na partida:** processo histórico 9044, thread 17156. Antes
+da instalação, os quatro hashes e os dois slots originais conferiram; saves
+copiados para diretório ignorado. Foram capturados três flushes completos:
 
-**Limites e próxima dependência:** conferir esta observação na partida, durante
-movimento/menu/recarga, antes de concluir sobre uma fase real. Mesmo que a fila
-CPU fique vazia, isso não é fence da GPU nem prova de outras filas/passes.
-Determinar contexto de câmera/matrizes, skins e ownership dos pacotes antes
-de introduzir um visual persistente. Não repetir criação/liberação privada
-já comprovada sem mudança que exija a regressão.
+| Estado confirmado pelo proprietário | Geração | Registros | Pool A | Pool B |
+| --- | ---: | ---: | --- | --- |
+| Partida parada em primeiro plano | 2 | 8 | `9 → 9 → 0` | `1 → 1 → 0` |
+| Após dirigir e fazer curva, mesma câmera | 3 | 8 | `9 → 9 → 0` | `1 → 1 → 0` |
+| Após menu de carregar e recarga de save existente | 4 | 8 | `9 → 9 → 0` | `1 → 1 → 0` |
+
+Cada sequência compara entrada/retorno do render e retorno do flush. Pools
+`núcleo+0x29558` e `+0x29648`, um bucket em cada, listas integralmente legíveis,
+sem truncamento. Os três relatórios tiveram `flags=0`, `foreign_calls=0` e todos
+os eventos na thread 17156; world/camera legíveis e finitas nos 24 registros.
+As matrizes mudaram após movimento e após recarga. O retorno do flush capturado
+foi sempre `game.dll+0x800f2`; o retorno de render, núcleo `+0x28e1`.
+Isso comprova a observação desse passe, não a cobertura de todos os passes 3D.
+O menu foi atravessado pelo proprietário; não houve captura isolada do menu
+nem de um instante durante o carregamento. A matriz completa de estados segue
+pendente. Artefatos locais: `target/analysis/render-observation/`.
+
+Na tentativa inicial, o loop continuou ativo sem chamadas de render/flush
+enquanto a janela estava sem foco. Voltar à partida em primeiro plano concluiu
+a geração já armada. Uma tentativa de armar a geração 3 durante flush foi
+recusada; repetir entre flushes funcionou. Não rearmar só para consultar estado:
+a CLI agora oferece `engine render-status`, JSON de contadores/flags sem ler
+registros nem modificar a geração, inclusive enquanto a captura está pendente.
+A bancada recebeu pausa/retomada do render para verificar esse caso pela CLI.
+O teste libera o controlador antes de executar `mp_launcher`, pois o mutex de
+controle por PID recusa um segundo controlador (comportamento intencional), e
+reabre o controle depois; a geração pendente permanece inalterada. Após o ajuste,
+28 testes x86 e 35 nativos passaram, com Clippy x86/nativo e formatação limpos.
+
+**Limpeza real:** `render-remove` restaurou os dois slots, conferidos por leitura
+externa: núcleo `+0x22240` voltou a `gfxshared+0x3690`; jogo `+0x160ea0` voltou
+a núcleo `+0x4820`. `pump-remove`/`stop` deixaram dispatcher inativo, worker
+parado, sonda do loop removida e contadores de trabalho pendente/em execução
+zerados. Os quatro módulos e os dois saves conservaram seus hashes. O usuário
+confirmou ausência de problemas e encerrou normalmente; enumeração posterior
+não encontrou `prism3d.exe`. Só então a reconstrução foi iniciada.
+
+**Limites e próxima dependência:** fila CPU vazia não é fence da GPU nem prova
+de outras filas/passes. Os getters globais mantiveram os mesmos valores ao
+longo de cada flush; não foram capturadas as matrizes de cada protótipo nem
+comprovada sua equivalência ao transform do caminhão. Identificar o passe 3D
+e o momento de submissão adequado, contexto de câmera/matrizes, skins e
+ownership dos pacotes antes de introduzir um visual persistente. Não repetir
+criação/liberação privada já comprovada sem mudança que exija a regressão.
 
 ## 3. Primeira versão jogável e limites
 
@@ -1674,12 +1708,13 @@ e [seleção de toolchain com rustup](https://rust-lang.github.io/rustup/overrid
 
 ## 9. Registro de passagem para a próxima etapa
 
-**Próxima entrega:** validar a sonda gráfica já implementada em uma partida,
-durante movimento/menu/recarga, com limpeza e conferência dos slots originais.
-A bancada passou; a pré-conferência externa do processo 9044 passou, mas a
-instalação/observação no jogo aguarda sinal do proprietário. Reenumerar alvo
-e módulos; a DLL do projeto ainda não foi carregada nesse processo.
-Depois comprovar matrizes/câmera, skins e drenagem das filas antes de um draw.
+**Próxima entrega:** identificar o passe 3D e o ponto de submissão, comprovar
+matrizes/câmera, skins e lifetime dos pacotes antes de um draw. A sonda passiva
+passou na partida parada, após movimento e após menu/recarga: três flushes,
+24 registros, duas filas `9 → 9 → 0` e `1 → 1 → 0`, sem flags de perda.
+Foi observado somente o passe cujo retorno é `game.dll+0x800f2`; não atribuir
+ao relatório cobertura de todo o render. Usar `render-status` para diagnosticar
+captura pendente e manter a partida em primeiro plano para renderizar.
 Depois manter um único visual e
 validar transform/remoção em menus e reload. Lifetime, ownership, metadados,
 setter PMD, descritor e instância PSM privados já têm provas registradas;

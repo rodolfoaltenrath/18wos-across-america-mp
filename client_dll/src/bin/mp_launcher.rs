@@ -50,6 +50,8 @@ fn main() -> anyhow::Result<()> {
     enum EngineTask {
         RenderAttach,
         RenderArm,
+        /// Read counters and capture state without arming or reading records.
+        RenderStatus,
         RenderReport,
         RenderRemove,
         PhaseProbe,
@@ -135,6 +137,7 @@ fn main() -> anyhow::Result<()> {
     }
     let mut block = match args.command {
         Task::Engine { task } => {
+            let render_status_only = matches!(task, EngineTask::RenderStatus);
             if matches!(task, EngineTask::Attach { .. }) {
                 controller.load(&dll)?;
             }
@@ -147,6 +150,7 @@ fn main() -> anyhow::Result<()> {
                 EngineTask::Probe => api::EngineControl::new(api::UI_PROBE),
                 EngineTask::RenderAttach => api::EngineControl::new(api::UI_RENDER_ATTACH),
                 EngineTask::RenderArm => api::EngineControl::new(api::RENDER_ARM),
+                EngineTask::RenderStatus => api::EngineControl::new(api::RENDER_STATUS),
                 EngineTask::RenderReport => api::EngineControl::new(api::RENDER_STATUS),
                 EngineTask::RenderRemove => api::EngineControl::new(api::UI_RENDER_REMOVE),
                 EngineTask::Trace => api::EngineControl::new(api::UI_TRACE),
@@ -202,6 +206,10 @@ fn main() -> anyhow::Result<()> {
             controller.engine_control(&dll, &mut block)?;
             if block.command == api::RENDER_STATUS {
                 let summary = client_dll::render_observation::Summary::decode(&block);
+                if render_status_only {
+                    println!("{}", serde_json::to_string_pretty(&summary)?);
+                    return Ok(());
+                }
                 ensure!(
                     summary.flags & 3 == 0,
                     "capture pending; let the game render a complete flush, then retry"

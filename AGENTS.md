@@ -146,12 +146,19 @@ path_flush no jogo. A bancada própria passou: ABI/LastError, fila `2→2→0`,
 matriz ilegível, chamada estrangeira, limite de registros, conflito de ownership,
 recuperação e restauração automática no stop. Mantém ABI v3/664 bytes (23–28).
 Foram executados 28 testes x86 e 35 nativos, além de build/Clippy/formatação.
-A pré-conferência externa no processo 9044 passou (hashes/slots/matrizes),
-mas a sonda ainda não foi instalada no jogo: aguarda resposta de prontidão do
-proprietário. Esse processo está aberto sem a DLL do projeto; não inferir
-validação gráfica real a partir da fixture. Reenumerar antes da próxima ação.
-Próximo bloco: validar a sonda em partida/movimento/menu/recarga e sua limpeza;
-depois comprovar matrizes/câmera, skins e drenagem de filas para um draw.
+A sonda passou no jogo: três capturas completas (parado, após movimento/curva,
+após menu/recarga), 24 registros na thread esperada, flags/foreign zerados;
+duas filas `9→9→0` e `1→1→0`. Matrizes legíveis/variáveis, sem comprovar convenção
+ou transform do caminhão. Retorno do flush sempre `game.dll+0x800f2`; não inferir
+cobertura dos outros passes nem captura isolada do menu/carregamento.
+Com a janela sem foco, o loop ficou ativo sem render; manter primeiro plano.
+`engine render-status` consulta contadores/captura pendente sem rearmar.
+Os dois slots foram restaurados por leitura externa; loop/dispatcher removidos,
+worker parado, tarefas zeradas e hashes de originais/saves preservados.
+O proprietário não notou problemas e encerrou normalmente; enumeração posterior
+não encontrou o jogo. Reenumerar antes da próxima ação.
+Próximo bloco: identificar o passe 3D/ponto de submissão, comprovar matrizes/
+câmera, skins e lifetime dos pacotes para um draw.
 `psm_draw` põe protos na fila e aumenta referências de pacotes: não desenhar e
 liberar a instância imediatamente sem comprovar o consumo desses recursos.
 Não refazer instância/descritor/setter/lifetime sem necessidade concreta.

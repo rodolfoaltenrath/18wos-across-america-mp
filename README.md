@@ -514,6 +514,7 @@ engine attach
 engine pump-attach
 engine render-attach
 engine render-arm
+engine render-status
 engine render-report
 engine render-remove
 engine pump-remove
@@ -523,7 +524,12 @@ stop
 Deixe a partida renderizar um flush completo entre `render-arm` e
 `render-report`. O relatório retorna JSON; mantenha-o local em
 `target/analysis/`. Se a captura ainda estiver armada/em andamento, o comando
-pede uma nova consulta. Pode usar `render-arm` novamente para outra captura,
+pede uma nova consulta. `render-status` retorna somente estado/contadores em
+JSON, inclusive com captura pendente, sem rearmar ou ler os registros.
+Mantenha a partida visível em primeiro plano: nesta instalação o loop continuou
+ativo sem chamadas de render/flush enquanto a janela estava sem foco; voltar
+à partida permitiu concluir a captura já armada.
+Pode usar `render-arm` novamente para outra captura,
 com geração nova; a instalação da sonda só pode ocorrer uma vez por processo.
 `stop` também restaura os slots gráficos antes de remover o dispatcher.
 O processo permanece com a DLL fixada até encerrar, pela regra da sonda do loop.
@@ -559,6 +565,14 @@ v3/664 bytes, comandos 23–28; nos registros gráficos `frames` transporta bits
 das matrizes, com codificação em `render_observation`, sem mudar comandos
 anteriores. Configuração/rede v1 preservadas. A bancada gráfica é própria,
 sem assets comerciais; os resultados no jogo ficam registrados no roadmap.
+
+No Windows, a sonda passou em três capturas reais: parado, após dirigir/fazer
+curva e após menu/recarga. Foram 24 registros, sem perda, na thread esperada;
+duas filas mantiveram 9/1 itens durante render e ficaram vazias após flush.
+Os slots originais foram restaurados e o processo encerrou normalmente, sem
+problemas relatados. As capturas observaram o mesmo passe (`game.dll+0x800f2`),
+sem provar todos os passes ou a convenção das matrizes. Ainda não há desenho
+de caminhões remotos.
 
 ## Retomada no Windows com Rust 1.99.0
 
