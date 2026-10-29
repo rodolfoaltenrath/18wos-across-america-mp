@@ -11,6 +11,8 @@ use std::{
 };
 use zip::{CompressionMethod, ZipArchive, ZipWriter, write::SimpleFileOptions};
 
+pub mod recipe;
+
 const MAX_FILE: usize = 16 * 1024 * 1024;
 const MAX_TOTAL: usize = 32 * 1024 * 1024;
 const MAX_JSON: usize = 1024 * 1024;
@@ -51,6 +53,8 @@ pub struct Entry {
     pub input: Input,
     pub bytes: usize,
     pub sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub derivation: Option<recipe::Derivation>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -320,7 +324,7 @@ fn archive(files: &BTreeMap<String, Vec<u8>>) -> Result<Vec<u8>> {
 fn validate(json: &[u8], payload: &[u8], distributable: bool) -> Result<Manifest> {
     let manifest: Manifest = serde_json::from_slice(json).context("invalid overlay manifest")?;
     ensure!(
-        manifest.schema == 1 && manifest.kind == KIND,
+        matches!(manifest.schema, 1 | 2) && manifest.kind == KIND,
         "unsupported overlay manifest"
     );
     label(&manifest.id)?;
@@ -361,6 +365,11 @@ fn validate(json: &[u8], payload: &[u8], distributable: bool) -> Result<Manifest
     let mut total = 0usize;
     let mut last = None;
     for (index, entry) in manifest.files.iter().enumerate() {
+        match (&entry.derivation, manifest.schema) {
+            (None, 1) => {}
+            (Some(derivation), 2) => derivation.validate(&entry.input)?,
+            _ => anyhow::bail!("manifest schema/derivation mismatch"),
+        }
         let name = &entry.input.path;
         ensure!(
             last.is_none_or(|previous: &String| previous < name),
@@ -491,17 +500,43 @@ pub fn build(project: &Path, output: &Path, distributable: bool) -> Result<Build
             input: input.clone(),
             bytes: bytes.len(),
             sha256: hash(&bytes),
+            derivation: None,
         };
         entries.insert(input.path.clone(), entry);
         files.insert(input.path, bytes);
     }
+    emit(
+        project.id,
+        project.version,
+        entries,
+        files,
+        &output_path,
+        distributable,
+    )
+}
+
+fn emit(
+    id: String,
+    version: String,
+    entries: BTreeMap<String, Entry>,
+    files: BTreeMap<String, Vec<u8>>,
+    output: &Path,
+    distributable: bool,
+) -> Result<BuildReport> {
+    let output_path = checked(output)?;
+    let owned = entries.values().all(|e| e.input.origin == Origin::Owned);
+    let schema = if entries.values().any(|e| e.derivation.is_some()) {
+        2
+    } else {
+        1
+    };
     let payload = archive(&files)?;
     ensure!(payload.len() <= MAX_ARCHIVE, "archive exceeds limit");
     let manifest = Manifest {
-        schema: 1,
+        schema,
         kind: KIND.into(),
-        id: project.id,
-        version: project.version,
+        id,
+        version,
         distributable: owned,
         payload_sha256: hash(&payload),
         files: entries.into_values().collect(),

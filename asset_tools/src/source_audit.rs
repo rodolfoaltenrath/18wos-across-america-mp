@@ -96,6 +96,7 @@ fn allowed(path: &str) -> Result<()> {
             | "LICENSE"
             | "rust-toolchain.toml"
             | "docs/NETWORK_PROTOCOL.md"
+            | "docs/GAME_VALIDATION.md"
             | "asset_tools/Cargo.toml"
             | "multiplayer_server/Cargo.toml"
             | "client_dll/Cargo.toml"

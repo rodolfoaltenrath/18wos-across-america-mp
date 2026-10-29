@@ -45,6 +45,12 @@ depende de instrução para publicar e de um destino conhecido; este roadmap nã
 Essas orientações também estão em [AGENTS.md](AGENTS.md), para acompanhar o
 repositório e orientar futuras sessões de desenvolvimento.
 
+Em 29/10/2026, o proprietário pediu para continuar o que for possível sem abrir
+o jogo, concentrando as provas práticas numa rodada posterior. As pendências
+entregues estão agrupadas em [docs/GAME_VALIDATION.md](docs/GAME_VALIDATION.md),
+com ordem, preparação, critérios e bloqueios técnicos. Não marcar resultados
+práticos a partir da bancada nem confundir integrações futuras com testes prontos.
+
 ## 2. Estado real de partida
 
 | Área | Implementado e validado | Ainda falta |
@@ -63,7 +69,7 @@ O estado atual **não é multiplayer LAN validado entre dois computadores**.
 O proprietário confirmou um visual sem textura ao lado do seu caminhão,
 copiando movimento e rotação; isso não foi um segundo jogador conectado.
 As implementações posteriores têm testes próprios (último registro Windows:
-127 x86/165 nativos, release, Clippy e formatação). Eco/skin e gate de `map`
+127 x86/179 nativos, release, Clippy e formatação). Eco/skin e gate de `map`
 passaram no jogo; a sessão v2 também passou em 29/10/2026. Demais comandos de
 teardown e suavização na LAN seguem pendentes. Não rebaixar esse visual a mera
 alocação privada, nem promover resultados da bancada a validação no jogo.
@@ -2999,6 +3005,78 @@ locais e transformações incrementais, mantendo-as fora de artefatos distribuí
 Ativação/montagem exige prova específica no jogo; não modificar init.cfg por
 hipótese. O próximo marco MP prático continua LAN e outros comandos de teardown.
 
+### M7/M8 — Receitas locais, conversões incrementais e roteiro acumulado — 29/10/2026
+
+`mod-recipe-example`, `mod-source-hash` e `mod-recipe-build` ampliam o pipeline
+sem exigir o jogo aberto. Receita schema 1 identifica arquivo próprio/editado
+local ou entrada de SCS/ZIP por SHA-256 obrigatório. Originais são vinculados
+por `--archive` somente no comando local; os caminhos privados não entram na
+receita/manifesto. São no máximo 16 arquivos de até 2 GiB, lidos em fluxo para
+hash; só a entrada escolhida é descompactada (16 MiB, até 100.000 entradas).
+Vínculo ausente/duplicado/não utilizado, caixa ambígua e links são recusados.
+Não há descoberta automática, extração completa ou escrita nos originais.
+
+Operações `copy`/`png`, flip Y e redução proporcional opcional (1..8192,
+Lanczos3) geram saídas com dependências internas explícitas. Fontes próprias
+ficam em inputs/owned, edições derivadas em inputs/local, arquivo original
+permanece externo e cache/saída têm árvores distintas. PNG tem limites de
+dimensão/16 megapixels antes de decode completo e orçamento best effort de
+64 MiB do decoder. Cor/alpha/inversão e pixels decodificados TGA/BMP/PNG 16-bit
+foram conferidos em fixtures próprias; ICC/EXIF/mipmaps/materiais não fazem
+parte do contrato. Sem escolher codecs proprietários por suposição.
+
+Cache por conteúdo inclui hash da fonte, extensão/decoder, operação, revisão
+do pipeline e hash do Cargo.lock. Header/chave/tamanho/hash são conferidos;
+corrupção interrompe sem reparo ou substituição silenciosa. Mesmo com hit,
+originais/hash de entrada são conferidos de novo. É cache local de confiança,
+sem autenticidade contra adulteração intencional, sem transação de crash ou
+escritores concorrentes. Mudança de implementação exige revisão nova da chave.
+Cache e builds derivados continuam privados/ignorados, não distribuíveis.
+
+Manifesto de pacote schema 2 guarda proveniência/operação/revisão/lock por
+entrada; schema 1 permanece verificável com os mesmos bytes. Derivação de
+arquivo local/entrada comercial continua `derived_local` depois de converter
+ou reutilizar cache, mesmo que os bytes coincidam com uma entrada `owned`.
+`--distributable` recusa antes de emitir; declaração de autoria continua
+responsabilidade do projeto, não é inferida do conteúdo nem autenticada.
+
+14 testes novos nativos cobrem cache frio/quente e raízes distintas, alteração/
+ausência de original com cache quente, corrupção, origem, pins de arquivo e
+entrada, colisões/links de ZIP, grafo, limites, identidade de fontes e formatos
+de textura. O fingerprint recusa diretórios/dispositivos/FIFOs antes de abrir,
+evitando abertura bloqueante no Unix. A fixture Unix adicional de FIFO exige
+mkfifo e ainda não foi executada neste host, assim como a de symlink Unix.
+
+Validação final `dev_env verify`: 127 testes x86 existentes e 179 nativos,
+release x86 do cliente/nativo do workspace, Clippy em ambos e rustfmt limpos.
+Log: target/analysis/verify-windows-20261029-mod-recipes.log. O ramo Windows de
+criação de symlink continua sem privilégio (1314), sem nova prova desse ramo.
+Nenhum jogo foi aberto; não houve teste LAN, Linux ou CLI de assets x86 novo.
+
+CLI release nativa: exemplo próprio, 0 hits/2 misses no build frio e 2 hits/0
+misses no quente, payload/manifesto iguais. Stage/backup/restauração schema 2
+passaram; pacote schema 1 da entrega anterior também passou sem mudança.
+Payload `fb7677d0a53d16b6ae33d59f87d23b055b9aac05cab057d43a74c6ffede8e9f6`,
+manifesto `b702babda3d47d8c650d7fe78b3849ba2b65ddfe6b9897bb4fbe66ef03343625`.
+Artefatos ignorados: target/analysis/mod-recipes-windows-20261029-01/. Também
+foi conferido hash/entrada JPEG do base.scs local, sem extrair ou montar; isso
+não é prova de pacote no motor. Sem execução Linux ou CLI x86 nova.
+Reutilização release após revisão final: 2 hits/0 misses, reused=true. Verificação
+pós-bloco: sete originais/saves iguais, jogo ausente e configuração Cargo local
+preservada. Registros reuse-report.log e verify-originals.log no diretório acima.
+
+`docs/GAME_VALIDATION.md` reúne G1–G8: regressão visual, ajustes/métricas,
+reconexão/desaparecimento, map/fallback/outros comandos, LAN/plataformas,
+duração/custo, ativação de assets e limpeza/integridade. Os caminhos de maior
+risco e o ativador de assets estão explicitamente aguardando preparo técnico.
+Nenhum resultado futuro preenchido; ausência de captura não comprova êxito.
+Allowlist do Git/auditor ampliada somente para esse documento próprio.
+
+Próximos limites: montagem/prioridade/ativador com backup ainda não implementados;
+não editar init.cfg ou iniciar jogo neste bloco. Transformações adicionais,
+dependências externas e pacote mínimo visível exigem outro contrato. LAN,
+demais comandos de teardown e sessões longas aguardam a rodada apropriada.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -3351,16 +3429,18 @@ Colisão e economia compartilhadas podem ser marcos posteriores ao MVP visual.
   Não apenas trocar um símbolo isolado nem depender de cotação cambial real.
 - [x] Ler os três SCS locais, extrair `data.scs`, converter uma TGA para PNG e
   reempacotar 76 arquivos num pacote separado de teste.
-- [ ] Organizar entradas originais, edição própria, cache e saída de build em
+- [x] Organizar entradas originais, edição própria, cache e saída de build em
   caminhos distintos; registrar origem e hash em manifesto gerado.
-  Progresso offline: projeto com `inputs/owned`/`inputs/local`, saída imutável e
-  manifesto individual; reconstrução de entrada comercial e cache pendentes.
-- [ ] Criar builds incrementais/determinísticos quando viável, com dependências
+  Entregue offline: inputs próprios/derivados, originais vinculados externamente,
+  cache/saída separados e manifesto com origem, pins e hashes individuais.
+- [x] Criar builds incrementais/determinísticos quando viável, com dependências
   explícitas de texturas, materiais e caminhos internos.
-  Progresso: Stored determinístico, reutilização exata verificada e grafo de
-  dependências internas; transformações/conversões incrementais pendentes.
+  Entregue: Stored determinístico, grafo interno, reuso exato e cache de copy/PNG.
+  Dependências externas, transformações adicionais e efeito no motor pendentes.
 - [ ] Preservar canais de cor, transparência, orientação e resolução; adicionar
   codecs/mipmaps apenas quando um asset real exigir e houver validação visual.
+  Progresso: fixtures de cópia/flip/resize, RGBA, TGA/BMP e PNG 16-bit; sem prova
+  nova no motor, sem ICC/EXIF/mipmaps ou codificação proprietária automática.
 - [ ] Definir sobreposição de pacotes e um instalador/restaurador em Rust que
   não sobrescreva silenciosamente originais ou alterações do usuário.
   Progresso: stage/backup/remoção/restauração offline em pastas novas, com

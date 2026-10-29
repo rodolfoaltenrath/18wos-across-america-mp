@@ -29,6 +29,26 @@ enum Command {
     VerifySourceBundle { input: PathBuf },
     /// Create a NEW project with our own PNG/text fixtures (no game inputs).
     ModExample { output: PathBuf },
+    /// Create a NEW hash-pinned reconstruction recipe with only our fixtures.
+    ModRecipeExample { output: PathBuf },
+    /// Reconstruct a local overlay using verified inputs and a separate cache.
+    ModRecipeBuild {
+        recipe: PathBuf,
+        output: PathBuf,
+        #[arg(long)]
+        cache: PathBuf,
+        /// Bind a local original archive by SHA-256, never by a private path in the recipe.
+        #[arg(long)]
+        archive: Vec<PathBuf>,
+        #[arg(long)]
+        distributable: bool,
+    },
+    /// Hash a local file and optionally one bounded ZIP/SCS entry, without extraction.
+    ModSourceHash {
+        input: PathBuf,
+        #[arg(long)]
+        entry: Option<String>,
+    },
     /// Build an immutable deterministic data overlay; reuse only an exact match.
     ModBuild {
         project: PathBuf,
@@ -145,6 +165,29 @@ fn main() -> Result<()> {
         }
         Command::Scan { root } => asset_tools::scan(&root),
         Command::ModExample { output } => asset_tools::mod_package::example(&output),
+        Command::ModRecipeExample { output } => asset_tools::mod_package::recipe::example(&output),
+        Command::ModRecipeBuild {
+            recipe,
+            output,
+            cache,
+            archive,
+            distributable,
+        } => {
+            let report = asset_tools::mod_package::recipe::build(
+                &recipe,
+                &output,
+                &cache,
+                &archive,
+                distributable,
+            )?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            Ok(())
+        }
+        Command::ModSourceHash { input, entry } => {
+            let report = asset_tools::mod_package::recipe::fingerprint(&input, entry.as_deref())?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            Ok(())
+        }
         Command::ModBuild {
             project,
             output,

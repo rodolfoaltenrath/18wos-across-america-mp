@@ -36,6 +36,11 @@ de uma falha concreta que impeça continuar ou de informação indispensável.
 Registrar como pendente tudo que a bancada não comprova, sem confundir menor
 frequência de teste manual com validação real já obtida.
 
+Em 29/10/2026, o proprietário reiterou: continuar as implementações possíveis
+sem o jogo e deixar a prova prática para rodada posterior agrupada. Atualizar
+docs/GAME_VALIDATION.md com cada pendência entregue; não pedir para abrir o
+jogo durante esses blocos nem marcar a checklist a partir de fixtures.
+
 Pergunte quando faltar uma decisão de produto que altere substancialmente o
 escopo, uma informação indisponível ou uma ação humana indispensável no jogo.
 Agrupe ações manuais em um procedimento reproduzível e avance no trabalho
@@ -675,3 +680,47 @@ instalador integrado permanecem pendentes, assim como reconstrução comercial
 local/transformações incrementais. Não publicar SCS reempacotado do jogo nem
 marcar M7 inteiro como entregue. Continuar o trabalho offline quando útil;
 LAN e demais comandos de teardown seguem dependentes de marco prático agrupado.
+
+Receitas locais/cache entregues no bloco seguinte: asset_tools
+mod-recipe-example/mod-source-hash/mod-recipe-build. Receita schema 1 pinna
+arquivo e entrada por SHA-256; owned_file em inputs/owned, local_file em
+inputs/local, local_archive ligado por --archive sem paths privados no manifesto.
+Até 16 originais de 2 GiB, hash em fluxo/entrada de até 16 MiB; somente a entrada
+escolhida é descompactada. Operações copy/PNG, flip Y e redução proporcional.
+Cache separado de inputs/saída, chave por conteúdo/extensão/operação/revisão/
+Cargo.lock; cabeçalho/tamanho/hash conferidos. Mesmo com hit, originais são
+revalidados. Corrupção aborta, sem reparo ou sobrescrita silenciosa; cache é
+local de confiança, não autenticado e pode conter conteúdo derivado privado.
+
+Pacote schema 2 registra proveniência/revisão/lock por entrada; schema 1 antigo
+continua válido sem mudar bytes. Origem local não é promovida a owned por
+converter/usar cache; --distributable recusa derivados. Autoria ainda é declaração,
+não inferência. Ajustar REVISION se mudar implementação das transformações;
+troca de dependências do lock invalida chaves automaticamente. Texturas têm
+limites de dimensão/pixels e orçamento best effort do decoder; ICC/EXIF/mipmaps
+não são preservados pelo contrato. Fixtures TGA/BMP/PNG 16-bit/RGBA passaram.
+
+14 testes novos nativos e CLI release própria: cache frio 0/2, quente 2/0,
+pacotes idênticos, stage/backup/restauração schema 2 e compatibilidade com pacote
+schema 1 anterior. Fingerprint de uma entrada JPEG do base.scs também passou
+sem extração; não confundir isso com reconstrução/ativação na partida. Artefatos
+em target/analysis/mod-recipes-windows-20261029-01/; ver resultado final da suíte
+no roadmap e verify-windows-20261029-mod-recipes.log. Sem jogo/Linux/CLI x86 novo.
+Verificação final: dev_env verify passou 127 x86 existentes/179 nativos,
+release/Clippy nos dois alvos/rustfmt; 14 novos testes nativos. Fingerprint
+prevalida arquivo regular antes de abrir para recusar FIFO sem bloquear no Unix;
+fixture Unix adicional com mkfifo ainda não executada aqui. Ramo de criação
+de symlink Windows continua sem privilégio, não contar como prova desse ramo.
+Reuse release final: 2 hits/0 misses/reused=true; sete originais/saves iguais,
+jogo ausente e configuração Cargo preservada. Sem mudança no wire ou nos hooks.
+
+docs/GAME_VALIDATION.md agora concentra G1–G8 e deve receber as próximas
+pendências; nenhum teste futuro foi marcado como passado. Gate dos demais
+comandos e ativador de assets precisam de preparo técnico antes da ação humana.
+Foi ampliada a allowlist exclusivamente para esse documento próprio. Ao mudar
+essa allowlist, reconstruir dev_env com windows --native antes de verify se o
+helper antigo recusar o documento: sua auditoria está embutida no binário.
+
+Montagem/prioridade/ativador no jogo continuam pendentes. Não editar init.cfg,
+não iniciar jogo nem pedir validação manual durante o trabalho offline já
+autorizado; manter automatic_load_supported=false e as proteções existentes.

@@ -13,6 +13,7 @@
 !/rust-toolchain.toml
 !/docs/
 !/docs/NETWORK_PROTOCOL.md
+!/docs/GAME_VALIDATION.md
 
 !/asset_tools/
 !/asset_tools/Cargo.toml

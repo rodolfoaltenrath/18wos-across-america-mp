@@ -33,6 +33,9 @@ roadmap; o fallback é `--no-load-gate` com `session-prepare-load` antes de carr
 O plano completo, os critérios de conclusão e o procedimento para continuar em
 outro computador estão em [ROADMAP.MD](ROADMAP.MD). As orientações de autonomia
 e continuidade do desenvolvimento estão em [AGENTS.md](AGENTS.md).
+As pendências práticas estão agrupadas em
+[docs/GAME_VALIDATION.md](docs/GAME_VALIDATION.md), com preparação, ordem,
+critérios e distinção entre teste disponível e integração ainda não entregue.
 
 ## Direção do mod definida pelo proprietário
 
@@ -1612,10 +1615,11 @@ Cada saída contém somente `overlay.scs` e `manifest.json`. O manifesto registr
 origem, tamanho, SHA-256 individual, dependências e SHA-256 do SCS. O ZIP é Stored,
 ordenado, com data/permissões fixas; a verificação também rejeita dados anexados,
 entradas não declaradas e metadados ZIP diferentes do formato canônico. Não é
-assinatura/autenticação. A reutilização relê e confere todas as entradas; não há
-cache incremental de conversão. Uma alteração exige outro diretório de saída.
+assinatura/autenticação. A reutilização de `mod-build` relê e confere todas as
+entradas. O cache de conversão está no comando de receitas abaixo. Uma alteração
+exige outro diretório de saída.
 
-O pipeline copia os bytes sem recodificar imagem; não converte materiais nem
+`mod-build` copia os bytes sem recodificar imagem; não converte materiais nem
 valida sua sintaxe no motor. Aceita `.def`, `.shd`, `.mat`, `.txt`, `.tga`, `.png`,
 `.dds`, `.bmp`, `.jpg` e `.jpeg`; textos precisam ser UTF-8 sem controles binários.
 Recusa extensões executáveis/arquivos compactados, assinaturas comuns de PE/ELF/
@@ -1638,6 +1642,83 @@ não substituem os SCS originais e não fazem o jogo descobrir automaticamente o
 overlay. O exemplo é uma fixture do pipeline, sem efeito visual prometido na
 partida. Montagem, prioridade entre pacotes, instalação integrada e remoção com
 o motor continuam exigindo um teste específico com backup.
+
+### Reconstrução local por receitas e cache
+
+`mod-recipe-build` acrescenta fontes com SHA-256 obrigatório, reconstrução de
+uma entrada ZIP/SCS local e transformações `copy` ou `png`. O exemplo continua
+inteiramente próprio; inclui um ZIP artificial classificado como local para
+exercitar as mesmas restrições dos originais, sem exigir o jogo:
+
+```powershell
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe mod-recipe-example target/recipe-project
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe mod-source-hash target/recipe-project/inputs/local/example-original.zip --entry textures/checker.png
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe mod-recipe-build target/recipe-project/recipe.json target/recipe-build-v1 --cache target/recipe-cache --archive target/recipe-project/inputs/local/example-original.zip
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe mod-verify target/recipe-build-v1
+```
+
+No Linux, os mesmos subcomandos usam o executável nativo ou `cargo run -p
+asset_tools -- ...`; não houve novo teste Linux deste bloco. O exemplo gera
+`recipe.json` completo. Repetir o build confere as fontes outra vez, usa o cache
+e retorna `reused=true` se o pacote já existente for idêntico.
+
+A receita schema 1 tem `id`, `version` e `files`. Cada saída declara `path`,
+`depends_on`, `source` e `transform`. Fontes disponíveis:
+
+| `source.kind` | Campos | Origem da saída |
+| --- | --- | --- |
+| `owned_file` | `path` em `inputs/owned/`, `sha256` | `owned` |
+| `local_file` | `path` em `inputs/local/`, `sha256` | `derived_local` |
+| `local_archive` | `archive_sha256`, `entry`, `sha256` da entrada | `derived_local` |
+
+`mod-source-hash ARQUIVO` calcula o hash do arquivo; `--entry CAMINHO` também
+calcula tamanho/hash da entrada sem extrair. Copiar esses valores para a receita.
+Para arquivos editados derivados de assets, usar `local_file`; autoria continua
+sendo declaração, não reconhecimento automático do conteúdo.
+
+Os caminhos privados dos originais são informados somente por `--archive`,
+repetível até 16 arquivos. A receita identifica cada original pelo hash integral;
+vínculos ausentes, repetidos ou não utilizados são recusados. Hash integral e
+hash da entrada precisam conferir, inclusive num build com cache quente. Os
+originais são lidos sem modificações, até 2 GiB por arquivo/100.000 entradas;
+a entrada selecionada permanece limitada a 16 MiB. O hash integral lê o arquivo
+todo em fluxo; só a entrada necessária é descompactada, sem extração completa
+ou varredura automática da instalação.
+
+Transformações:
+
+- `{"kind":"copy"}` conserva os bytes.
+- `{"kind":"png","flip_y":true,"max_edge":null}` decodifica e escreve PNG.
+  `max_edge` opcional/null ou 1..8192 reduz proporcionalmente com Lanczos3, sem
+  ampliar imagens menores. Sem resize, a fixture RGBA confirma cores/alpha e
+  inversão vertical; fixtures TGA/BMP e PNG 16-bit também conservam os pixels
+  decodificados, incluindo a precisão de 16 bits. Limites de entrada: 8192 por
+  dimensão, 16 megapixels antes
+  da decodificação completa e orçamento de alocação do decoder de 64 MiB; este
+  último é best effort do crate `image`. Metadados ICC/EXIF/mipmaps e sintaxe dos
+  materiais no motor não são preservados/validados por esse contrato.
+
+O pacote de receita usa manifesto schema 2 com a proveniência por entrada:
+fonte/hashes, operação, revisão do pipeline e hash do `Cargo.lock`. Pacotes
+schema 1 anteriores continuam aceitos sem mudar seus bytes. `mod-stage`,
+`mod-unstage` e `mod-verify` aceitam ambos. Converter ou aproveitar cache nunca
+promove `derived_local` a `owned`; `--distributable` continua recusando o pacote.
+O resultado derivado é local, não acompanha os fontes nem vai ao GitHub.
+
+O cache fica em árvore separada de entradas/saída. A chave inclui hash da fonte,
+extensão/decoder, operação, revisão e dependências fixadas. Cada entrada confere
+cabeçalho, chave, tamanho e hash; corrupção interrompe o build, sem sobrescrever
+ou reparar silenciosamente. Escolha outro cache se precisar preservar/investigar
+o anterior. É cache local de confiança, não autenticação contra adulteração
+intencional. Uma mudança de implementação da transformação exige incrementar
+`REVISION`; mudanças no lock invalidam as chaves automaticamente. Cache pode
+conter conteúdo derivado e permanece ignorado pelo Git. `cache_hits` e
+`cache_misses` medem conversões evitadas, não I/O evitado dos originais.
+
+A construção é reproduzível e foi conferida em duas raízes Windows x64, com
+cache frio/quente e com as fixtures próprias. Ativação/montagem e resultado
+visual no motor continuam pendentes no roteiro de validação; não há instalador
+que edite `init.cfg` nem reconstrução automática de todos os assets do jogo.
 
 A varredura dos três arquivos locais encontrou texturas PNG, JPEG e TGA, sem DDS.
 PNG também pode ser um intermediário para edição de outros formatos. Preserve os
