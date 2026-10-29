@@ -1,4 +1,6 @@
 //! Own thiscall(phase) virtuals and simulated teardown, never commercial code.
+#[path = "map.rs"]
+mod map;
 use std::{
     ffi::c_void,
     sync::atomic::{AtomicU32, AtomicUsize, Ordering},
@@ -44,6 +46,10 @@ pub unsafe fn setup(page: *mut c_void) {
     ]) {
         unsafe { page.cast::<usize>().add(offset).write(function) };
     }
+    unsafe { map::setup(page) };
+}
+pub fn map_descriptors(page: *mut c_void) -> [u32; 6] {
+    map::descriptors(page)
 }
 pub struct Blocks {
     _processor: super::Words<256>,
@@ -219,6 +225,7 @@ unsafe extern "thiscall" fn done(this: *mut c_void, phase: u32) -> u32 {
 }
 pub fn frame(car: u32) {
     match REQUEST.swap(0, Ordering::AcqRel) {
+        kind @ 11..=14 => map::dispatch(kind - 11),
         1 => {
             call(1, car, 1);
             call(1, car, 0);
@@ -294,6 +301,9 @@ pub fn frame(car: u32) {
     }
 }
 pub fn command(line: &str, car: u32) -> bool {
+    if map::command(line) {
+        return true;
+    }
     match line {
         "transition-cycle" => REQUEST.store(1, Ordering::Release),
         "transition-nested" => REQUEST.store(2, Ordering::Release),
@@ -326,8 +336,12 @@ pub fn command(line: &str, car: u32) -> bool {
         | "transition-block-conflict"
         | "transition-block-unconflict"
         | "transition-command-conflict"
-        | "transition-command-unconflict" => {
-            let (offset, saved) = if line.contains("command") {
+        | "transition-command-unconflict"
+        | "transition-map-conflict"
+        | "transition-map-unconflict" => {
+            let (offset, saved) = if line.contains("map") {
+                (0x94 / 4, &map::CONFLICT)
+            } else if line.contains("command") {
                 (0x88 / 4, &COMMAND_CONFLICT)
             } else if line.contains("block") {
                 (0x84 / 4, &BLOCK_CONFLICT)
@@ -358,6 +372,7 @@ pub fn command(line: &str, car: u32) -> bool {
 static CONFLICT: AtomicUsize = AtomicUsize::new(0);
 static BLOCK_CONFLICT: AtomicUsize = AtomicUsize::new(0);
 pub fn check_restored(page: *mut c_void) {
+    map::check_restored(page);
     for (slot, original) in [0x5c / 4, 0x60 / 4, 0x80 / 4, 0x84 / 4, 0x88 / 4]
         .into_iter()
         .zip([

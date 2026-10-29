@@ -188,6 +188,11 @@ fn verify_slots(pid: u32) -> Result<Vec<Value>> {
         ("init_eblock import", game + 0x124560, engine + 0xc270),
         ("destroy_eblock import", game + 0x1242b4, engine + 0xc600),
         ("cmd_argv binding", game + 0x160930, core + 0xe210),
+        (
+            "map descriptor callback",
+            game + u64::from(client_dll::profile::MAP_DESCRIPTOR) + 4,
+            game + u64::from(client_dll::profile::MAP_CALLBACK),
+        ),
         ("render_pool import", core + 0x22240, gfx + 0x3690),
         ("gfx_path_flush binding", game + 0x160ea0, core + 0x4820),
     ] {

@@ -29,10 +29,13 @@ const SLOTS: [u32; 2] = [profile::CAR_VTABLE + 0x5c, profile::CAR_VTABLE + 0x60]
 const FUNCTIONS: [u32; 2] = [0x50f40, 0x515d0];
 static STATE: AtomicU32 = AtomicU32::new(0);
 static OWNER: AtomicU32 = AtomicU32::new(0);
-static SLOTS_AT: [AtomicUsize; 5] = [const { AtomicUsize::new(0) }; 5];
-static ORIGINALS: [AtomicUsize; 5] = [const { AtomicUsize::new(0) }; 5];
-static PROTECTION: [AtomicU32; 5] = [const { AtomicU32::new(0) }; 5];
-static CALLS: [AtomicU32; 5] = [const { AtomicU32::new(0) }; 5];
+static SLOTS_AT: [AtomicUsize; 6] = [const { AtomicUsize::new(0) }; 6];
+static ORIGINALS: [AtomicUsize; 6] = [const { AtomicUsize::new(0) }; 6];
+static PROTECTION: [AtomicU32; 6] = [const { AtomicU32::new(0) }; 6];
+static CALLS: [AtomicU32; 6] = [const { AtomicU32::new(0) }; 6];
+// argc/argv/current handler pointer slots, never callbacks/getters to execute.
+static MAP_BINDINGS: [AtomicU32; 3] = [const { AtomicU32::new(0) }; 3];
+static MAP_FLIGHT: AtomicU32 = AtomicU32::new(0);
 static ARGV_SITE: AtomicU32 = AtomicU32::new(0);
 static HOOKS: AtomicU32 = AtomicU32::new(0);
 static FIXTURE: AtomicBool = AtomicBool::new(false);
@@ -99,7 +102,7 @@ fn record(kind: u32, this: u32, argument: u32, caller: u32, depth: u32, returned
         ..Record::default()
     };
     let block = (6..=9).contains(&kind);
-    let car = if block || kind == 10 {
+    let car = if block || kind >= 10 {
         LAST_CAR.load(Ordering::Acquire)
     } else {
         this
@@ -152,8 +155,24 @@ fn record(kind: u32, this: u32, argument: u32, caller: u32, depth: u32, returned
             }
         }
     }
-    if kind == 10 {
-        let (name, flags) = observation::command_name(argument, |at, out| {
+    if matches!(kind, 10..=12) {
+        let mut argv = argument;
+        if matches!(kind, 11 | 12) {
+            for (i, binding) in MAP_BINDINGS.iter().enumerate() {
+                let mut bytes = [0; 4];
+                if read(binding.load(Ordering::Acquire), &mut bytes).is_ok() {
+                    row.context[i + 1] = u32::from_le_bytes(bytes);
+                    row.readable |= 1 << (9 + i);
+                }
+            }
+            // An argc bound authorizes argv[0] only, never argv[1..].
+            argv = if row.readable & 0x600 == 0x600 && (1..=32).contains(&row.context[1]) {
+                row.context[2]
+            } else {
+                0
+            };
+        }
+        let (name, flags) = observation::command_name(argv, |at, out| {
             read(at, out).map_err(|_| "command byte unreadable".into())
         });
         row.command = name;
@@ -175,7 +194,7 @@ pub fn after_draw(this: u32) {
     if unsafe { GetCurrentThreadId() } == OWNER.load(Ordering::Acquire) {
         LAST_CAR.store(this, Ordering::Release);
         if NEXT_DRAW.swap(false, Ordering::AcqRel) {
-            record(5, this, 0, 0, 0, 0);
+            record(5, this, 0, 0, DEPTH.load(Ordering::Acquire), 0);
         }
     }
 }
@@ -286,13 +305,54 @@ unsafe extern "C" fn argv_impl(context: u32, caller: u32) -> *const *const u8 {
     unsafe { SetLastError(error) };
     result
 }
-fn shims() -> [usize; 5] {
+#[unsafe(naked)]
+unsafe extern "C" fn map_shim() -> u32 {
+    core::arch::naked_asm!("push ebp","mov ebp,esp","and esp,-16","sub esp,12","push dword ptr [ebp+4]","call {implementation}","mov esp,ebp","pop ebp","ret",implementation=sym map_impl);
+}
+unsafe extern "C" fn map_impl(caller: u32) -> u32 {
+    let incoming = unsafe { GetLastError() };
+    MAP_FLIGHT.fetch_add(1, Ordering::AcqRel);
+    let owner = unsafe { GetCurrentThreadId() } == OWNER.load(Ordering::Acquire);
+    let mut handler = [0; 4];
+    let handler = if read(MAP_BINDINGS[2].load(Ordering::Acquire), &mut handler).is_ok() {
+        u32::from_le_bytes(handler)
+    } else {
+        0
+    };
+    let descriptor = SLOTS_AT[5].load(Ordering::Acquire) as u32 - 4;
+    let depth = if owner {
+        DEPTH.fetch_add(1, Ordering::AcqRel) + 1
+    } else {
+        0
+    };
+    if owner {
+        CALLS[5].fetch_add(1, Ordering::Relaxed);
+        record(11, handler, descriptor, caller, depth, 0);
+    } else {
+        FOREIGN.fetch_add(1, Ordering::Relaxed);
+    }
+    let original: unsafe extern "C" fn() -> u32 =
+        unsafe { std::mem::transmute(ORIGINALS[5].load(Ordering::Acquire)) };
+    unsafe { SetLastError(incoming) };
+    let returned = unsafe { original() };
+    let outgoing = unsafe { GetLastError() };
+    if owner {
+        record(12, handler, descriptor, caller, depth, returned);
+        NEXT_DRAW.store(true, Ordering::Release);
+        DEPTH.fetch_sub(1, Ordering::AcqRel);
+    }
+    MAP_FLIGHT.fetch_sub(1, Ordering::AcqRel);
+    unsafe { SetLastError(outgoing) };
+    returned
+}
+fn shims() -> [usize; 6] {
     [
         init_shim as *const () as usize,
         done_shim as *const () as usize,
         block_init_shim as *const () as usize,
         destroy_request_shim as *const () as usize,
         argv_shim as *const () as usize,
+        map_shim as *const () as usize,
     ]
 }
 fn replace(index: usize, expected: usize, desired: usize) -> Result<(), String> {
@@ -539,11 +599,84 @@ pub fn install_commands(thread: u32, b: &EngineControl) -> Result<(), String> {
     }
     Ok(())
 }
+/// Adds a passive cdecl descriptor hook. Never defers or synthesizes a command.
+pub fn install_map(thread: u32, b: &EngineControl) -> Result<(), String> {
+    if STATE.load(Ordering::Acquire) != 1 || HOOKS.load(Ordering::Acquire) != 5 {
+        return Err("install command observation before map observation, exactly once".into());
+    }
+    if ACTIVE.load(Ordering::Acquire)
+        || DEPTH.load(Ordering::Acquire) != 0
+        || MAP_FLIGHT.load(Ordering::Acquire) != 0
+        || thread != OWNER.load(Ordering::Acquire)
+    {
+        return Err("install map observation before arming, on the owner thread".into());
+    }
+    let fixture = b.command == api::UI_TRANSITION_MAP_FIXTURE;
+    if fixture != FIXTURE.load(Ordering::Acquire) {
+        return Err("transition fixture/game mode mismatch".into());
+    }
+    let process = Process::open(unsafe { GetCurrentProcessId() }).map_err(|e| e.to_string())?;
+    let modules = process.modules().map_err(|e| e.to_string())?;
+    let get = |name: &str| {
+        modules
+            .iter()
+            .find(|m| m.name.eq_ignore_ascii_case(name))
+            .ok_or_else(|| format!("{name} missing"))
+    };
+    let (descriptor, original, bindings) = if fixture {
+        executable(b.fixture[1], get("engine_fixture.exe")?)?;
+        (
+            b.fixture[0],
+            b.fixture[1],
+            [b.fixture[2], b.fixture[3], b.fixture[4]],
+        )
+    } else {
+        let audit = crate::inspection::commands::inspect(&process).map_err(|e| e.to_string())?;
+        if !audit.map_registered || !audit.map_profile_matches {
+            return Err("map is not registered with the profiled descriptor/callback".into());
+        }
+        let core = get("prism3d.exe")?;
+        let game = get("game.dll")?;
+        executable(audit.map_callback, game)?;
+        (
+            audit.map_descriptor,
+            audit.map_callback,
+            [
+                add(core, profile::COMMAND_ARGC)?,
+                add(core, profile::COMMAND_ARGV)?,
+                add(game, profile::COMMAND_CONTEXT)?,
+            ],
+        )
+    };
+    let slot =
+        crate::command_registry::map_observer_slot(descriptor, original, bindings, |at, out| {
+            process.read(at, out).map_err(|e| e.to_string())
+        })?;
+    if SLOTS_AT[..5].iter().any(|s| {
+        let at = s.load(Ordering::Acquire) as u32;
+        at == slot || bindings.contains(&at)
+    }) {
+        return Err("map observer aliases an installed transition slot".into());
+    }
+    SLOTS_AT[5].store(slot as usize, Ordering::Release);
+    ORIGINALS[5].store(original as usize, Ordering::Release);
+    for (dst, src) in MAP_BINDINGS.iter().zip(bindings) {
+        dst.store(src, Ordering::Release);
+    }
+    HOOKS.store(6, Ordering::Release);
+    if let Err(error) = replace(5, original as usize, shims()[5]) {
+        let rollback = remove();
+        return Err(format!(
+            "{error}; rollback={rollback:?}; reopen process before reinstalling"
+        ));
+    }
+    Ok(())
+}
 pub fn remove() -> Result<(), String> {
     if STATE.load(Ordering::Acquire) != 1 {
         return Ok(());
     }
-    if DEPTH.load(Ordering::Acquire) != 0 {
+    if DEPTH.load(Ordering::Acquire) != 0 || MAP_FLIGHT.load(Ordering::Acquire) != 0 {
         return Err("transition callback active; retry removal".into());
     }
     for (i, shim) in shims()
@@ -574,7 +707,7 @@ pub fn control(b: &mut EngineControl) -> Result<(), String> {
         if STATE.load(Ordering::Acquire) != 1 {
             return Err("transition observer not installed".into());
         }
-        if DEPTH.load(Ordering::Acquire) != 0 {
+        if DEPTH.load(Ordering::Acquire) != 0 || MAP_FLIGHT.load(Ordering::Acquire) != 0 {
             return Err("transition callback active; retry arming".into());
         }
         let generation = trace
@@ -608,12 +741,14 @@ pub fn control(b: &mut EngineControl) -> Result<(), String> {
     b.count_before = CALLS[0].load(Ordering::Acquire);
     b.count_created = CALLS[1].load(Ordering::Acquire);
     b.count_after = FOREIGN.load(Ordering::Acquire);
-    b.frames[..5].copy_from_slice(&[
+    b.frames[..7].copy_from_slice(&[
         CALLS[2].load(Ordering::Acquire),
         CALLS[3].load(Ordering::Acquire),
         u32::from(HOOKS.load(Ordering::Acquire) >= 4 && STATE.load(Ordering::Acquire) == 1),
         CALLS[4].load(Ordering::Acquire),
-        u32::from(HOOKS.load(Ordering::Acquire) == 5 && STATE.load(Ordering::Acquire) == 1),
+        u32::from(HOOKS.load(Ordering::Acquire) >= 5 && STATE.load(Ordering::Acquire) == 1),
+        CALLS[5].load(Ordering::Acquire),
+        u32::from(HOOKS.load(Ordering::Acquire) == 6 && STATE.load(Ordering::Acquire) == 1),
     ]);
     b.reserved = trace.flags
         | u32::from(ACTIVE.load(Ordering::Acquire))

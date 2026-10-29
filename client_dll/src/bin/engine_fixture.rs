@@ -73,6 +73,12 @@ fn main() -> anyhow::Result<()> {
     #[cfg(not(target_arch = "x86"))]
     let command_descriptors = [0u32; 6];
     #[cfg(target_arch = "x86")]
+    let map_descriptors = drawer
+        .as_ref()
+        .map_or([0; 6], fixture_draw::Fixture::map_descriptors);
+    #[cfg(not(target_arch = "x86"))]
+    let map_descriptors = [0u32; 6];
+    #[cfg(target_arch = "x86")]
     let visual_descriptors = fixture_draw::Fixture::visual_descriptors();
     #[cfg(not(target_arch = "x86"))]
     let visual_descriptors = [0u32; 6];
@@ -176,7 +182,7 @@ fn main() -> anyhow::Result<()> {
     ensure!(!window.is_null(), "cannot create fixture window");
     println!(
         "{}",
-        serde_json::json!({"pid":unsafe{GetCurrentProcessId()},"window":window as usize,"thread":unsafe{GetCurrentThreadId()}, "peek_slot": peek_slot, "factory": bindings, "item_descriptors": item_descriptors, "model_definitions": model_definitions, "model_setter": model_setter,"info_descriptors":info_descriptors,"instance_descriptors":instance_descriptors,"render_descriptors":render_descriptors,"draw_descriptors":draw_descriptors,"draw_car":draw_car,"visual_descriptors":visual_descriptors,"transition_descriptors":transition_descriptors,"block_descriptors":block_descriptors,"command_descriptors":command_descriptors})
+        serde_json::json!({"pid":unsafe{GetCurrentProcessId()},"window":window as usize,"thread":unsafe{GetCurrentThreadId()}, "peek_slot": peek_slot, "factory": bindings, "item_descriptors": item_descriptors, "model_definitions": model_definitions, "model_setter": model_setter,"info_descriptors":info_descriptors,"instance_descriptors":instance_descriptors,"render_descriptors":render_descriptors,"draw_descriptors":draw_descriptors,"draw_car":draw_car,"visual_descriptors":visual_descriptors,"transition_descriptors":transition_descriptors,"block_descriptors":block_descriptors,"command_descriptors":command_descriptors,"map_descriptors":map_descriptors})
     );
     std::io::stdout().flush()?;
     let address = window as usize;

@@ -754,6 +754,33 @@ continua sendo apenas a simulação da fixture. Uma observação de `map` não
 comprova todos os caminhos de carga nem a segurança de liberar o visual nesse
 callback; não repetir reload com visual retido. Ver o registro no roadmap.
 
+`transition-map` (comandos 52/53, mesma ABI v3/664) acrescenta uma sonda
+passiva no callback do descritor perfilado de `map` (`game+0x1573c4`, slot
+`+4` → `game+0xd2e90`). Instale depois de `transition-commands` e antes de
+`transition-arm`; é recusada fora da thread proprietária, com captura armada,
+callback em andamento ou instalação repetida. O preflight confere nome,
+hash e callback do descritor duas vezes, alinhamento e ausência de aliasing
+dos três words lidos (`argc`/`argv` do núcleo e handler atual em
+`game+0x160df0`); nunca executa getters. O thunk original é cdecl sem
+argumentos: lê o handler global e salta para o membro, ou retorna se nulo.
+A sonda encaminha exatamente uma chamada, preservando pilha, EAX e LastError.
+
+Eventos `map_enter`/`map_return` registram descritor, handler de entrada,
+`argc`, ponteiro `argv` e handler corrente (antes/depois) e EAX do retorno.
+Com `argc` em 1..32 copia somente `argv[0]`, como em `transition-commands`;
+`argv[1..]` (nome do save) nunca é lido. EAX é diagnóstico: o membro não tem
+retorno comprovado e o ramo de handler nulo devolve EAX indefinido. Chamadas
+de outras threads são encaminhadas e contadas como foreign; remoção e rearmar
+aguardam o retorno de qualquer chamada em andamento. O status expõe
+`map_calls`/`map_installed`, a remoção restaura seis hooks e `session-stop`
+verifica nove slots. A análise offline produz `map_calls` com despacho do
+handler, primeiro init de outro ator, primeiro done do antigo, primeiro draw
+após retorno e flushes no intervalo, sem inferir causalidade; argc/argv
+alterados durante a chamada tornam a captura estruturalmente incompleta.
+Bancada própria apenas; ainda não executada no jogo. Para a sessão real,
+inserir `engine transition-map` logo após `engine transition-commands` no
+procedimento acima.
+
 ### Preservar e analisar uma captura de transição
 
 `engine transition-report --output ARQUIVO.json` salva o snapshot com os

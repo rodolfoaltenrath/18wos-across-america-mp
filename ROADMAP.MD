@@ -2198,6 +2198,54 @@ relacionar identidade/ordem do comando ao lifecycle, antes de habilitar
 interceptação ativa. Agrupar futuras verificações reais numa sessão; não pedir
 abertura/movimentos/menu a cada incremento. LAN e sessões longas pendentes.
 
+### M4 — Sonda passiva no descritor `map` — 28/10/2026
+
+Bloco iniciado em outra sessão de agente (interrompida por limite de uso) e
+concluído aqui, sem abrir o jogo. Entregue `engine transition-map` (comandos
+52/53, ABI v3/664 inalterada), sexto hook da sonda de transição: troca o word
+`descritor+4` por um shim cdecl, só depois de `transition-commands`, antes de
+armar, na thread proprietária. Perfil novo: `COMMAND_ARGC = prism3d+0x778f0`,
+`COMMAND_ARGV = prism3d+0x778f4`, `COMMAND_CONTEXT = game+0x160df0`.
+
+**Conferência estática:** `game+0xd2e90` é `mov ecx,[game+0x160df0]; test;
+je ret; jmp game+0xd3570`. Não lê pilha nem ECX de entrada, portanto o shim
+sem argumentos não perde parâmetros; o membro contém o callsite `cmd_argv`
+(`+0xd3596`) já observado, por isso `command_dispatch` aparece aninhado na
+janela `map`. Com handler nulo o EAX é indefinido: `returned_eax` é apenas
+diagnóstico, não resultado da carga.
+
+**Registro:** `map_enter`/`map_return` (tipos 11/12) com descritor, handler,
+`argc`/`argv`/handler corrente, EAX e profundidade compartilhada com
+init/done/blocos. Somente `argv[0]` é lido, e só com `argc` em 1..32; a
+fixture deixa `argv[1]` deliberadamente ilegível para provar que nunca é lido.
+`MAP_FLIGHT` conta chamadas em curso, inclusive estrangeiras, e bloqueia
+remoção/rearmar. `first_draw` agora carrega a profundidade corrente.
+`session-stop` confere nove slots (inclui `descritor+4`).
+
+**Análise offline:** `transition_analysis` pareia a família 4 e produz
+`map_calls` (despacho do handler no nível imediatamente interno, primeiro init
+de ator diferente, primeiro done do antigo, primeiro draw novo após o retorno
+até o próximo comando, delta de flushes, argc antes/depois, argv inalterado).
+Nome incompleto, EAX ausente ou argc/argv alterados geram issues;
+`automation_validated` continua false.
+
+**Validação no Fedora:** 81 testes nativos e 84 x86 sob Proton (`test_host`,
+prefixo próprio), incluindo `map_transition_workflow`: preflight recusando
+callback/bindings inválidos ou repetidos sem remover os cinco hooks anteriores,
+recarga sintética (tipos `5,11,10,6,(1,2)×4,7,(3,4)×3,12,5`), `map` aninhado, rollback
+de bloco com init falso, argumentos alterados durante a chamada, chamada
+estrangeira fora da timeline, chamada estrangeira retida bloqueando
+remoção/arm, conflito de ownership e restauração dos words da fixture. Builds
+release nativo/x86, Clippy nos dois alvos e rustfmt passaram. Enumeração antes
+dos builds não encontrou o jogo.
+
+**Limites:** nenhuma captura real com `transition-map`; não comprova que todo
+carregamento passa pelo descritor, nem que liberar dentro do callback seja
+seguro. Não ativa adiamento nem o adaptador `deferred_load`. Próximo: incluir
+`transition-map` na próxima sessão real agrupada (menu → carregar save de
+teste, SEM visual), preservar o relatório antes de sair e relacionar
+`map_calls` ao lifecycle; só então projetar interceptação ativa.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,

@@ -102,6 +102,41 @@ pub fn name_hash(bytes: &[u8]) -> u32 {
         .iter()
         .fold(0u32, |sum, &b| sum.wrapping_add(b as i8 as i32 as u32))
 }
+/// Read-only preflight for the passive map observer. Bindings are addresses of
+/// words, not functions to invoke. No argv element or argument is inspected.
+pub fn map_observer_slot(
+    descriptor: u32,
+    callback: u32,
+    bindings: [u32; 3],
+    mut read: impl FnMut(u64, &mut [u8]) -> Result<(), String>,
+) -> Result<u32, String> {
+    if descriptor == 0 || !descriptor.is_multiple_of(4) || callback == 0 {
+        return Err("invalid map descriptor alignment or callback".into());
+    }
+    let end = descriptor
+        .checked_add(16)
+        .ok_or("map descriptor overflow")?;
+    for (i, &binding) in bindings.iter().enumerate() {
+        if binding == 0
+            || !binding.is_multiple_of(4)
+            || (descriptor..end).contains(&binding)
+            || bindings[..i].contains(&binding)
+        {
+            return Err("invalid or aliased map binding".into());
+        }
+        word(&mut read, binding)?;
+    }
+    let before = header(&mut read, descriptor)?;
+    let mut name = [0; 4];
+    read(before[0].into(), &mut name)?;
+    if name != *b"map\0" || before[1] != callback || before[2] != name_hash(b"map") {
+        return Err("map descriptor name/hash/callback mismatch".into());
+    }
+    if header(&mut read, descriptor)? != before {
+        return Err("map descriptor changed during preflight".into());
+    }
+    Ok(descriptor + 4)
+}
 pub fn inspect(
     images: &[Image],
     mut read: impl FnMut(u64, &mut [u8]) -> Result<(), String>,
@@ -196,6 +231,64 @@ pub fn inspect(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn map_observer_preflight_checks_header_bindings_and_mutation_without_reading_argv() {
+        let mut memory = [0u8; 160];
+        memory[32..36].copy_from_slice(b"map\0");
+        for (i, value) in [32u32, 0x1234, 318, 0].into_iter().enumerate() {
+            memory[64 + i * 4..68 + i * 4].copy_from_slice(&value.to_le_bytes());
+        }
+        // Values are deliberately not readable pointers; preflight reads words only.
+        for i in [128usize, 132, 136] {
+            memory[i..i + 4].copy_from_slice(&u32::MAX.to_le_bytes());
+        }
+        let read = |at: u64, out: &mut [u8]| {
+            out.copy_from_slice(
+                memory
+                    .get(at as usize..at as usize + out.len())
+                    .ok_or("unmapped")?,
+            );
+            Ok(())
+        };
+        assert_eq!(
+            map_observer_slot(64, 0x1234, [128, 132, 136], read).unwrap(),
+            68
+        );
+        for (d, c, b) in [
+            (65, 0x1234, [128, 132, 136]),
+            (64, 0x1235, [128, 132, 136]),
+            (64, 0x1234, [128, 128, 136]),
+            (64, 0x1234, [64, 132, 136]),
+            (64, 0x1234, [128, 132, 1]),
+            (u32::MAX - 3, 0x1234, [128, 132, 136]),
+        ] {
+            assert!(map_observer_slot(d, c, b, read).is_err());
+        }
+        let mut headers = 0;
+        assert!(
+            map_observer_slot(64, 0x1234, [128, 132, 136], |at, out| {
+                read(at, out)?;
+                if at == 64 {
+                    headers += 1;
+                    if headers == 2 {
+                        out[12] = 1;
+                    }
+                }
+                Ok(())
+            })
+            .unwrap_err()
+            .contains("changed")
+        );
+        memory[72..76].fill(0);
+        assert!(
+            map_observer_slot(64, 0x1234, [128, 132, 136], |at, out| {
+                out.copy_from_slice(&memory[at as usize..at as usize + out.len()]);
+                Ok(())
+            })
+            .unwrap_err()
+            .contains("mismatch")
+        );
+    }
     struct Fixture {
         images: Vec<Image>,
         core: Vec<u8>,

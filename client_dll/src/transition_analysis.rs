@@ -32,6 +32,8 @@ enum Kind {
     DestroyRequestEnter,
     DestroyRequestReturn,
     CommandDispatch,
+    MapEnter,
+    MapReturn,
 }
 impl Kind {
     fn paired(self) -> Option<(u8, bool)> {
@@ -44,6 +46,8 @@ impl Kind {
             Self::BlockInitReturn => (2, false),
             Self::DestroyRequestEnter => (3, true),
             Self::DestroyRequestReturn => (3, false),
+            Self::MapEnter => (4, true),
+            Self::MapReturn => (4, false),
             _ => return None,
         })
     }
@@ -77,6 +81,14 @@ struct Event {
     #[serde(default)]
     observed_car: u32,
     returned: Option<bool>,
+    #[serde(default)]
+    argc: Option<u32>,
+    #[serde(default)]
+    argv: Option<u32>,
+    #[serde(default)]
+    current_handler: Option<u32>,
+    #[serde(default)]
+    returned_eax: Option<u32>,
 }
 #[derive(Serialize)]
 pub struct Issue {
@@ -135,7 +147,26 @@ pub struct Analysis {
     /// False init_eblock returns; they do not establish complete rollback/cleanup.
     pub failed_block_initializations: Vec<FailedInitialization>,
     pub commands: Vec<CommandWindow>,
+    pub map_calls: Vec<MapCall>,
     pub automation_validated: bool,
+}
+/// A paired callback span is ordering evidence, not a world-generation witness.
+#[derive(Serialize)]
+pub struct MapCall {
+    pub enter: usize,
+    pub returned: usize,
+    pub descriptor: u32,
+    pub entry_handler: u32,
+    pub current_handler_after: Option<u32>,
+    pub argc_before: Option<u32>,
+    pub argc_after: Option<u32>,
+    pub argv_unchanged: Option<bool>,
+    pub returned_eax: Option<u32>,
+    pub first_handler_dispatch_inside: Option<usize>,
+    pub first_different_actor_init_inside: Option<usize>,
+    pub first_old_actor_done_inside: Option<usize>,
+    pub first_different_actor_draw_after_return: Option<usize>,
+    pub callback_flush_delta: Option<u32>,
 }
 pub fn analyze(bytes: &[u8]) -> Result<Analysis, String> {
     if bytes.len() > MAX_CAPTURE_BYTES {
@@ -162,6 +193,7 @@ pub fn analyze(bytes: &[u8]) -> Result<Analysis, String> {
         cleanups: Vec::new(),
         failed_block_initializations: Vec::new(),
         commands: Vec::new(),
+        map_calls: Vec::new(),
         automation_validated: false,
     };
     for (bad, code) in [
@@ -181,6 +213,7 @@ pub fn analyze(bytes: &[u8]) -> Result<Analysis, String> {
     let mut stack: Vec<usize> = Vec::new();
     let mut actors = BTreeMap::<u32, Actor>::new();
     let mut commands = Vec::new();
+    let mut map_pairs = Vec::new();
     for (i, event) in events.iter().enumerate() {
         if event.models.as_ref().is_some_and(|m| {
             m.len() > 16
@@ -237,11 +270,20 @@ pub fn analyze(bytes: &[u8]) -> Result<Analysis, String> {
                     continue;
                 }
                 out.paired_calls += 1;
-                if family >= 2 && event.returned.is_none() {
+                if matches!(family, 2 | 3) && event.returned.is_none() {
                     out.issues.push(Issue {
                         event: Some(i),
                         code: "missing_block_result",
                     });
+                }
+                if family == 4 {
+                    map_pairs.push((start, i));
+                    if event.returned_eax.is_none() {
+                        out.issues.push(Issue {
+                            event: Some(i),
+                            code: "missing_map_return_value",
+                        });
+                    }
                 }
                 if family == 2 && event.returned == Some(false) {
                     out.failed_block_initializations.push(FailedInitialization {
@@ -296,6 +338,62 @@ pub fn analyze(bytes: &[u8]) -> Result<Analysis, String> {
         out.issues.push(Issue {
             event: Some(event),
             code: "open_call_at_snapshot_end",
+        });
+    }
+    map_pairs.sort_unstable();
+    for &(start, end) in &map_pairs {
+        let before = &events[start];
+        let after = &events[end];
+        for index in [start, end] {
+            if events[index].command_status.as_deref() != Some("complete")
+                || events[index].command.as_deref() != Some("map")
+            {
+                out.issues.push(Issue {
+                    event: Some(index),
+                    code: "map_name_incomplete_or_mismatched",
+                });
+            }
+        }
+        let old = before.observed_car;
+        let find = |kind, different: bool| {
+            ((start + 1)..end).find(|&i| {
+                old != 0
+                    && events[i].thread == summary.owner_thread
+                    && events[i].kind == kind
+                    && ((events[i].this != old) == different)
+            })
+        };
+        // A new command boundary (including an incomplete pair) ends attribution.
+        let following_end = ((end + 1)..events.len())
+            .find(|&i| matches!(events[i].kind, Kind::MapEnter | Kind::CommandDispatch))
+            .unwrap_or(events.len());
+        let draw = ((end + 1)..following_end).find(|&i| {
+            old != 0
+                && events[i].thread == summary.owner_thread
+                && events[i].kind == Kind::FirstDraw
+                && events[i].this != old
+        });
+        let delta = after.flushes_seen.wrapping_sub(before.flushes_seen);
+        out.map_calls.push(MapCall {
+            enter: start,
+            returned: end,
+            descriptor: before.argument,
+            entry_handler: before.this,
+            current_handler_after: after.current_handler,
+            argc_before: before.argc,
+            argc_after: after.argc,
+            argv_unchanged: before.argv.zip(after.argv).map(|(a, b)| a == b),
+            returned_eax: after.returned_eax,
+            first_handler_dispatch_inside: ((start + 1)..end).find(|&i| {
+                events[i].kind == Kind::CommandDispatch
+                    && events[i].thread == summary.owner_thread
+                    && events[i].this == before.this
+                    && before.depth.checked_add(1) == Some(events[i].depth)
+            }),
+            first_different_actor_init_inside: find(Kind::InitEnter, true),
+            first_old_actor_done_inside: find(Kind::DoneEnter, false),
+            first_different_actor_draw_after_return: draw,
+            callback_flush_delta: (delta <= i32::MAX as u32).then_some(delta),
         });
     }
     for (n, &start) in commands.iter().enumerate() {
@@ -411,6 +509,88 @@ mod tests {
             cleared,
             draw,
         ]
+    }
+    fn map_row(kind: u32, depth: u32) -> Record {
+        let mut r = command();
+        r.kind = kind;
+        r.argument = 64;
+        r.depth = depth;
+        r.context[..4].copy_from_slice(&[10, 2, 128, 99]);
+        r.readable |= 0xf00;
+        r.returned = 0xfedcba98;
+        api::put(&mut r.command, "map").unwrap();
+        r
+    }
+    fn map_success() -> Vec<Record> {
+        let old = success();
+        let mut rows = vec![old[0], map_row(11, 1)];
+        for mut r in old[1..old.len() - 1].iter().copied() {
+            r.depth += 1;
+            if r.kind == 10 {
+                api::put(&mut r.command, "map").unwrap();
+            }
+            rows.push(r);
+        }
+        rows.push(map_row(12, 1));
+        rows.push(*old.last().unwrap());
+        rows
+    }
+    #[test]
+    fn pairs_map_span_and_separates_its_return_from_first_draw_and_nested_dispatch() {
+        let mut rows = map_success();
+        // Inner argv marker must not be attributed as the outer direct marker.
+        let mut inner_dispatch = command();
+        inner_dispatch.depth = 3;
+        rows.splice(2..2, [map_row(11, 2), inner_dispatch, map_row(12, 2)]);
+        let a = parse(&snapshot(&rows));
+        assert!(a.structurally_complete);
+        assert_eq!(a.map_calls.len(), 2);
+        assert_eq!(a.map_calls[0].first_handler_dispatch_inside, Some(5));
+        assert_eq!(a.map_calls[1].first_handler_dispatch_inside, Some(3));
+        assert_eq!(a.map_calls[1].first_different_actor_draw_after_return, None);
+        let m = &a.map_calls[0];
+        assert_eq!(m.descriptor, 64);
+        assert_eq!(m.returned_eax, Some(0xfedcba98));
+        assert_eq!(
+            (m.argc_before, m.argc_after, m.argv_unchanged),
+            (Some(2), Some(2), Some(true))
+        );
+        assert!(
+            m.first_different_actor_init_inside.unwrap() < m.first_old_actor_done_inside.unwrap()
+        );
+        assert!(m.returned < m.first_different_actor_draw_after_return.unwrap());
+        assert!(!a.automation_validated);
+    }
+    #[test]
+    fn incomplete_mismatched_or_changed_map_evidence_never_claims_generation_or_load_success() {
+        let rows = map_success();
+        let end = rows.len() - 2;
+        let mut bad = snapshot(&rows);
+        bad["records"][end]["argument"] = 65.into();
+        let a = parse(&bad);
+        assert!(!a.structurally_complete && a.map_calls.is_empty());
+        let mut changed = snapshot(&rows);
+        changed["records"][end]["argc"] = 0.into();
+        changed["records"][end]["argv"] = 0.into();
+        changed["records"][end]["command"] = serde_json::Value::Null;
+        changed["records"][end]["command_status"] = "unreadable".into();
+        changed["records"][end]["returned_eax"] = serde_json::Value::Null;
+        let a = parse(&changed);
+        assert_eq!(a.map_calls[0].argv_unchanged, Some(false));
+        assert!(!a.structurally_complete && !a.automation_validated);
+        for code in [
+            "map_name_incomplete_or_mismatched",
+            "missing_map_return_value",
+        ] {
+            assert!(a.issues.iter().any(|i| i.code == code));
+        }
+        let a = parse(&snapshot(&rows[..end]));
+        assert!(a.map_calls.is_empty());
+        assert!(
+            a.issues
+                .iter()
+                .any(|i| i.code == "open_call_at_snapshot_end")
+        );
     }
     #[test]
     fn correlates_signed_phases_scenes_cleanup_and_three_flushes_without_authorizing_automation() {

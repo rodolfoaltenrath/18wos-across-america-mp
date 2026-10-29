@@ -174,6 +174,9 @@ impl Fixture {
     pub fn command_descriptors(&self) -> [u32; 6] {
         lifecycle::command_descriptors(self.page)
     }
+    pub fn map_descriptors(&self) -> [u32; 6] {
+        lifecycle::map_descriptors(self.page)
+    }
     /// psm_draw, gfx_push, gfx_pop, gfx_translate, gfx_qrotate, psm_set_shader.
     pub fn visual_descriptors() -> [u32; 8] {
         [

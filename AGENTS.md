@@ -409,3 +409,13 @@ builds release, Clippy nos dois alvos e rustfmt passaram. O lote de 80.000
 cenários/40.000 callbacks próprios passou nativo e Windows x86, JSON idêntico.
 Recursos visuais/epochs são simulados; não é teste do callback comercial nem
 recarga real. Artefatos adapter-* ignorados, jogo não foi iniciado neste bloco.
+
+Bloco seguinte entregue na bancada: `engine transition-map` (52/53, ABI v3/664),
+sexto hook passivo em `descritor map+4`, instalado após `transition-commands`
+e antes do arm. Thunk `game+0xd2e90` conferido: cdecl sem argumentos, lê o
+handler em `game+0x160df0` e salta para `+0xd3570`; EAX de retorno é só
+diagnóstico. Registra argc/argv/handler e somente `argv[0]`; `argv[1..]`
+nunca é lido. Chamadas em curso bloqueiam remoção/arm; `session-stop` verifica
+nove slots. `transition_analysis` gera `map_calls`, sem autorizar automação.
+81 testes nativos/84 x86 sob Proton, builds release, Clippy e rustfmt passaram.
+Sem captura real ainda: incluir na próxima sessão agrupada, sem visual retido.

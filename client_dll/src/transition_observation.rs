@@ -42,6 +42,7 @@ pub struct Record {
     /// 1/2 init enter/return, 3/4 done enter/return, 5 first subsequent draw;
     /// 6/7 block init enter/return, 8/9 destruction REQUEST enter/return;
     /// 10 profiled command dispatch (after cmd_argv, before command execution).
+    /// 11/12 map descriptor callback enter/return (cdecl, no added engine calls).
     pub kind: u32,
     pub thread: u32,
     pub caller: u32,
@@ -54,7 +55,8 @@ pub struct Record {
     pub values: [u32; 4],
     pub readable: u32,
     /// Block data/context/strong/residency/access, observed car, queue raw words.
-    /// For kind 10, context[0] is the handler's scene pointer (+0x14c), not block data.
+    /// For kinds 10..12, [0] is the entry handler's scene (+0x14c).
+    /// For map records, [1..4] are argc/argv/current handler word snapshots.
     pub context: [u32; 8],
     pub returned: u32,
     pub models: [u32; 16],
@@ -99,10 +101,12 @@ impl Record {
         let value = |i: usize| (self.readable & (1 << i) != 0).then_some(self.values[i]);
         let context = |i: usize| (self.readable & (1 << (8 + i)) != 0).then_some(self.context[i]);
         let block = (6..=9).contains(&self.kind);
-        let command = (self.kind == 10 && self.readable & COMMAND_READ != 0)
+        let command_record = matches!(self.kind, 10..=12);
+        let map = matches!(self.kind, 11 | 12);
+        let command = (command_record && self.readable & COMMAND_READ != 0)
             .then(|| crate::api::text(&self.command).ok())
             .flatten();
-        let command_status = (self.kind == 10).then_some(if self.readable & COMMAND_READ != 0 {
+        let command_status = command_record.then_some(if self.readable & COMMAND_READ != 0 {
             if command.is_some() {
                 "complete"
             } else {
@@ -116,7 +120,7 @@ impl Record {
             "not_recorded"
         });
         let block_context = |i| if block { context(i) } else { None };
-        serde_json::json!({"kind":match self.kind {1=>"init_enter",2=>"init_return",3=>"done_enter",4=>"done_return",5=>"first_draw",6=>"block_init_enter",7=>"block_init_return",8=>"destroy_request_enter",9=>"destroy_request_return",10=>"command_dispatch",_=>"unknown"},"command":command,"command_status":command_status,"handler_scene":(self.kind==10).then(||context(0)).flatten(),"thread":self.thread,"caller":self.caller,"this":self.this,"argument":self.argument,"phase":(1..=4).contains(&self.kind).then_some(self.argument as i32),"depth":self.depth,"flushes_seen":self.flushes,"scene":value(0),"physics":value(1),"first_model":value(2),"model_count":value(3),"readable":self.readable,
+        serde_json::json!({"kind":match self.kind {1=>"init_enter",2=>"init_return",3=>"done_enter",4=>"done_return",5=>"first_draw",6=>"block_init_enter",7=>"block_init_return",8=>"destroy_request_enter",9=>"destroy_request_return",10=>"command_dispatch",11=>"map_enter",12=>"map_return",_=>"unknown"},"command":command,"command_status":command_status,"handler_scene":command_record.then(||context(0)).flatten(),"map_descriptor":map.then_some(self.argument),"argc":map.then(||context(1)).flatten(),"argv":map.then(||context(2)).flatten(),"current_handler":map.then(||context(3)).flatten(),"returned_eax":(self.kind==12).then_some(self.returned),"thread":self.thread,"caller":self.caller,"this":self.this,"argument":self.argument,"phase":(1..=4).contains(&self.kind).then_some(self.argument as i32),"depth":self.depth,"flushes_seen":self.flushes,"scene":value(0),"physics":value(1),"first_model":value(2),"model_count":value(3),"readable":self.readable,
         "observed_car":self.context[5],"block":block.then_some(self.argument),"block_data":block_context(0),"block_context":block_context(1),"block_strong":block_context(2),"block_residency":block_context(3),"block_access":block_context(4),"queue_words":[block_context(6),block_context(7)],"returned":matches!(self.kind,7|9).then_some(self.returned != 0),"models":(self.readable & 16 != 0).then(|| &self.models[..(self.values[3] as usize).min(16)]),"models_truncated":self.readable & 8 != 0 && self.values[3]>16})
     }
 }
@@ -135,6 +139,8 @@ pub struct Summary {
     pub blocks_installed: bool,
     pub command_calls: u32,
     pub commands_installed: bool,
+    pub map_calls: u32,
+    pub map_installed: bool,
 }
 impl Summary {
     pub fn decode(b: &EngineControl) -> Self {
@@ -152,12 +158,39 @@ impl Summary {
             blocks_installed: b.frames[2] != 0,
             command_calls: b.frames[3],
             commands_installed: b.frames[4] != 0,
+            map_calls: b.frames[5],
+            map_installed: b.frames[6] != 0,
         }
     }
 }
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn map_records_preserve_eax_and_readability_without_serializing_arguments() {
+        let mut row = Record {
+            kind: 12,
+            argument: 64,
+            returned: 0xfedcba98,
+            readable: COMMAND_READ | 0xf00,
+            ..Record::default()
+        };
+        row.context[..4].copy_from_slice(&[10, 2, 128, 99]);
+        crate::api::put(&mut row.command, "map").unwrap();
+        let mut block = EngineControl::new(crate::api::TRANSITION_READ);
+        row.encode(&mut block);
+        assert_eq!(Record::decode(&block), row);
+        let json = row.json();
+        assert_eq!(json["kind"], "map_return");
+        assert_eq!(json["map_descriptor"], 64);
+        assert_eq!(json["argc"], 2);
+        assert_eq!(json["argv"], 128);
+        assert_eq!(json["current_handler"], 99);
+        assert_eq!(json["returned_eax"], 0xfedcba98u32);
+        assert!(json["returned"].is_null());
+        assert!(json["block_data"].is_null());
+        assert!(Record { readable: 0, ..row }.json()["argc"].is_null());
+    }
     #[test]
     fn command_capture_reads_only_argv_zero_and_drops_partial_or_unterminated_names() {
         let capture = |text: &[u8]| {

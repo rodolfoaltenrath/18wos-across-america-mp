@@ -190,6 +190,10 @@ fn execute(mut block: EngineControl) -> Result<EngineControl, String> {
         api::UI_TRANSITION_COMMANDS | api::UI_TRANSITION_COMMANDS_FIXTURE => {
             crate::engine_transition::install_commands(tid, &block)?
         }
+        #[cfg(target_arch = "x86")]
+        api::UI_TRANSITION_MAP | api::UI_TRANSITION_MAP_FIXTURE => {
+            crate::engine_transition::install_map(tid, &block)?
+        }
         api::UI_PROBE => {}
         api::UI_TRACE => {
             let mut frames = [ptr::null_mut(); 32];
@@ -452,6 +456,8 @@ pub fn control(block: &mut EngineControl) -> Result<(), String> {
         | api::UI_TRANSITION_BLOCKS_FIXTURE
         | api::UI_TRANSITION_COMMANDS
         | api::UI_TRANSITION_COMMANDS_FIXTURE
+        | api::UI_TRANSITION_MAP
+        | api::UI_TRANSITION_MAP_FIXTURE
         | api::UI_TRANSITION_REMOVE => dispatch(*block).map(|response| {
             *block = response;
         }),

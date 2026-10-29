@@ -118,6 +118,8 @@ fn main() -> anyhow::Result<()> {
         TransitionBlocks,
         /// Observe command names at the profiled game handler, without arguments.
         TransitionCommands,
+        /// Observe entry/return of the profiled map descriptor; always forwards.
+        TransitionMap,
         TransitionArm,
         TransitionStatus,
         /// Snapshot of the append-only capture, even while still armed.
@@ -373,6 +375,7 @@ fn main() -> anyhow::Result<()> {
                 EngineTask::TransitionCommands => {
                     api::EngineControl::new(api::UI_TRANSITION_COMMANDS)
                 }
+                EngineTask::TransitionMap => api::EngineControl::new(api::UI_TRANSITION_MAP),
                 EngineTask::TransitionArm => api::EngineControl::new(api::TRANSITION_ARM),
                 EngineTask::TransitionStatus | EngineTask::TransitionReport { .. } => {
                     api::EngineControl::new(api::TRANSITION_STATUS)
