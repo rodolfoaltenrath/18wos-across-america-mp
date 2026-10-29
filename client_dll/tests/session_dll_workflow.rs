@@ -302,6 +302,10 @@ fn dll_heartbeats_without_coordinates_restarts_histories_recovers_server_and_rem
         initial.connection,
         "heartbeat must keep the original connection alive"
     );
+    let timing = control(&c, &dll, api::NETWORK_TIMING);
+    let timing: multiplayer_server::session_timing::Timing =
+        serde_json::from_str(api::text(&timing.message).unwrap()).unwrap();
+    assert!(timing.rtt_samples >= 2 && timing.snapshots > 0);
     let old = remote(&c, &dll).sequence;
     peer.reconnect.store(true, Ordering::Release);
     let (_, new) = until(&c, &dll, "remote generation reset", |_, _, r| {

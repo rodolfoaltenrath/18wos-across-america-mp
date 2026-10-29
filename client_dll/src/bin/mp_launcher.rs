@@ -48,6 +48,15 @@ fn main() -> anyhow::Result<()> {
             identity_file: Option<PathBuf>,
         },
         Status,
+        /// Query RTT/arrival timing for the accepted v2 connection (null for v1).
+        NetworkTiming,
+        /// Read/change local interpolation; never calls a game API.
+        Presentation {
+            #[arg(long, value_parser = clap::value_parser!(u16).range(0..=200))]
+            delay_ms: Option<u16>,
+            #[arg(long, value_parser = clap::value_parser!(u16).range(0..=200))]
+            extrapolation_ms: Option<u16>,
+        },
         Watch {
             #[arg(long, default_value_t=30, value_parser=clap::value_parser!(u64).range(1..=600))]
             seconds: u64,
@@ -58,6 +67,10 @@ fn main() -> anyhow::Result<()> {
         SessionStart {
             #[arg(long)]
             server: SocketAddr,
+            #[arg(long, default_value_t = 100, value_parser = clap::value_parser!(u16).range(0..=200))]
+            interpolation_ms: u16,
+            #[arg(long, default_value_t = 200, value_parser = clap::value_parser!(u16).range(0..=200))]
+            extrapolation_ms: u16,
             #[arg(long, default_value = "all", value_parser = parse_player)]
             player: u32,
             #[arg(long, num_args = 3, allow_hyphen_values = true, default_values_t = [0.0f32, 0.0, 0.0])]
@@ -268,6 +281,39 @@ fn main() -> anyhow::Result<()> {
         );
     }
     match &args.command {
+        Task::NetworkTiming => {
+            let mut timing = Control::new(api::NETWORK_TIMING);
+            controller.control(&dll, &mut timing)?;
+            let report: serde_json::Value =
+                serde_json::from_str(api::text(&timing.message).map_err(anyhow::Error::msg)?)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            return Ok(());
+        }
+        Task::Presentation {
+            delay_ms,
+            extrapolation_ms,
+        } => {
+            let mut current = Control::new(api::PRESENTATION_STATUS);
+            controller.control(&dll, &mut current)?;
+            let mut status: client_dll::presentation::Status =
+                serde_json::from_str(api::text(&current.message).map_err(anyhow::Error::msg)?)?;
+            if delay_ms.is_some() || extrapolation_ms.is_some() {
+                if let Some(value) = delay_ms {
+                    status.config.delay_ms = *value;
+                }
+                if let Some(value) = extrapolation_ms {
+                    status.config.extrapolation_ms = *value;
+                }
+                let mut set = Control::new(api::PRESENTATION_SET);
+                api::put(&mut set.message, &serde_json::to_string(&status.config)?)
+                    .map_err(anyhow::Error::msg)?;
+                controller.control(&dll, &mut set)?;
+                status =
+                    serde_json::from_str(api::text(&set.message).map_err(anyhow::Error::msg)?)?;
+            }
+            println!("{}", serde_json::to_string_pretty(&status)?);
+            return Ok(());
+        }
         Task::SessionBackup { backup, saves } => {
             let saves = match saves {
                 Some(path) => path.clone(),
@@ -281,6 +327,8 @@ fn main() -> anyhow::Result<()> {
         }
         Task::SessionStart {
             server,
+            interpolation_ms,
+            extrapolation_ms,
             player,
             offset,
             fixture_info,
@@ -324,6 +372,10 @@ fn main() -> anyhow::Result<()> {
                 .transpose()?;
             let options = launcher_session::Options {
                 server: *server,
+                presentation: client_dll::interpolation::Config {
+                    delay_ms: *interpolation_ms,
+                    extrapolation_ms: *extrapolation_ms,
+                },
                 player: *player,
                 offset: [offset[0], offset[1], offset[2]],
                 skin: !*no_skin,
@@ -709,6 +761,8 @@ fn main() -> anyhow::Result<()> {
             return Ok(());
         }
         Task::SessionStart { .. }
+        | Task::NetworkTiming
+        | Task::Presentation { .. }
         | Task::SessionBackup { .. }
         | Task::SessionPrepareLoad { .. }
         | Task::SessionStatus

@@ -1,9 +1,9 @@
 //! Deterministic, virtual-clock receive-path lab. Uses the production packet
 //! codec and interpolation; no sockets, engine, assets or game callbacks.
 use anyhow::{Result, ensure};
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use client_dll::{
-    interpolation::{History, Sample},
+    interpolation::{Config, History, Mode, Sample},
     network_conditions::{Conditions, Counters, Link},
 };
 use multiplayer_server::protocol::{self, Position, Rotation, ServerUpdate, TICK_HZ, VERSION};
@@ -18,10 +18,50 @@ struct Parameters {
     #[command(flatten)]
     #[serde(flatten)]
     conditions: Conditions,
+    #[arg(long, default_value_t = 100, value_parser = clap::value_parser!(u16).range(0..=200))]
+    interpolation_ms: u16,
+    #[arg(long, default_value_t = 200, value_parser = clap::value_parser!(u16).range(0..=200))]
+    extrapolation_ms: u16,
+    #[arg(long, value_enum, default_value = "linear")]
+    trajectory: Trajectory,
     /// A new report file; its parent directory must already exist.
     #[arg(long)]
     #[serde(skip)]
     output: Option<PathBuf>,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum Trajectory {
+    Linear,
+    StopTurn,
+}
+
+/// Own piecewise path, with two stops and changes of direction every 8 s.
+/// No game units/physics/tick convention is inferred from this synthetic path.
+fn truth(kind: Trajectory, milliseconds: f64) -> Position {
+    let [x, z] = match kind {
+        Trajectory::Linear => [milliseconds * 0.6, 100.0],
+        Trajectory::StopTurn => {
+            let t = milliseconds % 8000.0;
+            if t < 2000.0 {
+                [t * 0.6, 100.0]
+            } else if t < 3500.0 {
+                [1200.0, 100.0]
+            } else if t < 5500.0 {
+                [1200.0, 100.0 + (t - 3500.0) * 0.6]
+            } else if t < 7000.0 {
+                [1200.0, 1300.0]
+            } else {
+                [1200.0 - (t - 7000.0) * 1.2, 1300.0 - (t - 7000.0) * 1.2]
+            }
+        }
+    };
+    Position {
+        x: x as f32,
+        y: 0.0,
+        z: z as f32,
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize)]
@@ -42,6 +82,36 @@ struct Scenario {
     resumed_after_blackout: bool,
     final_queue: usize,
     finite_poses: bool,
+    modes: Modes,
+    max_prediction_ms: u16,
+    /// Error against the selected synthetic path, not real game physics.
+    mean_error_milli_cm: u64,
+    max_error_milli_cm: u64,
+}
+
+#[derive(Default, Debug, PartialEq, Eq, Serialize)]
+struct Modes {
+    buffering: u64,
+    interpolated: u64,
+    predicted: u64,
+    capped: u64,
+    held: u64,
+    snapped: u64,
+}
+impl Modes {
+    fn add(&mut self, mode: Mode) {
+        match mode {
+            Mode::Buffering => self.buffering += 1,
+            Mode::Interpolated => self.interpolated += 1,
+            Mode::Predicted => self.predicted += 1,
+            Mode::Capped => self.capped += 1,
+            Mode::Held => self.held += 1,
+            Mode::Snapped => self.snapped += 1,
+        }
+    }
+    fn total(&self) -> u64 {
+        self.buffering + self.interpolated + self.predicted + self.capped + self.held + self.snapped
+    }
 }
 
 fn simulate(name: &'static str, parameters: &Parameters, blackout: bool) -> Result<Scenario> {
@@ -71,7 +141,17 @@ fn simulate(name: &'static str, parameters: &Parameters, blackout: bool) -> Resu
         resumed_after_blackout: false,
         final_queue: 0,
         finite_poses: true,
+        modes: Modes::default(),
+        max_prediction_ms: 0,
+        mean_error_milli_cm: 0,
+        max_error_milli_cm: 0,
     };
+    let config = Config {
+        delay_ms: parameters.interpolation_ms,
+        extrapolation_ms: parameters.extrapolation_ms,
+    };
+    config.validate().map_err(anyhow::Error::msg)?;
+    let mut total_error = 0u64;
     let mut history = History::default();
     let mut seen = None;
     let mut sequence = 0;
@@ -84,11 +164,10 @@ fn simulate(name: &'static str, parameters: &Parameters, blackout: bool) -> Resu
                     version: VERSION,
                     player_id: 1,
                     sequence: u64::from(sequence),
-                    position: Position {
-                        x: sequence as f32 * 10.0,
-                        y: 0.0,
-                        z: 100.0,
-                    },
+                    position: truth(
+                        parameters.trajectory,
+                        f64::from(sequence) * 1000.0 / f64::from(TICK_HZ),
+                    ),
                     rotation: Some(Rotation {
                         x: 0.0,
                         y: 0.0,
@@ -137,13 +216,36 @@ fn simulate(name: &'static str, parameters: &Parameters, blackout: bool) -> Resu
                 report.stale_hidden_frames += 1;
                 continue;
             }
-            if let Some((position, rotation)) = history.pose(now as f64 / 1000.0) {
-                report.finite_poses &= position.into_iter().chain(rotation).all(f32::is_finite);
+            if let Some(pose) = history.evaluate(now as f64 / 1000.0, config) {
+                report.finite_poses &= pose
+                    .position
+                    .into_iter()
+                    .chain(pose.rotation)
+                    .all(f32::is_finite);
+                report.modes.add(pose.mode);
+                report.max_prediction_ms = report.max_prediction_ms.max(pose.prediction_ms);
+                let actual = truth(parameters.trajectory, now as f64);
+                let error = (pose
+                    .position
+                    .into_iter()
+                    .zip([actual.x, actual.y, actual.z])
+                    .map(|(a, b)| (f64::from(a) - f64::from(b)).powi(2))
+                    .sum::<f64>()
+                    .sqrt()
+                    * 1000.0)
+                    .round() as u64;
+                total_error += error;
+                report.max_error_milli_cm = report.max_error_milli_cm.max(error);
                 report.rendered_frames += 1;
             }
         }
     }
     report.network = link.counters();
+    report.mean_error_milli_cm = total_error.checked_div(report.rendered_frames).unwrap_or(0);
+    ensure!(
+        report.modes.total() == report.rendered_frames,
+        "presentation mode accounting mismatch"
+    );
     report.final_queue = link.pending();
     ensure!(
         report.final_queue == 0 && report.finite_poses,
@@ -185,7 +287,7 @@ fn report(parameters: &Parameters) -> Result<Report<'_>> {
     clean.conditions.delay_ms = 0;
     clean.conditions.jitter_ms = 0;
     Ok(Report {
-        schema: 1,
+        schema: 2,
         virtual_clock: true,
         game_tested: false,
         lan_tested: false,
@@ -265,8 +367,48 @@ mod tests {
             ("--queue-capacity", "8193"),
             ("--delay-ms", "5001"),
             ("--jitter-ms", "5001"),
+            ("--interpolation-ms", "201"),
+            ("--extrapolation-ms", "201"),
         ] {
             assert!(Parameters::try_parse_from(["network_lab", key, value]).is_err());
         }
+    }
+    #[test]
+    fn smaller_delay_reduces_clean_synthetic_lag_but_uses_prediction_more() {
+        let baseline = parameters();
+        let delayed = report(&baseline).unwrap();
+        let mut immediate = parameters();
+        immediate.interpolation_ms = 0;
+        immediate.extrapolation_ms = 50;
+        let fast = report(&immediate).unwrap();
+        assert!(fast.clean.mean_error_milli_cm < delayed.clean.mean_error_milli_cm);
+        assert!(
+            fast.impaired.modes.predicted + fast.impaired.modes.capped
+                > delayed.impaired.modes.predicted + delayed.impaired.modes.capped
+        );
+        assert!(fast.impaired.max_prediction_ms <= 50);
+        immediate.extrapolation_ms = 0;
+        let held = report(&immediate).unwrap();
+        assert_eq!(
+            held.impaired.modes.predicted + held.impaired.modes.capped,
+            0
+        );
+        assert!(held.impaired.modes.held > 0);
+    }
+    #[test]
+    fn stop_turn_path_is_continuous_and_exercises_predictions_around_braking() {
+        for at in [2000.0, 3500.0, 5500.0, 7000.0, 8000.0] {
+            let a = truth(Trajectory::StopTurn, at - 0.001);
+            let b = truth(Trajectory::StopTurn, at);
+            assert!((a.x - b.x).abs() < 0.01 && (a.z - b.z).abs() < 0.01);
+        }
+        let mut p = parameters();
+        p.trajectory = Trajectory::StopTurn;
+        p.interpolation_ms = 0;
+        p.extrapolation_ms = 50;
+        let result = report(&p).unwrap();
+        assert!(result.impaired.modes.predicted > 0 && result.impaired.modes.capped > 0);
+        assert!(result.impaired.finite_poses && result.impaired.max_error_milli_cm > 0);
+        assert!(result.impaired.max_prediction_ms <= 50);
     }
 }

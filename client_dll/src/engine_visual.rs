@@ -120,22 +120,32 @@ const MAX_REMOTE_DRAWS: usize = 16;
 /// Interpolated poses of the selected remote(s), if fresh. Never blocks the
 /// render thread: a contended lock skips this frame.
 fn remote_poses(target: u32, out: &mut [([f32; 4], [f32; 3]); MAX_REMOTE_DRAWS]) -> Option<usize> {
-    let remotes = crate::REMOTES.try_lock().ok()?;
+    let Ok(remotes) = crate::REMOTES.try_lock() else {
+        crate::presentation::lock_miss();
+        return None;
+    };
     let now = crate::interpolation::now();
+    let config = crate::presentation::config();
     let mut count = 0;
     for (id, entry) in remotes.iter() {
         if count == out.len() {
             break;
         }
-        if (target != ALL_PLAYERS && *id != u64::from(target))
-            || entry.seen.elapsed() >= REMOTE_FRESH
-        {
+        if target != ALL_PLAYERS && *id != u64::from(target) {
             continue;
         }
-        if let Some((position, rotation)) = entry.history.pose(now) {
-            out[count] = (rotation, position);
+        if entry.seen.elapsed() >= REMOTE_FRESH {
+            crate::presentation::stale();
+            continue;
+        }
+        if let Some(pose) = entry.history.evaluate(now, config) {
+            crate::presentation::record(&pose);
+            out[count] = (pose.rotation, pose.position);
             count += 1;
         }
+    }
+    if count == 0 {
+        crate::presentation::empty();
     }
     Some(count)
 }

@@ -7,6 +7,12 @@ pub const STOP: u32 = 3;
 pub const START_SESSION: u32 = 4;
 /// Status JSON in message (or null for v1). No credentials are returned.
 pub const SESSION_STATUS: u32 = 5;
+/// Local presentation Config JSON in message; does not change any ABI layout.
+pub const PRESENTATION_SET: u32 = 6;
+/// Local presentation Status JSON in message; independent of wire v1/v2.
+pub const PRESENTATION_STATUS: u32 = 7;
+/// Per-connection v2 Timing JSON (or null for v1); no credentials.
+pub const NETWORK_TIMING: u32 = 8;
 pub const SIMULATED: u32 = 1;
 pub const GAME: u32 = 2;
 pub const MEMORY: u32 = 3;

@@ -5,6 +5,7 @@ use crate::{
         self as wire, ClientFrame, ClientMessage as C, Credentials, Pose, Refusal,
         ServerMessage as S,
     },
+    session_timing::{Recorder, Timing},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, VecDeque};
@@ -78,6 +79,7 @@ pub struct Client {
     now: u64,
     closing_at: u64,
     leave_at: Option<u64>,
+    timing: Recorder,
 }
 impl Client {
     pub fn new(options: Options, request: u64) -> Result<Self, String> {
@@ -118,10 +120,14 @@ impl Client {
             now: 0,
             closing_at: 0,
             leave_at: None,
+            timing: Recorder::default(),
         })
     }
     pub fn status(&self) -> Status {
         self.status.clone()
+    }
+    pub fn timing(&self) -> Timing {
+        self.timing.value
     }
     pub fn connected(&self) -> bool {
         self.status.phase == Phase::Connected
@@ -278,6 +284,7 @@ impl Client {
                 self.status.rtt_ms = None;
                 self.status.best_rtt_ms = None;
                 self.status.clock_offset_ms = None;
+                self.timing = Recorder::default();
                 vec![Event::Reset]
             }
             S::Rejected {
@@ -329,6 +336,7 @@ impl Client {
                 self.pings.remove(index);
                 self.heard_at = now;
                 self.status.rtt_ms = Some(rtt);
+                self.timing.rtt(rtt);
                 if self.status.best_rtt_ms.is_none_or(|best| rtt <= best) {
                     self.status.best_rtt_ms = Some(rtt);
                     self.status.clock_offset_ms = Some(offset);
@@ -353,12 +361,15 @@ impl Client {
                 session,
                 revision,
                 poses,
+                tick,
+                server_ms,
                 ..
             } if self.connected()
                 && session == self.status.session
                 && revision >= self.revision =>
             {
                 self.heard_at = now;
+                self.timing.snapshot(tick, server_ms, now);
                 self.revision = revision;
                 let mut events = Vec::new();
                 for pose in poses {

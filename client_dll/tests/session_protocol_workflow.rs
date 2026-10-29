@@ -68,6 +68,76 @@ fn receive(h: &mut Hub, c: &mut Client, port: u16, now: u64) -> Vec<Event> {
         .collect()
 }
 #[test]
+fn admitted_connection_timing_ignores_other_rooms_resets_on_accept_and_survives_leave() {
+    let (mut h, mut a, mut b) = (hub(), client(1), client(2));
+    connect(&mut h, &mut a, 1, 0);
+    connect(&mut h, &mut b, 2, 0);
+    let pose = b
+        .pose(
+            Position {
+                x: 1.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            None,
+            1,
+        )
+        .unwrap();
+    exchange(&mut h, &mut b, 2, pose, 1, 1);
+    let frames = h.tick(1);
+    let snapshot = frames
+        .iter()
+        .find(|(address, f)| *address == addr(1) && matches!(f.message, S::Snapshot { .. }))
+        .unwrap()
+        .1
+        .clone();
+    for (_, frame) in frames
+        .into_iter()
+        .filter(|(address, _)| *address == addr(1))
+    {
+        a.ingest(&w::encode_server(&frame).unwrap(), 101);
+    }
+    for (_, frame) in h
+        .tick(17)
+        .into_iter()
+        .filter(|(address, _)| *address == addr(1))
+    {
+        a.ingest(&w::encode_server(&frame).unwrap(), 141);
+    }
+    assert_eq!(a.timing().snapshots, 2);
+    assert_eq!(a.timing().arrival_jitter_us, 1500);
+    let mut other_room = snapshot;
+    if let S::Snapshot { session, .. } = &mut other_room.message {
+        *session = 999;
+    }
+    let before = a.timing();
+    a.ingest(&w::encode_server(&other_room).unwrap(), 150);
+    assert_eq!(a.timing(), before);
+    a.request_reconnect();
+    let join = a.poll(151).0.remove(0);
+    exchange(&mut h, &mut a, 1, join, 151, 151);
+    assert_eq!(a.timing(), Default::default());
+    for (_, frame) in h
+        .tick(160)
+        .into_iter()
+        .filter(|(address, _)| *address == addr(1))
+    {
+        a.ingest(&w::encode_server(&frame).unwrap(), 260);
+    }
+    let before_close = a.timing();
+    assert_eq!(before_close.snapshots, 1);
+    a.close(261);
+    let leave = a
+        .poll(261)
+        .0
+        .into_iter()
+        .find(|f| matches!(f.message, C::Leave { .. }))
+        .unwrap();
+    exchange(&mut h, &mut a, 1, leave, 261, 261);
+    assert_eq!(a.status().phase, Phase::Closed);
+    assert_eq!(a.timing(), before_close);
+}
+#[test]
 fn lost_acceptance_retries_without_a_second_player_and_refuses_incompatible_rooms() {
     let (mut h, mut c) = (hub(), client(1));
     assert!(

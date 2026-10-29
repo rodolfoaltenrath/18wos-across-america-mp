@@ -601,3 +601,41 @@ distinguem o gate validado da detecção tardia que causou o crash histórico.
 Próximo marco: dois computadores na LAN, atraso/jitter, vários remotos, saída de
 pares e observação de desaparecimento. Outros comandos/transições e sessões
 longas pendentes. Preservar automatic_load_supported=false, v1 padrão e fallback.
+
+Bloco offline seguinte, após o proprietário informar que não conseguiu abrir o
+jogo no Linux e não podia testar dois PCs: suavização configurável e métricas
+de tempo. Nenhuma nova partida foi solicitada/aberta. `presentation` consulta ou
+ajusta --delay-ms/--extrapolation-ms (0..200); session-start recebe
+--interpolation-ms/--extrapolation-ms. Padrões 100/200 mantidos, sem alegar que o
+atraso leve foi corrigido no jogo. Configuração atômica; modos de avaliação,
+stale/sem pose/contenção em presentation, cumulativos desde a carga da DLL.
+Control v1 preservada (1536), novos comandos 6/7; Engine v3/664 e hooks intactos.
+
+`network-timing`/network_timing (comando 8) registra por conexão aceita:
+RTT máximo/amostras/variação e variação de intervalo de chegada vs server_ms,
+EMA inteira 1/16 em us, gaps/passos de tick e não monotônicos. Mesmo tick não
+troca a base; regressões contadas sem contaminá-la; novo aceite zera e leave
+preserva. V1 retorna null. Nada de credenciais ou campos novos no wire. Lacunas
+e old NÃO estimam perda; agendamento/polling também afetam os números. Offset
+continua diagnóstico e não alimenta o render. session_probe exporta timing.
+
+network_lab schema 2 mede modos/erro contra trajetória própria, com linear e
+stop-turn (duas paradas e mudanças de direção contínuas em 8 s). Lote: 2 caminhos
+x 3 orçamentos x 2 alvos x 3 cenários x 36.000 poses = 1.296.000 geradas; seis
+pares JSON idênticos x86/x64. Menor atraso médio pode aumentar o erro máximo;
+nenhum novo padrão recomendado. Não comparar seus hashes com schema 1 histórico.
+
+dev_env verify passou Windows: 127 testes x86/148 nativos, release/Clippy/rustfmt.
+Fixture com DLL real validou ajuste, retenção/stale/sem pose e timing durante
+heartbeat sem coordenadas. Dois clientes release reais/servidor Tokio e proxy
+passaram em loopback: ambos conectados, leaves confirmados, servidor sem peers
+ao terminar e auxiliares encerrados. Logs/lotes/identidades em
+target/analysis/offline-presentation-20261029-01/ (ignorado); log da suíte em
+target/analysis/verify-windows-20261029-presentation-timing.log. Nenhum jogo,
+teste Linux ou LAN novo. Reenumerar antes de próximo build.
+
+Próximo marco prático continua LAN/visibilidade e outros comandos de teardown,
+quando houver ambiente disponível; trabalho offline não substitui essa prova.
+A cópia local preparada para o pendrive permanece na revisão anterior; novos
+comandos exigem transferir launcher/DLL atualizados juntos, não presumir que
+uma compilação atualize automaticamente aquela cópia.

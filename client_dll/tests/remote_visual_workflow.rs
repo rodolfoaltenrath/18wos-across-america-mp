@@ -139,6 +139,16 @@ fn drawn_pose_is_sent_and_a_relayed_player_pose_drives_the_test_visual() {
     assert_eq!(Visual::decode(&shown).target, 5);
     std::thread::sleep(Duration::from_millis(80));
     assert!(status(&controller, &dll).drawn > 0);
+    let mut tuning = Control::new(api::PRESENTATION_SET);
+    api::put(
+        &mut tuning.message,
+        r#"{"delay_ms":0,"extrapolation_ms":0}"#,
+    )
+    .unwrap();
+    controller.control(&dll, &mut tuning).unwrap();
+    let applied: client_dll::presentation::Status =
+        serde_json::from_str(api::text(&tuning.message).unwrap()).unwrap();
+    assert_eq!(applied.config.delay_ms, 0);
     let last: serde_json::Value =
         serde_json::from_str(&send(&mut host, &mut output, "visual-last")).unwrap();
     assert_eq!(last["position"], serde_json::json!([5000.0, 11.0, -20.0]));
@@ -163,6 +173,11 @@ fn drawn_pose_is_sent_and_a_relayed_player_pose_drives_the_test_visual() {
     let later = status(&controller, &dll);
     assert_eq!(later.drawn, stale.drawn);
     assert!(later.skipped > stale.skipped);
+    let mut timing = Control::new(api::PRESENTATION_STATUS);
+    controller.control(&dll, &mut timing).unwrap();
+    let metrics: client_dll::presentation::Status =
+        serde_json::from_str(api::text(&timing.message).unwrap()).unwrap();
+    assert!(metrics.held > 0 && metrics.stale > 0 && metrics.empty_queries > 0);
     // An unknown player draws nothing.
     relay(6, 5200.0);
     let mut unknown = show;
@@ -201,6 +216,23 @@ fn drawn_pose_is_sent_and_a_relayed_player_pose_drives_the_test_visual() {
     );
     // Listing through the CLI (it takes the per-PID control mutex).
     drop(controller);
+    let tuning = Command::new(env!("CARGO_BIN_EXE_mp_launcher"))
+        .args(["--pid", &host.0.id().to_string(), "--dll"])
+        .arg(&dll)
+        .args([
+            "--fixture",
+            "presentation",
+            "--delay-ms",
+            "25",
+            "--extrapolation-ms",
+            "50",
+        ])
+        .output()
+        .unwrap();
+    assert!(tuning.status.success(), "{tuning:?}");
+    let tuning: serde_json::Value = serde_json::from_slice(&tuning.stdout).unwrap();
+    assert_eq!(tuning["config"]["delay_ms"], 25);
+    assert_eq!(tuning["config"]["extrapolation_ms"], 50);
     let listed = Command::new(env!("CARGO_BIN_EXE_mp_launcher"))
         .args(["--pid", &host.0.id().to_string(), "--dll"])
         .arg(&dll)

@@ -63,7 +63,7 @@ O estado atual **não é multiplayer LAN validado entre dois computadores**.
 O proprietário confirmou um visual sem textura ao lado do seu caminhão,
 copiando movimento e rotação; isso não foi um segundo jogador conectado.
 As implementações posteriores têm testes próprios (último registro Windows:
-119 x86/136 nativos, release, Clippy e formatação). Eco/skin e gate de `map`
+127 x86/148 nativos, release, Clippy e formatação). Eco/skin e gate de `map`
 passaram no jogo; a sessão v2 também passou em 29/10/2026. Demais comandos de
 teardown e suavização na LAN seguem pendentes. Não rebaixar esse visual a mera
 alocação privada, nem promover resultados da bancada a validação no jogo.
@@ -2846,6 +2846,92 @@ foram executados. Os cinco comandos, outras transições e sessões longas segue
 pendentes; preservar `automatic_load_supported=false`, v1 padrão e fallback.
 O atraso leve do eco permanece registrado, sem alegar suavidade concluída.
 
+### M5/M8 — Suavização configurável e avaliação offline — 29/10/2026
+
+Após o proprietário informar que o jogo não iniciou no outro PC, retomado o
+trabalho sem depender da LAN. Atraso e orçamento de previsão passam a ser
+ajustáveis entre 0 e 200 ms, mantendo os padrões 100/200 ms. `session-start`
+aceita `--interpolation-ms`/`--extrapolation-ms`; `presentation` consulta ou
+ajusta pela Control v1 (comandos 6/7, JSON, mesmos 1536 bytes). Engine v3/664,
+wire v1/v2 e hooks de teardown não mudam. Nenhum valor novo foi escolhido como
+melhor para o jogo ou LAN; o atraso leve da sessão anterior continua registrado.
+
+Configuração atômica, sem mutex/alocações/I/O adicionais na consulta do render;
+guardas de teleporte/rajada, limites de memória e idade de 1 s preservados.
+Histórico avalia explicitamente interpolação, previsão, previsão limitada,
+retenção, snap e buffer insuficiente. Contadores por consulta/remoto no status
+distinguem stale, ausência de pose e contenção; são aproximados e cumulativos
+durante a carga, não frames exibidos nem prova visual de desaparecimento.
+Zero extrapolação é uma retenção explícita, não uma velocidade infinita.
+
+`network_lab` schema 2 registra os modos, previsão máxima e erro médio/máximo
+contra a própria trajetória artificial, em milésimos de cm. `linear` mantém
+600 cm/s; `stop-turn` acrescenta paradas/mudanças de direção contínuas em 8 s,
+sem supor física real. A linha sozinha favorece previsão; usar ambos. Testes
+comparam orçamentos, custo de menor atraso em maior uso de previsão, limites,
+teleporte, rajada e rejeição sem alterar configuração. A fixture de render
+consulta/altera a DLL x86 real e testemunha retenção/stale/ausência de pose;
+CLI avulsa e sessão passam pelos mesmos controles. JSON máximo cabe nos 512
+bytes existentes; launcher e DLL precisam ser transferidos da mesma revisão.
+
+**Validação Windows:** `dev_env verify` passou: 127 testes x86/148 nativos x64,
+builds release, Clippy nos dois alvos e rustfmt. A fixture consultou a DLL real,
+aplicou ajuste pela API/CLI e observou contadores de retenção/stale/sem pose.
+Log ignorado: `target/analysis/verify-windows-20261029-presentation-timing.log`.
+
+Lote release: duas trajetórias, três orçamentos e dois alvos, 36.000 poses por
+cenário (limpo, degradado e interrupção), total 1.296.000 poses geradas. Os seis
+pares de JSON x86/x64 ficaram idênticos. Tabela do cenário degradado (5% de perda,
+10% de duplicação, atraso 40 ms/jitter ±80 ms); erros média/máximo em cm contra
+a trajetória artificial no instante atual, incluindo atraso intencional:
+
+| Atraso/previsão (ms) | Linha: média / máximo | Paradas/direção: média / máximo | Consultas previsão / limitada |
+| --- | --- | --- | --- |
+| 100 / 200 (padrão) | 67,031 / 130,359 | 56,766 / 462,068 | 95 / 0 |
+| 50 / 100 | 36,575 / 160,000 | 31,202 / 325,730 | 3.910 / 9 |
+| 0 / 50 | 8,322 / 190,000 | 7,511 / 358,111 | 28.149 / 4.301 |
+
+Menor erro médio não garante menor pico; não escolher valor para LAN a partir
+dessa simulação. Filas drenaram e poses permaneceram finitas. Relatórios em
+`target/analysis/offline-presentation-20261029-01/`, ignorados. O formato é
+schema 2, sem comparar seus hashes aos históricos schema 1. Não houve jogo,
+execução Linux ou outra máquina; suavidade e custo real continuam pendentes.
+
+### M3/M8 — Diagnósticos de variação de tempo por conexão — 29/10/2026
+
+`session_timing` entrega métricas inteiras/saturadas por conexão aceita: RTT
+máximo/amostras/EMA de variação, EMA de `|delta_chegada - delta_server_ms|`, maior
+intervalo, lacunas/passos de tick e snapshots não monotônicos. Peso 1/16,
+microssegundos para variações. Batches/duplicatas de mesmo tick não mudam a base;
+regressões são contadas sem envenená-la. Não requer offset nem altera clock do
+render. Lacunas não estimam perda; ausência de poses/cadência/agendamento também
+contribuem. Não muda snapshots/handshake/credenciais/limites do wire v1/v2.
+
+DLL publica snapshot separado pela Control v1 (comando 8). `network-timing`
+consulta sem exigir hooks; `session-status` inclui `network_timing`, `null` no
+v1. A conexão aceita zera as métricas; leave preserva o diagnóstico. Dados não
+são captura atômica com o status da sessão. `session_probe` acrescenta `timing`.
+Fixtures cobrem lotes iguais, reordenação, extremos u64, RTT correlacionado,
+outra sala, reset no aceite e retenção no leave; a DLL real em fixture consulta
+as métricas durante heartbeat sem coordenadas. Sem credenciais nos relatórios.
+
+Validação conjunta: 127 x86/148 nativos, release/Clippy/rustfmt, conforme o bloco
+acima. Teste adicional de executáveis release: servidor Tokio por 25 s, dois
+clientes por 15 s, um direto e outro via proxy com 8% de perda, 20% de duplicação
+e atraso 30 ms/jitter ±30 ms. Ambos conectados ao final e leave confirmado.
+Cliente via proxy: 24 amostras RTT, máximo 198 ms, variação RTT 25.189 us e de
+chegada 10.945 us, 308 snapshots não monotônicos. Direto: 30 amostras, máximo
+19 ms, variações 396/5.022 us e zero não monotônicos. Valores incluem polling/
+agendamento e variam entre execuções, mesmo com sorteio determinístico do proxy.
+Os 242 eventos de lacuna do proxy NÃO foram convertidos em taxa de perda.
+
+Servidor: dois aceites/dois leaves, zero conectados ao encerrar, sem inválidos,
+limites excedidos, recusas ou send_errors; 383 datagramas antigos contados,
+compatíveis com duplicação/reordenação injetadas, sem afirmar perda a partir
+deles. Servidor/proxy/clientes encerraram pelo fluxo/prazo; stderr vazios.
+Artefatos `timing-*` no mesmo diretório ignorado do lote. Sem medição nova no
+jogo/Linux/LAN; qualidade visual real depende de prova prática.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -3055,8 +3141,9 @@ Se algum método exigir alteração de arquivo, documentar e testar restauraçã
   V2: 1200 bytes, quatro poses por batch, limites de peers/cache/recibos,
   orçamento antes do parsing e envio não bloqueante. Sessões longas pendentes.
 - [ ] Adicionar métricas de pacotes, atraso, perda, jitter e tick atrasado.
-  V2: contadores, RTT último/mínimo, refusas, limites, bytes e ticks atrasados;
-  estimativa de perda/jitter da rede real continua pendente.
+  V2: contadores, RTT último/mínimo/máximo, variações de RTT/chegada, recusas,
+  limites, bytes e ticks atrasados. Lacunas de tick não estimam perda;
+  estimativa de perda e medição de jitter entre computadores continuam pendentes.
 - [ ] Medir custo do broadcast atual, que cresce com pares de clientes; avaliar
   agrupamento, frequência e relevância espacial quando os números justificarem.
 - [ ] Testar duas máquinas reais; configurar bind LAN, IP e porta. A configuração

@@ -60,6 +60,7 @@ pub mod network_conditions;
 pub mod pe_exports;
 #[cfg(any(all(windows, target_arch = "x86"), test))]
 mod phase_queue;
+pub mod presentation;
 pub mod profile;
 pub mod release_policy;
 pub mod render_observation;
@@ -77,6 +78,7 @@ static SAMPLE_STATE: AtomicU32 = AtomicU32::new(0);
 static READ_FAILURES: AtomicU64 = AtomicU64::new(0);
 static MESSAGE: Mutex<String> = Mutex::new(String::new());
 static SESSION: Mutex<Option<multiplayer_server::session_client::Status>> = Mutex::new(None);
+static NETWORK_TIMING: Mutex<Option<multiplayer_server::session_timing::Timing>> = Mutex::new(None);
 /// Latest relayed state per player. The render thread only uses try_lock.
 pub(crate) static REMOTES: Mutex<BTreeMap<u64, RemoteEntry>> = Mutex::new(BTreeMap::new());
 /// Local pose observed by the draw probe (same coordinates the game draws with).
@@ -293,6 +295,9 @@ fn session_snapshot(client: &multiplayer_server::session_client::Client) -> Resu
     *SESSION
         .lock()
         .map_err(|_| "session status mutex poisoned")? = Some(client.status());
+    *NETWORK_TIMING
+        .lock()
+        .map_err(|_| "network timing mutex poisoned")? = Some(client.timing());
     Ok(())
 }
 fn run(
@@ -539,6 +544,9 @@ fn start_source_session(
     *SESSION
         .lock()
         .map_err(|_| "session status mutex poisoned")? = None;
+    *NETWORK_TIMING
+        .lock()
+        .map_err(|_| "network timing mutex poisoned")? = None;
     diagnostic("starting client");
     STATUS.store(1, Ordering::Release);
     *worker = Some(
@@ -653,6 +661,13 @@ pub unsafe extern "system" fn client_control(block: *mut api::Control) -> u32 {
                 start_source_session(server, source, Some(options))
             })(),
             api::SESSION_STATUS => Ok(()),
+            api::NETWORK_TIMING => Ok(()),
+            api::PRESENTATION_SET => serde_json::from_str::<interpolation::Config>(
+                api::text(&block.message).unwrap_or(""),
+            )
+            .map_err(|e| format!("invalid presentation configuration: {e}"))
+            .and_then(presentation::configure),
+            api::PRESENTATION_STATUS => Ok(()),
             api::STATUS => Ok(()),
             api::STOP => {
                 if client_stop() == 0 {
@@ -675,7 +690,28 @@ pub unsafe extern "system" fn client_control(block: *mut api::Control) -> u32 {
         block.sent = client_packets_sent();
         block.received = client_packets_received();
         block.read_failures = READ_FAILURES.load(Ordering::Relaxed);
-        if block.command == api::SESSION_STATUS {
+        if block.command == api::PRESENTATION_STATUS
+            || (block.command == api::PRESENTATION_SET && block.result == 0)
+        {
+            if serde_json::to_string(&presentation::status())
+                .map_err(|e| e.to_string())
+                .and_then(|json| api::put(&mut block.message, &json))
+                .is_err()
+            {
+                block.result = 1;
+            }
+        } else if block.command == api::NETWORK_TIMING {
+            let snapshot = NETWORK_TIMING
+                .lock()
+                .map_err(|_| "network timing mutex poisoned".to_string())
+                .and_then(|s| serde_json::to_string(&*s).map_err(|e| e.to_string()));
+            if snapshot
+                .and_then(|s| api::put(&mut block.message, &s))
+                .is_err()
+            {
+                block.result = 1;
+            }
+        } else if block.command == api::SESSION_STATUS {
             let snapshot = SESSION
                 .lock()
                 .map_err(|_| "session status mutex poisoned".to_string())

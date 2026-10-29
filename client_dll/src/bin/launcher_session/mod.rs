@@ -20,6 +20,7 @@ use std::{
 
 pub struct Options {
     pub server: SocketAddr,
+    pub presentation: client_dll::interpolation::Config,
     pub player: u32,
     pub offset: [f32; 3],
     /// Apply the AI truck skin (fixture: its own shader name).
@@ -97,6 +98,13 @@ pub fn start(c: &Controller, dll: &Path, o: &Options) -> Result<Value> {
             None => EngineControl::new(api::UI_DRAW_ATTACH),
         };
         step("draw-attach", engine(c, dll, draw).map(drop))?;
+        let mut tuning = Control::new(api::PRESENTATION_SET);
+        api::put(
+            &mut tuning.message,
+            &serde_json::to_string(&o.presentation)?,
+        )
+        .map_err(anyhow::Error::msg)?;
+        step("presentation", c.control(dll, &mut tuning).map(drop))?;
         let mut connect = Control::new(if o.session.is_some() {
             api::START_SESSION
         } else {
@@ -187,10 +195,20 @@ pub fn status(c: &Controller, dll: &Path) -> Result<Value> {
     c.control(dll, &mut session)?;
     let session: Value =
         serde_json::from_str(api::text(&session.message).map_err(anyhow::Error::msg)?)?;
+    let mut presentation = Control::new(api::PRESENTATION_STATUS);
+    c.control(dll, &mut presentation)?;
+    let presentation: Value =
+        serde_json::from_str(api::text(&presentation.message).map_err(anyhow::Error::msg)?)?;
+    let mut timing = Control::new(api::NETWORK_TIMING);
+    c.control(dll, &mut timing)?;
+    let timing: Value =
+        serde_json::from_str(api::text(&timing.message).map_err(anyhow::Error::msg)?)?;
     Ok(json!({
         "client": {"status": client.status, "sample_state": client.sample_state, "sent": client.sent,
             "received": client.received, "diagnostic": api::text(&client.message).unwrap_or("")},
         "visual": visual, "draw": draw, "load_gate": gate, "remotes": remotes, "network_session":session,
+        "presentation": presentation,
+        "network_timing": timing,
     }))
 }
 

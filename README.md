@@ -1215,10 +1215,86 @@ com perda, duplicação, atraso/jitter, pacotes antigos/inválidos, interrupçã
 retomada. Não instala sondas no motor nem abre o jogo. A fixture observa o estado
 remoto envelhecer, sem afirmar que um caminhão foi ocultado pelo render real.
 
+### Ajustar e medir a suavização sem recompilar
+
+O padrão continua em 100 ms de atraso e até 200 ms de extrapolação. Para
+comparar opções numa futura sessão, `session-start` aceita `--interpolation-ms`
+e `--extrapolation-ms`, ambos entre 0 e 200. Diminuir o atraso pode exigir mais
+previsão e expor jitter; não há um valor novo aprovado na LAN.
+
+Com a DLL atual já carregada, também é possível consultar ou ajustar ao vivo:
+
+```text
+mp_launcher --pid PID --dll CAMINHO_DLL presentation
+mp_launcher --pid PID --dll CAMINHO_DLL presentation --delay-ms 50 --extrapolation-ms 100
+mp_launcher --pid PID --dll CAMINHO_DLL presentation --delay-ms 100 --extrapolation-ms 200
+```
+
+O exemplo de 50/100 ms é uma configuração de comparação, não recomendação
+medida. `extrapolation-ms 0` segura a última posição quando faltam amostras.
+Os dois parâmetros mudam como uma palavra atômica; entrada inválida conserva
+o ajuste anterior. Não muda o servidor, as regras de teleporte nem o limite de
+1 s para deixar de desenhar poses antigas. Iniciar uma sessão aplica seus
+parâmetros (ou os padrões); ajuste avulso dura enquanto essa DLL estiver carregada.
+
+`session-status` agora inclui `presentation`: configuração/revisão e contadores
+de consultas com interpolação, previsão, previsão no limite, pose mantida,
+teleporte e buffer ainda sem histórico suficiente. `stale`, `empty_queries` e
+`lock_misses` ajudam a distinguir dado antigo, consulta sem pose e contenção.
+São diagnósticos aproximados, cumulativos desde a carga da DLL, por consulta/
+remoto; não representam frames de tela nem comprovam desaparecimento percebido.
+Não são zerados ao trocar configuração ou reconectar.
+
+`network_lab` aceita os mesmos orçamentos por `--interpolation-ms` e
+`--extrapolation-ms`. Seu relatório **schema 2** acrescenta modos de avaliação,
+maior previsão e erro médio/máximo contra a trajetória artificial selecionada,
+em milésimos de centímetro (`mean_error_milli_cm`/`max_error_milli_cm`). O erro
+inclui o atraso intencional do buffer; não é precisão da física real. `--delay-ms`
+continua sendo o atraso da rede simulada. Relatórios schema 1 e hashes históricos
+continuam históricos, sem promessa de igualdade com o formato novo.
+`--trajectory linear` conserva a linha a 600 cm/s; `--trajectory stop-turn`
+adiciona duas paradas e mudanças de direção num percurso contínuo de 8 s.
+Comparar apenas a linha favorece a previsão; o segundo percurso serve para
+observar erros nas frenagens e mudanças bruscas. Não reproduz física de caminhão.
+
+Os comandos 6/7 usam o payload JSON da Control v1 existente, sem mudar seus
+1536 bytes ou a Engine v3/664. Transfira launcher e DLL da mesma revisão;
+uma cópia antiga não implementa esses comandos. Sem novo teste no jogo/Linux/LAN
+neste bloco; fixtures próprias verificam controles e contadores da DLL x86.
+
+### Diagnóstico de RTT e chegada de snapshots v2
+
+`session-status` inclui `network_timing`; também existe a consulta independente:
+
+```text
+mp_launcher --pid PID --dll CAMINHO_DLL network-timing
+```
+
+Em v1 ou antes de iniciar v2, o resultado é `null`. Na v2, registra número de
+amostras de RTT, RTT máximo e variação entre RTTs consecutivos. O RTT atual e
+mínimo continuam em `network_session`. `arrival_jitter_us` suaviza a diferença
+absoluta entre o intervalo de chegada local e o intervalo do relógio do servidor,
+com peso 1/16: não precisa de offset de relógio e inclui efeitos do agendamento
+dos processos. Zero com poucas amostras não comprova uma rede sem jitter.
+
+Snapshots com o mesmo tick (batches/duplicatas) não trocam a referência de tempo.
+Ticks/tempos regressivos são contados sem contaminar essa referência.
+`max_receive_gap_ms`, `tick_gap_events` e `largest_tick_step` mostram intervalos e
+lacunas observados; **não estimam perda de pacotes**. Falta de poses, cadência do
+servidor, batching e indisponibilidade também podem produzir lacunas. O contador
+`old` continua sem equivaler a perda.
+
+As métricas reiniciam quando uma nova conexão é aceita e ficam disponíveis após
+o leave. Consulta e status são snapshots separados; não são uma captura atômica
+do jogo ou entre todos os contadores. `session_probe` também exporta `timing`.
+O comando 8 usa a Control v1 existente, sem novos campos no wire e sem token no
+diagnóstico. Linux e medição entre computadores continuam pendentes; manter o
+procedimento de backup/parada para qualquer validação futura na partida.
+
 ### Comportamento do caminhão remoto (referência)
 
 - **Suavização:** cada jogador remoto guarda 16 amostras (tempo de recepção
-  local). O desenho fica 100 ms atrás da mais recente, com interpolação linear
+  local). O desenho usa por padrão 100 ms de atraso, com interpolação linear
   de posição e de quaternion pelo arco curto (nlerp). Se faltar amostra, prevê
   no máximo 200 ms à frente. Acima de 20.000 cm/s implícitos, salta direto ao
   destino (teleporte). Sem amostra há mais de 1 s, não desenha.

@@ -101,6 +101,20 @@ menos o ponto médio local, usando a amostra com menor RTT da conexão. É um
 diagnóstico sujeito a assimetria de rede. Ainda não alimenta o relógio do render:
 a interpolação segue usando os instantes locais de recebimento já existentes.
 
+O diagnóstico local `network_timing` acrescenta RTT máximo, número de amostras
+e EMA da variação absoluta entre RTTs consecutivos, em microssegundos. Também
+mede `|delta_chegada - delta_server_ms|` dos snapshots, com EMA de peso 1/16,
+sem usar offset como ajuste do render. Inclui o agendamento dos processos; não
+isola atraso físico da rede. Cada conexão aceita reinicia a referência e as
+métricas, que permanecem consultáveis após o leave.
+
+Batches/duplicatas com o mesmo tick não atualizam a referência de intervalos.
+Ticks/tempos regressivos contam em `nonmonotonic_snapshots` sem trocar a base.
+Maior intervalo de chegada, eventos de lacuna e maior passo de tick são
+observações: falta de poses e cadência também causam lacunas, portanto não são
+estimativas de perda. Nenhum desses números prova suavidade, FPS ou LAN.
+Não foram acrescentados campos a datagramas nem alteradas credenciais/regras.
+
 O envio/recebimento UDP apenas publica dados Rust. Acesso a instâncias PSM,
 render e liberação continuam na integração do motor e em sua thread/fase.
 

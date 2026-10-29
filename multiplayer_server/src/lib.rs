@@ -6,6 +6,7 @@ pub mod session_hub;
 #[cfg(test)]
 mod session_hub_tests;
 pub mod session_protocol;
+pub mod session_timing;
 
 #[cfg(feature = "server")]
 pub mod server;

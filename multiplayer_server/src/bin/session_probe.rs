@@ -56,6 +56,7 @@ struct Report {
     lan_tested: bool,
     status_before_close: Status,
     status: Status,
+    timing: multiplayer_server::session_timing::Timing,
     counts: Counts,
     remotes_before_close: Vec<Pose>,
 }
@@ -238,6 +239,7 @@ fn main() -> Result<()> {
         lan_tested: false,
         status_before_close,
         status: client.status(),
+        timing: client.timing(),
         counts,
         remotes_before_close,
     };
