@@ -986,7 +986,7 @@ violação de acesso; detectar a nova entidade depois da recarga não protege os
 recursos durante a destruição do mundo antigo. Com `--no-load-gate`, esse
 preparo manual continua obrigatório antes de carregar. Com o gate (padrão),
 a carga pelo menu é adiada automaticamente; ver a seção seguinte. O gate
-ainda não foi validado no jogo.
+foi validado no jogo com eco (duas cargas).
 Para testar num só PC, inicie o servidor com `--echo`: ele também devolve a
 cada cliente a própria pose como o jogador `1000000000 + id`. Com
 `session-start --server 127.0.0.1:39000 --offset 400 0 0`, o seu caminhão
@@ -1034,13 +1034,15 @@ uso avulso: instale depois de pump/render/draw. A remoção é recusada enquanto
 um carregamento adiado estiver ativo. A sonda passiva `transition-map` e o
 gate são mutuamente exclusivos no mesmo descritor.
 
-**Limites:** validado apenas na bancada própria (fixture com callback cdecl,
-argv destruído após o retorno, troca de ator e contagem de instâncias PSM
-vivas no momento da carga). Ainda não foi executado no jogo. Somente `map`
+**Validado no jogo** (Fedora/Proton, eco num PC): duas cargas de `test_mp` pelo
+menu com o caminhão espelhado visível, que voltou nas duas, sem crash, com nove
+slots e sete hashes conferidos. Antes disso, foi validado na bancada própria
+(fixture com callback cdecl, argv destruído após o retorno, troca de ator e
+contagem de instâncias PSM vivas no momento da carga). LAN e sessões longas
+pendentes; mantenha a janela em primeiro plano. Somente `map`
 passa pelo gate: `quit`, `exit`, `edit`, `preview`, novo jogo ou outros
 caminhos de carga não são interceptados. Rode `session-stop` antes de fechar o
-jogo, como antes. `automatic_load_supported` continua `false` até a validação
-real.
+jogo, como antes. `automatic_load_supported` continua `false` até ampliar a matriz.
 
 ### Comportamento do caminhão remoto (referência)
 

@@ -2395,6 +2395,53 @@ visual retido não foi explicado, apenas evitado pela ordem nova.
 Se o jogo fechar ou travar, registrar o estado e voltar a
 `--no-load-gate` + `session-prepare-load`.
 
+### M4 — Gate de `map` validado no jogo com eco — 28/10/2026
+
+Sessão real no Fedora/Proton, PID Windows histórico 396, thread 400. Servidor
+nativo `--echo` em 127.0.0.1:39000. `session-start --offset 400 0 0 --backup
+target/analysis/gate-backup-20261028-01` cumpriu as 8 etapas
+(`load-gate-attach` incluída), com backup de 7 arquivos. Artefatos em
+`target/analysis/gate-logs-20261028-01` (ignorado).
+
+**Resultado:** duas cargas de `test_mp` pelo menu, sem `session-prepare-load`,
+com o caminhão espelhado com skin visível e o jogo em primeiro plano.
+- **Primeira carga:** `deferred=1`, `replays=1` (EAX 0, argc/argv
+  restaurados), novo ator (`epoch` 1→2), `recreated=1`.
+- **Segunda carga:** `deferred=2`, `replays=2`, `arguments_restored=2`,
+  `epoch=3`, `recreated=2`.
+- Em todas as leituras: `dropped=0`, `swallowed_busy=0`, `forwarded=0`,
+  `foreign=0`, `fault=0`.
+
+O proprietário confirmou, com capturas de tela, que o jogo carregou
+normalmente e que o caminhão espelhado com textura voltou e acompanhou o
+jogador. Não houve crash: o mesmo cenário que antes fechava o jogo
+(`0xc0000005`) passou duas vezes com a ordem nova.
+
+**Observação lateral:** com a janela sem foco, o loop ficou girando no
+callsite `+0x1473b`, sem render, rede nem draw, como já registrado antes.
+O gate permaneceu ocioso e voltou ao normal ao recuperar o foco. Nenhuma
+carga ocorreu nesse intervalo.
+
+**Limpeza:** `session-stop --verify` liberou o visual na primeira tentativa,
+removeu o gate (`installed=false`, `calls=2`), restaurou os nove slots e
+deixou sete arquivos iguais. O proprietário fechou o jogo normalmente.
+A enumeração não encontrou o processo, `session-verify` deu sete iguais e
+o servidor foi encerrado.
+
+**Conclusão e limites:** a carga pelo menu com visual retido está validada
+no jogo para este perfil (duas cargas, um save, um PC, eco). Pendentes:
+- LAN com dois PCs e vários remotos;
+- sessões longas e outras cargas/saves;
+- caminhos fora de `map` (`quit`/`exit`/novo jogo/morte), que não passam
+  pelo gate; `session-stop` continua necessário antes de fechar.
+
+`automatic_load_supported` permanece `false` no código até ampliar a matriz.
+O contorno `--no-load-gate` + `session-prepare-load` fica como fallback.
+
+**Próximo:** cobrir com o mesmo mecanismo os outros comandos que destroem o
+mundo (`quit`/`exit`, que compartilham o thunk) ou registrar por que não é
+necessário. Em seguida, LAN com dois PCs (M3/M5).
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -3062,10 +3109,10 @@ e [seleção de toolchain com rustup](https://rust-lang.github.io/rustup/overrid
 ## 9. Registro de passagem para a próxima etapa
 
 **Atualização 28/10 (gate de `map`):** a liberação/recriação automática na
-carga pelo menu está implementada e validada na bancada (ver "Gate ativo de
-`map`"). O próximo passo é a sessão real agrupada descrita nessa seção, com
-eco num PC e depois LAN. Até validar, `--no-load-gate` + `session-prepare-load`
-continuam como contorno conhecido. O texto abaixo é histórico.
+carga pelo menu foi implementada e VALIDADA no jogo com eco: duas cargas, o
+caminhão espelhado voltou, sem crash e com slots/hashes conferidos (ver "Gate
+de `map` validado no jogo"). Próximo: `quit`/`exit` e LAN com dois PCs.
+`--no-load-gate` + `session-prepare-load` ficam como fallback. O texto abaixo é histórico.
 
 **Próxima entrega:** comprovar uma fase de lifecycle anterior à destruição do
 mundo e automatizar a liberação/recriação nessa transição. A textura com luz

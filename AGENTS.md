@@ -440,3 +440,10 @@ NÃO testado no jogo: `automatic_load_supported=false`. Só `map` passa pelo gat
 (não quit/exit/novo jogo); manter `session-stop` antes de fechar. Próximo:
 sessão real agrupada com eco (roadmap "Gate ativo de `map`"); se falhar, voltar
 a `--no-load-gate` + `session-prepare-load`.
+VALIDADO no jogo (Fedora/Proton, PID histórico 396/thread 400, eco 127.0.0.1):
+duas cargas de `test_mp` pelo menu com o visual visível, sem prepare-load:
+`deferred/replays/recreated=2`, argc/argv restaurados, `dropped=0`, sem crash;
+proprietário viu o caminhão espelhado voltar com textura. Stop: nove slots,
+sete hashes; jogo fechado, `session-verify` igual, servidor parado. Próximo:
+`quit`/`exit` pelo mesmo mecanismo e LAN com dois PCs. Janela sem foco congela
+render/rede (não é falha do gate).
