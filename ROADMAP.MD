@@ -2754,8 +2754,10 @@ para o MVP visual sem colisão.
   Progresso: ID remoto → visual (`--player ID|all`), pose interpolada,
   sem desenho após 1 s, recriação automática na troca da entidade local e
   `session-stop` com liberação segura. Eco no jogo e carregamento preparado
-  passaram; retenção/recriação automática durante carga falhou no primeiro
-  teste e continua em investigação. Faltam tráfego LAN real e saída de pares.
+  passaram. Em 28/10 o gate de comandos liberou, carregou e recriou o visual
+  automaticamente em duas cargas reais pelo menu (sem crash); os outros cinco
+  comandos que apagam a cena passam pelo gate só na bancada. Faltam tráfego
+  LAN real e saída de pares.
 - [ ] Confirmar que mudar o remoto não muda o caminhão local nem os dados do save.
   Progresso: nas sessões de 28/10 os hashes de originais e saves ficaram iguais
   e o caminhão local não foi afetado, mas o visual seguia o próprio jogador.
