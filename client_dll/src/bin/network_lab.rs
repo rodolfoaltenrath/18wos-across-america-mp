@@ -2,113 +2,26 @@
 //! codec and interpolation; no sockets, engine, assets or game callbacks.
 use anyhow::{Result, ensure};
 use clap::Parser;
-use client_dll::interpolation::{History, Sample};
+use client_dll::{
+    interpolation::{History, Sample},
+    network_conditions::{Conditions, Counters, Link},
+};
 use multiplayer_server::protocol::{self, Position, Rotation, ServerUpdate, TICK_HZ, VERSION};
 use serde::Serialize;
-use std::{cmp::Reverse, collections::BinaryHeap, io::Write, path::PathBuf};
+use std::{io::Write, path::PathBuf};
 
 #[derive(Clone, Debug, Parser, Serialize)]
 struct Parameters {
     /// Number of synthetic 60 Hz server poses (at least 120).
     #[arg(long, default_value_t = 3600, value_parser = clap::value_parser!(u32).range(120..=1000000))]
     packets: u32,
-    /// Nonzero seed; same parameters produce the same events and JSON.
-    #[arg(long, default_value_t = 42, value_parser = clap::value_parser!(u64).range(1..))]
-    seed: u64,
-    /// Random loss per thousand original packets.
-    #[arg(long, default_value_t = 50, value_parser = clap::value_parser!(u16).range(0..=1000))]
-    loss_permille: u16,
-    /// Probability of one extra copy per thousand surviving packets.
-    #[arg(long, default_value_t = 100, value_parser = clap::value_parser!(u16).range(0..=1000))]
-    duplicate_permille: u16,
-    #[arg(long, default_value_t = 40, value_parser = clap::value_parser!(u32).range(0..=5000))]
-    delay_ms: u32,
-    /// Independent jitter in [-jitter, +jitter]; total delay clamps at zero.
-    #[arg(long, default_value_t = 80, value_parser = clap::value_parser!(u32).range(0..=5000))]
-    jitter_ms: u32,
-    #[arg(long, default_value_t = 2048, value_parser = clap::value_parser!(u32).range(1..=8192))]
-    queue_capacity: u32,
+    #[command(flatten)]
+    #[serde(flatten)]
+    conditions: Conditions,
     /// A new report file; its parent directory must already exist.
     #[arg(long)]
     #[serde(skip)]
     output: Option<PathBuf>,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
-struct Counters {
-    submitted: u64,
-    random_loss: u64,
-    duplicate_copies: u64,
-    queue_overflow: u64,
-    emitted: u64,
-    reordered: u64,
-    peak_queue: usize,
-}
-struct Link {
-    parameters: Parameters,
-    random: u64,
-    serial: u64,
-    last_emitted: u64,
-    queue: BinaryHeap<Reverse<(u64, u64, Vec<u8>)>>,
-    counts: Counters,
-}
-impl Link {
-    fn new(parameters: &Parameters) -> Self {
-        Self {
-            parameters: parameters.clone(),
-            random: parameters.seed,
-            serial: 0,
-            last_emitted: 0,
-            queue: BinaryHeap::new(),
-            counts: Counters::default(),
-        }
-    }
-    fn random(&mut self) -> u64 {
-        // xorshift64, for reproducible impairment only (not cryptography).
-        let mut x = self.random;
-        x ^= x << 13;
-        x ^= x >> 7;
-        x ^= x << 17;
-        self.random = x;
-        x
-    }
-    fn enqueue(&mut self, now: u64, bytes: &[u8]) {
-        if self.queue.len() == self.parameters.queue_capacity as usize {
-            self.counts.queue_overflow += 1;
-            return;
-        }
-        let jitter = i64::from(self.parameters.jitter_ms);
-        let offset = (self.random() % (2 * jitter + 1) as u64) as i64 - jitter;
-        let delay = (i64::from(self.parameters.delay_ms) + offset).max(0) as u64;
-        self.serial += 1;
-        self.queue
-            .push(Reverse((now + delay, self.serial, bytes.to_vec())));
-        self.counts.peak_queue = self.counts.peak_queue.max(self.queue.len());
-    }
-    fn submit(&mut self, now: u64, bytes: &[u8]) {
-        self.counts.submitted += 1;
-        if self.random() % 1000 < u64::from(self.parameters.loss_permille) {
-            self.counts.random_loss += 1;
-            return;
-        }
-        self.enqueue(now, bytes);
-        if self.random() % 1000 < u64::from(self.parameters.duplicate_permille) {
-            self.counts.duplicate_copies += 1;
-            self.enqueue(now, bytes);
-        }
-    }
-    fn pop(&mut self, now: u64) -> Option<Vec<u8>> {
-        if self.queue.peek()?.0.0 > now {
-            return None;
-        }
-        let Reverse((_, serial, bytes)) = self.queue.pop()?;
-        self.counts.emitted += 1;
-        if serial < self.last_emitted {
-            self.counts.reordered += 1;
-        }
-        self.last_emitted = self.last_emitted.max(serial);
-        Some(bytes)
-    }
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize)]
@@ -132,13 +45,15 @@ struct Scenario {
 }
 
 fn simulate(name: &'static str, parameters: &Parameters, blackout: bool) -> Result<Scenario> {
-    let mut link = Link::new(parameters);
+    let mut link = Link::new(parameters.conditions.clone()).map_err(anyhow::Error::msg)?;
     let duration = u64::from(parameters.packets - 1) * 1000 / u64::from(TICK_HZ);
     // Keep enough poses on both sides of the outage, including the short lab.
     let outage_start = duration / 3;
     let outage_length = (duration / 3).min(1500);
     let outage_end = outage_start + outage_length;
-    let end = duration + u64::from(parameters.delay_ms + parameters.jitter_ms) + 250;
+    let end = duration
+        + u64::from(parameters.conditions.delay_ms + parameters.conditions.jitter_ms)
+        + 250;
     let mut report = Scenario {
         name,
         virtual_duration_ms: end,
@@ -182,7 +97,7 @@ fn simulate(name: &'static str, parameters: &Parameters, blackout: bool) -> Resu
                     }),
                 })
                 .map_err(anyhow::Error::msg)?;
-                link.submit(now, &bytes);
+                link.submit(now, &bytes).map_err(anyhow::Error::msg)?;
             }
             sequence += 1;
         }
@@ -228,8 +143,8 @@ fn simulate(name: &'static str, parameters: &Parameters, blackout: bool) -> Resu
             }
         }
     }
-    report.network = link.counts;
-    report.final_queue = link.queue.len();
+    report.network = link.counters();
+    report.final_queue = link.pending();
     ensure!(
         report.final_queue == 0 && report.finite_poses,
         "queue did not drain or pose became invalid"
@@ -265,10 +180,10 @@ struct Report<'a> {
 }
 fn report(parameters: &Parameters) -> Result<Report<'_>> {
     let mut clean = parameters.clone();
-    clean.loss_permille = 0;
-    clean.duplicate_permille = 0;
-    clean.delay_ms = 0;
-    clean.jitter_ms = 0;
+    clean.conditions.loss_permille = 0;
+    clean.conditions.duplicate_permille = 0;
+    clean.conditions.delay_ms = 0;
+    clean.conditions.jitter_ms = 0;
     Ok(Report {
         schema: 1,
         virtual_clock: true,
@@ -321,17 +236,17 @@ mod tests {
     #[test]
     fn total_loss_never_creates_a_pose_and_small_queues_stay_bounded() {
         let mut p = parameters();
-        p.loss_permille = 1000;
+        p.conditions.loss_permille = 1000;
         let result = simulate("lost", &p, false).unwrap();
         assert_eq!(result.network.random_loss, 600);
         assert_eq!(result.accepted, 0);
         assert_eq!(result.rendered_frames, 0);
         assert_eq!(result.last_sequence, None);
-        p.loss_permille = 0;
-        p.duplicate_permille = 1000;
-        p.delay_ms = 100;
-        p.jitter_ms = 0;
-        p.queue_capacity = 1;
+        p.conditions.loss_permille = 0;
+        p.conditions.duplicate_permille = 1000;
+        p.conditions.delay_ms = 100;
+        p.conditions.jitter_ms = 0;
+        p.conditions.queue_capacity = 1;
         let result = simulate("bounded", &p, false).unwrap();
         assert!(result.network.queue_overflow > 0);
         assert_eq!(result.network.peak_queue, 1);

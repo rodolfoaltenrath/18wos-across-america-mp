@@ -1097,6 +1097,63 @@ do worker. Não chama o worker, sockets, servidor, DLL injetada ou render do
 jogo. `game_tested` e `lan_tested` ficam `false`: o resultado não mede RTT/FPS
 nem comprova suavidade entre dois PCs ou sincronização de relógios.
 
+### Proxy UDP para testar o worker e os sockets
+
+`udp_proxy` aplica as mesmas condições de `network_lab` a tráfego UDP real, nos
+dois sentidos. Use uma instância por cliente: ela fixa o endereço/porta do
+primeiro remetente com um `ClientUpdate` v1 válido e recusa outros remetentes.
+O socket de saída é conectado ao servidor configurado. Não é uma sala nem
+substitui identidade/autenticação do futuro protocolo de sessão.
+
+No Windows, depois de `dev_env verify`, abra três terminais para testar sem jogo:
+
+```powershell
+# Terminal 1: servidor com eco.
+.\target\x86_64-pc-windows-gnu\release\multiplayer_server.exe --bind 127.0.0.1:39000 --echo
+
+# Terminal 2: proxy por 30 segundos; arquivo novo, pasta já existente.
+.\target\x86_64-pc-windows-gnu\release\udp_proxy.exe --listen 127.0.0.1:39001 --server 127.0.0.1:39000 --duration-ms 30000 --loss-permille 50 --duplicate-permille 100 --delay-ms 40 --jitter-ms 80 --blackout-after-ms 5000 --blackout-for-ms 1500 --output target/analysis/udp-01.json
+
+# Terminal 3: DLL deste projeto dentro do host Rust próprio, por 10 segundos.
+$env:AA_MP_SERVER = '127.0.0.1:39001'
+$env:AA_MP_MODE = 'simulated'
+.\target\i686-pc-windows-gnu\release\client_probe.exe .\target\i686-pc-windows-gnu\release\client_dll.dll 10
+```
+
+No Linux, compile/rode o proxy nativamente com
+`cargo run -p client_dll --bin udp_proxy --locked -- --listen 127.0.0.1:39001 --server 127.0.0.1:39000 --duration-ms 30000`.
+O host da DLL Windows continua exigindo o ambiente Proton próprio descrito
+anteriormente. O fluxo Linux deste bloco ainda não foi executado novamente.
+
+Para uma futura sessão na LAN, mantenha o proxy no PC do cliente e aponte
+`--server` para o IP do servidor. Configure o cliente para o endereço de escuta
+do proxy. Ao reiniciar o worker com outra porta de origem, reinicie o proxy.
+O proxy não foi validado na partida nem entre dois PCs neste bloco; mantenha
+o procedimento de sessão, backup e encerramento já documentado.
+
+As probabilidades são aplicadas independentemente por sentido; perda de 5% em
+cada sentido não significa 5% no percurso completo. A fila padrão comporta 2048
+datagramas por direção, com limite configurável de 8192; datagramas acima de
+1200 bytes são descartados. Cada passagem limita o trabalho de recebimento e
+envio. Erros transitórios de porta UDP inacessível não encerram o proxy.
+`--blackout-after-ms` conta a partir do primeiro cliente válido, para que a
+interrupção não aconteça enquanto você ainda prepara o host. A duração total
+do proxy continua contando desde o início; inicie o cliente dentro desse prazo.
+
+Ele termina pelo prazo (`--duration-ms`, até uma hora), descarta as cópias ainda
+pendentes e registra os contadores por direção, parâmetros, seeds e endereço do
+cliente. Deixe o prazo terminar para obter o relatório: interromper o processo
+pode deixar o arquivo reservado incompleto. Não grava conteúdo dos pacotes.
+O seed controla os sorteios, mas o agendamento e as chegadas reais variam; os
+relatórios de sockets não têm a garantia de igualdade do laboratório virtual.
+`validates_game=false` e `validates_lan=false` deixam explícito que o proxy,
+sozinho, não comprova integração ou LAN.
+
+`udp_proxy_workflow` usa a DLL x86 real numa fixture própria e UDP loopback,
+com perda, duplicação, atraso/jitter, pacotes antigos/inválidos, interrupção e
+retomada. Não instala sondas no motor nem abre o jogo. A fixture observa o estado
+remoto envelhecer, sem afirmar que um caminhão foi ocultado pelo render real.
+
 ### Comportamento do caminhão remoto (referência)
 
 - **Suavização:** cada jogador remoto guarda 16 amostras (tempo de recepção

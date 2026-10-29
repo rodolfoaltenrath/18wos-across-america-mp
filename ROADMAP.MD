@@ -2585,6 +2585,80 @@ amostras geradas após a interrupção. Todas as filas terminaram vazias e as po
 calculadas foram finitas. Relatórios ignorados em
 `target/analysis/network-lab-windows-20261029-{native,x86}.json`.
 
+### M2/M8 — Proxy de condições de rede e worker real — 29/10/2026
+
+Continuação offline após `7ae5f3e`. O laboratório anterior usava relógio virtual
+e simulava o filtro de recebimento. Este bloco acrescenta sockets reais e prova
+do worker da DLL numa fixture própria, sem chamar APIs comerciais ou abrir jogo.
+
+**Implementado:**
+
+- `network_conditions` reúne RNG, condições e fila limitada de datagramas, usado
+  por `network_lab` e pelo novo `udp_proxy`. Mantém as condições/ordem do cenário
+  virtual anterior. Valida tamanho de pacote, parâmetros e limite do relógio;
+  não faz parsing ou chamadas ao jogo.
+- `udp_proxy` nativo, com escuta e destino configuráveis, um cliente fixado após
+  o primeiro pacote v1 válido e socket conectado ao servidor. Trata perda,
+  duplicação, atraso, jitter e reordenação independentemente em cada sentido,
+  com seeds distintos registrados. Outro remetente não troca o dono do proxy.
+- Limites de tamanho (1200 bytes), fila por direção (até 8192), trabalho por
+  passagem e duração (até uma hora). Ao parar, descarta a fila restante e informa
+  `pending_on_stop`; não esvazia a fila enviando tráfego no encerramento.
+- Interrupção programada nos dois sentidos e controle em memória para fixtures.
+  O intervalo programado começa após o primeiro cliente válido; o relatório
+  registra `client_started_ms`. Não consome a interrupção antes da conexão.
+  Erros transitórios de porta inacessível não derrubam a ponte.
+- JSON com contadores por sentido, parâmetros e seeds; arquivo novo reservado
+  antes de aceitar clientes, preenchido ao terminar normalmente. Sem conteúdo
+  de pacotes. O relatório usa relógio real, não promete reprodução byte a byte.
+- Fixture x86 `udp_proxy_workflow`: carrega a DLL real em processo Rust próprio,
+  configura fonte simulada, recebe replies sintéticos por UDP degradado e
+  confere posição/rotação, sequência monotônica e histórico limitado. Injeta
+  sequência antiga com pose errada, versão inválida e pacote grande. Interrompe
+  tráfego até o remoto ter ≥1200 ms sem amostras; worker continua enviando e
+  depois aceita poses novas. Encerra e aguarda o worker antes de descarregar a DLL.
+- Testes de sockets verificam fixação do cliente, rejeição de outro remetente,
+  pacote grande, servidor temporariamente ausente e retomada. Testes puros
+  verificam fila, prazos/empates e limites.
+
+**Limites:** loopback não é LAN entre PCs. O servidor da fixture de worker é
+sintético, não o servidor Tokio; a integração com este pode ser exercitada pelo
+procedimento de três terminais no README. Sem teste novo de render, FPS ou jogo.
+O envelhecimento da linha remota não prova ocultação pelo motor. Sem negociação,
+heartbeat ou reconexão de sessão novos; o proxy fixa a porta de origem durante
+toda a execução. O fluxo Linux continua previsto, sem nova execução neste bloco.
+`validates_game=false`/`validates_lan=false` nos relatórios. Não amplia a prova
+real dos cinco comandos do gate. Próximo marco de integração permanece a sessão
+agrupada exit/menu/map/quit com eco e, depois, LAN entre dois PCs.
+
+**Validação final Windows:** `dev_env verify` passou com **108 testes x86 e
+107 nativos Windows x64**, builds release de ambos, Clippy x86/nativo e rustfmt.
+Log ignorado `target/analysis/verify-windows-20261029-udp-proxy-final.log`.
+A fixture real da DLL passou, incluindo histórico de até 16 amostras, recusa de
+estados antigos após estabelecer uma referência mais nova, versão inválida,
+pacotes grandes, interrupção ≥1200 ms, retomada, stop/join e descarga.
+
+Além da fixture, passou o percurso **servidor Tokio real com eco → proxy nativo
+→ DLL x86 dentro de `client_probe`**, em loopback e fonte simulada. Host rodou
+oito segundos, terminou com exit 0 (worker parado e módulo descarregado),
+476 envios/121 amostras novas aceitas. Durante a interrupção programada de
+1,5 s, o contador ficou em 46/seq 142 enquanto o envio continuou; depois subiu
+até 121/seq 468, com `status=1` durante toda a execução. O proxy durou 20 s,
+registrou 90 descartes de interrupção na subida e 75 na descida, picos de fila
+8/7 e zero pendentes no final. Seeds/condições padrão, interrupção após
+2500 ms do primeiro cliente. O primeiro smoke confirmou o relay mas não a
+interrupção, consumida antes da conexão; a contagem relativa ao primeiro cliente
+e o teste de bordas corrigem isso. Sem prova de FPS, render ou LAN.
+Relatório/logs `target/analysis/udp-proxy-final-*20261029*`, ignorados.
+
+O lote virtual de 36.000 pacotes por cenário também passou nos dois alvos,
+com JSON idêntico entre arquiteturas **e ao relatório anterior à refatoração**:
+SHA-256 `c63d182b8b980832ccc60abbda6045077512255dbccbc87111b9046ad73ca678`.
+Arquivos ignorados `target/analysis/network-lab-shared-20261029-{native,x86}.json`.
+Servidor auxiliar encerrado, proxy terminou pelo prazo; enumeração confirmou
+ausência do jogo. Nenhuma sonda/DLL injetada na partida ou alteração de originais
+e saves neste bloco. Sem nova execução Linux. ABI v1/v3 e wire v1 preservados.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -2837,8 +2911,9 @@ para o MVP visual sem colisão.
   Progresso: ID remoto → visual (`--player ID|all`), pose interpolada,
   sem desenho após 1 s, recriação automática na troca da entidade local e
   `session-stop` com liberação segura. Eco no jogo e carregamento preparado
-  passaram; retenção/recriação automática durante carga falhou no primeiro
-  teste e continua em investigação. Faltam tráfego LAN real e saída de pares.
+  passaram. A primeira carga retida falhou; o gate de `map` foi validado depois
+  em duas recargas reais com liberação/reexecução/recriação. Os cinco comandos
+  adicionais continuam só na bancada. Faltam tráfego LAN real e saída de pares.
 - [ ] Confirmar que mudar o remoto não muda o caminhão local nem os dados do save.
   Progresso: nas sessões de 28/10 os hashes de originais e saves ficaram iguais
   e o caminhão local não foi afetado, mas o visual seguia o próprio jogador.
@@ -2947,6 +3022,9 @@ verificada e removida em outra instalação original sem distribuir o jogo.
   Entregue `network_lab`, com relógio virtual, seed, filas limitadas, três
   cenários e relatório JSON. Escopo: codec/interpolação e recebimento simulado;
   não é teste do worker, sockets ou LAN. Ver registro de 29/10/2026 e README.
+  Extensão: `udp_proxy` aplica condições a sockets reais; `udp_proxy_workflow`
+  exercita o worker da DLL x86 com interrupção/recuperação em fixture própria.
+  Isso não converte os resultados virtuais anteriores em provas da partida/LAN.
 - [ ] Testar sessão longa, menus, reload, encerramento abrupto e reconexão, com
   verificações de vazamento e remoção de entidades.
 - [ ] Ter logs com versão/perfil/estado e coleta opcional de métricas, sem dumps

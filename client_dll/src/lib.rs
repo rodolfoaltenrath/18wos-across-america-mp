@@ -56,6 +56,7 @@ pub mod inspection;
 pub mod interpolation;
 pub mod load_gate;
 mod memory;
+pub mod network_conditions;
 pub mod pe_exports;
 #[cfg(any(all(windows, target_arch = "x86"), test))]
 mod phase_queue;
@@ -65,6 +66,7 @@ pub mod render_observation;
 pub mod resource_bindings;
 pub mod transition_analysis;
 pub mod transition_observation;
+pub mod udp_proxy;
 
 static WORKER: Mutex<Option<JoinHandle<Result<(), String>>>> = Mutex::new(None);
 static STOP: AtomicBool = AtomicBool::new(false);

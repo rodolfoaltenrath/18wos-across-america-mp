@@ -478,3 +478,36 @@ do Fedora sem considerar testes condicionais Windows. Jogo não foi iniciado;
 nenhuma nova DLL injetada. Reenumerar antes de novo build/uso. Próximo marco de
 integração preservado: sessão agrupada exit/menu/map/quit com eco e, depois,
 LAN entre dois PCs. Sem prova nova dos cinco comandos nem de LAN neste bloco.
+
+Continuação de 29/10/2026 após `7ae5f3e`: extraído `network_conditions`, agora
+compartilhado por `network_lab` e novo `udp_proxy` nativo. Proxy usa dois sockets,
+um cliente fixado após primeiro pacote v1 válido, filas/tamanho/trabalho/duração
+limitados, perdas/duplicação/atraso/jitter por sentido e relatório sem conteúdo de
+pacotes. Interrupção programada conta após o primeiro cliente válido; prazo total
+desde início do proxy. Ao terminar descarta pendentes; reiniciar proxy quando o
+worker mudar a porta de origem. Erros transitórios de porta inacessível não o
+encerram. Seed reproduz sorteios, não o agendamento real dos sockets.
+
+`udp_proxy_workflow` passou: DLL x86 real em fixture Rust própria, UDP degradado,
+sequência antiga com pose errada somente após testemunhar uma pose mais nova,
+versão inválida, pacotes grandes, interrupção ≥1200 ms e retomada; worker continua
+enviando, histórico ≤16 amostras, stop/join e descarga. Não usa hooks do motor nem
+prova que um visual foi ocultado no jogo. Testes próprios de sockets cobrem outro
+remetente, tamanho e servidor temporariamente ausente.
+
+Também passou servidor Tokio com eco + proxy nativo + `client_probe`/DLL x86
+simulada, em loopback: oito segundos, 476 envios/121 amostras novas aceitas,
+contador parado durante a interrupção de 1,5 s e depois recuperado, exit 0.
+Proxy: 90/75 descartes na interrupção, filas máximas 8/7 e zero pendentes ao
+terminar. Relatórios `udp-proxy-final-*20261029*` ignorados. Fluxo virtual antigo
+repetido em x64/x86 com 36.000 pacotes por cenário: JSON idêntico ao anterior,
+SHA-256 c63d182b8b980832ccc60abbda6045077512255dbccbc87111b9046ad73ca678.
+
+`dev_env verify` final: 108 testes x86 e 107 nativos Windows x64, builds release,
+Clippy nos dois alvos e rustfmt. Ver log ignorado
+`target/analysis/verify-windows-20261029-udp-proxy-final.log`. Sem nova execução
+Linux, jogo ou LAN entre PCs; validação do fluxo Linux ainda pendente. Servidores
+auxiliares encerrados, proxy terminou pelo prazo e jogo ausente na enumeração.
+Não reconstruir com DLL residente: reenumerar sempre. Próximo marco de integração
+preservado: sessão agrupada exit/menu/map/quit com eco, depois LAN. Não confundir
+esses testes de sockets com negociação/heartbeat/reconexão de M3 ou jogo validado.
