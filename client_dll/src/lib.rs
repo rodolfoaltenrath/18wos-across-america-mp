@@ -17,8 +17,10 @@ use std::{
 
 pub mod addresses;
 pub mod api;
+pub mod command_registry;
 #[cfg(windows)]
 pub mod controller;
+pub mod deferred_load;
 pub mod draw_observation;
 #[cfg(windows)]
 mod engine_bridge;

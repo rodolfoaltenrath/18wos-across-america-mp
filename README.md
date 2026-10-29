@@ -857,6 +857,49 @@ O preparo concluiu com uma consulta/uma tentativa, oito slots restaurados e
 seis hashes iguais após a saída. Não houve teste de liberação dentro de `map`
 nem recarga com o visual retido; detalhes e limites no roadmap.
 
+### Desenvolvimento em blocos e laboratório sem jogo
+
+As próximas validações manuais serão agrupadas em marcos maiores. Análise dos
+binários, testes de protocolo, fixtures x86, cenários de falha/recuperação e
+builds devem avançar sem abrir o jogo a cada incremento. Uma sessão manual
+deve reunir as verificações pendentes, preservando backup e limpeza. Resultados
+de laboratório continuam separados das provas no jogo e na LAN.
+
+O novo laboratório Rust exercita seis cenários completos por iteração:
+
+```text
+cargo run --release -p client_dll --bin load_lab -- --iterations 10000
+```
+
+São 60.000 cenários determinísticos, sem assets, PID, Steam ou servidor:
+sucesso após drenar referências, recuperação de timeout, cancelamento antes
+da execução, resultado desconhecido sem replay, troca inesperada de mundo e
+confirmação atrasada. O relatório conta operações simuladas e mantém
+`game_tested=false`/`automatic_load_supported=false`. No Windows também há
+`target\i686-pc-windows-gnu\release\load_lab.exe` após `dev_env windows`.
+
+O controlador `deferred_load` mantém uma carga por vez, argumentos próprios
+(até 32/4096 bytes, inclusive bytes não UTF-8), prazo monotônico, tokens de
+operação e estados explícitos de recuperação. Nunca guarda ponteiros argv
+da pilha original nem reconstrói comandos juntando strings. Somente o loop
+pode emitir ações; liberar precede executar, e retorno do callback ainda
+exige uma nova geração de mundo pronta antes de recriar. Resultado desconhecido
+fica bloqueado até recuperação explícita; timeout/cancelamento não executa
+trabalho atrasado. Logs/JSON do controlador omitem argumentos e nomes de saves.
+
+Esse controlador ainda é infraestrutura de bancada, sem hooks ou chamadas
+ao motor. O futuro adaptador precisa comprovar ABI, contexto e troca de argv,
+fornecer gerações reais do lifecycle e conservar a configuração do visual.
+O teste x86 usa um callback e globals próprios; não valida o callback original.
+
+Para a próxima sessão agrupada, a consulta externa `memory_tool commands --pid
+PID` audita o registro de comandos e o descritor de `map`, com perfil/hash,
+limite de entradas, detecção de ciclos e releitura contra mudanças. Não injeta,
+não lê argv/argumentos e não executa comandos. Do buffer associado a `cmd_add`,
+lê apenas ocupação e contador; não afirma que seja uma fila de execução.
+A correspondência do callback é diagnóstico, não autorização para chamá-lo.
+Esta consulta nova ainda não foi validada numa partida real.
+
 ### Teste no jogo com sessão (um comando)
 
 Compile e verifique tudo antes: `.\target\debug\dev_env.exe verify`. Abra o

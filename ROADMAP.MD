@@ -2032,6 +2032,102 @@ contexto de entrada observado, sem esperar render dentro do handler e sem
 executá-lo recursivamente. Manter o preparo manual e não repetir reload retido.
 LAN e sessões longas continuam pendentes.
 
+### M4 — Bloco offline: registro de comandos, fila própria e laboratório — 28/10/2026
+
+O proprietário pediu implementações maiores e menos interrupções para abrir
+o jogo/dirigir/menu/load enquanto trabalha em outras tarefas. Registrado em
+AGENTS.md: priorizar bancada e concluir conjuntos coerentes; reservar sessões
+manuais para marcos agrupados. Não abrir o jogo a cada entrega intermediária.
+Este bloco foi desenvolvido sem iniciar o jogo nem solicitar intervenção.
+
+**Contrato estático identificado:** `map` usa o descritor de 16 bytes em
+`game+0x1573c4`: ponteiro do nome `map` em `+0x14be44`, callback em `+4`, hash
+em `+8` e próximo em `+0xc`. O callback perfilado é o thunk `game+0xd2e90`,
+que resolve o contexto em `+0x160df0` e encaminha ao handler `+0xd3570`.
+Os oito comandos quit/map/preview/exit/edit/pause/menu/game_menu compartilham
+o mesmo thunk; isso não obriga interceptar todos, pois os descritores são
+distintos. O núcleo `cmd_execute` chama o callback em `[descriptor+4]` e em
+seguida define AL=1. Ainda não se instalou nenhum hook nesse descritor.
+
+Registro encadeado em `prism3d+0x778fc`, com comparação de nome e hash pela
+soma de caracteres com sinal (rotina `+0xdef0`). `cmd_register_command`
+recebe a memória do descritor fornecida pelo chamador e a encadeia; não
+presumir que o núcleo transfira propriedade ou permita liberar esse registro.
+`cmd_add` continua sendo somente um buffer candidato: as referências diretas
+encontradas mostram limpeza/adicionar, sem comprovar um consumidor de execução
+adiada. Portanto não será usado como fila de replay do mod por hipótese.
+Hashes locais do núcleo/jogo permanecem os perfis já registrados.
+
+**Auditoria externa entregue:** `memory_tool commands --pid PID`, módulo
+portável `command_registry` e wrapper Windows com verificação de perfil/hash
+e identidade dos módulos antes/depois. Lê até 1024 registros, nomes limitados,
+callback/módulo/RVA e hash, detecta ciclos e mudanças entre leituras. Confere
+se `map` aparece no endereço/callback esperados. Do buffer de 100×128 bytes
+lê somente o primeiro byte de cada entrada e o contador; não lê argv ou texto
+de argumentos/saves. A segunda passagem detecta mudanças comuns, não ABA nem
+quiescência. `execution_queue_proven` permanece false. Fixtures próprias
+cobrem identidade, callback/hash alterados, nome ilegível/longo, ciclo,
+overflow/x86 e mutação. Ainda sem auditoria nova na partida real.
+
+**Controlador independente entregue:** `deferred_load` mantém uma solicitação
+de `map`, com até 32 argumentos/4096 bytes copiados e preservados exatamente,
+inclusive bytes não UTF-8, espaços, aspas e barras. Argumentos não entram em
+JSON/Debug; nenhuma reconstrução de linha de comando ou chamada do núcleo.
+Um action mantém propriedade dos argumentos até a conclusão mesmo se a
+solicitação for cancelada. Tokens têm identidade da instância/solicitação e
+sequência, recusando confirmações duplicadas, antigas ou de outro controlador.
+
+Estados hide/check/release/execute/await-world/recreate exigem confirmação de
+cada operação e só emitem ações no contexto externo do loop proprietário.
+Prontidão é recalculada a partir de `release_policy`, sem confiar num booleano
+fornecido pelo adaptador. Referências retidas aguardam sem executar o load;
+timeout/falha de preparo permite retry explícito somente no mundo antigo.
+Cancelamento em execução, resultado desconhecido ou troca de mundo inesperada
+bloqueiam a automação. Cancelar de novo não converte resultado desconhecido
+em retry. Confirmação atrasada não reinicia trabalho. Recuperação exige prova
+externa de visual ausente/callbacks ociosos, além do estado interno sem ação
+pendente. O callback não é executado de novo automaticamente após incerteza.
+
+Retorno do callback não equivale a sucesso da carga: a recriação só é emitida
+depois de uma geração de mundo nova e pronta. O laboratório fornece gerações
+sintéticas, inclusive reaproveitando endereços; um adaptador real ainda deve
+comprovar o testemunho de lifecycle e reter a configuração própria do visual.
+Não se conectou esse controlador à DLL/jogo nem se alterou o protocolo ou a
+ABI v3/664. `automatic_load_supported` continua false.
+
+**Ferramenta entregue:** `load_lab --iterations N` roda seis cenários por
+iteração sem jogo/assets/servidor. Exercita sucesso, referências retidas,
+timeout com recuperação, cancelamento, resultado desconhecido, troca fora do
+fluxo e ack atrasado. A execução nativa de 10.000 iterações concluiu **60.000
+cenários**, 30.000 callbacks simulados, 120.000 checks e 50.000 recuperações.
+Esses números medem a simulação, não cargas reais ou estabilidade prolongada.
+O JSON diz explicitamente `game_tested=false`.
+
+Fixtures de memória comprovam cópia antes do fim do argv original, limites,
+ponteiros inválidos, privacidade, clock, exclusão de solicitações e recuperação.
+A nova bancada x86 usa somente um callback cdecl próprio: leitura de argv vivo
+via ReadProcessMemory, descarte da origem, espera por referências, liberação
+simulada, uma chamada posterior com bytes exatos, stack/LastError e restauração
+do frame anterior. Unwind Rust antes do callback também restaura esse frame.
+Isso valida o adaptador da fixture, não a ABI de suspensão/replay do motor.
+
+Validação no **Fedora**: **68 testes nativos e 70 x86 sob Proton passaram**,
+builds release nativo/x86, Clippy nos dois alvos e rustfmt. Os executáveis
+release `load_lab` nativo e Windows x86 rodaram 10.000 iterações cada; relatórios
+de 60.000 cenários por alvo foram idênticos byte a byte. A primeira rodada
+detectou medição de LastError depois de helpers TLS que o alteravam; a fixture
+agora captura o erro imediatamente na entrada/retorno e protege o binding
+ao construir/destruir o array de ponteiros. A bancada final completa passou.
+Logs/relatórios em `target/analysis/batch-*` (ignorados). Nenhum teste manual,
+processo do jogo, injeção ou alteração de originais/saves neste bloco.
+
+**Próximo marco agrupado:** preparar e provar o adaptador do descritor/argv
+na bancada, contexto da chamada e restauração com ownership/conflitos. Somente
+depois juntar auditoria/observação e testes necessários numa sessão real,
+sem solicitar abertura a cada incremento. O preload manual permanece o
+caminho autorizado no jogo; não repetir reload com visual retido. LAN e
+sessões longas continuam pendentes.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,

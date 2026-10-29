@@ -26,6 +26,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Audit command registry/map descriptor, without arguments, injection or calls.
+    Commands {
+        #[arg(long)]
+        pid: u32,
+    },
     /// Read profiled PSM/PMD slots and target exports; never calls engine APIs.
     Resources {
         #[arg(long)]
@@ -240,6 +245,11 @@ fn cadence(next: &mut Instant, interval: Duration) {
 
 pub fn main() -> Result<()> {
     match Cli::parse().command {
+        Command::Commands { pid } => {
+            let process = Process::open(pid)?;
+            let report = client_dll::inspection::commands::inspect(&process)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        }
         Command::Resources { pid } => {
             let process = Process::open(pid)?;
             let report = client_dll::inspection::resources::inspect(&process)?;

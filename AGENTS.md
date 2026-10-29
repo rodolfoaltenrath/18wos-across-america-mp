@@ -26,6 +26,16 @@ termine apenas com uma proposta ou uma oferta para continuar. Planejamento e
 atualizações de progresso não devem interromper a execução a cada pequeno passo.
 Resuma resultados e evidências, sem narrar raciocínio interno.
 
+O proprietário pediu em 28/10/2026 blocos maiores e menos interrupções para
+testes manuais, pois trabalha em outras tarefas. Priorizar investigação offline,
+fixtures, simulações e verificações automáticas; concluir e commitar conjuntos
+coerentes antes de abrir o jogo. Agrupar a validação manual de várias mudanças
+numa sessão em um marco significativo. Não iniciar o jogo nem pedir movimentos/
+menu/load a cada incremento; solicitar intervenção antecipada somente diante
+de uma falha concreta que impeça continuar ou de informação indispensável.
+Registrar como pendente tudo que a bancada não comprova, sem confundir menor
+frequência de teste manual com validação real já obtida.
+
 Pergunte quando faltar uma decisão de produto que altere substancialmente o
 escopo, uma informação indisponível ou uma ação humana indispensável no jogo.
 Agrupe ações manuais em um procedimento reproduzível e avance no trabalho
@@ -356,3 +366,23 @@ buffer de 100 entradas; retorno de sucesso não comprovado. Não chamar nem
 usar para replay ainda. Próximo: comprovar consumidor/ordem/ownership da fila
 e descritor do callback de `map`, limites e recuperação antes de impedir carga.
 Ver o novo registro e os artefatos ignorados release-check-fedora-20261028-01.
+
+Bloco offline seguinte (sem abrir jogo/interromper o proprietário): auditor
+`memory_tool commands --pid PID` com perfil/hash, registro limitado a 1024,
+ciclos/releitura, descritor `map` em game+0x1573c4 → thunk +0xd2e90.
+`cmd_add` não tem consumidor de execução adiada comprovado: não usá-lo como
+fila por hipótese. A auditoria não lê argv nem argumentos de saves.
+`deferred_load` entrega fila própria de uma carga, argumentos copiados e
+redigidos nos logs, tickets por instância/operação, timeout/cancelamento,
+confirmações e recuperação explícita. Sem ligação com o jogo/novos hooks.
+`load_lab` roda seis cenários por iteração; 10.000 iterações nativas passaram
+(60.000 cenários simulados). Fixtures x86 usam argv/callback próprios, sem
+assets comerciais. `automatic_load_supported=false` e `game_tested=false`.
+Próximo: adaptador do descritor/argv na bancada, com ownership/restauração e
+conflitos; depois agrupar as verificações numa sessão real em marco maior.
+Não pedir ao proprietário para abrir o jogo a cada incremento. Consultar o
+registro novo no roadmap; a auditoria/controle novos ainda não passaram no jogo.
+Validação desse bloco no Fedora: 68 testes nativos/70 x86 sob Proton, builds
+release, Clippy nativo/x86 e rustfmt passaram. `load_lab` release passou 60.000
+cenários por alvo, nativo e Windows x86, com JSON idêntico. Artefatos batch-*
+ignorados; jogo não foi aberto e não houve teste manual nesse bloco.

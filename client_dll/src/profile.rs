@@ -13,6 +13,12 @@ pub const EXECUTABLE_SHA256: &str =
     "949be316b38eaf4d80d4f7f6a3e7ae040e6c6072c92267b3d10066140058f61e";
 pub const PEEK_MESSAGE_IAT: u32 = 0x22188;
 pub const PUMP_RETURN_SITES: [u32; 3] = [0x1473b, 0x1476e, 0x147a4];
+pub const COMMAND_HEAD: u32 = 0x778fc;
+pub const COMMAND_BUFFER: u32 = 0x746f0;
+pub const COMMAND_BUFFER_COUNTER: u32 = 0x778f8;
+pub const MAP_DESCRIPTOR: u32 = 0x1573c4;
+pub const MAP_CALLBACK: u32 = 0xd2e90;
+pub const MAP_NAME: u32 = 0x14be44;
 pub const ENGINE_CONTEXT: u32 = 0x51314;
 pub const GAME_CONTEXT: u32 = 0x160a24;
 pub const CREATE_FACTORY: u32 = 0xcba0;
