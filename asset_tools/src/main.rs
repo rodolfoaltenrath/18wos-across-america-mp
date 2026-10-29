@@ -27,6 +27,31 @@ enum Command {
     },
     /// Check a source bundle's allowlist/limits/hashes without extraction.
     VerifySourceBundle { input: PathBuf },
+    /// Create a NEW project with our own PNG/text fixtures (no game inputs).
+    ModExample { output: PathBuf },
+    /// Build an immutable deterministic data overlay; reuse only an exact match.
+    ModBuild {
+        project: PathBuf,
+        output: PathBuf,
+        /// Reject every asset declared derived_local.
+        #[arg(long)]
+        distributable: bool,
+    },
+    /// Verify paths, declared origins, dependencies, hashes and canonical ZIP.
+    ModVerify {
+        package: PathBuf,
+        #[arg(long)]
+        distributable: bool,
+    },
+    /// Copy a verified package to a NEW directory; does not activate it in-game.
+    ModStage {
+        package: PathBuf,
+        destination: PathBuf,
+        #[arg(long)]
+        distributable: bool,
+    },
+    /// Backup to a NEW directory, then remove only the two unchanged stage files.
+    ModUnstage { package: PathBuf, backup: PathBuf },
     /// Find ZIP/SCS archives and report entry counts and texture formats.
     Scan {
         #[arg(default_value = ".")]
@@ -119,6 +144,38 @@ fn main() -> Result<()> {
             Ok(())
         }
         Command::Scan { root } => asset_tools::scan(&root),
+        Command::ModExample { output } => asset_tools::mod_package::example(&output),
+        Command::ModBuild {
+            project,
+            output,
+            distributable,
+        } => {
+            let report = asset_tools::mod_package::build(&project, &output, distributable)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            Ok(())
+        }
+        Command::ModVerify {
+            package,
+            distributable,
+        } => {
+            let report = asset_tools::mod_package::verify(&package, distributable)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            Ok(())
+        }
+        Command::ModStage {
+            package,
+            destination,
+            distributable,
+        } => {
+            let report = asset_tools::mod_package::stage(&package, &destination, distributable)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            Ok(())
+        }
+        Command::ModUnstage { package, backup } => {
+            let report = asset_tools::mod_package::unstage(&package, &backup)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            Ok(())
+        }
         Command::List { archive, limit } => asset_tools::list(&archive, limit),
         Command::Read {
             archive,

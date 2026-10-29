@@ -639,3 +639,39 @@ quando houver ambiente disponível; trabalho offline não substitui essa prova.
 A cópia local preparada para o pendrive permanece na revisão anterior; novos
 comandos exigem transferir launcher/DLL atualizados juntos, não presumir que
 uma compilação atualize automaticamente aquela cópia.
+
+Bloco offline seguinte (M7/M8): `asset_tools mod-example/mod-build/mod-verify/
+mod-stage/mod-unstage` entregues, sem jogo/DLL/rede novos. Projeto schema 1
+declara source relativo em inputs/owned ou inputs/local, caminho interno,
+origin owned/derived_local e depends_on (somente referências internas). Pacote
+imutável de dois arquivos: overlay.scs Stored canônico e manifest.json com
+SHA-256/tamanhos/origem/dependências. Build só reutiliza saída exatamente igual,
+sem reescrever; mudanças exigem destino novo. Sem cache de conversão ou codecs
+novos. O modo --distributable recusa derived_local; autoria não é reconhecida
+automaticamente. Extensões data-only e assinaturas comuns PE/ELF/ZIP filtradas;
+não tratar isso como auditoria completa ou assinatura.
+
+Stage usa pasta nova; unstage verifica tudo, cria/confere backup novo, revalida
+e remove só os dois arquivos esperados. Extras/adulterações recusados; falha
+pode deixar parcial, preservando backup para stage em outro destino novo.
+Sem exclusão recursiva, sem sobrescrita e sem transação contra energia/escritores
+concorrentes. Links/junctions recusados nos ancestrais; fixture de symlink
+Windows não pôde criar link por erro 1314, portanto esse ramo não foi provado
+neste host. Fixture Unix aguardando execução Linux. Bytes de PNG/alpha passaram.
+
+dev_env verify passou: 127 x86 existentes/165 nativos, builds release, Clippy e
+rustfmt. São 17 testes novos nativos; não afirmar que a CLI de assets foi testada
+x86 ou Linux. Teste real de arquivo bloqueado confirmou backup/restauração após
+remoção parcial. CLI release nativa passou todo o ciclo e reutilização; duas
+raízes/backup/restauração produziram hashes iguais. Artefatos ignorados em
+target/analysis/mod-package-windows-20261029-01/ e log
+target/analysis/verify-windows-20261029-mod-package.log.
+session-verify pós-bloco: sete originais/saves iguais, jogo ausente e configuração
+local do Cargo preservada. Não reaproveitar PIDs/endereço de sessões históricas.
+
+IMPORTANTE: aa/init.cfg local monta SCS explicitamente. Stage NÃO ativa mod no
+jogo, não instala hooks nem edita a configuração. Prioridade de montagem e
+instalador integrado permanecem pendentes, assim como reconstrução comercial
+local/transformações incrementais. Não publicar SCS reempacotado do jogo nem
+marcar M7 inteiro como entregue. Continuar o trabalho offline quando útil;
+LAN e demais comandos de teardown seguem dependentes de marco prático agrupado.

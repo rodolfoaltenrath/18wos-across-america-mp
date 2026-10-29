@@ -1567,6 +1567,78 @@ O destino deve ficar fora da árvore de entrada. Links e arquivos que precisaria
 de ZIP64 são recusados; pacotes de teste devem ficar abaixo de 4 GiB e 65.535
 entradas. A ferramenta não instala o pacote automaticamente na Steam.
 
+### Pacotes de alterações com manifesto (offline)
+
+`mod-example` cria um projeto só com PNG/texto próprios, sem ler o jogo. Depois
+do build nativo, os comandos Windows são:
+
+```powershell
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe mod-example target/mod-project
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe mod-build target/mod-project/project.json target/mod-build-v1 --distributable
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe mod-verify target/mod-build-v1 --distributable
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe mod-stage target/mod-build-v1 target/mod-stage-v1 --distributable
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe mod-unstage target/mod-stage-v1 target/mod-backup-v1
+```
+
+No Linux, use `cargo run -p asset_tools -- mod-example target/mod-project` e os
+mesmos subcomandos, ou o executável nativo `target/release/asset_tools`. O código
+é portátil; os novos comandos foram executados no Windows x64, sem teste Linux
+novo. A suíte completa também conferiu a DLL x86 existente. O diretório
+pai de cada destino precisa existir. Exemplo, stage e backup exigem diretórios
+novos; repetir o build reutiliza a saída apenas se todos os bytes conferirem.
+
+O `project.json` usa schema 1, `id`, `version` e `files`. Cada entrada declara:
+
+```json
+{
+  "source": "inputs/owned/notes.txt",
+  "path": "locale/mp/notes.txt",
+  "origin": "owned",
+  "depends_on": []
+}
+```
+
+`source` é relativo à pasta do projeto. `owned` exige `inputs/owned/`;
+`derived_local` exige `inputs/local/` e marca o pacote como não distribuível.
+`--distributable` recusa qualquer derivação local antes de escrever a saída.
+Origem é uma declaração obrigatória: essa conferência não reconhece cópias do
+jogo declaradas incorretamente como próprias nem comprova autoria. Os caminhos
+locais absolutos não entram no manifesto. `depends_on` lista outros caminhos
+internos do pacote, com correspondência exata; ausências, ciclos, duplicatas e
+colisões de nomes no Windows são recusados. Dependências externas do jogo e
+transformações/conversões ainda não fazem parte desse grafo.
+
+Cada saída contém somente `overlay.scs` e `manifest.json`. O manifesto registra
+origem, tamanho, SHA-256 individual, dependências e SHA-256 do SCS. O ZIP é Stored,
+ordenado, com data/permissões fixas; a verificação também rejeita dados anexados,
+entradas não declaradas e metadados ZIP diferentes do formato canônico. Não é
+assinatura/autenticação. A reutilização relê e confere todas as entradas; não há
+cache incremental de conversão. Uma alteração exige outro diretório de saída.
+
+O pipeline copia os bytes sem recodificar imagem; não converte materiais nem
+valida sua sintaxe no motor. Aceita `.def`, `.shd`, `.mat`, `.txt`, `.tga`, `.png`,
+`.dds`, `.bmp`, `.jpg` e `.jpeg`; textos precisam ser UTF-8 sem controles binários.
+Recusa extensões executáveis/arquivos compactados, assinaturas comuns de PE/ELF/
+ZIP disfarçadas, saves, links e junctions. Limites: 1.024 arquivos, 16 MiB por
+asset, 32 MiB de conteúdo, manifesto de 1 MiB e caminhos ASCII de até 240 bytes.
+Isso não substitui a auditoria de autoria nem permite publicar assets do jogo.
+
+`mod-stage` prepara uma cópia verificada em pasta nova. `mod-unstage` primeiro
+cria e verifica um backup em outra pasta nova, revalida o stage e remove somente
+os dois arquivos conhecidos; arquivos extras ou conteúdo alterado impedem a
+remoção. Para recuperar, use `mod-stage target/mod-backup-v1 target/mod-stage-v1`
+se esse destino já não existir, ou escolha outra pasta nova. Uma falha de escrita
+ou remoção pode deixar uma pasta parcial, que permanece para inspeção; o backup
+verificado não é apagado. Não há sobrescrita automática nem promessa de transação
+contra queda de energia ou gravações concorrentes. Use um único escritor local.
+
+**Ativação no jogo continua pendente.** A instalação atual monta os SCS por
+caminhos explícitos em `aa/init.cfg`. Esses comandos não editam essa configuração,
+não substituem os SCS originais e não fazem o jogo descobrir automaticamente o
+overlay. O exemplo é uma fixture do pipeline, sem efeito visual prometido na
+partida. Montagem, prioridade entre pacotes, instalação integrada e remoção com
+o motor continuam exigindo um teste específico com backup.
+
 A varredura dos três arquivos locais encontrou texturas PNG, JPEG e TGA, sem DDS.
 PNG também pode ser um intermediário para edição de outros formatos. Preserve os
 nomes e formatos esperados pelos materiais ao montar um pacote. Codificação de

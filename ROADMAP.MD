@@ -50,7 +50,7 @@ repositório e orientar futuras sessões de desenvolvimento.
 | Área | Implementado e validado | Ainda falta |
 | --- | --- | --- |
 | Workspace | Cargo com `asset_tools`, `multiplayer_server`, `client_dll` | Reproduzir o ambiente em outra máquina e automatizar o preparo |
-| Assets | Varredura, listagem, extração ZIP/SCS, conversão de texturas, reempacotamento e inspeção binária/PE | Testar instalação de pacote no jogo, manifesto, restauração e distribuição só das alterações próprias |
+| Assets | Varredura/extração/conversão/PE e overlays determinísticos com manifesto, hashes, dependências, origem declarada e stage/backup/remoção offline | Montagem/instalador integrado no jogo, reconstrução comercial local e auditoria completa de distribuição |
 | Servidor | Tokio UDP v1 e sessão v2 opcional, sala/identidade, heartbeat/reconexão, limites, RTT e eco; v2 passou na partida Windows com reinício do servidor | LAN entre PCs, relógio do render, métricas de perda/jitter e mundo compartilhado |
 | DLL | x86 no jogo sob Proton, perfil por hash, configuração ABI, worker, UDP, dispatcher e sonda do loop | Matriz completa de estados do jogo e APIs de entidades |
 | Host de teste | `client_probe`, controlador entre processos e `test_host`; bancada x86 passou sob Proton | Testes de sessão longa, saída abrupta e duas máquinas |
@@ -63,7 +63,7 @@ O estado atual **não é multiplayer LAN validado entre dois computadores**.
 O proprietário confirmou um visual sem textura ao lado do seu caminhão,
 copiando movimento e rotação; isso não foi um segundo jogador conectado.
 As implementações posteriores têm testes próprios (último registro Windows:
-127 x86/148 nativos, release, Clippy e formatação). Eco/skin e gate de `map`
+127 x86/165 nativos, release, Clippy e formatação). Eco/skin e gate de `map`
 passaram no jogo; a sessão v2 também passou em 29/10/2026. Demais comandos de
 teardown e suavização na LAN seguem pendentes. Não rebaixar esse visual a mera
 alocação privada, nem promover resultados da bancada a validação no jogo.
@@ -2932,6 +2932,73 @@ deles. Servidor/proxy/clientes encerraram pelo fluxo/prazo; stderr vazios.
 Artefatos `timing-*` no mesmo diretório ignorado do lote. Sem medição nova no
 jogo/Linux/LAN; qualidade visual real depende de prova prática.
 
+### M7/M8 — Overlays reproduzíveis e preparação reversível — 29/10/2026
+
+Nova frente offline enquanto o teste LAN não está disponível: `mod-example`,
+`mod-build`, `mod-verify`, `mod-stage` e `mod-unstage` em `asset_tools`, sem novos
+crates/dependências e sem tocar no jogo/DLL/rede. O exemplo gera PNG RGBA/texto
+próprios. Projeto schema 1 explicita fontes relativas `inputs/owned/` e
+`inputs/local/`, origem `owned`/`derived_local`, destino interno e dependências.
+O grafo recusa ausências, ciclos, duplicatas e colisões portáveis; só cobre
+dependências dentro do pacote, sem transformação ou dependência comercial externa.
+
+Saída imutável: `overlay.scs` Stored ordenado com data/permissões fixas e
+`manifest.json` com hashes/tamanhos individuais, origem/dependências e hash do
+payload. Sem caminhos absolutos, datas do host ou leitura implícita de pastas
+comerciais. Mesmo conteúdo/ordem de entradas/mtime diferentes produz os mesmos
+bytes. Build existente só é reutilizado após igualdade verificada; alterações
+pedem novo destino. Ainda relê todas as fontes, sem cache de conversões.
+
+Modo `--distributable` recusa derivados locais; o manifesto marca os demais como
+uso local. A origem é declaração obrigatória, não reconhecimento de conteúdo
+comercial/autoria. Filtro de extensões data-only e assinaturas PE/ELF/ZIP reduz
+inclusão acidental; não é auditoria completa ou assinatura de pacote. Limites:
+1.024 entradas, 16 MiB/asset, 32 MiB de conteúdo, 1 MiB de JSON, nomes ASCII até
+240 bytes. ZIP verificado canonicamente, sem extras/dados anexados ou links.
+Bytes de imagem preservados; não há validação de material/modelo pelo motor.
+
+Stage exige pasta nova. Remoção exige só os dois arquivos conhecidos e íntegros,
+cria/confere backup em pasta nova, revalida antes de excluir; restauração é stage
+do backup em outro destino novo. Falhas deixam parciais para inspeção e mantêm
+backup válido; sem transação contra crash/energia ou escritores concorrentes.
+Nunca há remoção recursiva nem substituição de originais/alterações do usuário.
+Links/reparse points de ancestrais são recusados. O teste de criação de symlink
+Windows depende de privilégio e não executou essa parte neste host (erro 1314);
+há fixture Unix para execução futura no Linux, sem alegar prova Linux nova.
+
+**Limite de integração:** `aa/init.cfg` local monta arquivos SCS explicitamente.
+Nenhum dos comandos edita esse arquivo ou monta automaticamente o pacote. M7
+continua parcial: instalador de jogo/prioridade de sobreposição, transformação
+incremental, reconstrução comercial local e teste na partida seguem pendentes.
+Não marcar stage como instalação validada na Steam nem distribuir base.scs.
+
+Validação: 17 testes novos do módulo na bancada nativa Windows, incluindo
+mudança de raiz/ordem/mtime, reutilização sem reescrita, bytes RGBA/alpha,
+dependências e limites, adulteração, origem/local-only, extras, colisões e
+backup/restauração. Um handle Windows que permite leitura e impede exclusão
+provocou falha após remover o primeiro arquivo: backup íntegro preservado e
+restaurado em pasta nova. A condição de symlink indisponível está registrada
+acima; não contar esse ramo como exercitado.
+
+`dev_env verify` passou: 127 testes x86 existentes e 165 nativos (17 novos),
+release x86 do cliente/nativo do workspace, Clippy nos dois alvos e rustfmt.
+Log em `target/analysis/verify-windows-20261029-mod-package.log` (ignorado).
+CLI release nativa também passou exemplo → build → verify → stage → unstage →
+restauração e reutilização `reused=true`. Duas raízes independentes/backup/
+restauração têm o mesmo payload SHA-256
+`25ec0addbfcc2b20f94a5821f2b38c5f4228591760bba5fb95762882031ee8cd` e manifesto
+`960adc8c77396c21e1eda3133c0d13c9fbc261469caa019d618906656b512587`.
+Artefatos em `target/analysis/mod-package-windows-20261029-01/`, ignorados.
+O novo pipeline não foi compilado/testado como CLI x86 ou executado no Linux;
+assets continuam nativos. Nenhum jogo/LAN novo; `session-verify` pós-bloco
+conferiu sete originais/saves inalterados, com jogo ausente e configuração local
+do Cargo preservada. Registro em `verify-originals.log` no mesmo diretório.
+
+Próximo nesta frente: contrato de reconstrução a partir de entradas comerciais
+locais e transformações incrementais, mantendo-as fora de artefatos distribuíveis.
+Ativação/montagem exige prova específica no jogo; não modificar init.cfg por
+hipótese. O próximo marco MP prático continua LAN e outros comandos de teardown.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -3286,18 +3353,26 @@ Colisão e economia compartilhadas podem ser marcos posteriores ao MVP visual.
   reempacotar 76 arquivos num pacote separado de teste.
 - [ ] Organizar entradas originais, edição própria, cache e saída de build em
   caminhos distintos; registrar origem e hash em manifesto gerado.
+  Progresso offline: projeto com `inputs/owned`/`inputs/local`, saída imutável e
+  manifesto individual; reconstrução de entrada comercial e cache pendentes.
 - [ ] Criar builds incrementais/determinísticos quando viável, com dependências
   explícitas de texturas, materiais e caminhos internos.
+  Progresso: Stored determinístico, reutilização exata verificada e grafo de
+  dependências internas; transformações/conversões incrementais pendentes.
 - [ ] Preservar canais de cor, transparência, orientação e resolução; adicionar
   codecs/mipmaps apenas quando um asset real exigir e houver validação visual.
 - [ ] Definir sobreposição de pacotes e um instalador/restaurador em Rust que
   não sobrescreva silenciosamente originais ou alterações do usuário.
+  Progresso: stage/backup/remoção/restauração offline em pastas novas, com
+  recusa de alterações/extras; montagem e instalador integrado ainda pendentes.
 - [ ] Testar um pacote mínimo no jogo, registrar o resultado e testar sua remoção.
 - [ ] Distribuir código, assets próprios e manifestos; reconstruir localmente o
   que depende de conteúdo comercial. Não publicar o `base.scs` reempacotado.
 - [ ] Criar auditoria Rust que impeça inclusão acidental de originais em artefatos.
   Parcial: auditoria e ZIP próprio de fontes entregues; originais forçados e
-  binários disfarçados recusados. Binários do mod/assets/instalador ainda pendentes.
+  binários disfarçados recusados. Overlays data-only têm origem obrigatória,
+  filtro de extensões/assinaturas e modo distribuível que recusa derivados locais;
+  autoria não é inferida. Binários do mod e auditoria completa ainda pendentes.
 
 **Concluído quando:** uma alteração própria pode ser construída, instalada,
 verificada e removida em outra instalação original sem distribuir o jogo.
