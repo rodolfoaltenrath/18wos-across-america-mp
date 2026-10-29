@@ -7,6 +7,7 @@ use client_dll::{
     controller::Controller,
     draw_observation::{Remote, Visual},
     inspection::process::Process,
+    load_gate::Status as GateStatus,
     profile,
     release_policy::{Refusal, Report as ReleaseReport},
 };
@@ -23,6 +24,10 @@ pub struct Options {
     pub offset: [f32; 3],
     /// Apply the AI truck skin (fixture: its own shader name).
     pub skin: bool,
+    /// Install the active map gate (automatic release/replay/recreate on load).
+    pub load_gate: bool,
+    /// Gate deadline from the load request to recreation, in milliseconds.
+    pub load_timeout_ms: u32,
     /// engine_fixture's first stdout line; None targets the real game.
     pub fixture: Option<Value>,
 }
@@ -96,6 +101,18 @@ pub fn start(c: &Controller, dll: &Path, o: &Options) -> Result<Value> {
         api::put(&mut connect.config.server, &o.server.to_string()).map_err(anyhow::Error::msg)?;
         api::put(&mut connect.config.profile, profile::ID).map_err(anyhow::Error::msg)?;
         step("connect-drawn", c.control(dll, &mut connect).map(drop))?;
+        if o.load_gate {
+            let mut gate = match fixture {
+                Some(info) => {
+                    let mut b = EngineControl::new(api::UI_LOAD_GATE_FIXTURE);
+                    b.fixture = words(info, "map_descriptors")?;
+                    b
+                }
+                None => EngineControl::new(api::UI_LOAD_GATE_ATTACH),
+            };
+            gate.cycles = o.load_timeout_ms;
+            step("load-gate-attach", engine(c, dll, gate).map(drop))?;
+        }
         let mut show = match fixture {
             Some(info) => {
                 let mut b = EngineControl::new(api::VISUAL_SHOW_FIXTURE);
@@ -143,6 +160,7 @@ pub fn status(c: &Controller, dll: &Path) -> Result<Value> {
         dll,
         EngineControl::new(api::DRAW_STATUS),
     )?);
+    let gate = gate_status(c, dll)?;
     let mut remotes = Vec::new();
     loop {
         let mut b = EngineControl::new(api::REMOTE_LIST);
@@ -159,7 +177,7 @@ pub fn status(c: &Controller, dll: &Path) -> Result<Value> {
     Ok(json!({
         "client": {"status": client.status, "sample_state": client.sample_state, "sent": client.sent,
             "received": client.received, "diagnostic": api::text(&client.message).unwrap_or("")},
-        "visual": visual, "draw": draw, "remotes": remotes,
+        "visual": visual, "draw": draw, "load_gate": gate, "remotes": remotes,
     }))
 }
 
@@ -207,7 +225,30 @@ fn verify_slots(pid: u32) -> Result<Vec<Value>> {
 
 /// Release the visual before the game starts destroying its world resources.
 /// Keep the probes/network alive, so the visual may be shown again after loading.
+/// Gate status, or None when this DLL has no gate installed.
+pub fn gate_status(c: &Controller, dll: &Path) -> Result<Option<GateStatus>> {
+    let status = GateStatus::decode(&engine(c, dll, EngineControl::new(api::LOAD_GATE_STATUS))?)
+        .map_err(anyhow::Error::msg)?;
+    Ok(status.installed.then_some(status))
+}
+/// A deferred load owns the visual until it settles; never race its release.
+fn wait_gate(c: &Controller, dll: &Path, timeout: Duration) -> Result<Option<GateStatus>> {
+    let deadline = Instant::now() + timeout;
+    loop {
+        let status = gate_status(c, dll)?;
+        if status.is_none_or(|s| s.quiescent()) {
+            return Ok(status);
+        }
+        if Instant::now() >= deadline {
+            bail!(
+                "deferred load still active after {timeout:?}: {status:?}; keep the game in the foreground and retry"
+            );
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+}
 pub fn prepare_load(c: &Controller, dll: &Path, timeout: Duration) -> Result<Value> {
+    let gate = wait_gate(c, dll, timeout)?;
     let mut refusals: Vec<String> = Vec::new();
     let mut attempts = 0;
     let mut checks = 0;
@@ -253,13 +294,14 @@ pub fn prepare_load(c: &Controller, dll: &Path, timeout: Duration) -> Result<Val
     Ok(
         json!({"released": visual.state == 1, "release_attempts": attempts,
         "refusals": refusals, "preflight_checks": checks, "last_release_check": last_check,
-        "prepared": true}),
+        "load_gate": gate, "prepared": true}),
     )
 }
 
 pub fn stop(c: &Controller, dll: &Path, pid: u32, timeout: Duration, game: bool) -> Result<Value> {
     let mut report = prepare_load(c, dll, timeout)?;
     for command in [
+        api::UI_LOAD_GATE_REMOVE,
         api::UI_TRANSITION_REMOVE,
         api::UI_DRAW_REMOVE,
         api::UI_RENDER_REMOVE,

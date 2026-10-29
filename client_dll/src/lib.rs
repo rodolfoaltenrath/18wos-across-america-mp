@@ -37,6 +37,8 @@ mod engine_item;
 #[cfg(all(windows, target_arch = "x86"))]
 mod engine_lifecycle;
 #[cfg(all(windows, target_arch = "x86"))]
+mod engine_load_gate;
+#[cfg(all(windows, target_arch = "x86"))]
 mod engine_model;
 #[cfg(all(windows, target_arch = "x86"))]
 mod engine_phase;
@@ -50,6 +52,7 @@ mod engine_visual;
 #[cfg(windows)]
 pub mod inspection;
 pub mod interpolation;
+pub mod load_gate;
 mod memory;
 pub mod pe_exports;
 #[cfg(any(all(windows, target_arch = "x86"), test))]

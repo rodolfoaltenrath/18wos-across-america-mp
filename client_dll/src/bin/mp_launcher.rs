@@ -49,7 +49,7 @@ fn main() -> anyhow::Result<()> {
         },
         Stop,
         Unload,
-        /// attach, pump, render, draw, connect --mode drawn and visual-show, in order.
+        /// attach, pump, render, draw, connect --mode drawn, load gate and visual-show, in order.
         SessionStart {
             #[arg(long)]
             server: SocketAddr,
@@ -69,6 +69,12 @@ fn main() -> anyhow::Result<()> {
             /// Keep the fallback shader instead of the AI truck skin.
             #[arg(long)]
             no_skin: bool,
+            /// Do not install the active map gate (loads then require session-prepare-load).
+            #[arg(long)]
+            no_load_gate: bool,
+            /// Gate deadline from a load request to the recreated visual, in seconds.
+            #[arg(long, default_value_t = 120, value_parser = clap::value_parser!(u32).range(1..=600))]
+            load_timeout: u32,
         },
         /// Client, visual, draw and relayed players in one JSON report.
         SessionStatus,
@@ -129,6 +135,15 @@ fn main() -> anyhow::Result<()> {
             output: Option<PathBuf>,
         },
         TransitionRemove,
+        /// ACTIVE map gate: defers a load while the visual is retained, releases it,
+        /// replays the original once and recreates the visual. Needs pump+render+draw.
+        LoadGateAttach {
+            #[arg(long, default_value_t = 120, value_parser = clap::value_parser!(u32).range(1..=600))]
+            timeout: u32,
+        },
+        LoadGateStatus,
+        /// Refused while a deferred load is still active.
+        LoadGateRemove,
         /// Retained truck instance drawn after the player's exterior draw; needs draw+render.
         VisualShow {
             #[arg(long, default_value = "models/ai/truck/models/truck.psm")]
@@ -263,6 +278,8 @@ fn main() -> anyhow::Result<()> {
             backup,
             saves,
             no_skin,
+            no_load_gate,
+            load_timeout,
         } => {
             let backup = match backup {
                 Some(directory) => {
@@ -299,6 +316,8 @@ fn main() -> anyhow::Result<()> {
                 player: *player,
                 offset: [offset[0], offset[1], offset[2]],
                 skin: !*no_skin,
+                load_gate: !*no_load_gate,
+                load_timeout_ms: *load_timeout * 1000,
                 fixture,
             };
             let mut report = launcher_session::start(&controller, &dll, &options)?;
@@ -381,6 +400,13 @@ fn main() -> anyhow::Result<()> {
                     api::EngineControl::new(api::TRANSITION_STATUS)
                 }
                 EngineTask::TransitionRemove => api::EngineControl::new(api::UI_TRANSITION_REMOVE),
+                EngineTask::LoadGateAttach { timeout } => {
+                    let mut b = api::EngineControl::new(api::UI_LOAD_GATE_ATTACH);
+                    b.cycles = timeout * 1000;
+                    b
+                }
+                EngineTask::LoadGateStatus => api::EngineControl::new(api::LOAD_GATE_STATUS),
+                EngineTask::LoadGateRemove => api::EngineControl::new(api::UI_LOAD_GATE_REMOVE),
                 EngineTask::VisualShow {
                     model,
                     offset,
@@ -525,6 +551,12 @@ fn main() -> anyhow::Result<()> {
                         &serde_json::json!({"summary":summary,"records":records})
                     )?
                 );
+                return Ok(());
+            }
+            if block.command == api::LOAD_GATE_STATUS {
+                let status =
+                    client_dll::load_gate::Status::decode(&block).map_err(anyhow::Error::msg)?;
+                println!("{}", serde_json::to_string_pretty(&status)?);
                 return Ok(());
             }
             if block.command == api::VISUAL_CHECK {

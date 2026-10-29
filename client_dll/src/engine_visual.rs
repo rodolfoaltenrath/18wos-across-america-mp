@@ -54,6 +54,8 @@ static LAST_THIS: AtomicU32 = AtomicU32::new(0);
 /// Hidden after an entity change; the loop recreates it once release is safe.
 static RECREATE: AtomicBool = AtomicBool::new(false);
 static RECREATED: AtomicU32 = AtomicU32::new(0);
+/// Distinct player entities seen by the draw: the load gate's world epoch.
+static ACTOR_EPOCH: AtomicU32 = AtomicU32::new(0);
 /// Draw cost (ns, EMA and max) around our engine calls, and exterior frame
 /// interval (us, EMA) between local exterior draws. Diagnostics only.
 static COST_AVG: AtomicU32 = AtomicU32::new(0);
@@ -139,6 +141,9 @@ fn remote_poses(target: u32, out: &mut [([f32; 4], [f32; 3]); MAX_REMOTE_DRAWS])
 }
 pub(crate) fn after_car_draw(this: u32, [world, _, path, viewport]: [u32; 4]) {
     let previous = LAST_THIS.swap(this, Ordering::AcqRel);
+    if previous != this {
+        ACTOR_EPOCH.fetch_add(1, Ordering::AcqRel);
+    }
     if previous != 0 && previous != this && SHOWN.swap(false, Ordering::AcqRel) {
         // Reloaded player entity: stop drawing now; maintain() recreates later.
         HIDDEN_AT.store(flush_calls(), Ordering::Release);
@@ -391,6 +396,9 @@ pub fn run(mut block: EngineControl, fixture: bool) -> Result<EngineControl, Str
         if !crate::engine_render::installed() {
             return Err("attach the render observer; release needs its flush count".into());
         }
+        if crate::engine_load_gate::busy() {
+            return Err("deferred load in progress; the gate recreates the visual".into());
+        }
         if FAULT.load(Ordering::Acquire) != 0 {
             return Err("visual faulted; release it and restart the process".into());
         }
@@ -494,7 +502,7 @@ fn create(block: &EngineControl, fixture: bool) -> Result<(), String> {
     STATE.store(1, Ordering::Release);
     Ok(())
 }
-fn release_report() -> Report {
+pub(crate) fn release_report() -> Report {
     let item = ITEM.load(Ordering::Acquire) as u32;
     let allocated = STATE.load(Ordering::Acquire) == 1;
     let counters = (allocated && item != 0)
@@ -584,6 +592,9 @@ pub fn control(b: &mut EngineControl) -> Result<(), String> {
 /// Loop-thread maintenance after each pump pass: once a reload-triggered hide
 /// has settled, release and recreate with the original show parameters.
 pub(crate) fn maintain(fixture: bool) {
+    if crate::engine_load_gate::busy() {
+        return;
+    }
     if !RECREATE.load(Ordering::Acquire) {
         return;
     }
@@ -609,4 +620,43 @@ pub(crate) fn maintain(fixture: bool) {
         _ => FAULT.store(2, Ordering::Release),
     }
     RECREATE.store(false, Ordering::Release);
+}
+/// Last drawn player entity and how many distinct ones the draw has seen.
+pub(crate) fn witness() -> (u32, u32) {
+    (
+        LAST_THIS.load(Ordering::Acquire),
+        ACTOR_EPOCH.load(Ordering::Acquire),
+    )
+}
+/// Stop drawing for a deferred load (atomic, any phase) and cancel a pending
+/// automatic recreation. True when the gate should recreate it afterwards.
+pub(crate) fn suspend_for_load() -> bool {
+    let shown = SHOWN.swap(false, Ordering::AcqRel);
+    if shown {
+        HIDDEN_AT.store(flush_calls(), Ordering::Release);
+    }
+    let pending = RECREATE.swap(false, Ordering::AcqRel);
+    (shown || pending) && CREATION.lock().is_ok_and(|c| c.is_some())
+}
+/// Loop-queue release for the gate; revalidates the whole policy first.
+pub(crate) fn release_for_load() -> Result<(), Refusal> {
+    release()
+}
+/// Loop-queue recreation in the NEW world with the original show block.
+pub(crate) fn recreate_for_load(fixture: bool) -> Result<(), String> {
+    if FAULT.load(Ordering::Acquire) != 0 {
+        return Err("visual faulted; not recreated".into());
+    }
+    if STATE.load(Ordering::Acquire) == 1 {
+        return Err("visual still allocated; not recreated".into());
+    }
+    let block = CREATION
+        .lock()
+        .ok()
+        .and_then(|c| *c)
+        .ok_or("no show parameters to recreate")?;
+    create(&block, fixture)?;
+    RECREATED.fetch_add(1, Ordering::AcqRel);
+    SHOWN.store(true, Ordering::Release);
+    Ok(())
 }

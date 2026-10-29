@@ -73,6 +73,11 @@ pub const VISUAL_CHECK: u32 = 51;
 /// Passive entry/return observation of the map descriptor callback; never defer.
 pub const UI_TRANSITION_MAP: u32 = 52;
 pub const UI_TRANSITION_MAP_FIXTURE: u32 = 53;
+/// ACTIVE map gate: defers a load while the visual is retained (see load_gate).
+pub const UI_LOAD_GATE_ATTACH: u32 = 54;
+pub const UI_LOAD_GATE_FIXTURE: u32 = 55;
+pub const UI_LOAD_GATE_REMOVE: u32 = 56;
+pub const LOAD_GATE_STATUS: u32 = 57;
 pub const ENGINE_ABI_VERSION: u32 = 3;
 /// Separate extension ABI; does not change the original Control v1 layout.
 #[repr(C)]

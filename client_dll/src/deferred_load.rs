@@ -459,6 +459,8 @@ pub enum Ack {
     Hidden,
     Checked(Report),
     Released,
+    /// The release revalidation refused WITHOUT freeing; nothing was executed.
+    ReleaseRefused,
     ExecuteReturned,
     NotInvoked,
     Recreated,
@@ -512,7 +514,7 @@ fn outer(context: Context, owner: u32) -> Result<(), Error> {
 impl Gate {
     /// Recheck immediately before a fixture adapter dispatches an issued action.
     /// Polling earlier does not authorize dispatch after cancellation or expiry.
-    fn validate_execute(
+    pub(crate) fn validate_execute(
         &mut self,
         action: &Action,
         context: Context,
@@ -719,7 +721,7 @@ impl Gate {
             (&ack, token.kind),
             (Ack::Hidden, ActionKind::Hide)
                 | (Ack::Checked(_), ActionKind::Check)
-                | (Ack::Released, ActionKind::Release)
+                | (Ack::Released | Ack::ReleaseRefused, ActionKind::Release)
                 | (Ack::ExecuteReturned | Ack::NotInvoked, ActionKind::Execute)
                 | (Ack::Recreated, ActionKind::Recreate)
         ) || matches!(ack, Ack::Unknown);
@@ -763,6 +765,10 @@ impl Gate {
             Ack::Released => {
                 j.release_confirmed = true;
                 Phase::Execute
+            }
+            Ack::ReleaseRefused => {
+                j.reason = Some("release_refused_after_check");
+                Phase::Recoverable
             }
             Ack::ExecuteReturned => Phase::AwaitWorld,
             Ack::NotInvoked => {
@@ -873,5 +879,75 @@ impl Gate {
         }
         self.job = None;
         Ok(())
+    }
+}
+impl Gate {
+    /// Drop a job that can no longer act, so a NEW request may be admitted.
+    /// Never replays the old command: Recoverable/Quarantined/Complete only,
+    /// with no action in flight. A quarantined outcome stays unknown. Returns
+    /// its phase and whether a requested visual restoration never happened.
+    pub fn discard_terminal(&mut self) -> Result<Option<(Phase, bool)>, Error> {
+        let Some(j) = &self.job else {
+            return Ok(None);
+        };
+        if j.in_flight.is_some()
+            || !matches!(
+                j.phase,
+                Phase::Recoverable | Phase::Quarantined | Phase::Complete
+            )
+        {
+            return Err(Error::Busy);
+        }
+        let outcome = (j.phase, j.restore_visual && j.phase != Phase::Complete);
+        self.job = None;
+        Ok(Some(outcome))
+    }
+    /// True while a job may still issue an action (not terminal).
+    pub fn active(&self) -> bool {
+        self.job.as_ref().is_some_and(|j| {
+            !matches!(
+                j.phase,
+                Phase::Recoverable | Phase::Quarantined | Phase::Complete
+            )
+        })
+    }
+}
+#[cfg(test)]
+mod terminal_tests {
+    use super::lab::{command, context, report, world};
+    use super::*;
+    #[test]
+    fn refused_release_is_recoverable_and_terminal_jobs_can_be_discarded_without_replay() {
+        let mut g = Gate::new(9).unwrap();
+        assert_eq!(g.discard_terminal(), Ok(None));
+        g.admit(9, command(), world(1), true, 0, 100).unwrap();
+        assert!(g.active());
+        assert_eq!(g.discard_terminal(), Err(Error::Busy));
+        let a = g.poll(context(), world(1), 1).unwrap().unwrap();
+        assert_eq!(g.discard_terminal(), Err(Error::Busy));
+        g.acknowledge(a.token, Ack::Hidden, 1).unwrap();
+        let a = g.poll(context(), world(1), 2).unwrap().unwrap();
+        g.acknowledge(a.token, Ack::Checked(report(false)), 2)
+            .unwrap();
+        let a = g.poll(context(), world(1), 3).unwrap().unwrap();
+        assert_eq!(a.kind, ActionKind::Release);
+        assert_eq!(g.acknowledge(a.token, Ack::ReleaseRefused, 3), Ok(()));
+        let s = g.snapshot();
+        assert_eq!(s.phase, Phase::Recoverable);
+        assert_eq!(s.reason, Some("release_refused_after_check"));
+        assert!(!s.execute_started && !s.release_confirmed && !g.active());
+        assert!(g.poll(context(), world(1), 4).unwrap().is_none());
+        assert_eq!(g.discard_terminal(), Ok(Some((Phase::Recoverable, true))));
+        assert_eq!(g.snapshot().phase, Phase::Idle);
+        // ReleaseRefused is only valid for a release action.
+        g.admit(9, command(), world(1), true, 5, 100).unwrap();
+        let a = g.poll(context(), world(1), 5).unwrap().unwrap();
+        assert_eq!(
+            g.acknowledge(a.token, Ack::ReleaseRefused, 5),
+            Err(Error::WrongAcknowledgement)
+        );
+        g.acknowledge(a.token, Ack::Unknown, 5).unwrap();
+        assert_eq!(g.snapshot().phase, Phase::Quarantined);
+        assert_eq!(g.discard_terminal(), Ok(Some((Phase::Quarantined, true))));
     }
 }

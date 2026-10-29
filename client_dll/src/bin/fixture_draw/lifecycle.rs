@@ -226,6 +226,7 @@ unsafe extern "thiscall" fn done(this: *mut c_void, phase: u32) -> u32 {
 pub fn frame(car: u32) {
     match REQUEST.swap(0, Ordering::AcqRel) {
         kind @ 11..=14 => map::dispatch(kind - 11),
+        kind @ 15..=18 => map::gate(kind),
         1 => {
             call(1, car, 1);
             call(1, car, 0);

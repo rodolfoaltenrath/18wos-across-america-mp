@@ -104,6 +104,7 @@ unsafe extern "system" fn peek_impl(
             TASKS.run_one(|block| {
                 crate::engine_lifecycle::run(block, FIXTURE.load(Ordering::Acquire) != 0)
             });
+            crate::engine_load_gate::maintain(FIXTURE.load(Ordering::Acquire) != 0);
             crate::engine_visual::maintain(FIXTURE.load(Ordering::Acquire) != 0);
         }
     }
@@ -200,6 +201,7 @@ pub fn remove() -> Result<(), String> {
     if TASKS.stats().1 != 0 {
         return Err("phase operation still running; dispatcher and module retained".into());
     }
+    crate::engine_load_gate::remove()?;
     crate::engine_transition::remove()?;
     crate::engine_draw::remove()?;
     crate::engine_render::remove()?;

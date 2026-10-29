@@ -601,6 +601,9 @@ pub fn install_commands(thread: u32, b: &EngineControl) -> Result<(), String> {
 }
 /// Adds a passive cdecl descriptor hook. Never defers or synthesizes a command.
 pub fn install_map(thread: u32, b: &EngineControl) -> Result<(), String> {
+    if crate::engine_load_gate::installed() {
+        return Err("the active map gate owns the descriptor; remove it first".into());
+    }
     if STATE.load(Ordering::Acquire) != 1 || HOOKS.load(Ordering::Acquire) != 5 {
         return Err("install command observation before map observation, exactly once".into());
     }

@@ -254,3 +254,7 @@ unsafe extern "C" fn destroy(object: *mut c_void, storage: *mut c_void) {
     }
     ROOT.refs.fetch_sub(1, Ordering::AcqRel);
 }
+/// PSM instances created and not yet freed: a load must never see one.
+pub fn live_instances() -> u32 {
+    instance::live()
+}

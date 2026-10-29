@@ -194,6 +194,12 @@ fn execute(mut block: EngineControl) -> Result<EngineControl, String> {
         api::UI_TRANSITION_MAP | api::UI_TRANSITION_MAP_FIXTURE => {
             crate::engine_transition::install_map(tid, &block)?
         }
+        #[cfg(target_arch = "x86")]
+        api::UI_LOAD_GATE_ATTACH | api::UI_LOAD_GATE_FIXTURE => {
+            crate::engine_load_gate::install(tid, &block)?
+        }
+        #[cfg(target_arch = "x86")]
+        api::UI_LOAD_GATE_REMOVE => crate::engine_load_gate::remove()?,
         api::UI_PROBE => {}
         api::UI_TRACE => {
             let mut frames = [ptr::null_mut(); 32];
@@ -435,6 +441,8 @@ pub fn control(block: &mut EngineControl) -> Result<(), String> {
         }
         #[cfg(target_arch = "x86")]
         api::VISUAL_HIDE | api::VISUAL_STATUS => crate::engine_visual::control(block),
+        #[cfg(target_arch = "x86")]
+        api::LOAD_GATE_STATUS => crate::engine_load_gate::control(block),
         api::REMOTE_LIST => crate::remote_row(block),
         api::UI_DETACH => detach_locked(),
         api::UI_PROBE
@@ -458,6 +466,9 @@ pub fn control(block: &mut EngineControl) -> Result<(), String> {
         | api::UI_TRANSITION_COMMANDS_FIXTURE
         | api::UI_TRANSITION_MAP
         | api::UI_TRANSITION_MAP_FIXTURE
+        | api::UI_LOAD_GATE_ATTACH
+        | api::UI_LOAD_GATE_FIXTURE
+        | api::UI_LOAD_GATE_REMOVE
         | api::UI_TRANSITION_REMOVE => dispatch(*block).map(|response| {
             *block = response;
         }),

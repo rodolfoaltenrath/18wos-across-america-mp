@@ -157,3 +157,8 @@ unsafe extern "C" fn free(pointer: *mut c_void) {
     super::info::instance_context(-1);
     FREED.fetch_add(1, Ordering::AcqRel);
 }
+pub(super) fn live() -> u32 {
+    CREATED
+        .load(Ordering::Acquire)
+        .wrapping_sub(FREED.load(Ordering::Acquire))
+}
