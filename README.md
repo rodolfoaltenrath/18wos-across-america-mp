@@ -851,6 +851,12 @@ comprova a fase de liberação nem uma ABI para adiar/cancelar a carga. Este
 bloco não altera esse handler e mantém `session-prepare-load` antes da carga
 e `visual-show` depois. Não testar reload com visual retido.
 
+O preflight passou também numa partida real no Fedora/Proton: recusou o visual
+visível, indicou prontidão após ocultação e confirmou ausência após liberar.
+O preparo concluiu com uma consulta/uma tentativa, oito slots restaurados e
+seis hashes iguais após a saída. Não houve teste de liberação dentro de `map`
+nem recarga com o visual retido; detalhes e limites no roadmap.
+
 ### Teste no jogo com sessão (um comando)
 
 Compile e verifique tudo antes: `.\target\debug\dev_env.exe verify`. Abra o

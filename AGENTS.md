@@ -341,3 +341,18 @@ Manter o preparo explícito e não repetir reload com visual retido.
 Este bloco passou em 55 testes nativos/55 x86 sob Proton, builds release
 nativo/x86, Clippy nos dois alvos e rustfmt no Fedora. Sem novo teste no jogo
 nesse commit. Antes dos builds, a enumeração não encontrou o jogo.
+
+O mesmo preflight passou depois no jogo Fedora/Proton (PID Windows histórico
+420/thread 424): consulta sem instância, recusa por visível apesar de `[1,1,0]`,
+prontidão após ocultar, uma consulta/uma tentativa no prepare-load e confirmação
+de item zero depois. Sempre no loop, profundidades 1/0/0/0, sem rede nem sonda
+de transição. Oito slots restaurados, filas zeradas e seis hashes iguais antes
+e depois da saída. Proprietário informou saída, enumeração final confirmou
+ausência do jogo. Nenhuma DLL residente; reenumerar antes de novo build.
+Não houve recarga retida nem prova de liberação dentro de `map`.
+Pista estática: `cmd_execute` usa argc/argv globais apontando para sua pilha;
+reentrância sobrescreve os globais. `cmd_add` copia no máximo 127 bytes em
+buffer de 100 entradas; retorno de sucesso não comprovado. Não chamar nem
+usar para replay ainda. Próximo: comprovar consumidor/ordem/ownership da fila
+e descritor do callback de `map`, limites e recuperação antes de impedir carga.
+Ver o novo registro e os artefatos ignorados release-check-fedora-20261028-01.

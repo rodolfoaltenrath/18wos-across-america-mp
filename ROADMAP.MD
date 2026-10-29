@@ -1970,6 +1970,68 @@ quando não houver prontidão; não bloquear a thread esperando render nem
 recursar o handler. Manter o preparo explícito antes da carga. LAN e sessões
 longas continuam pendentes.
 
+### M4 — Preflight validado na partida e limites do dispatcher — 28/10/2026
+
+Após o commit `09b4f82`, testado o build já verificado no jogo Steam sob Proton,
+sem servidor, rede conectada ou sonda de transição. Prefixo copiado antes da
+abertura; `session-backup` copiou o save e registrou os cinco originais.
+Perfil/hashes e bases/slots conferidos no processo atual (PID Windows
+histórico 420/thread 424). Não reutilizar esses identificadores.
+
+`visual-check` sem instância retornou `not_allocated`. Após criar o caminhão
+com skin, o mesmo comando observou 141 desenhos já submetidos, contadores
+`[1,1,0]` e recusou por `visible`, sem ocultar/liberar. Não se pediu nova
+confirmação da aparência/textura ao proprietário; três partes configuradas
+e contagem de draw não são prova visual de textura nesta sessão.
+
+Ao ocultar, a contagem estava em 2292. A consulta posterior conservou o mesmo
+item, retornou `ready=true`, idades de 1077 flushes desde o último desenho e
+1076 desde a ocultação, contadores `[1,1,0]` e bindings presentes. Todas as
+consultas executaram na thread 424, pump depth 1 e window/draw/render depth 0.
+Os intervalos longos decorreram do tempo entre ferramentas; o caso perto do
+limite e a volta dos contadores permanecem provas da fixture, não do jogo.
+
+O novo `session-prepare-load` concluiu com `prepared=true`, **uma consulta e
+uma tentativa de liberação**, sem recusas. Sua evidência imediatamente anterior
+à operação permaneceu pronta. A consulta seguinte retornou `not_allocated`,
+item zero, bindings de release ausentes e nenhuma leitura de contadores.
+`automatic_load_supported` ficou false em todos os relatórios. Nenhuma carga
+foi solicitada com o visual retido; não se chamou release no handler de `map`.
+
+`session-stop --verify` não tentou liberar novamente: instância já ausente,
+oito slots restaurados por leitura, worker parado, dispatcher removido, pump
+restaurado, pending/running/inflight zerados. Seis hashes iguais (cinco
+originais/um save). Foi solicitado dirigir/menu/carregar apenas após essa
+limpeza. O proprietário confirmou conclusão e, após uma enumeração ainda
+encontrar o jogo, informou explicitamente que saiu. A enumeração seguinte
+confirmou ausência do processo; a verificação final pós-saída repetiu os seis
+hashes iguais. Não há DLL residente no jogo ao concluir este bloco.
+
+Artefatos locais em `target/analysis/release-check-fedora-20261028-01/`
+(ignorados), incluindo checks sem instância/visível/oculto/liberado, preparo,
+parada, enumeração final e hashes pós-saída. Sem alteração de código após a
+bancada de 55 testes nativos/55 x86, builds release, Clippy e rustfmt; este
+registro acrescenta somente a evidência real do novo caminho de liberação.
+
+**Investigação estática adicional, sem chamadas novas:** `cmd_execute`
+(`prism3d+0xdf40`) instala argc/argv globais em `+0x778f0/+0x778f4`, com argv
+apontando para armazenamento de sua pilha, antes de chamar o callback
+registrado. Uma execução recursiva sobrescreve esses globais; não tratá-la
+como replay seguro do handler atual. `cmd_execute_block` (`+0xe060`) chama o
+executor por linha. `cmd_add` (`+0xe1b0`) procura uma entrada de buffer de
+128 bytes, até 100 entradas, copia no máximo 127 bytes/termina e incrementa
+o contador em `+0x778f8`; o ramo cheio segue para diagnóstico, sem um contrato
+booleano de sucesso comprovado. Isso identifica um candidato de fila, não
+uma API validada de suspensão ou cancelamento. Não enfileirar nomes de save
+truncados nem reter ponteiros argv após retornar.
+
+**Próximo:** localizar o consumidor e a ordem dessa fila e o descritor do
+callback de `map`, confirmar ABI/ownership/limites e rollback em fixtures antes
+de qualquer interceptação que impeça a carga. Relacionar esse contrato ao
+contexto de entrada observado, sem esperar render dentro do handler e sem
+executá-lo recursivamente. Manter o preparo manual e não repetir reload retido.
+LAN e sessões longas continuam pendentes.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
