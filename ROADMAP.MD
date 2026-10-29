@@ -2246,6 +2246,59 @@ seguro. Não ativa adiamento nem o adaptador `deferred_load`. Próximo: incluir
 teste, SEM visual), preservar o relatório antes de sair e relacionar
 `map_calls` ao lifecycle; só então projetar interceptação ativa.
 
+### M4 — Captura real do descritor `map` — 28/10/2026
+
+Sessão agrupada no Fedora/Proton, PID Windows histórico 428, thread 432, sem
+visual, rede ou `session-start`. O proprietário carregou `test_mp` pelo menu
+com a captura armada. Artefatos em
+`target/analysis/transition-map-fedora-20261028-01` (ignorado).
+
+**Auditoria `memory_tool commands --pid` (primeira no jogo):** passou. Foram
+encontrados 33 comandos, com hashes corretos, `map` registrado no descritor e
+callback do perfil, buffer de `cmd_add` vazio (ocupação/contador 0) e
+`execution_queue_proven=false`. O mesmo thunk `game+0xd2e90` atende oito
+comandos (`game_menu`, `menu`, `pause`, `edit`, `exit`, `preview`, `map`,
+`quit`). A sonda troca somente o word do descritor `map`.
+
+**Captura:** a captura passou com as seis sondas: snapshot de 68 eventos e
+final de 68, `structurally_complete=true`, sem issues/foreign/perdas/
+truncamento e 30 pares. A análise foi repetida após a saída e deu o mesmo
+resultado. Sequência:
+`game_menu` (despacho em `game+0xd3596`), depois `map_enter` (caller
+`prism3d+0xe01f`, `argc=2`, handler igual antes/depois) → despacho `map`
+aninhado → blocos de um processador NOVO (`game+0xcc78a`, profundidade até 4)
+→ init do caminhão novo `-10,-1,0,10` (caller `p3shared+0xc3ce`) →
+`map_return` com EAX 0 e argc/argv inalterados → done do caminhão antigo
+`-10,0,10` (caller `p3shared+0xc74c`), ainda no mesmo frame → primeiro draw
+novo três flushes depois. O contador de flushes ficou parado durante todo o
+callback (`callback_flush_delta=0`).
+
+**Conclusão:** a construção do mundo novo ocorre de forma síncrona dentro de
+`map` e a destruição do antigo ocorre logo após o retorno. `map_enter` é o
+ponto mais cedo observado com o mundo antigo intacto. Como nenhum flush ocorre
+no intervalo, liberar o visual dentro do callback NÃO satisfaz a política
+(≥8 flushes após ocultar). A automação exige ADIAR `map`: retornar sem
+executar, ocultar, aguardar flushes/referências e despachar o original uma
+vez. Esse é o desenho de `deferred_load`, ainda não conectado ao jogo.
+Ressalvas desta captura: uma carga do menu e um save. Não comprova outros
+caminhos (carga direta, morte/novo jogo), o efeito de retornar sem executar
+o callback, nem o conteúdo de `argv[1]`.
+
+**Limpeza:** `session-stop --verify` restaurou os nove slots e deixou sete
+arquivos iguais (cinco originais, `meusave.sav` e `test_mp.sav`). Após o
+fechamento normal, a enumeração não encontrou o jogo e `session-verify`
+voltou a dar sete iguais. O primeiro `session-backup` recusou a pasta
+pré-criada (destino deve ser novo); o backup válido foi feito em
+`backup/` antes da carga.
+
+**Próximo:** conectar o adaptador `deferred_load` ao descritor real em modo
+ativo, primeiro na bancada: o `map_enter` retém os argumentos (incluindo
+`argv[1]` sem registrá-lo), retorna sem executar e despacha uma vez depois
+da liberação, verificando argc/argv globais, ABA do descritor e conflitos.
+Antes do jogo, definir recusa/fallback (encaminhar sem adiar) quando houver
+outro dono ou os pré-requisitos falharem. Não repetir reload retido até essa
+prova.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,

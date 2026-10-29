@@ -777,9 +777,13 @@ verifica nove slots. A análise offline produz `map_calls` com despacho do
 handler, primeiro init de outro ator, primeiro done do antigo, primeiro draw
 após retorno e flushes no intervalo, sem inferir causalidade; argc/argv
 alterados durante a chamada tornam a captura estruturalmente incompleta.
-Bancada própria apenas; ainda não executada no jogo. Para a sessão real,
-inserir `engine transition-map` logo após `engine transition-commands` no
-procedimento acima.
+Para a sessão real, inserir `engine transition-map` logo após
+`engine transition-commands` no procedimento acima. `session-backup` exige
+uma pasta NOVA: não crie o destino antes. A primeira captura real passou
+(menu → carregar save, 68 eventos íntegros): blocos e init do caminhão novo
+ocorreram DENTRO de `map`, sem nenhum flush, e o done do antigo logo após o
+retorno. Portanto não se pode liberar o visual dentro do callback; a
+automação depende de adiar o comando. Ver o registro no roadmap.
 
 ### Preservar e analisar uma captura de transição
 

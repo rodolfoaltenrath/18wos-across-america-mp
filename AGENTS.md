@@ -418,4 +418,12 @@ diagnóstico. Registra argc/argv/handler e somente `argv[0]`; `argv[1..]`
 nunca é lido. Chamadas em curso bloqueiam remoção/arm; `session-stop` verifica
 nove slots. `transition_analysis` gera `map_calls`, sem autorizar automação.
 81 testes nativos/84 x86 sob Proton, builds release, Clippy e rustfmt passaram.
-Sem captura real ainda: incluir na próxima sessão agrupada, sem visual retido.
+Captura real passou (Fedora/Proton, PID histórico 428/thread 432, sem visual):
+auditoria `commands` com 33 comandos, `map` conforme o perfil; o thunk
+`+0xd2e90` atende oito comandos. Snapshot de 68 eventos íntegros: novos
+blocos e init `-10,-1,0,10` do caminhão novo DENTRO de `map`, zero flushes,
+done antigo `-10,0,10` logo após o retorno. Nove slots e sete hashes conferidos
+antes e depois da saída; nenhuma DLL residente. Liberar dentro de `map` está
+descartado; próximo passo é adiar `map` com `deferred_load` na bancada, com
+fallback para encaminhar. Não repetir reload retido. Artefatos em
+target/analysis/transition-map-fedora-20261028-01 (ignorado).
