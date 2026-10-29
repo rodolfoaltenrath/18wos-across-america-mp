@@ -2725,6 +2725,31 @@ velocidade do veículo novos nem offset aplicado à interpolação. Não altera 
 validade histórica das provas v1 nem comprova os outros cinco comandos do gate.
 A próxima prova prática deve agrupar os fluxos do jogo e LAN, quando disponível.
 
+### M5/M8 — Previsão limitada após rajadas UDP — 29/10/2026
+
+Regressão própria reproduziu duas poses separadas por 100 cm, recebidas com
+1 microssegundo de diferença: o código anterior aceitava o par e previa
+20.000.100 cm ao extrapolar 200 ms. O teste falhou antes da correção, sem jogo.
+A previsão agora usa o mesmo intervalo mínimo de um tick (1/60 s) empregado
+na detecção de teleporte: esse caso produz 1.300 cm. Não é medição de velocidade
+do caminhão; a janela de extrapolação continua em 200 ms e o atraso em 100 ms.
+
+Timestamps iguais substituem a última pose sem formar um par de velocidade;
+histórico rejeita timestamps/coordenadas/quaternions inválidos. Consultas não
+finitas não geram pose. Distância, interpolação e previsão usam intermediários
+f64, evitando overflow ao subtrair coordenadas f32 finitas extremas; uma previsão
+não representável conserva a pose mais recente. Read path continua sem alocação.
+Três regressões em `interpolation_burst` cobrem esses comportamentos.
+
+Não altera wire/ABI/hooks, nem aplica offset de relógio de rede ao render.
+Suavidade percebida no jogo, veículos distintos na LAN e sessões longas continuam
+pendentes de prova prática. `dev_env verify` passou no Windows: 119 testes x86,
+128 nativos x64, releases dos dois alvos, Clippy e rustfmt. Log ignorado:
+`target/analysis/verify-windows-20261029-interpolation.log`; a falha anterior
+da regressão está em `interpolation-burst-before.log`. O helper foi executado
+de uma cópia local para permitir atualizar seu próprio executável no Windows;
+a correção permanente desse fluxo fica no bloco seguinte. Não houve jogo.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,

@@ -18,6 +18,8 @@ pub const DELAY: f64 = 0.1;
 pub const MAX_EXTRAPOLATION: f64 = 0.2;
 /// Faster implied motion (cm/s, ~720 km/h) is treated as a teleport: snap.
 pub const TELEPORT_SPEED: f32 = 20_000.0;
+/// A receive burst cannot measure velocity faster than the nominal source tick.
+pub const MIN_SAMPLE_INTERVAL: f64 = 1.0 / multiplayer_server::protocol::TICK_HZ as f64;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Sample {
@@ -27,13 +29,34 @@ pub struct Sample {
     pub rotation: [f32; 4],
 }
 
+impl Sample {
+    fn valid(self) -> bool {
+        self.at.is_finite()
+            && self.at >= 0.0
+            && self.position.into_iter().all(f32::is_finite)
+            && multiplayer_server::protocol::Rotation {
+                x: self.rotation[0],
+                y: self.rotation[1],
+                z: self.rotation[2],
+                w: self.rotation[3],
+            }
+            .is_valid()
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct History(VecDeque<Sample>);
 
 impl History {
-    /// Append in receive order; older or equal timestamps replace nothing.
+    /// Ignore invalid/older samples; equal receive times retain only the latest pose.
     pub fn push(&mut self, sample: Sample) {
-        if self.0.back().is_some_and(|last| sample.at < last.at) {
+        if !sample.valid() || self.0.back().is_some_and(|last| sample.at < last.at) {
+            return;
+        }
+        if let Some(last) = self.0.back_mut()
+            && sample.at == last.at
+        {
+            *last = sample;
             return;
         }
         if self.0.len() == HISTORY {
@@ -57,10 +80,15 @@ impl History {
 }
 
 fn lerp(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
-    std::array::from_fn(|i| a[i] + (b[i] - a[i]) * t)
+    std::array::from_fn(|i| {
+        (f64::from(a[i]) + (f64::from(b[i]) - f64::from(a[i])) * f64::from(t)) as f32
+    })
 }
-fn distance(a: [f32; 3], b: [f32; 3]) -> f32 {
-    (0..3).map(|i| (b[i] - a[i]).powi(2)).sum::<f32>().sqrt()
+fn distance(a: [f32; 3], b: [f32; 3]) -> f64 {
+    (0..3)
+        .map(|i| (f64::from(b[i]) - f64::from(a[i])).powi(2))
+        .sum::<f64>()
+        .sqrt()
 }
 /// Normalized linear quaternion blend along the shorter arc.
 pub fn nlerp(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
@@ -75,8 +103,10 @@ pub fn nlerp(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
     }
 }
 fn teleport(a: &Sample, b: &Sample) -> bool {
-    let dt = (b.at - a.at) as f32;
-    dt <= 0.0 || distance(a.position, b.position) > TELEPORT_SPEED * dt.max(1.0 / 60.0)
+    let dt = b.at - a.at;
+    dt <= 0.0
+        || distance(a.position, b.position)
+            > f64::from(TELEPORT_SPEED) * dt.max(MIN_SAMPLE_INTERVAL)
 }
 
 /// Samples must be in non-decreasing time order.
@@ -84,6 +114,10 @@ pub fn pose_at(
     samples: impl DoubleEndedIterator<Item = Sample> + Clone,
     t: f64,
 ) -> Option<([f32; 3], [f32; 4])> {
+    if !t.is_finite() {
+        return None;
+    }
+    let samples = samples.filter(|sample| sample.valid());
     let mut previous: Option<Sample> = None;
     for s in samples.clone() {
         if s.at >= t {
@@ -104,14 +138,21 @@ pub fn pose_at(
     // Past the newest sample: bounded linear prediction from the last two.
     let mut newest = samples.rev();
     let last = newest.next()?;
-    let ahead = (t - last.at).min(MAX_EXTRAPOLATION) as f32;
+    let ahead = (t - last.at).clamp(0.0, MAX_EXTRAPOLATION);
     match newest.next() {
         Some(before) if !teleport(&before, &last) => {
-            let dt = (last.at - before.at) as f32;
-            let velocity: [f32; 3] =
-                std::array::from_fn(|i| (last.position[i] - before.position[i]) / dt);
+            let dt = (last.at - before.at).max(MIN_SAMPLE_INTERVAL);
+            let position: [f32; 3] = std::array::from_fn(|i| {
+                (f64::from(last.position[i])
+                    + (f64::from(last.position[i]) - f64::from(before.position[i])) / dt * ahead)
+                    as f32
+            });
             Some((
-                std::array::from_fn(|i| last.position[i] + velocity[i] * ahead),
+                if position.into_iter().all(f32::is_finite) {
+                    position
+                } else {
+                    last.position
+                },
                 last.rotation,
             ))
         }

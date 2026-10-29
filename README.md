@@ -1212,6 +1212,9 @@ remoto envelhecer, sem afirmar que um caminhão foi ocultado pelo render real.
   de posição e de quaternion pelo arco curto (nlerp). Se faltar amostra, prevê
   no máximo 200 ms à frente. Acima de 20.000 cm/s implícitos, salta direto ao
   destino (teleporte). Sem amostra há mais de 1 s, não desenha.
+  A previsão usa intervalo mínimo de um tick (1/60 s), pois pacotes recebidos
+  juntos não medem velocidade física. Timestamps iguais conservam só a última
+  pose; amostras inválidas são recusadas e os cálculos evitam overflow de f32.
 - **Vários remotos:** `--player all` desenha cada remoto fresco com a mesma
   instância (até 16 por frame). `engine remotes` lista ID, sequência, idade,
   amostras, posição e rotação.

@@ -542,3 +542,12 @@ Perfil errado recusado; servidor acabou sem peers. Artefatos session-v2-* em
 target/analysis, ignorados. Nenhum auxiliar ficou aberto. Sem jogo/Linux/LAN
 entre PCs ou prova nova dos cinco comandos. Autenticação/economia, relógio de
 render, modelo/velocidade e sessões longas continuam pendentes.
+
+M5/M8 offline: regressão de rajada UDP reproduziu extrapolação de 20.000.100 cm
+a partir de 100 cm recebidos em 1 microssegundo. Corrigido denominador mínimo
+de 1/60 s (mesmo critério de teleporte), timestamp igual substitui a última pose,
+rejeição de amostras inválidas e intermediários f64/fallback finito. Mantidos
+100 ms de atraso e 200 ms de previsão, sem aplicar offset de rede ao render.
+`dev_env verify` Windows passou: 119 x86/128 nativos, release/Clippy/rustfmt.
+Sem jogo ou LAN. Executou-se uma cópia do helper em target/analysis para não
+bloquear sua própria atualização; corrigir esse fluxo ao modificar asset_tools.
