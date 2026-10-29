@@ -967,10 +967,8 @@ jogo, carregue o save e deixe a janela em primeiro plano. Em outro terminal:
 multiplayer_server --bind 0.0.0.0:39000
 mp_launcher.exe --pid PID --dll CAMINHO\client_dll.dll session-start --server IP:39000 --backup target\analysis\sessao-NOVA
 mp_launcher.exe --pid PID --dll CAMINHO\client_dll.dll session-status
-mp_launcher.exe --pid PID --dll CAMINHO\client_dll.dll session-prepare-load
-# Somente após prepared=true: carregar um save existente no jogo.
-# Depois de voltar à partida:
-mp_launcher.exe --pid PID --dll CAMINHO\client_dll.dll engine visual-show --player all --offset 400 0 0 --shader models/ai/truck/shaders/truck.shd
+# Carregar um save pelo menu: o gate libera, carrega e recria (ver abaixo).
+mp_launcher.exe --pid PID --dll CAMINHO\client_dll.dll session-status
 mp_launcher.exe --pid PID --dll CAMINHO\client_dll.dll session-stop --verify target\analysis\sessao-NOVA
 ```
 
@@ -985,14 +983,64 @@ Depois disso, feche o jogo normalmente: a DLL fica fixada até ele encerrar.
 parada, mantendo rede e sondas. Aguarde `prepared=true` antes de abrir/carregar
 o save. A primeira tentativa de reload com a instância retida terminou em
 violação de acesso; detectar a nova entidade depois da recarga não protege os
-recursos durante a destruição do mundo antigo. Este procedimento é um contorno
-para investigar a transição, não uma correção comprovada da recarga automática.
+recursos durante a destruição do mundo antigo. Com `--no-load-gate`, esse
+preparo manual continua obrigatório antes de carregar. Com o gate (padrão),
+a carga pelo menu é adiada automaticamente; ver a seção seguinte. O gate
+ainda não foi validado no jogo.
 Para testar num só PC, inicie o servidor com `--echo`: ele também devolve a
 cada cliente a própria pose como o jogador `1000000000 + id`. Com
 `session-start --server 127.0.0.1:39000 --offset 400 0 0`, o seu caminhão
 aparece espelhado 4 m ao lado. O caminho passa por rede, histórico,
 interpolação (100 ms atrás) e desenho. Sem `--echo`, use dois PCs na LAN, cada
 um com sua sessão apontando para o mesmo servidor.
+
+### Carregamento com o visual ativo (gate de `map`)
+
+`session-start` agora instala também o **gate ativo de `map`** (comandos
+54–57, mesma ABI v3/664), depois do draw e antes de `visual-show`. Use
+`--no-load-gate` para voltar ao procedimento manual e `--load-timeout SEG`
+(padrão 120, 1–600) para o prazo entre o pedido de carga e a recriação.
+Com o gate instalado não é preciso rodar `session-prepare-load`. Basta
+carregar um save pelo menu do jogo:
+
+1. o comando `map <save>` chega ao descritor perfilado (`game+0x1573c4`+4);
+   com o visual alocado, o hook copia argc/argv (no máximo 32 argumentos,
+   4096 bytes), oculta o visual e **não executa** a carga naquele instante;
+2. no pump (`PeekMessageA`, profundidade 1, fora de `cmd_execute`), o gate
+   espera a mesma política de liberação (≥8 flushes e item `[1,1,0]`) e
+   libera a instância;
+3. publica argc e um argv próprios em `prism3d+0x778f0/+0x778f4` e chama
+   o callback original uma vez, exatamente como `cmd_execute`
+   (`prism3d+0xe010..0xe01c`). Depois, restaura os words se ainda forem
+   seus. O argv reexecutado fica alocado até o fim do processo;
+4. quando o draw observa um ator novo, recria o visual com os mesmos
+   parâmetros de `visual-show`, se ele estava visível no pedido.
+
+Sem visual alocado, a chamada é encaminhada sem mudança. Um segundo pedido
+enquanto há outro em andamento é descartado (`swallowed_busy`). Uma chamada
+aninhada durante a reexecução é encaminhada (`replay_nested`). Com argumentos
+ilegíveis ou sem testemunha de mundo, o pedido é descartado e o visual é
+liberado sem carregar (`dropped`/`fallback_releases`). Nesse caso, carregue de
+novo. Se o prazo vencer antes da execução, nada é carregado nem liberado
+(`phase=recoverable`, `reason=deadline_expired`). O próximo pedido assume a
+restauração pendente. Para ver o estado, use `session-status` (campo
+`load_gate`) ou `engine load-gate-status`. Os nomes dos saves nunca são
+registrados.
+
+`session-stop` e `session-prepare-load` aguardam o gate assentar antes de
+liberar; `session-stop` remove o gate antes das sondas. `engine
+load-gate-attach [--timeout SEG]` e `engine load-gate-remove` existem para
+uso avulso: instale depois de pump/render/draw. A remoção é recusada enquanto
+um carregamento adiado estiver ativo. A sonda passiva `transition-map` e o
+gate são mutuamente exclusivos no mesmo descritor.
+
+**Limites:** validado apenas na bancada própria (fixture com callback cdecl,
+argv destruído após o retorno, troca de ator e contagem de instâncias PSM
+vivas no momento da carga). Ainda não foi executado no jogo. Somente `map`
+passa pelo gate: `quit`, `exit`, `edit`, `preview`, novo jogo ou outros
+caminhos de carga não são interceptados. Rode `session-stop` antes de fechar o
+jogo, como antes. `automatic_load_supported` continua `false` até a validação
+real.
 
 ### Comportamento do caminhão remoto (referência)
 

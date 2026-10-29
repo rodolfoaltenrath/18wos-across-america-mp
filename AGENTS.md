@@ -427,3 +427,16 @@ antes e depois da saída; nenhuma DLL residente. Liberar dentro de `map` está
 descartado; próximo passo é adiar `map` com `deferred_load` na bancada, com
 fallback para encaminhar. Não repetir reload retido. Artefatos em
 target/analysis/transition-map-fedora-20261028-01 (ignorado).
+
+Gate ativo de `map` entregue na bancada (commit `fe52021`, comandos 54–57, ABI
+v3/664): com o visual alocado, o hook em `descritor map+4` copia argc/argv,
+oculta e NÃO executa; o pump libera pela política, publica argc/argv próprios
+em `prism3d+0x778f0/+0x778f4` e chama o original uma vez (contrato estático de
+`cmd_execute` `+0xe010..0xe01c`), depois recria o visual quando o draw vê um
+ator novo. Sem visual, encaminha. `session-start` instala por padrão
+(`--no-load-gate`, `--load-timeout`); stop/prepare aguardam quiescência.
+`map_gate_workflow` cobre onze cenários; 84 nativos/88 x86, Clippy e rustfmt.
+NÃO testado no jogo: `automatic_load_supported=false`. Só `map` passa pelo gate
+(não quit/exit/novo jogo); manter `session-stop` antes de fechar. Próximo:
+sessão real agrupada com eco (roadmap "Gate ativo de `map`"); se falhar, voltar
+a `--no-load-gate` + `session-prepare-load`.

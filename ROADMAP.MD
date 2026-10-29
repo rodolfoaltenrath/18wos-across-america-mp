@@ -2299,6 +2299,102 @@ Antes do jogo, definir recusa/fallback (encaminhar sem adiar) quando houver
 outro dono ou os pré-requisitos falharem. Não repetir reload retido até essa
 prova.
 
+### M4 — Gate ativo de `map`: adiar, liberar, reexecutar e recriar — 28/10/2026
+
+O proprietário pediu a implementação completa do adiamento, com autonomia
+para aprofundar e commitar. O bloco foi desenvolvido e validado na bancada,
+sem abrir o jogo.
+
+**Evidência estática que fundamenta a reexecução:**
+- `cmd_execute` (`prism3d+0xdf40`) monta argv no próprio frame. Em
+  `+0xdff6` procura o descritor; em `+0xe010/+0xe016` grava argc em
+  `+0x778f0` e o ponteiro do array em `+0x778f4`; em `+0xe01c` chama
+  `[descritor+4]`; depois define AL=1, ignorando EAX. Os globais não são
+  limpos.
+- O ramo `map` do handler (`game+0xd365e`) compara `argv[0]`, exige
+  `cmd_argc ≥ 2` e lê `argv[1]` pelo binding `cmd_argv` (`core+0xe210`, que
+  só lê `[+0x778f4]`).
+- O loop de mensagens do núcleo (`prism3d+0x14721..0x147cb`) contém os três
+  callsites perfilados do pump. Ali não há `cmd_execute` ativo.
+
+Reexecutar = publicar argc/argv próprios e chamar o callback original uma vez,
+no pump. Nada usa `cmd_add` nem reconstrói texto.
+
+**Entregue:**
+- `load_gate` (portável): decisão do hook, com esta ordem: thread estrangeira
+  → encaminha; aninhado na reexecução → encaminha; job ativo → descarta
+  duplicata; argc<2 → encaminha (no-op no handler); sem visual → encaminha;
+  senão adia. Também traz o status v3 (`frames[0..24]`, schema `LGT1`) e
+  códigos de razão.
+- `engine_load_gate` (x86): CAS em `descritor+4` com VirtualProtect, preflight
+  `map_observer_slot`, exclusão mútua com `transition-map`, contagem de
+  chamadas em voo e shim cdecl naked que preserva LastError/pilha. Na
+  admissão, `OwnedCommand::capture`, testemunha de mundo (ator do draw, época
+  de atores distintos, cena do handler `+0x14c`) e um job `deferred_load::Gate`.
+  No pump: Hide/Check (um por passada)/Release/Execute/Recreate. A
+  reexecução é feita sem o lock do gate. O argv próprio fica retido até o
+  fim do processo, porque não há prova de que o jogo solte o ponteiro do
+  nome do save.
+- `deferred_load`: `Ack::ReleaseRefused` → Recoverable; `discard_terminal`
+  devolve a fase e a restauração pendente (herdada pelo próximo pedido);
+  `active`; `validate_execute` pub(crate).
+- `engine_visual`: época de atores, `suspend_for_load`, `release_for_load`,
+  `recreate_for_load`. `visual-show` e a manutenção automática recusam/pulam
+  enquanto o gate estiver ocupado.
+- Launcher: `engine load-gate-attach [--timeout]`, `load-gate-status` e
+  `load-gate-remove`. `session-start` instala o gate por padrão
+  (`--no-load-gate`, `--load-timeout`); `session-status` inclui `load_gate`;
+  `session-stop`/`session-prepare-load` aguardam a quiescência, e o stop
+  remove o gate antes das sondas.
+
+**Validação (Fedora, bancada):** 84 testes nativos e 88 x86 sob Proton
+(`test_host`, prefixo próprio), builds release, Clippy nativo/x86 e rustfmt.
+`map_gate_workflow` usa DLL e launcher reais sobre a fixture. A fixture
+invoca o descriptor como `cmd_execute`, destrói o argv de origem após o
+retorno e, durante a carga, conta instâncias PSM vivas e draws pendentes.
+Passaram onze cenários:
+1. adiamento com zero cargas inseguras e reexecução única (EAX
+   `0xfedcba98`, argc/argv restaurados);
+2. duplicata no mesmo frame descartada;
+3. `map` aninhado durante a carga encaminhado;
+4. visual oculto pelo usuário: liberado, sem recriação;
+5. sem visual: carga síncrona;
+6. argc 1 encaminhado;
+7. argumento ilegível: pedido descartado e visual liberado sem carga;
+8. draws retidos: prazo vencido, sem carga nem liberação; o pedido seguinte
+   herda a restauração e completa;
+9. segunda instalação e `transition-map` recusadas;
+10. `session-stop` libera e remove o gate;
+11. descritor restaurado (carga direta depois) e saída limpa da fixture.
+
+`session_workflow` atualizado para 8 etapas.
+
+**Limites/pendências:** nenhuma execução no jogo, então
+`automatic_load_supported=false`. Não comprovado:
+- reexecutar `map` a partir do pump no jogo real (UI do menu, tela de
+  carregamento, PeekMessage aninhado);
+- que o ator observado após a carga seja o caminhão novo do jogador em
+  todos os caminhos.
+
+Somente `map` passa pelo gate: `quit`/`exit`/`edit`/`preview`, novo jogo e
+morte/reinício não. Continuar rodando `session-stop` antes de fechar. A
+cena do handler deve permanecer estável no mundo antigo; uma troca antes da
+execução coloca o job em quarentena sem carregar. O crash original com
+visual retido não foi explicado, apenas evitado pela ordem nova.
+
+**Próximo:** uma sessão real agrupada com eco num PC:
+- `session-start --server 127.0.0.1:39000 --offset 400 0 0 --backup NOVA`;
+- dirigir;
+- carregar `test_mp` pelo menu SEM `session-prepare-load`, observando
+  `session-status.load_gate` (fase → idle, `replays=1`, `recreated=1`) e o
+  caminhão espelhado de volta;
+- repetir a carga;
+- `session-stop --verify`;
+- fechar o jogo e rodar `session-verify`.
+
+Se o jogo fechar ou travar, registrar o estado e voltar a
+`--no-load-gate` + `session-prepare-load`.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -2964,6 +3060,12 @@ Referências oficiais: [publicar código local no GitHub](https://docs.github.co
 e [seleção de toolchain com rustup](https://rust-lang.github.io/rustup/overrides.html).
 
 ## 9. Registro de passagem para a próxima etapa
+
+**Atualização 28/10 (gate de `map`):** a liberação/recriação automática na
+carga pelo menu está implementada e validada na bancada (ver "Gate ativo de
+`map`"). O próximo passo é a sessão real agrupada descrita nessa seção, com
+eco num PC e depois LAN. Até validar, `--no-load-gate` + `session-prepare-load`
+continuam como contorno conhecido. O texto abaixo é histórico.
 
 **Próxima entrega:** comprovar uma fase de lifecycle anterior à destruição do
 mundo e automatizar a liberação/recriação nessa transição. A textura com luz
