@@ -447,3 +447,10 @@ proprietário viu o caminhão espelhado voltar com textura. Stop: nove slots,
 sete hashes; jogo fechado, `session-verify` igual, servidor parado. Próximo:
 `quit`/`exit` pelo mesmo mecanismo e LAN com dois PCs. Janela sem foco congela
 render/rede (não é falha do gate).
+Gate estendido (commit `d98efb6`) a `preview`/`edit`/`exit`/`menu`/`quit`: o
+mesmo handler apaga a cena nesses ramos (estático; `game_menu`/`pause` não).
+Classifica por argv[0]; sem mundo de jogador, o job conclui no retorno e o visual é
+recriado no próximo ator distinto (`restore_pending`); `quit` nunca restaura.
+87 nativos/91 x86, Clippy e rustfmt; cenário `exit`→menu→`map` na fixture.
+Sem teste no jogo desses cinco. Próximo: sessão real agrupada (exit, carga do
+menu principal, quit com visual) e depois LAN com dois PCs.

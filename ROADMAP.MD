@@ -2442,6 +2442,66 @@ O contorno `--no-load-gate` + `session-prepare-load` fica como fallback.
 mundo (`quit`/`exit`, que compartilham o thunk) ou registrar por que não é
 necessário. Em seguida, LAN com dois PCs (M3/M5).
 
+### M4 — Gate estendido aos seis comandos que apagam a cena — 28/10/2026
+
+Continuação autorizada pelo proprietário após a validação real do `map`.
+Desenvolvido e validado na bancada, sem abrir o jogo.
+
+**Análise estática do handler `game+0xd3570`** (strings resolvidas com
+`engine_report string`):
+- O ramo é escolhido por `strcmp(argv[0], ...)`: `quit` (+0x14b0e4), `map`,
+  `preview` (+0x157454), `exit` (+0x152468), `edit` (+0x15744c), `pause`,
+  `menu` (+0x14bbf8) e `game_menu`.
+- `quit` apaga a cena, desregistra sete descritores (`cmd_unregister`, entre
+  eles `map`) e chama a saída do núcleo.
+- `map`/`preview`/`edit`/`menu` apagam a cena e criam outra. `preview` e
+  `map` retornam antes disso com argc<2 (`+0xd38db`/`+0xd367f`).
+- `exit` apaga a cena e depois executa `menu` por `[game+0x160ef8]`.
+- `game_menu` e `pause` não chamam `0xcc4a0` nem o destrutor da cena.
+- Todos usam o mesmo thunk, com descritores distintos (`+0x1573b4..0x157424`).
+
+**Entregue:**
+- `load_gate::WorldCommand` (classificação, argc mínimo, `awaits_player`
+  só para `map`, `restorable` exceto `quit`) e `Note::Unclassified`.
+- Status com `last_command` e `restore_pending`. A restauração pendente não
+  bloqueia `session-stop`.
+- `OwnedCommand::world`/`capture_world` (argc ≥1, argv[0] entre os seis);
+  `Gate::admit_with(await_world)`. Sem `await_world`, o job conclui com
+  `ExecuteReturned` e nunca recria.
+- `command_registry::command_slot` genérico (nome exato com NUL, hash,
+  callback, cabeçalho estável). `map_observer_slot` passou a delegar a ele.
+- `engine_load_gate`:
+  - até seis slots, cada um exigido no registro com o callback/hash do perfil;
+  - rollback dos já trocados se uma troca falhar;
+  - classificação por argv[0] (até 15 bytes);
+  - reexecução só se todos os slots ainda forem do gate;
+  - restauração no próximo ator distinto após comandos sem mundo de jogador
+    (época registrada na conclusão);
+  - herança da restauração entre jobs descartados.
+- Fixture: descritor `exit` próprio (`page+0xa0`, hash 442, mesmo callback)
+  e estado sem jogador (nenhum draw) até um `map` posterior.
+
+**Validação (Fedora, bancada):** 87 testes nativos e 91 x86 sob Proton,
+builds release, Clippy nos dois alvos e rustfmt. O `map_gate_workflow`
+ganhou o cenário 10: `exit` com o visual visível foi adiado e liberado antes
+da execução (zero cargas inseguras); job ocioso no retorno, visual
+`state=0`, `restore_pending=true`; nada recriado no menu sem jogador; `map`
+encaminhado (sem visual) e visual restaurado ao desenhar o ator novo.
+`map_transition_workflow` e `session_workflow` continuam passando.
+
+**Limites:**
+- Sem teste no jogo dos cinco comandos novos. Em especial, falta comprovar
+  que `quit` reexecutado a partir do pump encerra normalmente e que o menu
+  principal não desenha um `actors.car` que dispare a restauração antes da
+  hora (se desenhar, a restauração ainda é segura porque o próximo `map`
+  volta a ser adiado).
+- Fechar a janela, novo jogo e morte/reinício não foram mapeados.
+
+**Próximo:** agrupar numa sessão real, com eco: `exit` para o menu principal
+com o visual visível, carregar `test_mp` a partir do menu (restauração),
+outra carga no jogo e, por fim, `quit` pelo menu com o visual visível,
+seguido de `session-verify` após a saída. Em seguida, LAN com dois PCs.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -3111,7 +3171,9 @@ e [seleção de toolchain com rustup](https://rust-lang.github.io/rustup/overrid
 **Atualização 28/10 (gate de `map`):** a liberação/recriação automática na
 carga pelo menu foi implementada e VALIDADA no jogo com eco: duas cargas, o
 caminhão espelhado voltou, sem crash e com slots/hashes conferidos (ver "Gate
-de `map` validado no jogo"). Próximo: `quit`/`exit` e LAN com dois PCs.
+de `map` validado no jogo"). Os cinco outros comandos que apagam a cena
+(`preview`/`edit`/`exit`/`menu`/`quit`) já passam pelo gate na bancada; falta
+testar no jogo (ver "Gate estendido"). Depois, LAN com dois PCs.
 `--no-load-gate` + `session-prepare-load` ficam como fallback. O texto abaixo é histórico.
 
 **Próxima entrega:** comprovar uma fase de lifecycle anterior à destruição do

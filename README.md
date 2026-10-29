@@ -994,7 +994,7 @@ aparece espelhado 4 m ao lado. O caminho passa por rede, histórico,
 interpolação (100 ms atrás) e desenho. Sem `--echo`, use dois PCs na LAN, cada
 um com sua sessão apontando para o mesmo servidor.
 
-### Carregamento com o visual ativo (gate de `map`)
+### Carregamento e saída com o visual ativo (gate de comandos)
 
 `session-start` agora instala também o **gate ativo de `map`** (comandos
 54–57, mesma ABI v3/664), depois do draw e antes de `visual-show`. Use
@@ -1027,6 +1027,21 @@ restauração pendente. Para ver o estado, use `session-status` (campo
 `load_gate`) ou `engine load-gate-status`. Os nomes dos saves nunca são
 registrados.
 
+**Outros comandos que apagam a cena.** O mesmo handler (`game+0xd3570`, thunk
+`+0xd2e90`) apaga a cena (`this+0x14c` via `0xcc4a0` e destrutor) em `map`,
+`preview`, `edit`, `exit`, `menu` e `quit`. `game_menu` e `pause` não apagam
+a cena. O gate instala o mesmo shim nos seis descritores. Na partida, todos
+precisam estar registrados com o callback perfilado e o hash correto, ou a
+instalação é recusada. O comando é identificado pelo `argv[0]`, que o
+`cmd_execute` publica antes da chamada (até 15 bytes). `map` e `preview` com
+argc<2 só retornam no handler e são encaminhados. Depois de
+`exit`/`menu`/`edit`/`preview` não há mundo de jogador: o job termina no
+retorno (`restore_pending=true`) e o visual é recriado quando o draw vê o
+próximo ator novo, por exemplo ao carregar um save a partir do menu principal.
+Depois de `quit` nada é restaurado. `exit` chama `menu` por dentro; essa
+chamada aninhada é encaminhada. O status traz `last_command`. Fechar a janela
+(Alt+F4/X) pode não passar por `quit` e continua sem cobertura.
+
 `session-stop` e `session-prepare-load` aguardam o gate assentar antes de
 liberar; `session-stop` remove o gate antes das sondas. `engine
 load-gate-attach [--timeout SEG]` e `engine load-gate-remove` existem para
@@ -1039,10 +1054,11 @@ menu com o caminhão espelhado visível, que voltou nas duas, sem crash, com nov
 slots e sete hashes conferidos. Antes disso, foi validado na bancada própria
 (fixture com callback cdecl, argv destruído após o retorno, troca de ator e
 contagem de instâncias PSM vivas no momento da carga). LAN e sessões longas
-pendentes; mantenha a janela em primeiro plano. Somente `map`
-passa pelo gate: `quit`, `exit`, `edit`, `preview`, novo jogo ou outros
-caminhos de carga não são interceptados. Rode `session-stop` antes de fechar o
-jogo, como antes. `automatic_load_supported` continua `false` até ampliar a matriz.
+pendentes; mantenha a janela em primeiro plano. A cobertura de
+`preview`/`edit`/`exit`/`menu`/`quit` foi validada só na bancada (descritor
+`exit` próprio, menu sem jogador, restauração após `map`), sem teste no jogo.
+Novo jogo, morte/reinício e fechar a janela não são interceptados. Continue
+rodando `session-stop` antes de fechar o jogo. `automatic_load_supported` continua `false` até ampliar a matriz.
 
 ### Comportamento do caminhão remoto (referência)
 
