@@ -8,6 +8,7 @@ use client_dll::{
     draw_observation::{Remote, Visual},
     inspection::process::Process,
     profile,
+    release_policy::{Refusal, Report as ReleaseReport},
 };
 use serde_json::{Value, json};
 use std::{
@@ -204,32 +205,50 @@ fn verify_slots(pid: u32) -> Result<Vec<Value>> {
 pub fn prepare_load(c: &Controller, dll: &Path, timeout: Duration) -> Result<Value> {
     let mut refusals: Vec<String> = Vec::new();
     let mut attempts = 0;
+    let mut checks = 0;
+    let mut last_check = None;
     let visual = Visual::decode(&engine(c, dll, EngineControl::new(api::VISUAL_STATUS))?);
     if visual.state == 1 {
         engine(c, dll, EngineControl::new(api::VISUAL_HIDE))?;
         let deadline = Instant::now() + timeout;
         loop {
-            attempts += 1;
-            match engine(c, dll, EngineControl::new(api::VISUAL_RELEASE)) {
-                Ok(_) => break,
-                Err(e) => {
-                    let message = e.to_string();
+            checks += 1;
+            let report =
+                ReleaseReport::decode(&engine(c, dll, EngineControl::new(api::VISUAL_CHECK))?)
+                    .map_err(anyhow::Error::msg)?;
+            let reason = report.refusal;
+            last_check = Some(serde_json::to_value(&report)?);
+            match reason {
+                Some(Refusal::NotAllocated) => break,
+                None => {
+                    attempts += 1;
+                    // The DLL repeats all checks, on the loop, immediately before free.
+                    engine(c, dll, EngineControl::new(api::VISUAL_RELEASE))
+                        .context("release did not confirm completion after preflight; do not load; inspect current state before retry")?;
+                    break;
+                }
+                Some(reason) if reason.retryable() => {
+                    let message = reason.to_string();
                     if !refusals.contains(&message) {
                         refusals.push(message);
                     }
-                    if Instant::now() >= deadline {
-                        bail!(
-                            "visual not released after {attempts} attempts: {refusals:?}; keep the game in the foreground and retry session-stop"
-                        );
-                    }
-                    std::thread::sleep(Duration::from_millis(200));
                 }
+                Some(reason) => bail!(
+                    "cannot prepare load: {reason}; do not load. Release evidence: {last_check:?}"
+                ),
             }
+            if Instant::now() >= deadline {
+                bail!(
+                    "visual not released after {checks} checks/{attempts} release attempts: {refusals:?}; keep the game in the foreground and retry session-prepare-load. Evidence: {last_check:?}"
+                );
+            }
+            std::thread::sleep(Duration::from_millis(200));
         }
     }
     Ok(
         json!({"released": visual.state == 1, "release_attempts": attempts,
-        "refusals": refusals, "prepared": true}),
+        "refusals": refusals, "preflight_checks": checks, "last_release_check": last_check,
+        "prepared": true}),
     )
 }
 

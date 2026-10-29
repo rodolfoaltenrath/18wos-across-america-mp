@@ -35,6 +35,9 @@ static FLUSHES: AtomicU32 = AtomicU32::new(0);
 static POOLS: AtomicU32 = AtomicU32::new(0);
 static FOREIGN: AtomicU32 = AtomicU32::new(0);
 static DEPTH: AtomicU32 = AtomicU32::new(0);
+pub(crate) fn callback_depth() -> u32 {
+    DEPTH.load(Ordering::Acquire)
+}
 static CAPTURING: AtomicBool = AtomicBool::new(false);
 static LOST: AtomicBool = AtomicBool::new(false);
 static TRACE: Mutex<Trace> = Mutex::new(Trace::new());

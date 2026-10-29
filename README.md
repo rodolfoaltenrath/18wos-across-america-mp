@@ -816,6 +816,41 @@ depois de ocultar, de ≥8 flushes e com o contador de acesso do item em zero;
 se recusar, repita após alguns frames. `stop`/`pump-remove`/`render-remove`
 recusam enquanto a instância existir, e `draw-remove` enquanto estiver visível.
 
+### Conferir a liberação antes da carga (`visual-check`)
+
+Com o pump instalado, `engine visual-check` coleta um relatório somente de
+leitura na fila do loop. Não oculta, libera ou recria a instância. A janela
+deve continuar processando o loop. A saída inclui thread atual/proprietária,
+profundidades do pump/janela/draw/flush, contadores strong/residency/access,
+presença dos bindings e idades dos flushes de ocultação e último desenho.
+Exige o launcher e a DLL atualizados juntos; comando 51, ABI v3/664 preservada.
+
+`ready=true` descreve somente aquele instante no loop; `visual-release`
+repete as mesmas verificações imediatamente antes de liberar. Uma instância
+visível retorna `refusal=visible`. Depois de ocultar, `draws_pending` e
+`referenced` têm `retryable=true`; as demais recusas interrompem o preparo.
+Contadores ilegíveis permanecem desconhecidos, sem serem substituídos por
+zero. Não se libera dentro de draw/render/janela aninhados ou fora da thread
+e fase do loop, mesmo que os contadores pareçam livres.
+
+Os dois intervalos de flush são verificados separadamente, inclusive na volta
+do contador u32. Ordem ambígua (diferença superior a i32::MAX) recusa liberação.
+Um marcador separado mantém a guarda mesmo se a contagem de desenhos voltar
+a zero. Instâncias nunca desenhadas dispensam a espera, mas continuam exigindo
+os contadores `[1,1,0]` e bindings de liberação presentes.
+
+`session-prepare-load` usa essa checagem após ocultar, aguarda somente as
+recusas repetíveis e registra `preflight_checks` e `last_release_check`
+(snapshot ANTES da liberação). Erros de transporte/ABI ou outras recusas
+encerram a tentativa; não carregue o save sem `prepared=true`. Uma falha de
+controle pode deixar o resultado da operação indeterminado: consulte o estado
+antes de tentar novamente. Essa política também serve à parada da sessão.
+
+`automatic_load_supported` permanece false. O `map` observado no jogo não
+comprova a fase de liberação nem uma ABI para adiar/cancelar a carga. Este
+bloco não altera esse handler e mantém `session-prepare-load` antes da carga
+e `visual-show` depois. Não testar reload com visual retido.
+
 ### Teste no jogo com sessão (um comando)
 
 Compile e verifique tudo antes: `.\target\debug\dev_env.exe verify`. Abra o

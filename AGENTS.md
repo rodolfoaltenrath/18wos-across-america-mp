@@ -326,3 +326,18 @@ isso ainda não autoriza liberar dentro dele. Próximo: avaliar estado de
 render/referências e política de recusa/recuperação antes de automatizar;
 não inventar adiamento do comando nem repetir reload com visual retido.
 Manter o preparo manual. Outras cargas/menus, LAN e sessões longas pendentes.
+
+Bloco seguinte: `release_policy` compartilha as guardas com `visual-release`
+e `engine visual-check` (51, ABI v3/664). Preflight somente de leitura no loop,
+com thread/profundidades, contadores e idades de flush; não oculta/libera.
+Corrigidos wrap de flush (`max` numérico incorreto) e de contagem de desenhos
+(marcador separado). Recusas tipadas substituem busca de `retry` no texto;
+preparo/parada só aguardam flush/referências, outras falhas interrompem.
+`ready` vale só como snapshot, o release revalida e o relatório mantém
+`automatic_load_supported=false`. Nenhuma alteração no handler de `map`.
+Antes de automatizar, comprovar contexto/ordem e contrato de adiamento ou
+recusa da carga. Não esperar render dentro do handler nem chamar recursivamente.
+Manter o preparo explícito e não repetir reload com visual retido.
+Este bloco passou em 55 testes nativos/55 x86 sob Proton, builds release
+nativo/x86, Clippy nos dois alvos e rustfmt no Fedora. Sem novo teste no jogo
+nesse commit. Antes dos builds, a enumeração não encontrou o jogo.

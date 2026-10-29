@@ -37,6 +37,17 @@ static RESTORE: AtomicU32 = AtomicU32::new(0);
 static DEPTH: AtomicU32 = AtomicU32::new(0);
 static TASKS: Queue = Queue::new();
 struct DepthGuard(bool);
+pub(crate) fn release_context() -> crate::release_policy::Context {
+    crate::release_policy::Context {
+        current_thread: unsafe { GetCurrentThreadId() },
+        owner_thread: THREAD.load(Ordering::Acquire),
+        pump_installed: STATE.load(Ordering::Acquire) == 1,
+        pump_depth: DEPTH.load(Ordering::Acquire),
+        window_depth: crate::engine_bridge::window_depth(),
+        draw_depth: crate::engine_draw::callback_depth(),
+        render_depth: crate::engine_render::callback_depth(),
+    }
+}
 impl Drop for DepthGuard {
     fn drop(&mut self) {
         if self.0 {

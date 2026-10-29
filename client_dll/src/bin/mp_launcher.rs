@@ -146,6 +146,8 @@ fn main() -> anyhow::Result<()> {
         /// Frees the instance only after queued draws were flushed.
         VisualRelease,
         VisualStatus,
+        /// Read-only release checks on the proven outer loop; does not hide/free.
+        VisualCheck,
         /// List relayed players (ids for visual-show --player).
         Remotes,
         PhaseProbe,
@@ -395,6 +397,7 @@ fn main() -> anyhow::Result<()> {
                 EngineTask::VisualHide => api::EngineControl::new(api::VISUAL_HIDE),
                 EngineTask::VisualRelease => api::EngineControl::new(api::VISUAL_RELEASE),
                 EngineTask::VisualStatus => api::EngineControl::new(api::VISUAL_STATUS),
+                EngineTask::VisualCheck => api::EngineControl::new(api::VISUAL_CHECK),
                 EngineTask::Remotes => {
                     let mut rows = Vec::new();
                     loop {
@@ -519,6 +522,12 @@ fn main() -> anyhow::Result<()> {
                         &serde_json::json!({"summary":summary,"records":records})
                     )?
                 );
+                return Ok(());
+            }
+            if block.command == api::VISUAL_CHECK {
+                let report = client_dll::release_policy::Report::decode(&block)
+                    .map_err(anyhow::Error::msg)?;
+                println!("{}", serde_json::to_string_pretty(&report)?);
                 return Ok(());
             }
             if matches!(

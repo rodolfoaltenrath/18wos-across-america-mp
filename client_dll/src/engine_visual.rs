@@ -11,6 +11,7 @@ use crate::{
     engine_render::{flush_calls, read},
     inspection::process::Process,
     pe_exports::{self, Image},
+    release_policy::{self, Evidence, Refusal, Report},
 };
 use multiplayer_server::protocol::{Position, Rotation};
 use std::{
@@ -34,8 +35,6 @@ static SET_LIGHT: AtomicUsize = AtomicUsize::new(0);
 static GET_LIGHT: AtomicUsize = AtomicUsize::new(0);
 /// Getter targets must belong to the profiled game/engine (or the own fixture).
 static LIGHT_RANGES: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
-/// Flushes that must pass after the last draw before the instance may be freed.
-pub const SETTLE_FLUSHES: u32 = 8;
 static STATE: AtomicU32 = AtomicU32::new(0); // 0 none, 1 allocated
 static SHOWN: AtomicBool = AtomicBool::new(false);
 static FAULT: AtomicU32 = AtomicU32::new(0);
@@ -45,6 +44,7 @@ static INFO: AtomicUsize = AtomicUsize::new(0);
 static FUNCTIONS: [AtomicUsize; 7] = [const { AtomicUsize::new(0) }; 7];
 static OFFSET: [AtomicU32; 3] = [const { AtomicU32::new(0) }; 3];
 static DRAWN: AtomicU32 = AtomicU32::new(0);
+static EVER_DRAWN: AtomicBool = AtomicBool::new(false);
 static SKIPPED: AtomicU32 = AtomicU32::new(0);
 static LAST_FLUSH: AtomicU32 = AtomicU32::new(0);
 static HIDDEN_AT: AtomicU32 = AtomicU32::new(0);
@@ -272,6 +272,7 @@ pub(crate) fn after_car_draw(this: u32, [world, _, path, viewport]: [u32; 4]) {
             }
         }
         DRAWN.fetch_add(1, Ordering::Relaxed);
+        EVER_DRAWN.store(true, Ordering::Release);
         if word(world) != Ok(top) {
             // Cannot repair an engine stack; stop drawing and keep the instance.
             FAULT.store(1, Ordering::Release);
@@ -374,8 +375,12 @@ fn set_offset(block: &EngineControl) -> Result<(), String> {
 /// Loop-queue task: create (once) and show, or release after settling.
 pub fn run(mut block: EngineControl, fixture: bool) -> Result<EngineControl, String> {
     block.executed_thread = unsafe { GetCurrentThreadId() };
+    if block.command == api::VISUAL_CHECK {
+        release_report().encode(&mut block);
+        return Ok(block);
+    }
     if block.command == api::VISUAL_RELEASE {
-        release()?;
+        release().map_err(|r| r.to_string())?;
     } else {
         if fixture != (block.command == api::VISUAL_SHOW_FIXTURE) {
             return Err("visual mode does not match the attached pump".into());
@@ -484,36 +489,44 @@ fn create(block: &EngineControl, fixture: bool) -> Result<(), String> {
     GET_LIGHT.store(functions[7] as usize, Ordering::Release);
     std::mem::forget(descriptor); // Ownership moves to the retained visual.
     DRAWN.store(0, Ordering::Release);
+    EVER_DRAWN.store(false, Ordering::Release);
     SKIPPED.store(0, Ordering::Release);
     STATE.store(1, Ordering::Release);
     Ok(())
 }
-fn release() -> Result<(), String> {
-    if STATE.load(Ordering::Acquire) != 1 {
-        return Err("no test visual allocated".into());
-    }
-    if SHOWN.load(Ordering::Acquire) {
-        return Err("hide the visual before releasing it".into());
-    }
-    let settled = HIDDEN_AT
-        .load(Ordering::Acquire)
-        .max(LAST_FLUSH.load(Ordering::Acquire));
-    if DRAWN.load(Ordering::Acquire) != 0 && flush_calls().wrapping_sub(settled) < SETTLE_FLUSHES {
-        return Err("queued draws not yet flushed; retry after more frames".into());
-    }
+fn release_report() -> Report {
     let item = ITEM.load(Ordering::Acquire) as u32;
-    let process = Process::open(unsafe { GetCurrentProcessId() }).map_err(|e| e.to_string())?;
-    // Strong/residency/access counters back to the allocation contract [1,1,0].
-    let counters = [0x4c, 0x50, 0x58].map(|o| offset(item, o).and_then(|a| value(&process, a)));
-    if counters.iter().any(|c| c.is_err()) {
-        return Err("visual item unreadable; retained".into());
+    let allocated = STATE.load(Ordering::Acquire) == 1;
+    let counters = (allocated && item != 0)
+        .then(|| [0x4c, 0x50, 0x58].map(|o| item.checked_add(o).ok_or(()).and_then(word)))
+        .and_then(|values| match values {
+            [Ok(strong), Ok(residency), Ok(access)] => Some([strong, residency, access]),
+            _ => None,
+        });
+    release_policy::assess(
+        crate::engine_phase::release_context(),
+        Evidence {
+            allocated,
+            shown: SHOWN.load(Ordering::Acquire),
+            item,
+            drawn: DRAWN.load(Ordering::Acquire),
+            ever_drawn: EVER_DRAWN.load(Ordering::Acquire),
+            flushes: flush_calls(),
+            last_draw_flush: LAST_FLUSH.load(Ordering::Acquire),
+            hidden_at: HIDDEN_AT.load(Ordering::Acquire),
+            counters,
+            bindings_present: INFO.load(Ordering::Acquire) != 0
+                && FUNCTIONS[5].load(Ordering::Acquire) != 0
+                && FUNCTIONS[6].load(Ordering::Acquire) != 0,
+        },
+    )
+}
+fn release() -> Result<(), Refusal> {
+    let report = release_report();
+    if let Some(reason) = report.refusal {
+        return Err(reason);
     }
-    let counters = counters.map(|c| c.unwrap_or(0));
-    if counters != [1, 1, 0] {
-        return Err(format!(
-            "visual item still referenced {counters:?}; retry after more frames"
-        ));
-    }
+    let item = report.evidence.item;
     let f = |i: usize| FUNCTIONS[i].load(Ordering::Acquire);
     unsafe {
         std::mem::transmute::<usize, info::Release>(f(5))(item as usize as *mut c_void);
@@ -579,7 +592,7 @@ pub(crate) fn maintain(fixture: bool) {
         return;
     }
     if let Err(e) = release() {
-        if !e.contains("retry") {
+        if !e.retryable() {
             // Unexpected refusal: keep the instance hidden and stop automating.
             FAULT.store(2, Ordering::Release);
             RECREATE.store(false, Ordering::Release);

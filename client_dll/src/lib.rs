@@ -53,6 +53,7 @@ pub mod pe_exports;
 #[cfg(any(all(windows, target_arch = "x86"), test))]
 mod phase_queue;
 pub mod profile;
+pub mod release_policy;
 pub mod render_observation;
 pub mod resource_bindings;
 pub mod transition_analysis;

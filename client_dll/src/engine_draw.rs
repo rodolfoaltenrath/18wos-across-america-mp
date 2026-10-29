@@ -40,6 +40,9 @@ static GLOBALS: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
 static DRAWS: AtomicU32 = AtomicU32::new(0);
 static FOREIGN: AtomicU32 = AtomicU32::new(0);
 static DEPTH: AtomicU32 = AtomicU32::new(0);
+pub(crate) fn callback_depth() -> u32 {
+    DEPTH.load(Ordering::Acquire)
+}
 static LOST: AtomicBool = AtomicBool::new(false);
 /// Armed or capturing; idle draws never touch the trace lock.
 static ACTIVE: AtomicBool = AtomicBool::new(false);

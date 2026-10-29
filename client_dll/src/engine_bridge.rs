@@ -409,7 +409,8 @@ pub fn control(block: &mut EngineControl) -> Result<(), String> {
         | api::PRIVATE_INSTANCE_FIXTURE
         | api::VISUAL_SHOW
         | api::VISUAL_SHOW_FIXTURE
-        | api::VISUAL_RELEASE => {
+        | api::VISUAL_RELEASE
+        | api::VISUAL_CHECK => {
             crate::engine_phase::dispatch(*block, WINDOW.load(Ordering::Acquire) as HWND).map(
                 |response| {
                     *block = response;

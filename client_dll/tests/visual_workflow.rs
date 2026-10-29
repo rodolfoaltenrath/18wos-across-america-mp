@@ -3,6 +3,7 @@ use client_dll::{
     api::{self, EngineControl},
     controller::Controller,
     draw_observation::Visual,
+    release_policy::{Refusal, Report},
 };
 use std::{
     io::{BufRead, BufReader, Write},
@@ -21,6 +22,23 @@ fn status(c: &Controller, dll: &Path) -> Visual {
     let mut b = EngineControl::new(api::VISUAL_STATUS);
     c.engine_control(dll, &mut b).unwrap();
     Visual::decode(&b)
+}
+fn check(c: &Controller, dll: &Path) -> Report {
+    let mut b = EngineControl::new(api::VISUAL_CHECK);
+    c.engine_control(dll, &mut b).unwrap();
+    let report = Report::decode(&b).unwrap();
+    assert_eq!(report.context.current_thread, report.context.owner_thread);
+    assert_eq!(report.context.pump_depth, 1);
+    assert_eq!(
+        (
+            report.context.window_depth,
+            report.context.draw_depth,
+            report.context.render_depth
+        ),
+        (0, 0, 0)
+    );
+    assert!(!report.automatic_load_supported);
+    report
 }
 fn send(host: &mut Host, output: &mut impl BufRead, command: &str) -> String {
     writeln!(host.0.stdin.as_mut().unwrap(), "{command}").unwrap();
@@ -98,6 +116,13 @@ fn test_visual_draws_only_in_validated_context_and_releases_after_flush() {
     assert!(deep.skipped > 0 && deep.item != 0);
     assert_eq!(deep.offset, [400.0, 0.0, -50.0]);
     assert_eq!(deep.skinned_parts, 3);
+    let visible = check(&controller, &dll);
+    assert_eq!(visible.refusal, Some(Refusal::Visible));
+    assert_eq!(visible.evidence.item, deep.item);
+    assert_eq!(visible.evidence.counters, Some([1, 1, 0]));
+    assert!(!visible.evidence.ever_drawn);
+    assert_eq!(visible.context.owner_thread, attach.window_thread);
+    assert_eq!(status(&controller, &dll).shown, 1); // check never hides.
     let mut passive = EngineControl::new(api::UI_TRANSITION_FIXTURE);
     assert!(
         controller
@@ -184,6 +209,9 @@ fn test_visual_draws_only_in_validated_context_and_releases_after_flush() {
     let retained = status(&controller, &dll);
     assert!(retained.access > 0);
     assert!(retained.flushes - retained.last_draw_flush >= 8);
+    let holding = check(&controller, &dll);
+    assert_eq!(holding.refusal, Some(Refusal::Referenced));
+    assert!(holding.retryable && holding.evidence.ever_drawn);
     assert!(error(&controller, &dll, release).contains("still referenced"));
     assert!(
         error(&controller, &dll, EngineControl::new(api::UI_RENDER_REMOVE)).contains("release")
@@ -191,9 +219,18 @@ fn test_visual_draws_only_in_validated_context_and_releases_after_flush() {
     assert_eq!(send(&mut host, &mut output, "visual-consume"), "armed");
     std::thread::sleep(Duration::from_millis(60));
     assert_eq!(status(&controller, &dll).access, 0);
+    let ready = check(&controller, &dll);
+    assert!(ready.ready && !ready.retryable);
+    assert_eq!(ready.evidence.counters, Some([1, 1, 0]));
+    assert!(ready.since_hidden.unwrap() >= 8 && ready.since_last_draw.unwrap() >= 8);
+    assert_eq!(status(&controller, &dll).item, retained.item); // check never frees.
     let mut b = release;
     controller.engine_control(&dll, &mut b).unwrap();
     assert_eq!((Visual::decode(&b).state, Visual::decode(&b).item), (0, 0));
+    assert_eq!(
+        check(&controller, &dll).refusal,
+        Some(Refusal::NotAllocated)
+    );
     let stats: serde_json::Value =
         serde_json::from_str(&send(&mut host, &mut output, "actor-stats")).unwrap();
     assert_eq!(stats["instance"]["created"], stats["instance"]["freed"]);

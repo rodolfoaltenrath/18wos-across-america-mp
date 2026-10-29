@@ -161,10 +161,45 @@ fn session_commands_compose_start_status_and_safe_stop() {
     assert_eq!(status["remotes"][0]["player_id"], 3);
     assert_eq!(status["visual"]["target"], u32::MAX);
     assert!(status["visual"]["drawn"].as_u64().unwrap() > 0);
+    let visible_check = launcher(&["engine", "visual-check"]);
+    assert!(visible_check.status.success(), "{visible_check:?}");
+    let visible_check: serde_json::Value = serde_json::from_slice(&visible_check.stdout).unwrap();
+    assert_eq!(visible_check["refusal"], "visible");
+    assert_eq!(visible_check["automatic_load_supported"], false);
+    // Held packets must time out without freeing or starting a simulated load.
+    writeln!(host.0.stdin.as_mut().unwrap(), "visual-retain").unwrap();
+    line.clear();
+    output.read_line(&mut line).unwrap();
+    assert_eq!(line.trim(), "armed");
+    std::thread::sleep(Duration::from_millis(60));
+    let blocked = launcher(&["session-prepare-load", "--timeout", "1"]);
+    assert!(!blocked.status.success());
+    assert!(String::from_utf8_lossy(&blocked.stderr).contains("still referenced"));
+    let retained = launcher(&["session-status"]);
+    assert!(retained.status.success());
+    let retained: serde_json::Value = serde_json::from_slice(&retained.stdout).unwrap();
+    assert_eq!(retained["visual"]["state"], 1);
+    assert_eq!(retained["visual"]["shown"], 0);
+    assert_eq!(retained["client"]["status"], 1);
+    writeln!(host.0.stdin.as_mut().unwrap(), "visual-consume").unwrap();
+    line.clear();
+    output.read_line(&mut line).unwrap();
+    assert_eq!(line.trim(), "armed");
     let prepared = launcher(&["session-prepare-load", "--timeout", "10"]);
     assert!(prepared.status.success(), "{prepared:?}");
     let prepared: serde_json::Value = serde_json::from_slice(&prepared.stdout).unwrap();
     assert_eq!(prepared["released"], true);
+    assert_eq!(prepared["release_attempts"], 1);
+    assert!(prepared["preflight_checks"].as_u64().unwrap() >= 1);
+    assert_eq!(prepared["last_release_check"]["ready"], true);
+    assert_eq!(
+        prepared["last_release_check"]["evidence"]["counters"],
+        serde_json::json!([1, 1, 0])
+    );
+    assert_eq!(
+        prepared["last_release_check"]["automatic_load_supported"],
+        false
+    );
     let paused = launcher(&["session-status"]);
     assert!(paused.status.success());
     let paused: serde_json::Value = serde_json::from_slice(&paused.stdout).unwrap();
@@ -179,6 +214,7 @@ fn session_commands_compose_start_status_and_safe_stop() {
     assert!(stopped.status.success(), "{stopped:?}");
     let stopped: serde_json::Value = serde_json::from_slice(&stopped.stdout).unwrap();
     assert_eq!(stopped["released"], false);
+    assert_eq!(stopped["preflight_checks"], 0);
     assert_eq!(stopped["client_status"], 2);
     assert_eq!(stopped["files"]["unchanged"], 2);
     // The backed-up files must remain verifiable after the target has exited.

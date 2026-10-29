@@ -178,7 +178,7 @@ impl Drop for PrivateEntity {
 pub fn run(mut block: EngineControl, is_fixture: bool) -> Result<EngineControl, String> {
     if matches!(
         block.command,
-        api::VISUAL_SHOW | api::VISUAL_SHOW_FIXTURE | api::VISUAL_RELEASE
+        api::VISUAL_SHOW | api::VISUAL_SHOW_FIXTURE | api::VISUAL_RELEASE | api::VISUAL_CHECK
     ) {
         return crate::engine_visual::run(block, is_fixture);
     }

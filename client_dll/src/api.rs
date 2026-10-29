@@ -68,6 +68,8 @@ pub const UI_TRANSITION_BLOCKS: u32 = 47;
 pub const UI_TRANSITION_BLOCKS_FIXTURE: u32 = 48;
 pub const UI_TRANSITION_COMMANDS: u32 = 49;
 pub const UI_TRANSITION_COMMANDS_FIXTURE: u32 = 50;
+/// Read-only release evidence sampled on the outer loop, not a load gate.
+pub const VISUAL_CHECK: u32 = 51;
 pub const ENGINE_ABI_VERSION: u32 = 3;
 /// Separate extension ABI; does not change the original Control v1 layout.
 #[repr(C)]

@@ -1913,6 +1913,63 @@ passiva e incompatível com visual retido. Manter `session-prepare-load` antes
 de carregar e `visual-show` depois. Não repetir a recarga retida que falhou.
 Matriz de outros menus/cargas, LAN entre dois PCs e sessões longas pendentes.
 
+### M4 — Política de liberação e preflight no loop — 28/10/2026
+
+A captura real de `map` identificou o comando e a ordem, mas não uma ABI de
+adiamento/cancelamento nem autorização para liberar recursos dentro do handler.
+Este bloco fortalece o caminho já validado da fila do loop antes de acoplar
+qualquer automação ao carregamento. Não intercepta comandos adicionais.
+
+Entregues o módulo Rust portável `release_policy` e `engine visual-check`
+(comando 51, sem alterar ABI v3/664). A consulta coleta evidência no loop e
+não oculta, libera ou recria recursos. O mesmo avaliador é usado de novo por
+`visual-release` imediatamente antes de chamar os dois releases existentes.
+Thread proprietária/pump instalado, profundidade 1 e ausência de callback de
+janela/draw/flush aninhado são requisitos explícitos. Contadores ilegíveis,
+bindings ausentes, visibilidade e contexto incorreto recusam a liberação.
+
+Corrigida a comparação numérica `max(hidden_at,last_draw_flush)`: após a volta
+de u32 ela podia escolher um carimbo antigo e aceitar a liberação cedo demais.
+Agora as duas idades são verificadas, com mínimo de oito flushes em cada uma
+e recusa se a ordem for ambígua. Um marcador independente de "já desenhada"
+impede que o wrap do contador diagnóstico de desenhos dispense a guarda.
+Instâncias nunca desenhadas ainda exigem `[strong,residency,access]=[1,1,0]`.
+Presença de bindings não é uma nova prova de ABI; sua resolução permanece no
+caminho perfilado de criação.
+
+Recusas são tipadas: somente filas ainda não esvaziadas e referências retidas
+admitem espera automática. A manutenção deixa de procurar `retry` no texto
+do erro. `session-prepare-load`/`session-stop` consultam o preflight, registram
+número de consultas e último snapshot, e só tentam release quando ele indica
+prontidão. Outras recusas/erros de ABI ou transporte encerram a tentativa.
+O release revalida a evidência; erro de controle não é tratado como prova de
+que o item continua alocado. Nenhuma espera ocorre dentro do motor.
+
+Fixtures próprias cobrem wrap de flush/desenhos, ordem ambígua, thread errada,
+callback aninhado, contadores ausentes/retidos, instância nunca desenhada e
+schema inválido. A bancada x86 verifica a thread/fase real da fila, a consulta
+sem ocultação/liberação, prontidão após consumo de referências e ausência de
+instância após liberar. A sessão simula pacotes retidos: o preparo expira
+sem liberar nem iniciar a carga; depois do consumo, o novo preparo conclui.
+
+`ready` é snapshot da fila, não autorização durável nem cobertura do handler
+de `map`. O relatório mantém `automatic_load_supported=false`. Não se ligou
+liberação/recriação à recarga real nem se repetiu reload retido. O caminho de
+detecção tardia da entidade continua sem comprovação de segurança no jogo.
+
+Validação no **Fedora**: **55 testes nativos e 55 x86 sob Proton passaram**,
+incluindo os cenários de consulta, timeout com referências retidas e recuperação
+no preparo da sessão. Builds release nativo/x86, Clippy nativo/x86 e rustfmt
+passaram. Logs em `target/analysis/release-policy-*` (ignorados). A enumeração
+antes dos builds não encontrou o jogo; não houve novo teste no jogo neste bloco.
+
+**Próximo:** observar o contexto de entrada do comando e o estado de
+draw/flush/filas antes do teardown, ainda SEM visual retido. Uma futura
+automação precisa de contrato comprovado para suspender ou recusar a carga
+quando não houver prontidão; não bloquear a thread esperando render nem
+recursar o handler. Manter o preparo explícito antes da carga. LAN e sessões
+longas continuam pendentes.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
