@@ -46,6 +46,8 @@ static SHADER_CALLS: AtomicU32 = AtomicU32::new(0);
 static LIGHT_CALLS: AtomicU32 = AtomicU32::new(0);
 static SCENE: AtomicU32 = AtomicU32::new(0);
 static LIGHT_INVALID: AtomicBool = AtomicBool::new(false);
+/// A menu scene without a player truck (after the gated `exit`).
+static PLAYERLESS: AtomicBool = AtomicBool::new(false);
 #[derive(Default)]
 struct Drawn {
     calls: u32,
@@ -221,7 +223,9 @@ impl Fixture {
         self.world[0].store(head, Ordering::Release);
         self.world[top(depth) + 12].store((self.frame as f32).to_bits(), Ordering::Release);
         self.camera[14].store((-(self.frame as f32)).to_bits(), Ordering::Release);
-        unsafe { call(CAR.load(Ordering::Acquire)) };
+        if !PLAYERLESS.load(Ordering::Acquire) {
+            unsafe { call(CAR.load(Ordering::Acquire)) };
+        }
         assert_eq!(self.world[0].load(Ordering::Acquire), head);
     }
     /// Runs after the render fixture's flush: queued draws release their access.

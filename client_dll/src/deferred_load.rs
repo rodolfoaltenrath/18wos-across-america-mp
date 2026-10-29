@@ -19,6 +19,7 @@ static NEXT_GATE: AtomicU64 = AtomicU64::new(1);
 
 /// Owns exact bytes, including non-UTF-8 arguments. Never serializes arguments.
 pub struct OwnedCommand {
+    name: &'static str,
     values: Vec<CString>,
     bytes: usize,
 }
@@ -295,7 +296,7 @@ mod tests {
 impl fmt::Debug for OwnedCommand {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("OwnedCommand")
-            .field("command", &"map")
+            .field("command", &self.name)
             .field("argc", &self.values.len())
             .field("bytes", &self.bytes)
             .field("arguments", &"<redacted>")
@@ -303,8 +304,26 @@ impl fmt::Debug for OwnedCommand {
     }
 }
 impl OwnedCommand {
+    /// `map` with at least one argument (the original fixture contract).
     pub fn new(tokens: &[&[u8]]) -> Result<Self, Error> {
-        if !(2..=MAX_ARGUMENTS).contains(&tokens.len()) || tokens[0] != b"map" {
+        if tokens.first() != Some(&b"map".as_slice()) {
+            return Err(Error::InvalidArguments);
+        }
+        Self::build(tokens, "map", 2)
+    }
+    /// Any scene-deleting command of the shared handler, argc >= 1.
+    pub fn world(tokens: &[&[u8]]) -> Result<Self, Error> {
+        let command = tokens
+            .first()
+            .and_then(|t| crate::load_gate::WorldCommand::classify(t))
+            .ok_or(Error::InvalidArguments)?;
+        Self::build(tokens, command.name(), 1)
+    }
+    pub fn name(&self) -> &'static str {
+        self.name
+    }
+    fn build(tokens: &[&[u8]], name: &'static str, minimum: usize) -> Result<Self, Error> {
+        if !(minimum..=MAX_ARGUMENTS).contains(&tokens.len()) {
             return Err(Error::InvalidArguments);
         }
         let mut values = Vec::new();
@@ -318,7 +337,11 @@ impl OwnedCommand {
             }
             values.push(CString::new(*token).map_err(|_| Error::InvalidArguments)?);
         }
-        Ok(Self { values, bytes })
+        Ok(Self {
+            name,
+            values,
+            bytes,
+        })
     }
     /// Borrowed argv is valid only inside the closure; no textual reconstruction.
     pub fn with_argv<R>(&self, f: impl FnOnce(u32, *const *const c_char) -> R) -> R {
@@ -333,9 +356,32 @@ impl OwnedCommand {
     pub fn capture(
         argc: u32,
         argv: u32,
-        mut read: impl FnMut(u32, &mut [u8]) -> Result<(), String>,
+        read: impl FnMut(u32, &mut [u8]) -> Result<(), String>,
     ) -> Result<Self, Error> {
-        if !(2..=MAX_ARGUMENTS as u32).contains(&argc) || argv == 0 {
+        if argc < 2 {
+            return Err(Error::InvalidArguments);
+        }
+        let tokens = Self::tokens(argc, argv, read, |t| t == b"map")?;
+        Self::new(&tokens.iter().map(Vec::as_slice).collect::<Vec<_>>())
+    }
+    /// Same bounded copy for any gated world command; argv[0] names it.
+    pub fn capture_world(
+        argc: u32,
+        argv: u32,
+        read: impl FnMut(u32, &mut [u8]) -> Result<(), String>,
+    ) -> Result<Self, Error> {
+        let tokens = Self::tokens(argc, argv, read, |t| {
+            crate::load_gate::WorldCommand::classify(t).is_some()
+        })?;
+        Self::world(&tokens.iter().map(Vec::as_slice).collect::<Vec<_>>())
+    }
+    fn tokens(
+        argc: u32,
+        argv: u32,
+        mut read: impl FnMut(u32, &mut [u8]) -> Result<(), String>,
+        first: impl Fn(&[u8]) -> bool,
+    ) -> Result<Vec<Vec<u8>>, Error> {
+        if !(1..=MAX_ARGUMENTS as u32).contains(&argc) || argv == 0 {
             return Err(Error::InvalidArguments);
         }
         let mut tokens = Vec::new();
@@ -367,12 +413,12 @@ impl OwnedCommand {
                 }
                 token.push(b[0]);
             }
-            if i == 0 && token != b"map" {
+            if i == 0 && !first(&token) {
                 return Err(Error::InvalidArguments);
             }
             tokens.push(token);
         }
-        Self::new(&tokens.iter().map(Vec::as_slice).collect::<Vec<_>>())
+        Ok(tokens)
     }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -483,6 +529,8 @@ struct Job {
     new: Option<World>,
     deadline: u64,
     restore_visual: bool,
+    /// Wait for a new ready world after the callback; otherwise complete on return.
+    await_world: bool,
     phase: Phase,
     sequence: u64,
     in_flight: Option<Token>,
@@ -580,6 +628,21 @@ impl Gate {
         now: u64,
         timeout: u64,
     ) -> Result<u64, Error> {
+        self.admit_with(thread, command, world, restore_visual, true, now, timeout)
+    }
+    /// `await_world = false` completes when the callback returns (no player
+    /// world follows, e.g. exit to the main menu); nothing is recreated then.
+    #[allow(clippy::too_many_arguments)]
+    pub fn admit_with(
+        &mut self,
+        thread: u32,
+        command: OwnedCommand,
+        world: World,
+        restore_visual: bool,
+        await_world: bool,
+        now: u64,
+        timeout: u64,
+    ) -> Result<u64, Error> {
         if thread != self.owner {
             return Err(Error::WrongThread);
         }
@@ -600,7 +663,8 @@ impl Gate {
             old: world,
             new: None,
             deadline,
-            restore_visual,
+            restore_visual: restore_visual && await_world,
+            await_world,
             phase: Phase::Hide,
             sequence: 0,
             in_flight: None,
@@ -770,7 +834,8 @@ impl Gate {
                 j.reason = Some("release_refused_after_check");
                 Phase::Recoverable
             }
-            Ack::ExecuteReturned => Phase::AwaitWorld,
+            Ack::ExecuteReturned if j.await_world => Phase::AwaitWorld,
+            Ack::ExecuteReturned => Phase::Complete,
             Ack::NotInvoked => {
                 j.execute_started = false;
                 j.reason = Some("callback_not_invoked");
@@ -949,5 +1014,66 @@ mod terminal_tests {
         g.acknowledge(a.token, Ack::Unknown, 5).unwrap();
         assert_eq!(g.snapshot().phase, Phase::Quarantined);
         assert_eq!(g.discard_terminal(), Ok(Some((Phase::Quarantined, true))));
+    }
+}
+#[cfg(test)]
+mod world_command_tests {
+    use super::lab::{context, report, world};
+    use super::*;
+    #[test]
+    fn world_commands_copy_argv_zero_only_and_complete_on_return_without_a_player_world() {
+        assert!(OwnedCommand::world(&[b"exit"]).is_ok());
+        assert_eq!(OwnedCommand::world(&[b"quit"]).unwrap().name(), "quit");
+        assert!(OwnedCommand::world(&[b"game_menu"]).is_err());
+        assert!(OwnedCommand::world(&[]).is_err());
+        // The map-only constructor keeps its stricter contract.
+        assert!(OwnedCommand::new(&[b"exit"]).is_err());
+        let mut memory = [0u8; 128];
+        memory[4..8].copy_from_slice(&64u32.to_le_bytes());
+        memory[64..69].copy_from_slice(b"menu\0");
+        let read = |at: u32, out: &mut [u8]| {
+            out.copy_from_slice(
+                memory
+                    .get(at as usize..at as usize + out.len())
+                    .ok_or("unreadable")?,
+            );
+            Ok(())
+        };
+        let menu = OwnedCommand::capture_world(1, 4, read).unwrap();
+        assert_eq!(
+            (menu.name(), menu.argument(0)),
+            ("menu", Some(b"menu".as_slice()))
+        );
+        assert!(!format!("{menu:?}").contains("arguments\": \"menu"));
+        assert_eq!(
+            OwnedCommand::capture(1, 4, read).unwrap_err(),
+            Error::InvalidArguments
+        );
+        memory[64..69].copy_from_slice(b"pause");
+        assert!(
+            OwnedCommand::capture_world(1, 4, |at, out| {
+                out.copy_from_slice(&memory[at as usize..at as usize + out.len()]);
+                Ok(())
+            })
+            .is_err()
+        );
+        let mut g = Gate::new(9).unwrap();
+        g.admit_with(9, menu, world(1), true, false, 0, 100)
+            .unwrap();
+        for (kind, ack) in [
+            (ActionKind::Hide, Ack::Hidden),
+            (ActionKind::Check, Ack::Checked(report(false))),
+            (ActionKind::Release, Ack::Released),
+            (ActionKind::Execute, Ack::ExecuteReturned),
+        ] {
+            let a = g.poll(context(), world(1), 1).unwrap().unwrap();
+            assert_eq!(a.kind, kind);
+            g.acknowledge(a.token, ack, 1).unwrap();
+        }
+        // Complete immediately: no AwaitWorld, no Recreate, nothing pending.
+        let s = g.snapshot();
+        assert_eq!(s.phase, Phase::Complete);
+        assert!(g.poll(context(), world(1), 2).unwrap().is_none());
+        assert_eq!(g.discard_terminal(), Ok(Some((Phase::Complete, false))));
     }
 }

@@ -1,9 +1,11 @@
-//! Decision and status contract of the ACTIVE map gate (commands 54..57).
+//! Decision and status contract of the ACTIVE world-command gate (54..57).
 //!
-//! A `map` request that arrives while the test visual is allocated is copied
-//! and swallowed; the outer loop hides, releases, replays the original callback
-//! exactly once with own argc/argv words, then recreates the visual in the new
-//! world. Hooks live in `engine_load_gate`; this module holds no addresses.
+//! The six commands whose shared game handler deletes the scene (`map`,
+//! `preview`, `edit`, `exit`, `menu`, `quit`) are deferred while the test
+//! visual is allocated: the request is copied and swallowed; the outer loop
+//! hides, releases, replays the original callback exactly once with own
+//! argc/argv words, then recreates the visual once a player world is drawn.
+//! Hooks live in `engine_load_gate`; this module holds no addresses.
 use crate::{api::EngineControl, deferred_load::Phase};
 use serde::Serialize;
 
@@ -11,7 +13,7 @@ use serde::Serialize;
 pub const DEFAULT_TIMEOUT_MS: u32 = 120_000;
 const SCHEMA: u32 = 0x4c47_5431;
 
-/// What the descriptor hook does with one `map` call.
+/// What the descriptor hook does with one world-command call.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Entry {
@@ -44,6 +46,8 @@ pub enum Note {
     InvalidWorld = 7,
     /// Gate refused admission: visual released, load dropped.
     AdmitFailed = 8,
+    /// argv[0] unreadable or not a gated command: forwarded unchanged.
+    Unclassified = 9,
 }
 impl Note {
     pub(crate) fn from_u32(v: u32) -> Self {
@@ -56,6 +60,7 @@ impl Note {
             6 => Self::CaptureFailed,
             7 => Self::InvalidWorld,
             8 => Self::AdmitFailed,
+            9 => Self::Unclassified,
             _ => Self::None,
         }
     }
@@ -67,6 +72,8 @@ pub struct EntryState {
     pub replaying: bool,
     /// A non-terminal job exists (or its state could not be sampled).
     pub job_active: bool,
+    /// Classified from argv[0], which cmd_execute publishes before the call.
+    pub command: Option<WorldCommand>,
     pub argc: u32,
     pub visual_allocated: bool,
 }
@@ -83,13 +90,74 @@ pub fn decide(s: EntryState) -> Entry {
     if s.job_active {
         return Entry::Swallow(Note::Busy);
     }
-    if s.argc < 2 {
+    let Some(command) = s.command else {
+        return Entry::Forward(Note::Unclassified);
+    };
+    if s.argc < command.minimum_argc() {
         return Entry::Forward(Note::NoArguments);
     }
     if !s.visual_allocated {
         return Entry::Forward(Note::NoVisual);
     }
     Entry::Defer
+}
+/// Commands of the shared handler `game+0xd3570` that delete the scene
+/// (`this+0x14c` through `0xcc4a0` and the deleting destructor).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+#[repr(u32)]
+pub enum WorldCommand {
+    Map = 1,
+    Preview = 2,
+    Edit = 3,
+    Exit = 4,
+    Menu = 5,
+    Quit = 6,
+}
+pub const WORLD_COMMANDS: [WorldCommand; 6] = [
+    WorldCommand::Map,
+    WorldCommand::Preview,
+    WorldCommand::Edit,
+    WorldCommand::Exit,
+    WorldCommand::Menu,
+    WorldCommand::Quit,
+];
+impl WorldCommand {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Map => "map",
+            Self::Preview => "preview",
+            Self::Edit => "edit",
+            Self::Exit => "exit",
+            Self::Menu => "menu",
+            Self::Quit => "quit",
+        }
+    }
+    pub fn classify(name: &[u8]) -> Option<Self> {
+        WORLD_COMMANDS
+            .into_iter()
+            .find(|c| c.name().as_bytes() == name)
+    }
+    pub(crate) fn from_u32(v: u32) -> Option<Self> {
+        WORLD_COMMANDS.into_iter().find(|c| *c as u32 == v)
+    }
+    /// map/preview return before deleting the scene with argc < 2
+    /// (`game+0xd367f`, `+0xd38db`); the others delete it unconditionally.
+    pub fn minimum_argc(self) -> u32 {
+        match self {
+            Self::Map | Self::Preview => 2,
+            _ => 1,
+        }
+    }
+    /// Only `map` leads directly to a drawn player world; after the others the
+    /// gate completes on return and restores the visual on a later new actor.
+    pub fn awaits_player(self) -> bool {
+        self == Self::Map
+    }
+    /// `quit` ends the process: never schedule a restoration after it.
+    pub fn restorable(self) -> bool {
+        self != Self::Quit
+    }
 }
 pub(crate) fn phase_code(p: Phase) -> u32 {
     match p {
@@ -175,6 +243,11 @@ pub struct Status {
     /// Releases without a load after a dropped request (capture/world/admit).
     pub fallback_releases: u32,
     pub fallback_pending: bool,
+    /// A non-player command (exit/menu/edit/preview) released a shown visual:
+    /// it is recreated once the draw sees a new player entity.
+    pub restore_pending: bool,
+    /// Command of the last deferred request.
+    pub last_command: Option<WorldCommand>,
     /// Last world witness used by the gate (draw-observed actor and epoch).
     pub actor: u32,
     pub scene: u32,
@@ -192,7 +265,8 @@ impl Status {
             | u32::from(self.execute_started) << 3
             | u32::from(self.release_confirmed) << 4
             | u32::from(self.fallback_pending) << 5
-            | u32::from(self.automatic_load_supported) << 6;
+            | u32::from(self.automatic_load_supported) << 6
+            | u32::from(self.restore_pending) << 7;
         f[2] = self.owner_thread;
         f[3] = self.timeout_ms;
         f[4] = self.phase.map_or(u32::MAX, phase_code);
@@ -215,6 +289,7 @@ impl Status {
         f[21] = self.actor;
         f[22] = self.scene;
         f[23] = self.epoch;
+        f[24] = self.last_command.map_or(0, |c| c as u32);
     }
     pub fn decode(b: &EngineControl) -> Result<Self, String> {
         let f = &b.frames;
@@ -230,6 +305,8 @@ impl Status {
             release_confirmed: bit(4),
             fallback_pending: bit(5),
             automatic_load_supported: bit(6),
+            restore_pending: bit(7),
+            last_command: WorldCommand::from_u32(f[24]),
             owner_thread: f[2],
             timeout_ms: f[3],
             phase: phase_from(f[4]),
@@ -254,7 +331,8 @@ impl Status {
             epoch: f[23],
         })
     }
-    /// Idle or terminal: nothing will act without a new request.
+    /// Idle or terminal: nothing will act without a new request. A pending
+    /// restoration only recreates in a later world and does not block.
     pub fn quiescent(&self) -> bool {
         !self.in_flight
             && !self.fallback_pending
@@ -273,6 +351,7 @@ mod tests {
             owner_thread: true,
             replaying: false,
             job_active: false,
+            command: Some(WorldCommand::Map),
             argc: 2,
             visual_allocated: true,
         }
@@ -315,9 +394,49 @@ mod tests {
                 },
                 Entry::Forward(Note::NoVisual),
             ),
+            (
+                EntryState {
+                    command: None,
+                    ..state()
+                },
+                Entry::Forward(Note::Unclassified),
+            ),
+            (
+                EntryState {
+                    command: Some(WorldCommand::Preview),
+                    argc: 1,
+                    ..state()
+                },
+                Entry::Forward(Note::NoArguments),
+            ),
         ] {
             assert_eq!(decide(s), expected, "{s:?}");
         }
+    }
+    #[test]
+    fn classifies_the_six_scene_deleting_commands_and_their_argument_rules() {
+        for c in WORLD_COMMANDS {
+            assert_eq!(WorldCommand::classify(c.name().as_bytes()), Some(c));
+            assert_eq!(WorldCommand::from_u32(c as u32), Some(c));
+            let s = EntryState {
+                command: Some(c),
+                argc: 1,
+                ..state()
+            };
+            let expected = if c.minimum_argc() == 2 {
+                Entry::Forward(Note::NoArguments)
+            } else {
+                Entry::Defer
+            };
+            assert_eq!(decide(s), expected, "{c:?}");
+        }
+        for ui in [b"game_menu".as_slice(), b"pause", b"MAP", b"map ", b""] {
+            assert_eq!(WorldCommand::classify(ui), None);
+        }
+        assert!(WorldCommand::Map.awaits_player());
+        assert!(!WorldCommand::Exit.awaits_player() && WorldCommand::Exit.restorable());
+        assert!(!WorldCommand::Quit.restorable());
+        assert_eq!(WorldCommand::from_u32(0), None);
     }
     #[test]
     fn status_round_trips_without_arguments_and_reports_quiescence() {
@@ -347,6 +466,8 @@ mod tests {
             recreated: 1,
             fallback_releases: 1,
             fallback_pending: false,
+            restore_pending: true,
+            last_command: Some(WorldCommand::Exit),
             actor: 0x1234,
             scene: 0x5678,
             epoch: 4,

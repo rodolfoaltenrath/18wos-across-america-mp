@@ -1,13 +1,18 @@
-//! ACTIVE `map` gate on the profiled descriptor word (`descriptor+4`).
+//! ACTIVE world-command gate on the profiled descriptor words (`descriptor+4`).
 //!
-//! The real game builds the new world synchronously INSIDE `map` with no flush
-//! in between, so the retained visual cannot be released from the callback.
-//! While the visual is allocated, the hook copies argc/argv, swallows the call
-//! and admits one `deferred_load::Gate` job. The outer loop (PeekMessageA pump,
-//! depth 1) hides, waits for the release policy, frees, then replays exactly
-//! what `cmd_execute` does (`prism3d+0xe010..0xe01c`): publish argc and an argv
-//! array in the core globals and call the ORIGINAL callback once. After a new
-//! player entity is drawn, the visual is recreated with its show parameters.
+//! The shared game handler (`game+0xd3570`, entered through the thunk
+//! `+0xd2e90`) deletes the scene for `map`, `preview`, `edit`, `exit`, `menu`
+//! and `quit`; `map` even builds the new world synchronously with no flush in
+//! between, so the retained visual cannot be released from the callback.
+//! While the visual is allocated, the hook classifies argv[0], copies argc/argv,
+//! swallows the call and admits one `deferred_load::Gate` job. The outer loop
+//! (PeekMessageA pump, depth 1) hides, waits for the release policy, frees,
+//! then replays exactly what `cmd_execute` does (`prism3d+0xe010..0xe01c`):
+//! publish argc and an argv array in the core globals and call the ORIGINAL
+//! callback once. After `map` the visual is recreated when a new player entity
+//! is drawn; after the other commands (no player world follows) the job ends on
+//! return and the visual is restored on the next new player entity, except
+//! after `quit`.
 //!
 //! Without a retained visual every call is forwarded unchanged. Arguments are
 //! never logged; replayed argv frames stay allocated for the process lifetime
@@ -18,7 +23,7 @@ use crate::{
     engine_lifecycle::{add, executable},
     engine_render::read,
     inspection::process::Process,
-    load_gate::{self, Entry, EntryState, Note, Status},
+    load_gate::{self, Entry, EntryState, Note, Status, WORLD_COMMANDS, WorldCommand},
     profile,
 };
 use std::{
@@ -37,13 +42,15 @@ use windows_sys::Win32::{
     },
 };
 type Callback = unsafe extern "C" fn() -> u32;
+const MAX_SLOTS: usize = WORLD_COMMANDS.len();
 static STATE: AtomicU32 = AtomicU32::new(0); // 0 never, 1 installed, 2 removed
 static OWNER: AtomicU32 = AtomicU32::new(0);
 static FIXTURE: AtomicBool = AtomicBool::new(false);
 static TIMEOUT: AtomicU32 = AtomicU32::new(load_gate::DEFAULT_TIMEOUT_MS);
-static SLOT: AtomicUsize = AtomicUsize::new(0);
+/// Hooked `descriptor+4` words; all share the profiled thunk as original.
+static SLOTS: [AtomicUsize; MAX_SLOTS] = [const { AtomicUsize::new(0) }; MAX_SLOTS];
+static SLOT_COUNT: AtomicU32 = AtomicU32::new(0);
 static ORIGINAL: AtomicUsize = AtomicUsize::new(0);
-static PROTECTION: AtomicU32 = AtomicU32::new(0);
 /// argc word, argv word and current-handler word. Never functions to call.
 static BINDINGS: [AtomicU32; 3] = [const { AtomicU32::new(0) }; 3];
 static REPLAYING: AtomicBool = AtomicBool::new(false);
@@ -55,6 +62,12 @@ static GATE: Mutex<Option<Gate>> = Mutex::new(None);
 static CLOCK: OnceLock<Instant> = OnceLock::new();
 /// Replayed argv frames: the game may keep pointers to the save name.
 static RETAINED: Mutex<Vec<Frame>> = Mutex::new(Vec::new());
+/// Current job: visual shown at admission, and whether a player world follows.
+static JOB_RESTORE: AtomicBool = AtomicBool::new(false);
+static JOB_AWAITS: AtomicBool = AtomicBool::new(true);
+/// Restore after a non-player command, once the draw epoch passes the stamp.
+static RESTORE_PENDING: AtomicBool = AtomicBool::new(false);
+static RESTORE_EPOCH: AtomicU32 = AtomicU32::new(0);
 // Published snapshot of the gate for lock-free hook decisions and status.
 static JOB_ACTIVE: AtomicBool = AtomicBool::new(false);
 static PHASE: AtomicU32 = AtomicU32::new(0);
@@ -62,6 +75,7 @@ static JOB: AtomicU32 = AtomicU32::new(0);
 static FLAGS: AtomicU32 = AtomicU32::new(0);
 static REASON: AtomicU32 = AtomicU32::new(0);
 static LAST_NOTE: AtomicU32 = AtomicU32::new(0);
+static LAST_COMMAND: AtomicU32 = AtomicU32::new(0);
 static LAST_RETURN: AtomicU32 = AtomicU32::new(0);
 static WITNESS: [AtomicU32; 3] = [const { AtomicU32::new(0) }; 3];
 #[derive(Clone, Copy)]
@@ -98,6 +112,19 @@ fn store(at: u32, value: u32) {
     // SAFETY: argc/argv words validated at install as aligned, readable and
     // distinct; the core writes them the same way inside cmd_execute.
     unsafe { AtomicU32::from_ptr(at as *mut u32) }.store(value, Ordering::Release);
+}
+/// argv[0] as published by cmd_execute; at most 15 bytes plus NUL are read.
+fn current_command() -> Option<WorldCommand> {
+    let argv = word(BINDINGS[1].load(Ordering::Acquire)).ok()?;
+    let first = word(argv).ok().filter(|p| *p != 0)?;
+    let mut name = [0u8; 16];
+    for (i, byte) in name.iter_mut().enumerate() {
+        read(first.checked_add(i as u32)?, std::slice::from_mut(byte)).ok()?;
+        if *byte == 0 {
+            return WorldCommand::classify(&name[..i]);
+        }
+    }
+    None
 }
 /// Owned argc/argv frame published while the original runs.
 struct Frame {
@@ -165,6 +192,16 @@ pub(crate) fn busy() -> bool {
 fn original() -> Callback {
     unsafe { std::mem::transmute(ORIGINAL.load(Ordering::Acquire)) }
 }
+fn ours(slot: usize) -> bool {
+    unsafe { AtomicUsize::from_ptr(slot as *mut usize) }.load(Ordering::Acquire)
+        == gate_shim as *const () as usize
+}
+fn slots() -> impl Iterator<Item = usize> {
+    SLOTS
+        .iter()
+        .take(SLOT_COUNT.load(Ordering::Acquire) as usize)
+        .map(|s| s.load(Ordering::Acquire))
+}
 #[unsafe(naked)]
 unsafe extern "C" fn gate_shim() -> u32 {
     core::arch::naked_asm!("push ebp","mov ebp,esp","and esp,-16","call {implementation}","mov esp,ebp","pop ebp","ret",implementation=sym gate_impl);
@@ -177,15 +214,19 @@ unsafe extern "C" fn gate_impl() -> u32 {
     FLIGHT.fetch_add(1, Ordering::AcqRel);
     bump(Count::Calls);
     let owner = unsafe { GetCurrentThreadId() } == OWNER.load(Ordering::Acquire);
-    let argc = if owner {
-        word(BINDINGS[0].load(Ordering::Acquire)).unwrap_or(0)
+    let (argc, command) = if owner {
+        (
+            word(BINDINGS[0].load(Ordering::Acquire)).unwrap_or(0),
+            current_command(),
+        )
     } else {
-        0
+        (0, None)
     };
     let entry = load_gate::decide(EntryState {
         owner_thread: owner,
         replaying: REPLAYING.load(Ordering::Acquire),
         job_active: JOB_ACTIVE.load(Ordering::Acquire),
+        command,
         argc,
         visual_allocated: crate::engine_visual::allocated(),
     });
@@ -215,9 +256,11 @@ unsafe extern "C" fn gate_impl() -> u32 {
             0
         }
         Entry::Defer => {
+            let command = command.expect("deferred calls are classified");
+            LAST_COMMAND.store(command as u32, Ordering::Release);
             // Stop drawing first: whatever happens next, no new queued draw.
             let restore = crate::engine_visual::suspend_for_load();
-            match admit(argc, restore) {
+            match admit(command, argc, restore) {
                 Ok(()) => {
                     FALLBACK.store(false, Ordering::Release);
                     bump(Count::Deferred);
@@ -235,13 +278,16 @@ unsafe extern "C" fn gate_impl() -> u32 {
     unsafe { SetLastError(incoming) };
     result
 }
-fn admit(argc: u32, restore: bool) -> Result<(), Note> {
+fn admit(command: WorldCommand, argc: u32, restore: bool) -> Result<(), Note> {
     let argv = word(BINDINGS[1].load(Ordering::Acquire)).map_err(|_| Note::CaptureFailed)?;
     // Copies argv[0..argc] before cmd_execute's stack frame returns.
-    let command = OwnedCommand::capture(argc, argv, |at, out| {
+    let owned = OwnedCommand::capture_world(argc, argv, |at, out| {
         read(at, out).map_err(|_| String::new())
     })
     .map_err(|_| Note::CaptureFailed)?;
+    if owned.name() != command.name() {
+        return Err(Note::CaptureFailed);
+    }
     let world = world();
     if !(world.epoch != 0 && world.ready) {
         return Err(Note::InvalidWorld);
@@ -252,30 +298,45 @@ fn admit(argc: u32, restore: bool) -> Result<(), Note> {
     let inherited = gate
         .discard_terminal()
         .map_err(|_| Note::AdmitFailed)?
-        .is_some_and(|(_, restore)| restore);
-    let admitted = gate.admit(
+        .is_some_and(|(phase, restore)| {
+            restore || (phase != Phase::Complete && JOB_RESTORE.load(Ordering::Acquire))
+        });
+    let restore = (restore || inherited || RESTORE_PENDING.swap(false, Ordering::AcqRel))
+        && command.restorable();
+    let awaits = command.awaits_player();
+    let admitted = gate.admit_with(
         OWNER.load(Ordering::Acquire),
-        command,
+        owned,
         world,
-        restore || inherited,
+        restore,
+        awaits,
         now(),
         u64::from(TIMEOUT.load(Ordering::Acquire)),
     );
+    if admitted.is_ok() {
+        JOB_RESTORE.store(restore, Ordering::Release);
+        JOB_AWAITS.store(awaits, Ordering::Release);
+    }
     publish(gate);
     admitted.map(drop).map_err(|_| Note::AdmitFailed)
-}
-fn finish_complete(gate: &mut Gate) {
-    let s = gate.snapshot();
-    if s.phase == Phase::Complete
-        && let Some(id) = s.id
-    {
-        let _ = gate.finish(id);
-    }
 }
 enum Step {
     Again,
     Stop,
     Execute(Action),
+}
+fn finish_complete(gate: &mut Gate) {
+    let s = gate.snapshot();
+    if s.phase == Phase::Complete
+        && let Some(id) = s.id
+        && gate.finish(id).is_ok()
+        && !JOB_AWAITS.load(Ordering::Acquire)
+        && JOB_RESTORE.swap(false, Ordering::AcqRel)
+    {
+        // No player world follows: restore on the next distinct actor.
+        RESTORE_EPOCH.store(crate::engine_visual::witness().1, Ordering::Release);
+        RESTORE_PENDING.store(true, Ordering::Release);
+    }
 }
 fn step(gate: &mut Gate, fixture: bool) -> Step {
     let context = crate::engine_phase::release_context();
@@ -327,12 +388,10 @@ fn step(gate: &mut Gate, fixture: bool) -> Step {
 }
 /// Replay outside cmd_execute, at the outer loop, exactly once.
 fn replay(command: &OwnedCommand) -> Ack {
-    let slot = SLOT.load(Ordering::Acquire);
-    let ours = |s: usize| {
-        unsafe { AtomicUsize::from_ptr(s as *mut usize) }.load(Ordering::Acquire)
-            == gate_shim as *const () as usize
-    };
-    if !ours(slot) || !matches!(word(BINDINGS[2].load(Ordering::Acquire)), Ok(h) if h != 0) {
+    let hooked: Vec<usize> = slots().collect();
+    if !hooked.iter().all(|s| ours(*s))
+        || !matches!(word(BINDINGS[2].load(Ordering::Acquire)), Ok(h) if h != 0)
+    {
         return Ack::NotInvoked;
     }
     let [argc_at, argv_at] = [0, 1].map(|i| BINDINGS[i].load(Ordering::Acquire));
@@ -362,11 +421,30 @@ fn replay(command: &OwnedCommand) -> Ack {
     } else {
         std::mem::forget(frame);
     }
-    if ours(slot) {
+    if hooked.iter().all(|s| ours(*s)) {
         Ack::ExecuteReturned
     } else {
-        // Another owner replaced the descriptor during the load: no recreation.
+        // Another owner replaced a descriptor during the load: no recreation.
         Ack::Unknown
+    }
+}
+/// After exit/menu/edit/preview: recreate once a new player entity is drawn.
+fn restore_pending(fixture: bool) {
+    if !RESTORE_PENDING.load(Ordering::Acquire) || JOB_ACTIVE.load(Ordering::Acquire) {
+        return;
+    }
+    if crate::engine_visual::allocated() {
+        // Shown again by other means: nothing left to restore.
+        RESTORE_PENDING.store(false, Ordering::Release);
+        return;
+    }
+    let current = world();
+    if !current.ready || current.epoch <= u64::from(RESTORE_EPOCH.load(Ordering::Acquire)) {
+        return;
+    }
+    RESTORE_PENDING.store(false, Ordering::Release);
+    if crate::engine_visual::recreate_for_load(fixture).is_ok() {
+        bump(Count::Recreated);
     }
 }
 /// Pump pass at depth 1, before the visual's own maintenance.
@@ -405,6 +483,10 @@ pub(crate) fn maintain(fixture: bool) {
         publish(gate);
     }
     let Some(action) = pending else {
+        drop(guard);
+        if !FALLBACK.load(Ordering::Acquire) {
+            restore_pending(fixture);
+        }
         return;
     };
     // The original may pump nested messages; no gate lock is held meanwhile.
@@ -414,51 +496,33 @@ pub(crate) fn maintain(fixture: bool) {
         && let Some(gate) = guard.as_mut()
     {
         let _ = gate.acknowledge(action.token, ack, now());
+        finish_complete(gate);
         publish(gate);
     }
 }
-fn replace(expected: usize, desired: usize) -> Result<(), String> {
-    let at = SLOT.load(Ordering::Acquire);
+fn replace(slot: usize, expected: usize, desired: usize) -> Result<(), String> {
     let mut old = 0;
-    if unsafe { VirtualProtect(at as *const c_void, 4, PAGE_READWRITE, &mut old) } == 0 {
-        return Err("cannot unlock map descriptor".into());
+    if unsafe { VirtualProtect(slot as *const c_void, 4, PAGE_READWRITE, &mut old) } == 0 {
+        return Err("cannot unlock command descriptor".into());
     }
-    if PROTECTION.load(Ordering::Acquire) == 0 {
-        PROTECTION.store(old, Ordering::Release);
-    }
-    let slot = unsafe { AtomicUsize::from_ptr(at as *mut usize) };
-    let exchanged = slot.compare_exchange(expected, desired, Ordering::AcqRel, Ordering::Acquire);
+    let word = unsafe { AtomicUsize::from_ptr(slot as *mut usize) };
+    let exchanged = word.compare_exchange(expected, desired, Ordering::AcqRel, Ordering::Acquire);
     let mut ignored = 0;
-    if unsafe {
-        VirtualProtect(
-            at as *const c_void,
-            4,
-            PROTECTION.load(Ordering::Acquire),
-            &mut ignored,
-        )
-    } == 0
-    {
-        return Err("map descriptor protection not restored; retry removal".into());
+    if unsafe { VirtualProtect(slot as *const c_void, 4, old, &mut ignored) } == 0 {
+        return Err("command descriptor protection not restored; retry removal".into());
     }
-    PROTECTION.store(0, Ordering::Release);
     exchanged
         .map(drop)
-        .map_err(|_| "map descriptor owner changed; refusing overwrite".into())
+        .map_err(|_| "command descriptor owner changed; refusing overwrite".into())
 }
-/// Window-thread install, after pump/render/draw in the same mode.
-pub fn install(thread: u32, b: &EngineControl) -> Result<(), String> {
-    if STATE.load(Ordering::Acquire) == 1 {
-        return Err("map gate already installed".into());
-    }
-    let context = crate::engine_phase::release_context();
-    if !context.pump_installed || context.owner_thread != thread {
-        return Err("attach the pump on this window thread before the map gate".into());
-    }
-    let fixture = b.command == api::UI_LOAD_GATE_FIXTURE;
-    if crate::engine_draw::mode() != Some(fixture) || !crate::engine_render::installed() {
-        return Err("attach draw and render observers in the same mode before the map gate".into());
-    }
-    let process = Process::open(unsafe { GetCurrentProcessId() }).map_err(|e| e.to_string())?;
+/// Descriptors to hook with their expected names, the shared callback and the
+/// argc/argv/handler words; validated by the caller.
+struct Targets {
+    list: Vec<(u32, &'static str)>,
+    callback: u32,
+    bindings: [u32; 3],
+}
+fn descriptors(process: &Process, b: &EngineControl, fixture: bool) -> Result<Targets, String> {
     let modules = process.modules().map_err(|e| e.to_string())?;
     let get = |name: &str| {
         modules
@@ -466,46 +530,94 @@ pub fn install(thread: u32, b: &EngineControl) -> Result<(), String> {
             .find(|m| m.name.eq_ignore_ascii_case(name))
             .ok_or_else(|| format!("{name} missing"))
     };
-    let (descriptor, callback, bindings) = if fixture {
+    if fixture {
         executable(b.fixture[1], get("engine_fixture.exe")?)?;
-        (
-            b.fixture[0],
-            b.fixture[1],
-            [b.fixture[2], b.fixture[3], b.fixture[4]],
-        )
-    } else {
-        let audit = crate::inspection::commands::inspect(&process).map_err(|e| e.to_string())?;
-        if !audit.map_registered || !audit.map_profile_matches {
-            return Err("map is not registered with the profiled descriptor/callback".into());
+        let mut list = vec![(b.fixture[0], "map")];
+        // The own fixture may register one extra non-player command (exit).
+        if b.fixture[5] != 0 {
+            list.push((b.fixture[5], "exit"));
         }
-        let core = get("prism3d.exe")?;
-        let game = get("game.dll")?;
-        executable(audit.map_callback, game)?;
-        (
-            audit.map_descriptor,
-            audit.map_callback,
-            [
-                add(core, profile::COMMAND_ARGC)?,
-                add(core, profile::COMMAND_ARGV)?,
-                add(game, profile::COMMAND_CONTEXT)?,
-            ],
-        )
-    };
-    let slot =
-        crate::command_registry::map_observer_slot(descriptor, callback, bindings, |at, out| {
-            process.read(at, out).map_err(|e| e.to_string())
-        })?;
+        return Ok(Targets {
+            list,
+            callback: b.fixture[1],
+            bindings: [b.fixture[2], b.fixture[3], b.fixture[4]],
+        });
+    }
+    let audit = crate::inspection::commands::inspect(process).map_err(|e| e.to_string())?;
+    if !audit.map_registered || !audit.map_profile_matches {
+        return Err("map is not registered with the profiled descriptor/callback".into());
+    }
+    let core = get("prism3d.exe")?;
+    let game = get("game.dll")?;
+    executable(audit.map_callback, game)?;
+    let mut list = Vec::new();
+    for command in WORLD_COMMANDS {
+        let entry = audit
+            .entries
+            .iter()
+            .find(|e| e.name == command.name())
+            .ok_or_else(|| format!("{} is not registered", command.name()))?;
+        if entry.callback != audit.map_callback || !entry.hash_matches {
+            return Err(format!(
+                "{} does not use the profiled shared handler",
+                command.name()
+            ));
+        }
+        list.push((entry.address, command.name()));
+    }
+    Ok(Targets {
+        list,
+        callback: audit.map_callback,
+        bindings: [
+            add(core, profile::COMMAND_ARGC)?,
+            add(core, profile::COMMAND_ARGV)?,
+            add(game, profile::COMMAND_CONTEXT)?,
+        ],
+    })
+}
+/// Window-thread install, after pump/render/draw in the same mode.
+pub fn install(thread: u32, b: &EngineControl) -> Result<(), String> {
+    if STATE.load(Ordering::Acquire) == 1 {
+        return Err("command gate already installed".into());
+    }
+    let context = crate::engine_phase::release_context();
+    if !context.pump_installed || context.owner_thread != thread {
+        return Err("attach the pump on this window thread before the command gate".into());
+    }
+    let fixture = b.command == api::UI_LOAD_GATE_FIXTURE;
+    if crate::engine_draw::mode() != Some(fixture) || !crate::engine_render::installed() {
+        return Err("attach draw and render observers in the same mode before the gate".into());
+    }
+    let process = Process::open(unsafe { GetCurrentProcessId() }).map_err(|e| e.to_string())?;
+    let Targets {
+        list,
+        callback,
+        bindings,
+    } = descriptors(&process, b, fixture)?;
+    let mut hooked = Vec::new();
+    for (descriptor, name) in list {
+        let slot = crate::command_registry::command_slot(
+            descriptor,
+            name.as_bytes(),
+            callback,
+            bindings,
+            |at, out| process.read(at, out).map_err(|e| e.to_string()),
+        )?;
+        if hooked.contains(&(slot as usize)) || bindings.contains(&slot) {
+            return Err("aliased command descriptors".into());
+        }
+        hooked.push(slot as usize);
+    }
     let timeout = match b.cycles {
         0 => load_gate::DEFAULT_TIMEOUT_MS,
         t => t.clamp(1_000, 600_000),
     };
     let gate = Gate::new(thread).map_err(|e| e.to_string())?;
     {
-        let mut guard = GATE.lock().map_err(|_| "map gate state poisoned")?;
+        let mut guard = GATE.lock().map_err(|_| "command gate state poisoned")?;
         publish(&gate);
         *guard = Some(gate);
     }
-    SLOT.store(slot as usize, Ordering::Release);
     ORIGINAL.store(callback as usize, Ordering::Release);
     for (dst, src) in BINDINGS.iter().zip(bindings) {
         dst.store(src, Ordering::Release);
@@ -514,37 +626,55 @@ pub fn install(thread: u32, b: &EngineControl) -> Result<(), String> {
     FIXTURE.store(fixture, Ordering::Release);
     TIMEOUT.store(timeout, Ordering::Release);
     FALLBACK.store(false, Ordering::Release);
+    RESTORE_PENDING.store(false, Ordering::Release);
+    SLOT_COUNT.store(0, Ordering::Release);
     STATE.store(1, Ordering::Release);
-    if let Err(error) = replace(callback as usize, gate_shim as *const () as usize) {
-        STATE.store(2, Ordering::Release);
-        return Err(error);
+    for (i, slot) in hooked.iter().enumerate() {
+        if let Err(error) = replace(*slot, callback as usize, gate_shim as *const () as usize) {
+            // Roll back the words already ours; the rest were never touched.
+            let rollback = unhook();
+            STATE.store(2, Ordering::Release);
+            return Err(format!("{error}; rollback={rollback:?}"));
+        }
+        SLOTS[i].store(*slot, Ordering::Release);
+        SLOT_COUNT.store(i as u32 + 1, Ordering::Release);
     }
     Ok(())
 }
-/// Refuses while a deferred load may still act; terminal jobs are dropped.
+fn unhook() -> Result<(), String> {
+    let original = ORIGINAL.load(Ordering::Acquire);
+    let mut first = Ok(());
+    for slot in slots() {
+        let current = unsafe { AtomicUsize::from_ptr(slot as *mut usize) }.load(Ordering::Acquire);
+        let result = if current == original {
+            Ok(())
+        } else {
+            replace(slot, gate_shim as *const () as usize, original)
+        };
+        if first.is_ok() {
+            first = result;
+        }
+    }
+    first
+}
+/// Refuses while a deferred command may still act; terminal jobs are dropped.
 pub fn remove() -> Result<(), String> {
     if STATE.load(Ordering::Acquire) != 1 {
         return Ok(());
     }
     if FLIGHT.load(Ordering::Acquire) != 0 || REPLAYING.load(Ordering::Acquire) {
-        return Err("map gate callback active; retry removal".into());
+        return Err("command gate callback active; retry removal".into());
     }
     if busy() {
-        return Err("deferred load still active; wait for load-gate-status to settle".into());
+        return Err("deferred command still active; wait for load-gate-status to settle".into());
     }
-    let slot = SLOT.load(Ordering::Acquire);
-    let current = unsafe { AtomicUsize::from_ptr(slot as *mut usize) }.load(Ordering::Acquire);
-    let original = ORIGINAL.load(Ordering::Acquire);
-    if current == original {
-        replace(original, original)?;
-    } else {
-        replace(gate_shim as *const () as usize, original)?;
-    }
+    unhook()?;
     STATE.store(2, Ordering::Release);
     if let Ok(mut guard) = GATE.lock() {
         *guard = None;
     }
     JOB_ACTIVE.store(false, Ordering::Release);
+    RESTORE_PENDING.store(false, Ordering::Release);
     Ok(())
 }
 pub(crate) fn installed() -> bool {
@@ -587,6 +717,8 @@ pub fn control(b: &mut EngineControl) -> Result<(), String> {
         recreated: count(Count::Recreated),
         fallback_releases: count(Count::FallbackReleases),
         fallback_pending: FALLBACK.load(Ordering::Acquire),
+        restore_pending: RESTORE_PENDING.load(Ordering::Acquire),
+        last_command: WorldCommand::from_u32(LAST_COMMAND.load(Ordering::Acquire)),
         actor: WITNESS[0].load(Ordering::Acquire),
         scene: WITNESS[1].load(Ordering::Acquire),
         epoch: WITNESS[2].load(Ordering::Acquire),

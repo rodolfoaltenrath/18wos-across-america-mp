@@ -73,7 +73,7 @@ pub const VISUAL_CHECK: u32 = 51;
 /// Passive entry/return observation of the map descriptor callback; never defer.
 pub const UI_TRANSITION_MAP: u32 = 52;
 pub const UI_TRANSITION_MAP_FIXTURE: u32 = 53;
-/// ACTIVE map gate: defers a load while the visual is retained (see load_gate).
+/// ACTIVE world-command gate (map/preview/edit/exit/menu/quit): defers while the visual is retained.
 pub const UI_LOAD_GATE_ATTACH: u32 = 54;
 pub const UI_LOAD_GATE_FIXTURE: u32 = 55;
 pub const UI_LOAD_GATE_REMOVE: u32 = 56;

@@ -69,7 +69,7 @@ fn main() -> anyhow::Result<()> {
             /// Keep the fallback shader instead of the AI truck skin.
             #[arg(long)]
             no_skin: bool,
-            /// Do not install the active map gate (loads then require session-prepare-load).
+            /// Do not install the command gate (loads/exits then require session-prepare-load).
             #[arg(long)]
             no_load_gate: bool,
             /// Gate deadline from a load request to the recreated visual, in seconds.
@@ -135,7 +135,7 @@ fn main() -> anyhow::Result<()> {
             output: Option<PathBuf>,
         },
         TransitionRemove,
-        /// ACTIVE map gate: defers a load while the visual is retained, releases it,
+        /// ACTIVE gate for map/preview/edit/exit/menu/quit: defers while the visual is retained, releases it,
         /// replays the original once and recreates the visual. Needs pump+render+draw.
         LoadGateAttach {
             #[arg(long, default_value_t = 120, value_parser = clap::value_parser!(u32).range(1..=600))]

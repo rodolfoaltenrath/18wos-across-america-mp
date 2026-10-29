@@ -19,6 +19,10 @@ pub unsafe fn setup(page: *mut c_void) {
     {
         unsafe { page.cast::<u32>().add(0x90 / 4 + i).write(value) };
     }
+    // A second descriptor sharing the same callback, like the game's `exit`.
+    for (i, value) in exit_header().into_iter().enumerate() {
+        unsafe { page.cast::<u32>().add(0xa0 / 4 + i).write(value) };
+    }
     ARGUMENTS[0].store(c"map".as_ptr() as u32, Ordering::Release);
     // Deliberately unreadable second argument: the observer must never read it.
     ARGUMENTS[1].store(1, Ordering::Release);
@@ -32,6 +36,15 @@ pub fn descriptors(page: *mut c_void) -> [u32; 6] {
         &ARGC as *const _ as u32,
         &ARGV as *const _ as u32,
         &PROC as *const _ as u32,
+        page as u32 + 0xa0,
+    ]
+}
+fn exit_header() -> [u32; 4] {
+    // Signed byte sum of "exit", the registry hash.
+    [
+        c"exit".as_ptr() as u32,
+        original as *const () as u32,
+        442,
         0,
     ]
 }
@@ -135,6 +148,7 @@ pub fn command(line: &str) -> bool {
         "gate-map-twice" => REQUEST.store(16, Ordering::Release),
         "gate-map-bad" => REQUEST.store(17, Ordering::Release),
         "gate-map-short" => REQUEST.store(18, Ordering::Release),
+        "gate-exit" => REQUEST.store(19, Ordering::Release),
         "gate-map-nested" => {
             GATE_NESTED.store(true, Ordering::Release);
             REQUEST.store(15, Ordering::Release);
@@ -180,6 +194,12 @@ pub fn check_restored(page: *mut c_void) {
             expected
         );
     }
+    for (i, expected) in exit_header().into_iter().enumerate() {
+        assert_eq!(
+            word(page as u32 + 0xa0 + i as u32 * 4).load(Ordering::Acquire),
+            expected
+        );
+    }
 }
 // Active load-gate mode (MODE 6): the descriptor is invoked like cmd_execute
 // (globals published, callback read from descriptor+4), then the source argv
@@ -190,14 +210,14 @@ static GATE_ARGS: [AtomicU32; 2] = [const { AtomicU32::new(0) }; 2];
 static GATE_IN_INVOKE: AtomicBool = AtomicBool::new(false);
 static GATE_NESTED: AtomicBool = AtomicBool::new(false);
 /// invokes, loads, synchronous loads, unsafe loads, bad calls, swallowed,
-/// no-argument calls, nested calls, wrong LastError/stack.
-static GATE: [AtomicU32; 9] = [const { AtomicU32::new(0) }; 9];
+/// no-argument calls, nested calls, wrong LastError/stack, exits.
+static GATE: [AtomicU32; 10] = [const { AtomicU32::new(0) }; 10];
 fn gate_bump(i: usize) {
     GATE[i].fetch_add(1, Ordering::AcqRel);
 }
 fn gate_stats() -> serde_json::Value {
     let g = |i: usize| GATE[i].load(Ordering::Acquire);
-    serde_json::json!({"invokes":g(0),"loads":g(1),"synchronous_loads":g(2),"unsafe_loads":g(3),"bad_calls":g(4),"swallowed":g(5),"no_arguments":g(6),"nested":g(7),"abi_errors":g(8),"live_instances":crate::fixture_actor::live_instances()})
+    serde_json::json!({"invokes":g(0),"loads":g(1),"synchronous_loads":g(2),"unsafe_loads":g(3),"bad_calls":g(4),"swallowed":g(5),"no_arguments":g(6),"nested":g(7),"abi_errors":g(8),"exits":g(9),"playerless":super::super::PLAYERLESS.load(Ordering::Acquire),"live_instances":crate::fixture_actor::live_instances()})
 }
 fn cstr(at: u32) -> Option<&'static [u8]> {
     // Own fixture memory: the bound argv frame or the source arguments.
@@ -211,8 +231,17 @@ fn gate_load() -> u32 {
     let argv = ARGV.load(Ordering::Acquire) as *const u32;
     let owner = unsafe { windows_sys::Win32::System::Threading::GetCurrentThreadId() }
         == super::super::OWNER.load(Ordering::Acquire);
+    let first = (argc >= 1).then(|| cstr(unsafe { *argv })).flatten();
     if depth > 0 {
         gate_bump(7);
+    } else if first == Some(b"exit") {
+        // Leave the player world for a menu: no car is drawn afterwards.
+        gate_bump(9);
+        let pending = !super::super::DRAWN.lock().unwrap().pending.is_empty();
+        if !owner || argc != 1 || crate::fixture_actor::live_instances() != 0 || pending {
+            gate_bump(3);
+        }
+        super::super::PLAYERLESS.store(true, Ordering::Release);
     } else if argc < 2 {
         gate_bump(6);
     } else {
@@ -242,6 +271,7 @@ fn gate_load() -> u32 {
             };
             unsafe { callback() };
         }
+        super::super::PLAYERLESS.store(false, Ordering::Release);
         let car = super::super::CAR.load(Ordering::Acquire);
         let old = super::super::CARS
             .iter()
@@ -258,7 +288,12 @@ fn gate_load() -> u32 {
 }
 pub fn gate(kind: u32) {
     MODE.store(6, Ordering::Release);
-    GATE_ARGS[0].store(c"map".as_ptr() as u32, Ordering::Release);
+    // kind 19: `exit` through its own descriptor, argc 1.
+    let exit = kind == 19;
+    GATE_ARGS[0].store(
+        if exit { c"exit" } else { c"map" }.as_ptr() as u32,
+        Ordering::Release,
+    );
     // kind 17: unreadable second argument; the gate must drop the request.
     GATE_ARGS[1].store(
         if kind == 17 {
@@ -268,9 +303,9 @@ pub fn gate(kind: u32) {
         },
         Ordering::Release,
     );
-    ARGC.store(if kind == 18 { 1 } else { 2 }, Ordering::Release);
+    ARGC.store(if kind == 18 || exit { 1 } else { 2 }, Ordering::Release);
     ARGV.store(GATE_ARGS.as_ptr() as u32, Ordering::Release);
-    let at = PAGE.load(Ordering::Acquire) + 0x94;
+    let at = PAGE.load(Ordering::Acquire) + if exit { 0xa4 } else { 0x94 };
     for _ in 0..if kind == 16 { 2 } else { 1 } {
         let callback: unsafe extern "C" fn() -> u32 = unsafe {
             std::mem::transmute(AtomicUsize::from_ptr(at as *mut usize).load(Ordering::Acquire))

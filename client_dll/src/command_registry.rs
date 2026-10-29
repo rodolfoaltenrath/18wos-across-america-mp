@@ -108,32 +108,51 @@ pub fn map_observer_slot(
     descriptor: u32,
     callback: u32,
     bindings: [u32; 3],
+    read: impl FnMut(u64, &mut [u8]) -> Result<(), String>,
+) -> Result<u32, String> {
+    command_slot(descriptor, b"map", callback, bindings, read)
+}
+/// Same preflight for any profiled command descriptor of the shared handler:
+/// exact NUL-terminated name, signed-sum hash, callback, stable header.
+pub fn command_slot(
+    descriptor: u32,
+    expected: &[u8],
+    callback: u32,
+    bindings: [u32; 3],
     mut read: impl FnMut(u64, &mut [u8]) -> Result<(), String>,
 ) -> Result<u32, String> {
     if descriptor == 0 || !descriptor.is_multiple_of(4) || callback == 0 {
-        return Err("invalid map descriptor alignment or callback".into());
+        return Err("invalid command descriptor alignment or callback".into());
+    }
+    if expected.is_empty() || expected.len() > 15 || expected.contains(&0) {
+        return Err("invalid expected command name".into());
     }
     let end = descriptor
         .checked_add(16)
-        .ok_or("map descriptor overflow")?;
+        .ok_or("command descriptor overflow")?;
     for (i, &binding) in bindings.iter().enumerate() {
         if binding == 0
             || !binding.is_multiple_of(4)
             || (descriptor..end).contains(&binding)
             || bindings[..i].contains(&binding)
         {
-            return Err("invalid or aliased map binding".into());
+            return Err("invalid or aliased command binding".into());
         }
         word(&mut read, binding)?;
     }
     let before = header(&mut read, descriptor)?;
-    let mut name = [0; 4];
-    read(before[0].into(), &mut name)?;
-    if name != *b"map\0" || before[1] != callback || before[2] != name_hash(b"map") {
-        return Err("map descriptor name/hash/callback mismatch".into());
+    let mut name = [0; 16];
+    let name = &mut name[..=expected.len()];
+    read(before[0].into(), name)?;
+    if &name[..expected.len()] != expected
+        || name[expected.len()] != 0
+        || before[1] != callback
+        || before[2] != name_hash(expected)
+    {
+        return Err("command descriptor name/hash/callback mismatch".into());
     }
     if header(&mut read, descriptor)? != before {
-        return Err("map descriptor changed during preflight".into());
+        return Err("command descriptor changed during preflight".into());
     }
     Ok(descriptor + 4)
 }
@@ -422,5 +441,39 @@ mod tests {
             .unwrap_err()
             .contains("changed")
         );
+    }
+}
+#[cfg(test)]
+mod command_slot_tests {
+    use super::*;
+    #[test]
+    fn command_slot_requires_the_exact_terminated_name_and_its_hash() {
+        let mut memory = [0u8; 160];
+        memory[32..37].copy_from_slice(b"exit\0");
+        memory[40..46].copy_from_slice(b"exitx\0");
+        let header = |m: &mut [u8; 160], name: u32, hash: u32| {
+            for (i, v) in [name, 0x1234, hash, 0].into_iter().enumerate() {
+                m[64 + i * 4..68 + i * 4].copy_from_slice(&v.to_le_bytes());
+            }
+        };
+        let run = |m: &[u8; 160], expected: &[u8]| {
+            command_slot(64, expected, 0x1234, [128, 132, 136], |at, out| {
+                out.copy_from_slice(
+                    m.get(at as usize..at as usize + out.len())
+                        .ok_or("unmapped")?,
+                );
+                Ok(())
+            })
+        };
+        header(&mut memory, 32, name_hash(b"exit"));
+        assert_eq!(run(&memory, b"exit").unwrap(), 68);
+        assert!(run(&memory, b"exi").is_err());
+        assert!(run(&memory, b"map").is_err());
+        assert!(run(&memory, b"").is_err());
+        assert!(run(&memory, b"exit\0").is_err());
+        header(&mut memory, 40, name_hash(b"exit"));
+        assert!(run(&memory, b"exit").is_err());
+        header(&mut memory, 32, name_hash(b"exit") + 1);
+        assert!(run(&memory, b"exit").is_err());
     }
 }

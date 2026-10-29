@@ -1,4 +1,4 @@
-//! Active map gate end to end on the own fixture: session-start installs it,
+//! Active world-command gate end to end on the own fixture: session-start installs it,
 //! a load request with a retained visual is deferred, the visual is released
 //! before the fixture's load runs, the original is replayed once with copied
 //! arguments and the visual is recreated in the new world.
@@ -281,6 +281,29 @@ fn deferred_map_releases_before_load_replays_once_and_recreates() {
     });
     assert_eq!(s["load_gate"]["deferred"], 6);
 
+    // 10. exit leaves the player world: released first, completed on return,
+    // then restored once a later (ungated) map draws a new player truck.
+    assert_eq!(b.send("gate-exit"), "armed");
+    let st = b.stats_until("exit", |s| s["exits"] == 1);
+    assert_eq!(st["unsafe_loads"], 0, "{st}");
+    assert_eq!(st["playerless"], true);
+    let s = b.until("exit completed", |s| {
+        idle(s) && s["visual"]["state"] == 0 && s["load_gate"]["restore_pending"] == true
+    });
+    assert_eq!(s["load_gate"]["last_command"], "exit");
+    assert_eq!(s["load_gate"]["deferred"], 7);
+    assert_eq!(s["load_gate"]["recreated"], 4);
+    // In the menu nothing is drawn and nothing is recreated.
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(b.status()["visual"]["state"], 0);
+    assert_eq!(b.send("gate-map"), "armed");
+    let st = b.stats_until("map from menu", |s| s["synchronous_loads"] == 2);
+    assert_eq!(st["playerless"], false);
+    let s = b.until("restored after menu", |s| {
+        s["load_gate"]["recreated"] == 5 && shown(s) && s["load_gate"]["restore_pending"] == false
+    });
+    assert_eq!(s["load_gate"]["forwarded"], 3);
+
     // 9. Session stop waits for the gate, releases, removes it and restores.
     let stopped = b.launcher(&["session-stop", "--timeout", "10"]);
     assert!(stopped.status.success(), "{stopped:?}");
@@ -299,7 +322,7 @@ fn deferred_map_releases_before_load_replays_once_and_recreates() {
     assert_eq!(st["bad_calls"], 0);
     // After removal the descriptor forwards directly again.
     assert_eq!(b.send("gate-map"), "armed");
-    b.stats_until("direct load after removal", |s| s["synchronous_loads"] == 2);
+    b.stats_until("direct load after removal", |s| s["synchronous_loads"] == 3);
     writeln!(b.host.0.stdin.as_mut().unwrap(), "quit").unwrap();
     assert!(b.host.0.wait().unwrap().success());
 }

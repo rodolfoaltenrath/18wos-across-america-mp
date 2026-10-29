@@ -24,7 +24,7 @@ pub struct Options {
     pub offset: [f32; 3],
     /// Apply the AI truck skin (fixture: its own shader name).
     pub skin: bool,
-    /// Install the active map gate (automatic release/replay/recreate on load).
+    /// Install the active world-command gate (release/replay/recreate on map, exit, ...).
     pub load_gate: bool,
     /// Gate deadline from the load request to recreation, in milliseconds.
     pub load_timeout_ms: u32,
