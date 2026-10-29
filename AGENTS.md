@@ -454,3 +454,27 @@ recriado no próximo ator distinto (`restore_pending`); `quit` nunca restaura.
 87 nativos/91 x86, Clippy e rustfmt; cenário `exit`→menu→`map` na fixture.
 Sem teste no jogo desses cinco. Próximo: sessão real agrupada (exit, carga do
 menu principal, quit com visual) e depois LAN com dois PCs.
+
+Revisão Windows de 29/10/2026 (base `26ece45`): corrigidos journal/rollback do
+gate. Os slots são registrados antes da escrita; callback e proteção de página
+têm recuperação separada. Se o rollback falhar, o gate continua instalado para
+permitir nova remoção e recusar reinstalação. Nunca sobrescrever um callback de
+outro dono. Instalação e `session-stop` agora resolvem os seis descritores com
+a mesma auditoria; o stop confere 14 slots. Os nove slots dos registros antigos
+são históricos. Novas fixtures cobrem falhas parciais e uma página read-only real
+Win32 x86 com seis palavras; não executam callbacks do jogo.
+
+Entregue `network_lab` (M8): três cenários com relógio virtual, protocolo e
+interpolação de produção, perda/duplicação/atraso/jitter/reordenação, fila limitada
+e interrupção/recuperação. O filtro de sequência é simulado; não chama worker,
+sockets ou motor. `game_tested=false`/`lan_tested=false`. O lote de 36.000 pacotes
+por cenário passou em release Windows x64 e x86 (108.000 gerados por alvo), com
+JSON idêntico. Sem nova execução Linux ou partida neste bloco. README contém
+comando e limites; artefatos `network-lab-windows-20261029-*` ignorados.
+
+`dev_env verify` final passou: 101 testes x86 e 101 nativos Windows x64, builds
+release, Clippy nos dois alvos e rustfmt. Não comparar esse total nativo com o
+do Fedora sem considerar testes condicionais Windows. Jogo não foi iniciado;
+nenhuma nova DLL injetada. Reenumerar antes de novo build/uso. Próximo marco de
+integração preservado: sessão agrupada exit/menu/map/quit com eco e, depois,
+LAN entre dois PCs. Sem prova nova dos cinco comandos nem de LAN neste bloco.

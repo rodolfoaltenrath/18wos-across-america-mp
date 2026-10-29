@@ -199,21 +199,30 @@ fn verify_slots(pid: u32) -> Result<Vec<Value>> {
         base("p3shared.dll")?,
     );
     let mut rows = Vec::new();
-    for (name, slot, expected) in [
+    let mut expected_slots: Vec<(String, u64, u64)> = [
         ("actors.car draw", game + 0x12580c, game + 0x5a6a0),
         ("actors.car init", game + 0x1257fc, game + 0x50f40),
         ("actors.car done", game + 0x125800, game + 0x515d0),
         ("init_eblock import", game + 0x124560, engine + 0xc270),
         ("destroy_eblock import", game + 0x1242b4, engine + 0xc600),
         ("cmd_argv binding", game + 0x160930, core + 0xe210),
-        (
-            "map descriptor callback",
-            game + u64::from(client_dll::profile::MAP_DESCRIPTOR) + 4,
-            game + u64::from(client_dll::profile::MAP_CALLBACK),
-        ),
         ("render_pool import", core + 0x22240, gfx + 0x3690),
         ("gfx_path_flush binding", game + 0x160ea0, core + 0x4820),
-    ] {
+    ]
+    .into_iter()
+    .map(|(name, slot, expected)| (name.into(), slot, expected))
+    .collect();
+    let audit = client_dll::inspection::commands::inspect(&process)?;
+    for (command, descriptor) in
+        client_dll::command_registry::world_gate_descriptors(&audit).map_err(anyhow::Error::msg)?
+    {
+        expected_slots.push((
+            format!("{} descriptor callback", command.name()),
+            u64::from(descriptor) + 4,
+            u64::from(audit.map_callback),
+        ));
+    }
+    for (name, slot, expected) in expected_slots {
         let mut bytes = [0; 4];
         process.read(slot, &mut bytes)?;
         let actual = u64::from(u32::from_le_bytes(bytes));

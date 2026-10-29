@@ -49,6 +49,8 @@ mod engine_transition;
 pub mod engine_values;
 #[cfg(all(windows, target_arch = "x86"))]
 mod engine_visual;
+#[cfg(any(all(windows, target_arch = "x86"), test))]
+mod hook_transaction;
 #[cfg(windows)]
 pub mod inspection;
 pub mod interpolation;

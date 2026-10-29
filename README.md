@@ -18,17 +18,17 @@ incluindo repetição após recarregar uma partida.
 No Windows, o proprietário já confirmou um caminhão de teste sem textura,
 4 m ao lado do seu, copiando seus movimentos e rotação. É um visual PSM,
 sem física/colisão próprias, não outro jogador conectado.
-Os avanços seguintes têm provas na bancada própria; a última verificação
-registrada passou com 41 testes x86 e 47 nativos, Clippy e formatação.
 O eco num PC já transmitiu/desenhou poses com rotação na partida; após fornecer
 iluminação da cena, o usuário confirmou a textura correta durante movimento.
 Carregar com liberação prévia e recriar explicitamente também passou no jogo.
-Recarga automática com instância retida, vários remotos e LAN entre dois PCs
-continuam sem validação. Ainda não há multiplayer LAN validado.
-O primeiro teste com eco já desenhou poses recebidas, mas o usuário relatou
-material preto e atraso; carregar um save com o visual retido fechou o jogo.
-A recarga automática permanece sem validação real. Ver o procedimento abaixo:
-liberar o visual antes do carregamento, até resolver o lifetime na transição.
+O gate de `map` passou depois em duas recargas reais no Fedora/Proton, com eco
+e visual visível: liberou antes da carga, reexecutou uma vez e recriou o caminhão
+com textura. A extensão a `preview`, `edit`, `exit`, `menu` e `quit` passou na
+bancada; a prova desses cinco comandos no jogo continua pendente.
+Vários remotos, suavização em LAN e LAN entre dois PCs ainda precisam de
+validação. A flag `automatic_load_supported=false` continua conservadora até
+ampliar a matriz. O primeiro crash de recarga está preservado no histórico do
+roadmap; o fallback é `--no-load-gate` com `session-prepare-load` antes de carregar.
 
 O plano completo, os critérios de conclusão e o procedimento para continuar em
 outro computador estão em [ROADMAP.MD](ROADMAP.MD). As orientações de autonomia
@@ -1049,6 +1049,13 @@ uso avulso: instale depois de pump/render/draw. A remoção é recusada enquanto
 um carregamento adiado estiver ativo. A sonda passiva `transition-map` e o
 gate são mutuamente exclusivos no mesmo descritor.
 
+A instalação conserva um registro das trocas de callback e das proteções de
+memória até concluir a restauração. Se o rollback falhar, uma nova instalação é
+recusada e a remoção pode ser tentada novamente; callbacks de outro dono nunca
+são sobrescritos. Ao encerrar uma sessão no jogo, `session-stop` agora audita os
+seis descritores e confere **14 slots** no total. Os nove slots das capturas
+históricas abaixo correspondem à versão anterior da conferência.
+
 **Validado no jogo** (Fedora/Proton, eco num PC): duas cargas de `test_mp` pelo
 menu com o caminhão espelhado visível, que voltou nas duas, sem crash, com nove
 slots e sete hashes conferidos. Antes disso, foi validado na bancada própria
@@ -1059,6 +1066,36 @@ pendentes; mantenha a janela em primeiro plano. A cobertura de
 `exit` próprio, menu sem jogador, restauração após `map`), sem teste no jogo.
 Novo jogo, morte/reinício e fechar a janela não são interceptados. Continue
 rodando `session-stop` antes de fechar o jogo. `automatic_load_supported` continua `false` até ampliar a matriz.
+
+### Laboratório de rede sem abrir o jogo
+
+`network_lab` usa relógio virtual, pacotes sintéticos de servidor a 60 Hz,
+o codec do protocolo e a interpolação do projeto. Executa três cenários:
+conexão limpa, condições configuradas e uma interrupção no meio da transmissão
+(até 1,5 s). O mesmo seed e parâmetros reproduzem o relatório JSON.
+
+```sh
+cargo run -p client_dll --bin network_lab --locked -- --packets 3600 --seed 42 --loss-permille 50 --duplicate-permille 100 --delay-ms 40 --jitter-ms 80 --output target/analysis/rede-01.json
+```
+
+No Windows, após `dev_env verify`, o executável nativo está em
+`target/x86_64-pc-windows-gnu/release/network_lab.exe`; no Linux, o comando
+Cargo acima roda nativamente. A pasta de saída precisa existir e o arquivo deve
+ser novo. `50` por mil significa 5% de perda; `100` significa 10% de chance de
+uma cópia extra. O atraso é por sentido simulado, com jitter uniforme entre
+`-80` e `+80` ms nesse exemplo, limitado a zero quando a soma fica negativa.
+
+O relatório conta perdas, cópias extras, descartes por fila cheia, reordenação,
+amostras aceitas, pacotes antigos/duplicados rejeitados, frames ocultados após
+1 s sem amostras e recuperação depois da interrupção. `--queue-capacity` limita
+datagramas em trânsito (padrão 2048, máximo 8192); a fila precisa terminar vazia
+e todas as poses calculadas precisam ser finitas. Os parâmetros de perda e
+atraso não se aplicam ao cenário limpo.
+
+É uma simulação do recebimento de um jogador, com a mesma regra de sequência
+do worker. Não chama o worker, sockets, servidor, DLL injetada ou render do
+jogo. `game_tested` e `lan_tested` ficam `false`: o resultado não mede RTT/FPS
+nem comprova suavidade entre dois PCs ou sincronização de relógios.
 
 ### Comportamento do caminhão remoto (referência)
 

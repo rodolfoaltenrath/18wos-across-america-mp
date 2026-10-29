@@ -2502,6 +2502,89 @@ com o visual visível, carregar `test_mp` a partir do menu (restauração),
 outra carga no jogo e, por fim, `quit` pelo menu com o visual visível,
 seguido de `session-verify` após a saída. Em seguida, LAN com dois PCs.
 
+### M4/M8 — Recuperação da instalação do gate e auditoria completa — 29/10/2026
+
+Revisão dos commits até `26ece45` ao retomar no Windows. Preservadas as provas
+reais de duas recargas de `map` no Fedora/Proton; os outros cinco comandos
+continuam comprovados somente na bancada. O resumo do README foi corrigido,
+pois ainda dizia que toda recarga automática estava sem validação.
+
+**Falhas encontradas e corrigidas:**
+
+- A troca do callback podia ter sucesso e a restauração de `VirtualProtect`
+  falhar antes de o slot entrar no registro de rollback. Agora os slots e o
+  journal existem antes da escrita; cada patch guarda separadamente ownership
+  do callback e a proteção original ainda pendente.
+- Um rollback incompleto marcava o gate como removido, impedindo nova tentativa
+  de limpeza. Agora conserva o estado instalado e o journal, recusa reinstalação
+  e permite repetir a remoção. A limpeza tenta todos os patches mesmo quando um
+  deles falha; não sobrescreve um callback estrangeiro.
+- `session-stop` conferia apenas o descritor de `map`. Instalação e conferência
+  final agora compartilham a resolução dos seis comandos pelo registro auditado,
+  com rejeição de nomes ausentes/duplicados, aliases, hash/callback incorretos e
+  endereços inválidos. São **14 slots** conferidos; capturas antigas de nove
+  slots não foram alteradas nem reclassificadas.
+
+**Cobertura nova:** fixtures próprias de falha em cada um dos seis pontos de
+instalação, erro antes/depois da troca, proteção pendente após o callback já
+estar restaurado, conflito de CAS, perda de ownership e palavra ilegível. Um
+teste Windows x86 usa seis palavras numa mesma página real read-only, falha
+controlada na proteção, rollback incompleto e nova tentativa; `VirtualQuery`
+confere a proteção original. Não executa callbacks do jogo nem injeta a DLL.
+
+**Limites e próximo marco:** sem novo teste no jogo neste bloco; não amplia a
+matriz dos comandos nem comprova LAN. Manter o teste real agrupado já descrito
+(saída ao menu, carga a partir dele, outra recarga e saída normal) e depois LAN
+com dois PCs. ABI v3/664 e protocolo v1 preservados. Artefatos locais em
+`target/analysis/verify-windows-20261029-hooks.log`, ignorados pelo Git.
+
+**Validação final no Windows:** `dev_env verify` passou com **101 testes x86 e
+101 nativos Windows x64**, builds release x86/nativo, Clippy dos dois alvos e
+rustfmt. O total inclui o laboratório de rede abaixo; não comparar diretamente
+com o total nativo do Fedora, pois há testes condicionais de Windows. Log final
+em `target/analysis/verify-windows-20261029-complete.log` (ignorado). Nenhum
+processo do jogo foi encontrado antes dos builds; não houve injeção na partida.
+
+### M8 — Laboratório determinístico de rede — 29/10/2026
+
+Entregue `network_lab`, binário Rust do crate `client_dll`, validado no Windows
+x64/x86 e portável para Linux (sem nova execução Linux neste bloco).
+Não exige assets, partida ou sockets.
+Usa o codec de produção e `interpolation::History`; o filtro estrito de sequência
+é simulado, não chama o worker da DLL. Não altera protocolo ou comportamento do
+servidor/cliente em produção.
+
+- Pacotes sintéticos de um remoto a 60 Hz e render com relógio virtual.
+- Perda e duplicação configuráveis por mil, atraso e jitter simétrico em ms,
+  reordenação decorrente dos prazos independentes, RNG/seed determinísticos.
+- Fila limitada, descarte por capacidade, contabilidade das cópias e drenagem.
+- Cenários limpo, degradado e interrupção de até 1,5 s no meio da transmissão.
+- Relatório JSON preserva parâmetros e contadores, ocultação por amostra antiga,
+  retomada com amostra gerada após a interrupção e verificação de poses finitas.
+  Arquivo de saída novo; não sobrescreve capturas.
+- Testes de repetibilidade, codec/interpolação, perda total, saturação da fila,
+  rejeição de parâmetros inválidos, interrupção/recuperação e conservação dos
+  pacotes. `game_tested=false` e `lan_tested=false` por definição.
+
+**Limites:** simula apenas o recebimento de um remoto. Não comprova sockets,
+agendamento do SO, custo do render, reboques, vários clientes, reconexão ou
+suavidade na LAN. RTT, relógio de servidor e negociação de sessão continuam
+pendentes em M3. O teste real agrupado dos comandos e depois LAN com dois PCs
+permanecem o próximo marco de integração. Uso reproduzível no README.
+
+**Lote release validado em ambos os alvos Windows:** `--packets 36000 --seed 42`,
+demais parâmetros padrão (perda 50/1000, duplicação 100/1000, atraso 40 ms,
+jitter ±80 ms, capacidade 2048). São 108.000 pacotes gerados por alvo nos três
+cenários; cada cenário tem dez minutos virtuais, não dez minutos de partida.
+Os dois JSONs foram idênticos byte a byte, SHA-256
+`c63d182b8b980832ccc60abbda6045077512255dbccbc87111b9046ad73ca678`.
+No cenário degradado: 1.826 perdas aleatórias, 3.377 cópias extras, 18.864
+datagramas reordenados, 18.097 amostras aceitas e 19.454 pacotes antigos/cópias
+rejeitados. Na interrupção: 35 frames simulados ocultados e recuperação com
+amostras geradas após a interrupção. Todas as filas terminaram vazias e as poses
+calculadas foram finitas. Relatórios ignorados em
+`target/analysis/network-lab-windows-20261029-{native,x86}.json`.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -2859,8 +2942,11 @@ verificada e removida em outra instalação original sem distribuir o jogo.
   servidor, interpolação/teleporte/extrapolação, fonte `drawn`, visual remoto
   ponta a ponta e sessão com backup têm testes próprios; `dev_env verify` roda
   tudo. Faltam mudança de versão e sessões com várias conexões.
-- [ ] Simular perda, duplicação, jitter, atraso e reordenação com uma ferramenta
+- [x] Simular perda, duplicação, jitter, atraso e reordenação com uma ferramenta
   Rust controlada; registrar parâmetros e resultado reproduzível.
+  Entregue `network_lab`, com relógio virtual, seed, filas limitadas, três
+  cenários e relatório JSON. Escopo: codec/interpolação e recebimento simulado;
+  não é teste do worker, sockets ou LAN. Ver registro de 29/10/2026 e README.
 - [ ] Testar sessão longa, menus, reload, encerramento abrupto e reconexão, com
   verificações de vazamento e remoção de entidades.
 - [ ] Ter logs com versão/perfil/estado e coleta opcional de métricas, sem dumps

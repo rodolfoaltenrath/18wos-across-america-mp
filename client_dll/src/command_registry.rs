@@ -29,6 +29,46 @@ pub struct Audit {
     /// This buffer is not assumed to be a consumable execution queue.
     pub execution_queue_proven: bool,
 }
+/// Resolve the complete gate set from a stable, profile-checked registry.
+/// Shared by installation and post-stop verification: neither may silently
+/// accept a missing or duplicate command, or only check `map` out of six.
+pub fn world_gate_descriptors(
+    audit: &Audit,
+) -> Result<Vec<(crate::load_gate::WorldCommand, u32)>, String> {
+    if !audit.map_registered || !audit.map_profile_matches {
+        return Err("map does not match the profiled descriptor/callback".into());
+    }
+    let mut descriptors = BTreeSet::new();
+    let mut result = Vec::new();
+    for command in crate::load_gate::WORLD_COMMANDS {
+        let mut matches = audit
+            .entries
+            .iter()
+            .filter(|entry| entry.name == command.name());
+        let entry = matches
+            .next()
+            .ok_or_else(|| format!("{} is not registered", command.name()))?;
+        if matches.next().is_some() || !descriptors.insert(entry.address) {
+            return Err(format!(
+                "{} has duplicate/aliased descriptors",
+                command.name()
+            ));
+        }
+        if entry.callback != audit.map_callback
+            || !entry.hash_matches
+            || entry.address == 0
+            || !entry.address.is_multiple_of(4)
+            || entry.address.checked_add(15).is_none()
+        {
+            return Err(format!(
+                "{} does not use a valid profiled descriptor/handler",
+                command.name()
+            ));
+        }
+        result.push((command, entry.address));
+    }
+    Ok(result)
+}
 fn image<'a>(images: &'a [Image], name: &str) -> Result<&'a Image, String> {
     let mut found = images.iter().filter(|m| m.name.eq_ignore_ascii_case(name));
     let image = found.next().ok_or_else(|| format!("{name} not loaded"))?;
@@ -250,6 +290,69 @@ pub fn inspect(
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn gate_audit() -> Audit {
+        Audit {
+            profile: profile::ID,
+            head: 0,
+            map_descriptor: 0x1000,
+            map_callback: 0x5000,
+            map_registered: true,
+            map_profile_matches: true,
+            buffer_occupied: 0,
+            buffer_counter: 0,
+            execution_queue_proven: false,
+            entries: crate::load_gate::WORLD_COMMANDS
+                .iter()
+                .enumerate()
+                .map(|(i, command)| Entry {
+                    address: 0x1000 + i as u32 * 16,
+                    name: command.name().into(),
+                    callback: 0x5000,
+                    callback_module: None,
+                    callback_rva: None,
+                    hash_matches: true,
+                })
+                .collect(),
+        }
+    }
+    #[test]
+    fn gate_resolves_all_six_descriptors_without_fixed_extra_addresses() {
+        let audit = gate_audit();
+        let result = world_gate_descriptors(&audit).unwrap();
+        assert_eq!(result.len(), 6);
+        for ((command, address), entry) in result.iter().zip(&audit.entries) {
+            assert_eq!(command.name(), entry.name);
+            assert_eq!(*address, entry.address);
+        }
+    }
+    #[test]
+    fn gate_rejects_missing_duplicate_aliased_and_changed_descriptors() {
+        for index in 0..6 {
+            for failure in 0..8 {
+                let mut audit = gate_audit();
+                match failure {
+                    0 => {
+                        audit.entries.remove(index);
+                    }
+                    1 => {
+                        let mut duplicate = gate_audit().entries.remove(index);
+                        duplicate.address += 0x100;
+                        audit.entries.push(duplicate);
+                    }
+                    2 => audit.entries[index].address = audit.entries[(index + 1) % 6].address,
+                    3 => audit.entries[index].callback = 0x6000,
+                    4 => audit.entries[index].hash_matches = false,
+                    5 => audit.entries[index].address = u32::MAX - 3,
+                    6 => audit.entries[index].address = 0x1001,
+                    _ => audit.map_profile_matches = false,
+                }
+                assert!(
+                    world_gate_descriptors(&audit).is_err(),
+                    "index={index} failure={failure}"
+                );
+            }
+        }
+    }
     #[test]
     fn map_observer_preflight_checks_header_bindings_and_mutation_without_reading_argv() {
         let mut memory = [0u8; 160];
