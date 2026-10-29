@@ -887,10 +887,37 @@ exige uma nova geração de mundo pronta antes de recriar. Resultado desconhecid
 fica bloqueado até recuperação explícita; timeout/cancelamento não executa
 trabalho atrasado. Logs/JSON do controlador omitem argumentos e nomes de saves.
 
-Esse controlador ainda é infraestrutura de bancada, sem hooks ou chamadas
-ao motor. O futuro adaptador precisa comprovar ABI, contexto e troca de argv,
-fornecer gerações reais do lifecycle e conservar a configuração do visual.
-O teste x86 usa um callback e globals próprios; não valida o callback original.
+O adaptador de bancada agora instala um hook num descritor **próprio** com o
+formato x86 de 16 bytes e callback em `+4`. Faz troca/restauração condicional,
+mantém argc/argv próprios durante a chamada e executa o callback original da
+fixture uma vez, sem passar pelo hook novamente. Nenhum endereço do jogo é
+aceito por esse adaptador. Para exercitar oito cenários por iteração:
+
+```text
+cargo run --release -p client_dll --bin load_lab -- --adapter --iterations 10000
+```
+
+Esse modo usa callbacks cdecl reais do próprio laboratório; hide/check/release,
+mundos e gerações continuam simulados. Inclui chamada aninhada recusada,
+alteração externa do descritor/argv, mudança e retorno dos mesmos words (ABA),
+cancelamento e prazo vencido entre emissão e execução da ação. Confere os
+argumentos depois de destruir sua origem, restauração, retorno e LastError;
+a bancada Windows x86 também confere a pilha.
+
+Se argv mudar durante a chamada, o adaptador preserva os words externos e
+retém seus argumentos, bloqueando outro binding até recuperação explícita.
+Essa recuperação exige prova de ausência de leitores; somente mudar argv
+não basta. Descartar o host sem essa prova deixa a memória retida, em vez de
+liberá-la sob ponteiros possivelmente publicados. Não há repetição automática
+de callback nem recriação após resultado incerto. Os relatórios omitem os
+argumentos e mantêm `game_tested=false`/`automatic_load_supported=false`.
+
+O host próprio serializa suas escritas e versiona argc/argv. Isso não comprova
+quiescência dos globais reais, nem detecta ABA no descritor do jogo. Ainda é
+necessário comprovar suspensão/replay/contexto do callback original, obter
+gerações reais de lifecycle e conservar a configuração do visual antes de
+conectar a automação ao jogo. O preparo manual continua obrigatório antes de
+carregar com o mod visual ativo.
 
 Para a próxima sessão agrupada, a consulta externa `memory_tool commands --pid
 PID` audita o registro de comandos e o descritor de `map`, com perfil/hash,

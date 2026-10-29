@@ -2128,6 +2128,76 @@ sem solicitar abertura a cada incremento. O preload manual permanece o
 caminho autorizado no jogo; não repetir reload com visual retido. LAN e
 sessões longas continuam pendentes.
 
+### M4 — Adaptador de descritor/argv e despacho completo na bancada — 28/10/2026
+
+Continuação do bloco offline, sem abrir o jogo ou solicitar intervenção. O
+módulo Rust `deferred_load::adapter` conecta o controlador ao **host próprio**:
+descritor `repr(C)` com nome/callback/hash/próximo, 16 bytes no x86 e callback
+em `+4`. Não aceita endereços do jogo. Instala/restaura o callback por CAS,
+recusa callback inesperado e preserva um substituto de outro dono, inclusive
+no Drop. Nome/hash/próximo permanecem iguais. Essa prova não autoriza patch
+no descritor comercial nem resolve ABA/quiescência do registro real.
+
+O host tem words argc/argv compartilhados, com acesso serializado e revisão
+monotônica para detectar mudança/retorno aos mesmos valores. O binding é
+restrito a uma thread Rust, exclui outro binding e mantém CStrings e array de
+ponteiros próprios. A fixture passa pelo descritor interceptado, copia os
+argumentos e destrói toda a origem antes de preparar/executar. O replay chama
+diretamente o callback original da fixture, uma vez, sem `cmd_execute`,
+`cmd_add`, remontagem de texto ou passagem recursiva pelo hook. Não mantém
+mutex durante o callback; uma solicitação aninhada é recusada explicitamente.
+
+Imediatamente antes do despacho, revalida thread/fase do loop, mundo antigo,
+prazo, token e identidade da memória dos argumentos da ação. Isso impede
+executar uma ação emitida antes de cancelamento/expiração, ou substituir seus
+argumentos copiando um token válido. Erro de revalidação não consome a ação:
+o proprietário do controlador deve resolvê-la; a bancada confirma NotInvoked.
+Conflito de hook/binding antes da chamada confirma NotInvoked. Depois de
+chamar, conflito confirma Unknown e bloqueia replay/recriação. O valor EAX
+retornado é diagnóstico: não equivale à conclusão de uma carga.
+
+Restauração de argv só ocorre se words/revisão ainda pertencerem ao binding.
+Caso contrário preserva os words externos e retém os argumentos, com no máximo
+um frame pendente e sem permitir novos bindings. Mesmo argc alterado mantendo
+argv publicado impede liberar. Recuperação explícita exige words estáveis,
+argv não publicado **e prova de que callbacks/leitores não guardam ponteiros**.
+A API de recuperação é unsafe por esse contrato. Descartar o host sem a prova
+mantém essa memória alocada; não presume que mudança de argv encerre leitores.
+Unwind Rust antes do callback restaura o binding por RAII. Isso não captura
+SEH/falha de heap nem permite unwind atravessar uma chamada C.
+
+`load_lab --adapter --iterations 10000` executa oito cenários por iteração:
+despacho completo, solicitação aninhada, argv alterado durante a chamada,
+descritor alterado durante/antes da chamada, ABA de argumentos antes do
+despacho, cancelamento e prazo vencido depois de emitir a ação. São callbacks
+cdecl realmente executados no host próprio; recursos visuais e gerações de
+mundo continuam simulados. O relatório separa essa condição, omite argumentos
+e mantém `game_tested=false`/`automatic_load_supported=false`. A bancada x86
+confere offsets, retorno, pilha e LastError de entrada/saída, incluindo recusas.
+
+**Validação no Fedora:** **77 testes nativos e 79 x86 sob Proton passaram**,
+builds release nativo/x86, Clippy nos dois alvos, rustfmt e diff sem erros de
+formatação. Os executáveis release nativo e Windows x86 completaram **80.000
+cenários cada**, 40.000 callbacks próprios, 10.000 recusas aninhadas, 30.000
+quarentenas, 10.000 retenções/recuperações e 40.000 despachos não invocados.
+Os relatórios foram idênticos byte a byte. O laboratório anterior também
+completou novamente seus 60.000 cenários nativos. Uma rodada x86 identificou
+medição de LastError iniciada antes de obter o snapshot da fixture; essa
+obtenção entrava em helpers de sincronização e alterava o erro. A fronteira
+do teste foi corrigida e a suíte completa final passou. Artefatos/logs em
+`target/analysis/adapter-*` (ignorados). Nenhum teste no jogo, ação manual,
+injeção ou alteração em originais/saves neste bloco.
+
+**Limite para a integração real:** revisão/serialização existem no host próprio,
+não nos globais do núcleo. Não se provou o contexto de suspensão/replay do
+handler original, nem uma testemunha de geração de mundo ou uma política de
+reconstrução do visual. Nenhuma ABI/comando da DLL foi ampliada, e o caminho
+manual `session-prepare-load` continua obrigatório no jogo. Não repetir reload
+retido. Próximo marco: adaptar a captura passiva ao descritor perfilado e
+relacionar identidade/ordem do comando ao lifecycle, antes de habilitar
+interceptação ativa. Agrupar futuras verificações reais numa sessão; não pedir
+abertura/movimentos/menu a cada incremento. LAN e sessões longas pendentes.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,

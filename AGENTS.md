@@ -386,3 +386,26 @@ Validação desse bloco no Fedora: 68 testes nativos/70 x86 sob Proton, builds
 release, Clippy nativo/x86 e rustfmt passaram. `load_lab` release passou 60.000
 cenários por alvo, nativo e Windows x86, com JSON idêntico. Artefatos batch-*
 ignorados; jogo não foi aberto e não houve teste manual nesse bloco.
+
+Adaptador seguinte entregue somente no host próprio: `deferred_load::adapter`
+tem descritor repr(C) de 16 bytes no x86, callback +4, instalação/restauração
+por CAS sem sobrescrever outro dono. Binding argc/argv próprio, revisionado,
+com array/CStrings retidos durante a chamada, exclusão de nesting e RAII.
+Revalida contexto/mundo/prazo/token/identidade dos argumentos imediatamente
+antes do despacho original; cancelamento/expiração não executam a ação antiga.
+Conflito após chamada vira Unknown, sem replay/recriação. Words externos são
+preservados; argumentos continuam retidos até prova explícita de ausência de
+leitores. Descartar o host sem essa prova mantém a memória, não a libera.
+`load_lab --adapter --iterations 10000` exercita oito cenários, com callbacks
+cdecl próprios reais e recursos/mundos simulados. Não aceita endereços reais,
+não instala hook no jogo e não amplia a ABI v3/664. Não confundir revisão dos
+words serializados da fixture com quiescência dos globais do núcleo; CAS
+também não resolve ABA do descritor real. Preparação manual antes de carregar
+continua obrigatória. Próximo marco é captura passiva no descritor perfilado,
+relacionada ao lifecycle, antes de habilitar interceptação ativa; agrupar as
+verificações reais, sem abrir jogo a cada incremento. Ver novo bloco no roadmap.
+Validação desse adaptador no Fedora: 77 testes nativos/79 x86 sob Proton,
+builds release, Clippy nos dois alvos e rustfmt passaram. O lote de 80.000
+cenários/40.000 callbacks próprios passou nativo e Windows x86, JSON idêntico.
+Recursos visuais/epochs são simulados; não é teste do callback comercial nem
+recarga real. Artefatos adapter-* ignorados, jogo não foi iniciado neste bloco.

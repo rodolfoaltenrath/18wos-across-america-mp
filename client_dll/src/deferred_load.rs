@@ -10,6 +10,7 @@ use std::{
         atomic::{AtomicU64, Ordering},
     },
 };
+pub mod adapter;
 pub mod lab;
 pub const MAX_ARGUMENTS: usize = 32;
 pub const MAX_ARGUMENT_BYTES: usize = 4096;
@@ -509,6 +510,37 @@ fn outer(context: Context, owner: u32) -> Result<(), Error> {
     Ok(())
 }
 impl Gate {
+    /// Recheck immediately before a fixture adapter dispatches an issued action.
+    /// Polling earlier does not authorize dispatch after cancellation or expiry.
+    fn validate_execute(
+        &mut self,
+        action: &Action,
+        context: Context,
+        world: World,
+        now: u64,
+    ) -> Result<(), Error> {
+        outer(context, self.owner)?;
+        let j = self.job.as_ref().ok_or(Error::StaleAction)?;
+        if j.in_flight != Some(action.token)
+            || action.kind != ActionKind::Execute
+            || !action
+                .command
+                .as_ref()
+                .is_some_and(|c| Arc::ptr_eq(c, &j.command))
+        {
+            return Err(Error::StaleAction);
+        }
+        if j.phase != Phase::Execute || !j.release_confirmed {
+            return Err(Error::WrongPhase);
+        }
+        if !world.valid() || world != j.old {
+            return Err(Error::InvalidWorld);
+        }
+        if now >= j.deadline {
+            return Err(Error::InvalidTimeout);
+        }
+        self.clock(now)
+    }
     pub fn new(owner: u32) -> Result<Self, Error> {
         if owner == 0 {
             return Err(Error::WrongThread);
