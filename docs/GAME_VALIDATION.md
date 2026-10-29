@@ -16,6 +16,9 @@ continuam pendentes. Testes em fixture/sockets locais não fecham essas lacunas.
 1. Registrar commit, builds, sistema, renderizador, resolução, foco da janela,
    versão do jogo/perfil por hash e configuração do servidor. Compilar/conferir
    antes de abrir o jogo; nunca reconstruir a DLL enquanto estiver residente.
+   Executar primeiro `mp_doctor` nativo com `--game` e `--client-dir` corretos
+   (servidor/prefixo opcionais conforme o README) e guardar o relatório redigido.
+   Aprovação estática não comprova runtimes, ABI ao vivo ou igualdade de builds.
 2. Usar save de teste existente, sem substituir/salvar por cima. Separar as
    identidades e os artefatos em `target/analysis/rodada-NOVA/`, ignorado.
 3. Conferir PID atual e paths. No Windows, launcher/DLL x86 em
@@ -130,11 +133,16 @@ processos novos entre grupos; rodada agrupada não significa uma única injeçã
   jogadores exige PCs/clientes reais adicionais; eco não substitui essa prova.
 - [ ] Windows↔Linux/Proton quando o jogo Linux estiver funcional. Separar falha
   de instalação/Proton de falha de rede; build cruzado não valida a partida.
+  O novo doctor precisa também de execução Linux nativa antes de ampliar essa
+  cobertura; fixtures ELF/prefixo e relatório Windows não são essa prova.
 
 ### G6 — Duração e custo
 
 - [ ] Sessão de 30–60 min com movimento, períodos parado e recargas previstas;
   observar controles/câmera/UI, consumo de memória/CPU/rede e custo de desenho.
+  `session_soak` agora mede sala/clientes reais em loopback, sem jogo, no mesmo
+  processo. Seus resultados de 16/32 clientes e recuperação não fecham G5/G6,
+  não medem heap/FPS/render e não comprovam desaparecimento visual.
 - [ ] Comparar pontos equivalentes após várias recargas; distinguir aquecimento
   de cache de crescimento repetido. Medir no mesmo mapa/câmera/foco.
 - [ ] Rede indisponível prolongadamente e recuperação. Encerramento abrupto só

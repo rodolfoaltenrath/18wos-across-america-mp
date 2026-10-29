@@ -21,6 +21,7 @@ pub mod command_registry;
 #[cfg(windows)]
 pub mod controller;
 pub mod deferred_load;
+pub mod doctor;
 pub mod draw_observation;
 #[cfg(windows)]
 mod engine_bridge;

@@ -96,6 +96,7 @@ client_dll/                cdylib Win32, leitura local de memória e cliente UDP
   src/bin/client_probe.rs  host Rust que carrega a DLL real para testes
   src/bin/memory_tool.rs   busca/comparação de memória e telemetria externa
   src/bin/mp_launcher.rs   controlador Windows x86 para um PID explícito
+  src/bin/mp_doctor.rs     diagnóstico estático nativo, sem iniciar/injetar jogo
   src/bin/proton_host.rs   entrada nativa Linux no prefixo Proton escolhido
   src/bin/test_host.rs     executa a bancada Windows num único runtime
   src/bin/engine_fixture.rs janela Rust ANSI/Unicode para testar o dispatcher
@@ -1130,6 +1131,92 @@ heartbeat mantém a sessão sem inventar posições.
 Aponte cada cliente ao seu próprio proxy para degradar uma sessão de dois
 clientes. Reinicie o proxy ao mudar a porta de origem do worker. V1 e v2 não
 são misturados no servidor. Salas, IDs, limites e garantias estão no contrato.
+
+### Diagnóstico da instalação sem abrir a partida
+
+`mp_doctor` lê arquivos e gera um relatório, sem abrir processo, carregar DLL,
+instalar DirectX/.NET ou modificar originais/saves. Usa os mesmos hashes do
+perfil da DLL, sem duplicar os valores em outro catálogo. No Windows, use a
+versão nativa x64 e informe a pasta dos clientes x86:
+
+```powershell
+.\target\x86_64-pc-windows-gnu\release\mp_doctor.exe --game . --client-dir target/i686-pc-windows-gnu/release --check-server --native-dir target/x86_64-pc-windows-gnu/release --output target/doctor-01.json
+```
+
+O servidor é opcional: omitir `--check-server` permite conferir uma instalação
+só de cliente. `--game` prevalece sobre `AA_GAME_DIR`; sem ambos, a ferramenta
+procura `prism3d.exe` em até oito ancestrais do diretório atual. Não varre toda a
+Steam nem escolhe silenciosamente outra instalação. `--client-dir`/`--native-dir`
+usam a pasta do doctor por padrão, útil num kit próprio; na árvore de build,
+informe as pastas separadas como acima. Isso permite manter fontes fora da Steam.
+
+No Linux, compilar/rodar o doctor nativamente (não o helper Windows):
+
+```text
+cargo run -p client_dll --bin mp_doctor --release --locked -- --game /CAMINHO/DO/JOGO --client-dir target/i686-pc-windows-gnu/release --check-server --native-dir target/release --proton-prefix /CAMINHO/compatdata/514160/pfx --output target/doctor-linux-01.json
+```
+
+Confere os cinco binários originais perfilados, arquitetura PE32 x86 de
+DLL/launcher e nomes dos exports necessários. O servidor opcional precisa ser
+PE/ELF da arquitetura/OS do doctor nativo. Prefixo fornecido precisa conter
+`drive_c`, `system.reg` e `user.reg`; apenas a estrutura é lida. Arquivo ausente,
+alterado, grande demais ou arquitetura/export incompatível deixa
+`static_checks_passed=false`, grava o relatório e retorna código diferente de
+zero. Nenhum hash é calculado sobre saves, identidades ou arquivos SCS.
+
+O parser lê imports PE em disco e procura seus nomes em diretórios locais
+conhecidos, com busca limitada. Presença é informativa; API sets, Wine builtins,
+WinSxS e a resolução real do loader podem diferir. Não chama `LoadLibrary` ou
+`ldd`. A verificação de ELF limita-se ao cabeçalho. Ausência nessa busca não é
+diagnóstico conclusivo de runtime faltante nem instrução para instalar algo.
+
+Os relatórios omitem caminhos particulares por padrão; `--include-paths` é
+opt-in para diagnóstico local. `--output` exige arquivo novo/pasta pai existente;
+sem ele, imprime somente o JSON. Perfil estático aprovado não prova DirectX,
+.NET, áudio/vídeo, execução Proton, ABI ao vivo, DLL/launcher da mesma revisão
+ou compatibilidade de mapa/mods. Esses pontos permanecem explicitamente
+`false`/não verificados no relatório. O novo fluxo Linux ainda precisa de
+execução no host Linux; parsers de ELF/prefixo com fixture não substituem isso.
+
+### Teste prolongado sem abrir o jogo
+
+`session_soak` cria uma sala Tokio de produção e 2..64 clientes reais UDP em
+loopback, no mesmo processo. As poses são sintéticas; não usa jogo, DLL,
+identidades persistentes nem endpoint público. Depois do build nativo:
+
+```powershell
+.\target\x86_64-pc-windows-gnu\release\session_soak.exe --clients 16 --seconds 300 --restart-every-secs 45 --outage-ms 3000 --churn-every-secs 2 --abrupt-restarts --output target/soak-01.json
+```
+
+No Linux, usar `cargo run -p multiplayer_server --bin session_soak --release
+--locked -- ...` ou o binário nativo. `--seconds` aceita 1..3600; o arquivo de
+saída precisa ser novo e a pasta pai existente. Sem flags de reinício/churn, o
+teste mantém o grupo conectado pelo período escolhido. Configurações de reinício
+precisam deixar tempo para indisponibilidade e recuperação dentro da execução.
+
+O churn alterna grupos de saídas com confirmação, queda do socket/expiração,
+retomada e troca de identidade temporária. Reinícios normais encerram a sala e
+capturam métricas; `--abrupt-restarts` aborta a tarefa do servidor, aguarda sua
+terminação e reabre o mesmo endpoint após a pausa. Não mata um processo externo.
+Não há métricas finais dos períodos abortados: `epochs[].server` fica null.
+
+O relatório exige troca de poses entre todos os clientes em cada período,
+convergência final, saídas finais confirmadas e servidor sem peers ativos na
+limpeza. Registra recusas/frames inválidos, datagramas, tráfego, churn e atrasos
+do driver/ticks; ultrapassar limites falha o comando após gravar o diagnóstico.
+`first_full_mesh_ms` é um timestamp global do teste; churn concorrente pode
+adiar essa observação, portanto não é uma medida isolada do tempo de reconexão.
+Erros retornados pelo driver geram relatório parcial e encerram seus recursos.
+Interrupção forçada/queda do processo pode deixar o relatório incompleto. Depois
+da duração principal há até 6 s para estabilizar e um período curto de limpeza.
+
+CPU e memória são do processo inteiro: servidor, clientes, driver e runtime.
+10000 em `cpu_basis_points` equivale a um núcleo a 100%; vários núcleos podem
+superar esse valor. RSS é amostrada aproximadamente a cada segundo; o pico do
+SO pode incluir aquecimento anterior. Dados indisponíveis são null. Não é
+medição isolada do servidor, perfil de heap, garantia de ausência de vazamento
+ou FPS do jogo. `game_tested`/`lan_tested` permanecem false. Endpoints/credenciais
+de jogadores não são exportados; os status têm somente IDs de runtime.
 
 ### Laboratório virtual de condições de rede
 

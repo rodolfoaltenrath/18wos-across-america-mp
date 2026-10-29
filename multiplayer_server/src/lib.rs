@@ -9,6 +9,10 @@ pub mod session_protocol;
 pub mod session_timing;
 
 #[cfg(feature = "server")]
+pub mod resources;
+#[cfg(feature = "server")]
 pub mod server;
 #[cfg(feature = "server")]
 pub mod session_server;
+#[cfg(feature = "server")]
+pub mod soak;

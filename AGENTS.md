@@ -724,3 +724,58 @@ helper antigo recusar o documento: sua auditoria está embutida no binário.
 Montagem/prioridade/ativador no jogo continuam pendentes. Não editar init.cfg,
 não iniciar jogo nem pedir validação manual durante o trabalho offline já
 autorizado; manter automatic_load_supported=false e as proteções existentes.
+
+Bloco seguinte autorizado: endurance UDP e diagnóstico estático, sem abrir o
+jogo. `session_soak` (multiplayer_server) usa sala Tokio e Client de produção,
+2..64 clientes/sockets reais em loopback no mesmo processo, poses sintéticas,
+duração até 1 h, churn de saída/queda/retomada/identidade nova e reinício normal
+ou aborto da tarefa. Não mata processo externo nem usa identidades pessoais.
+Exige malha observada por período, estabilização final, leaves confirmados,
+servidor sem peers ativos e limites; parâmetros inválidos/overflow recusados.
+Períodos abortados não têm métricas finais do servidor (null). Primeira malha é
+timestamp global e pode ser adiada por churn concorrente, sem medir recuperação
+isolada. Não confundir falta de observação com causa já isolada de falha.
+
+Release Windows: 16 clientes/300 s, seis abortos com pausa de 3 s, 3.474.812
+poses recebidas/250 aceites; 16 leaves confirmados/zero ativos finais. 32/60 s,
+três reinícios normais de 500 ms, 2.533.024 poses/179 aceites; 32 leaves/zero
+ativos. Ambos sem issues e sem frames inválidos/recusas acumulados nos clientes.
+Cache final reteve 16/32 membros; não declarar heap/cache inteiro liberado.
+CPU do processo 24,57%/67,09% de um núcleo; RSS amostrada máxima
+7.655.424/6.807.552 bytes. Inclui servidor/clientes/driver/runtime, com outros
+builds/testes no host; não é benchmark isolado, FPS ou prova de ausência de leak.
+Backend Windows consulta só o próprio processo; Linux procfs/sysconf tem fixture,
+sem execução Linux nova. libc/windows-sys viraram dependências diretas opcionais
+da feature server, nas versões já fixadas; DLL x86 continua sem essa feature.
+
+`mp_doctor` (client_dll, nativo recomendado) reutiliza profile e confere cinco
+originais, DLL/launcher x86/exports e servidor nativo opcional por leitura em
+disco. Não abre processo/injeta/carrega DLL nem instala DirectX/.NET. Game root
+via --game/AA_GAME_DIR/ancestrais do cwd, pastas de binários independentes.
+Relatório sem paths privados por padrão, --include-paths opt-in e --output novo.
+PE32/PE64 limitados, ELF só cabeçalho, arquivos até 64 MiB; prefixo apenas
+drive_c/user.reg/system.reg. Presença de imports é informação, não resolução de
+loader/WinSxS/Wine. Runtime, ABI ao vivo, revisão coincidente do par e mapa/mods
+continuam false/não verificados mesmo com static_checks_passed=true.
+
+Doctor x86 real passou sete arquivos; x64 passou oito incluindo servidor. Pasta
+errada de clientes x64, prefixo inexistente e overwrite de relatório recusados;
+o relatório original permaneceu idêntico e sem paths privados. Sete novos testes
+de diagnóstico x86/nativos, cinco novos do servidor nativo. dev_env verify:
+134 x86/191 nativos, release x86/nativo, Clippy ambos/rustfmt limpos. Ver
+target/analysis/verify-windows-20261029-soak-doctor.log e artefatos privados em
+target/analysis/soak-windows-20261029-01/. Sete originais/saves iguais e config
+Cargo preservada; game/soak/doctor encerrados, sem PID histórico reutilizável.
+
+README/roadmap e preparação de docs/GAME_VALIDATION.md atualizados. Não há nova
+partida, LAN, teste Proton/Linux ou prova de render/lifecycle/FPS. Roteiro G5/G6
+permanece pendente; doctor é preflight estático, não preparo automático de
+ambiente. Kit de binários próprios/CI e fluxo de instalação continuam futuros.
+
+Parada solicitada pelo proprietário para desligar/trocar de computador em
+29/10/2026: consultar primeiro o novo "Ponto de parada para troca de computador"
+no início de ROADMAP.MD. A última correção do soak (overflow de prazo, com teste)
+também passou no verify completo: 134 x86/191 nativos, release, Clippy e fmt.
+Não continuar a implementação nesta parada. Bloco preservado por commit local
+sem coautor; é necessário transferir o commit para retomar em outra máquina.
+Artefatos ignorados não viajam pelo Git; não confundir com prova Linux/LAN/jogo.

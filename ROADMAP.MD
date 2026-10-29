@@ -1,5 +1,49 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Ponto de parada para troca de computador — 29/10/2026
+
+O proprietário pediu o encerramento para desligar o computador. A tarefa em
+andamento era implementar dois blocos que não exigem abrir o jogo:
+`session_soak` (endurance UDP com clientes reais em loopback) e `mp_doctor`
+(diagnóstico estático da instalação e dos binários). Ambos foram implementados
+e documentados; os detalhes e limites estão no registro **M0/M8/M9 — Diagnóstico
+estático e endurance UDP — 29/10/2026**, abaixo.
+
+**Onde parou:** a última correção foi proteger a validação dos prazos de reinício
+do soak contra overflow, com regressão para `u64::MAX`. A verificação completa
+foi repetida depois dessa correção e terminou: **134 testes x86 e 191 nativos,
+builds release, Clippy nos dois alvos e rustfmt passaram**. Log local ignorado:
+`target/analysis/verify-windows-20261029-soak-doctor.log`. Não há jogo,
+`session_soak`, `mp_doctor`, Cargo ou helper de verificação em execução no ponto
+de parada. Nenhuma nova sessão no jogo foi feita neste bloco.
+
+**Entregue na bancada:** soak de 16 clientes por cinco minutos com seis abortos
+da tarefa do servidor, e de 32 clientes por um minuto com três reinícios normais;
+as duas execuções recuperaram a malha e encerraram com zero clientes ativos.
+Doctor passou na instalação Windows e nas rejeições controladas de arquitetura,
+prefixo ausente e saída já existente. Isso não valida LAN, Linux/Proton, FPS,
+recarga no jogo nem sessões longas de render. Resultados e artefatos estão
+detalhados no registro citado, sem marcar essas etapas práticas como concluídas.
+
+**Retomada:** revisar o commit deste bloco e a seção citada antes de escolher
+o próximo incremento. Os novos recursos não precisam de implementação adicional
+para repetir os comandos documentados; falta exercitá-los no outro sistema.
+Continuam futuros o kit de distribuição somente com binários próprios, CI e o
+fluxo de instalação. A validação prática acumulada permanece no roteiro
+`docs/GAME_VALIDATION.md`, incluindo LAN entre PCs distintos e os comandos de
+teardown ainda pendentes. Não abrir o jogo para cada incremento; agrupar a rodada
+manual conforme a autorização do proprietário.
+
+**Para continuar em outro computador:** levar este commit por Git ou copiar o
+repositório com `.git`; um commit local não aparece no GitHub sem envio. Os
+relatórios e executáveis de `target/` são ignorados e não acompanham o clone.
+Se forem necessários para análise, copiá-los separadamente de forma privada.
+Recompilar pelo fluxo Windows ou Linux do README e recriar a configuração local;
+não executar toolchain Windows nativamente no Linux, nem reutilizar PIDs,
+endereços, caminhos de prefixo ou binários antigos do pendrive. Preservar os
+arquivos comerciais e saves fora do Git. O encerramento inclui auditoria do
+índice e commit local sem coautor; envio remoto não foi solicitado neste ponto.
+
 Última atualização: 29/10/2026. Este arquivo descreve o projeto, não uma promessa
 de prazo. Checkboxes concluídos exigem implementação ou evidência registrada.
 O objetivo é desenvolver ferramentas de assets e multiplayer para a instalação
@@ -55,9 +99,9 @@ práticos a partir da bancada nem confundir integrações futuras com testes pro
 
 | Área | Implementado e validado | Ainda falta |
 | --- | --- | --- |
-| Workspace | Cargo com `asset_tools`, `multiplayer_server`, `client_dll` | Reproduzir o ambiente em outra máquina e automatizar o preparo |
+| Workspace | Cargo com três crates e `mp_doctor` estático nativo/x86 com hashes/perfil, arquitetura e presença informativa de dependências | Reproduzir preparo em outra máquina, validar runtime/fluxo Linux novo e automatizar instalação do ambiente |
 | Assets | Varredura/extração/conversão/PE e overlays determinísticos com manifesto, hashes, dependências, origem declarada e stage/backup/remoção offline | Montagem/instalador integrado no jogo, reconstrução comercial local e auditoria completa de distribuição |
-| Servidor | Tokio UDP v1 e sessão v2 opcional, sala/identidade, heartbeat/reconexão, limites, RTT e eco; v2 passou na partida Windows com reinício do servidor | LAN entre PCs, relógio do render, métricas de perda/jitter e mundo compartilhado |
+| Servidor | Tokio UDP v1/v2, sala/identidade/heartbeat/reconexão; `session_soak` passou 16 clientes/5 min e 32/1 min em loopback; v2 passou antes na partida Windows | LAN entre PCs, relógio do render, métricas de perda/jitter e mundo compartilhado |
 | DLL | x86 no jogo sob Proton, perfil por hash, configuração ABI, worker, UDP, dispatcher e sonda do loop | Matriz completa de estados do jogo e APIs de entidades |
 | Host de teste | `client_probe`, controlador entre processos e `test_host`; bancada x86 passou sob Proton | Testes de sessão longa, saída abrupta e duas máquinas |
 | Investigação | `memory_tool` Rust: processos, regiões, busca, filtros, comparação, ponteiros, observação e envio externo | Perfis de versões e ciclo de vida do veículo |
@@ -69,7 +113,7 @@ O estado atual **não é multiplayer LAN validado entre dois computadores**.
 O proprietário confirmou um visual sem textura ao lado do seu caminhão,
 copiando movimento e rotação; isso não foi um segundo jogador conectado.
 As implementações posteriores têm testes próprios (último registro Windows:
-127 x86/179 nativos, release, Clippy e formatação). Eco/skin e gate de `map`
+134 x86/191 nativos, release, Clippy e formatação). Eco/skin e gate de `map`
 passaram no jogo; a sessão v2 também passou em 29/10/2026. Demais comandos de
 teardown e suavização na LAN seguem pendentes. Não rebaixar esse visual a mera
 alocação privada, nem promover resultados da bancada a validação no jogo.
@@ -3077,6 +3121,91 @@ não editar init.cfg ou iniciar jogo neste bloco. Transformações adicionais,
 dependências externas e pacote mínimo visível exigem outro contrato. LAN,
 demais comandos de teardown e sessões longas aguardam a rodada apropriada.
 
+### M0/M8/M9 — Diagnóstico estático e endurance UDP — 29/10/2026
+
+Entregues dois blocos autorizados sem abrir jogo: `session_soak` e `mp_doctor`.
+Mantidos três crates, perfil existente, valores do wire v1/v2 e ABIs Control
+v1/Engine v3. Nenhuma nova API/hook do motor ou alteração em originais/saves.
+
+**Endurance:** `session_soak` usa `session_server::run` e `session_client::Client`
+de produção, sockets UDP reais em loopback e coordenadas sintéticas. De 2 a 64
+clientes no mesmo processo, duração de 1 s a 1 h, filas/recebimento limitados e
+relatório novo. Churn cobre saída com confirmação, queda de socket/expiração,
+retomada e identidade nova, sem arquivos pessoais. Reinício normal captura
+métricas; abrupto aborta/aguarda a tarefa e depois reabre o mesmo endpoint.
+Não é kill/crash de um processo externo; períodos abortados NÃO têm relatório
+final do servidor, registrado como null, sem inventar métricas perdidas.
+
+Condições: malha de poses observada em cada período, estabilização final,
+saídas finais confirmadas, servidor sem peers ativos e limites de protocolo/
+cache mantidos. Até 6 s de estabilização após o período principal. Timestamp
+de primeira malha é global e pode ser adiado pelo churn concorrente: não mede
+isoladamente latência de recuperação. Recusa de configurações inválidas inclui
+soma de intervalo indisponível sem overflow da API. Erro retornado grava
+relatório parcial; interrupção forçada pode deixar saída incompleta.
+
+Resultados release Windows x64 (cópia própria preservada em pasta ignorada):
+
+| Clientes / período principal | Reinícios | Poses recebidas pelos clientes | Aceites acumulados | Saídas finais / ativos no servidor | CPU do processo / RSS amostrada máxima |
+| --- | --- | --- | --- | --- | --- |
+| 16 / 300 s (302.597 ms totais) | 6 abortos, pausa de 3 s | 3.474.812 | 250 | 16 confirmadas / 0 | 24,57% de um núcleo / 7.655.424 bytes |
+| 32 / 60 s (62.647 ms totais) | 3 normais, pausa de 500 ms | 2.533.024 | 179 | 32 confirmadas / 0 | 67,09% de um núcleo / 6.807.552 bytes |
+
+Ambos `passed=true`, issues vazias, zero frames inválidos/recusas acumulados
+pelos clientes. No teste de 16: 79 churns de saída, 36 quedas de socket,
+31 retomadas e 31 substituições de identidade (subconjunto das saídas).
+Driver teve 123 ticks atrasados no de 16 e zero no de 32. Cache final reteve
+16/32 membros, respectivamente, distinto de peers ativos. Não afirmar que
+todo cache/heap retornou ao SO ou que não existe vazamento.
+
+CPU/WorkingSet no Windows usam o próprio processo; backend Linux usa procfs/
+sysconf, com parser testado por fixture, sem nova execução Linux. Ausentes ficam
+null. CPU soma servidor, todos os clientes, driver e runtime; RSS amostra ~1 Hz,
+sem medir heap/FPs/render. Houve outras compilações/testes no host, portanto
+esses valores não são benchmark isolado ou previsão de capacidade da LAN/jogo.
+`game_tested=false` e `lan_tested=false` em ambos. Não há credenciais/identidades
+ou datagramas crus nos relatórios. libc/windows-sys já fixados passaram a ser
+dependências diretas opcionais apenas da feature server, sem mudar versões.
+
+**Diagnóstico:** `mp_doctor` no crate client_dll reaproveita os hashes de profile,
+confere cinco originais, DLL/launcher PE32 x86, exports necessários e servidor
+nativo opcional. Não carrega/executa dependências nem abre o processo do jogo.
+Leitura limitada a arquivos regulares de até 64 MiB; PE32/PE64 com RVA/contagens/
+strings limitados, ELF só por cabeçalho. Prefixo opcional confere apenas
+drive_c/user.reg/system.reg. Imports PE têm presença informativa em diretórios
+conhecidos; API sets/WinSxS/Wine e resolução real continuam não verificados.
+DirectX/.NET, áudio/vídeo/Proton, ABI ao vivo, igualdade de revisão do par e
+compatibilidade de mapa/mods NÃO são inferidos de um relatório estático aprovado.
+
+Game root configurável por --game, AA_GAME_DIR ou até oito ancestrais do cwd;
+sem varredura integral da Steam. Pastas de cliente/servidor independentes;
+nenhum caminho particular é exportado por padrão. --include-paths opt-in,
+--output novo, sem substituição. Perfil, arquitetura alvo, checks e hashes
+ficam no relatório; não lê saves/identidades/conteúdo SCS. Não instala runtimes,
+configura o toolchain, altera prefixos ou inicia processos de jogo.
+
+Sete testes próprios de diagnóstico (x86/nativo): cabeçalhos/exports/imports,
+limites/truncamento/RVA/nome inseguro, hash alterado, ausência/tipo/tamanho,
+redação de caminhos e prefixo artificial. Cinco novos testes do servidor nativo
+cobrem recursos/procfs, limites e recuperação real UDP com/sem aborto/churn.
+CLI no host: doctor x86 passou sete arquivos; nativo x64 passou oito incluindo
+servidor. Pasta errada de clientes x64 foi recusada; prefixo inexistente recusado
+e tentativa de sobrescrever relatório manteve seu hash idêntico.
+
+Validação completa: dev_env verify passou 134 testes x86 e 191 nativos,
+release x86/nativo, Clippy em ambos e rustfmt. Log em
+target/analysis/verify-windows-20261029-soak-doctor.log (ignorado).
+Artefatos/relatórios em target/analysis/soak-windows-20261029-01/ (ignorado).
+SHA-256 da cópia do soak usada nos dois lotes:
+20c2324196ea7bcc55d86e46c82a07aacf2a2fddb6fa7ed93b6b6e70a4db48cd.
+Verificação pós-bloco: sete originais/saves iguais, configuração Cargo local
+preservada e jogo/soak/doctor ausentes. Não houve jogo, LAN ou execução Linux.
+
+Preparação comum do roteiro G1–G8 agora inclui doctor. M0/M9 seguem parciais:
+preparo automático de runtimes/ambiente, kit de binários e UI de conexão ainda
+pendentes. Próximo marco prático continua LAN, demais comandos de teardown e
+sessão longa no jogo; este endurance não comprova lifecycle/render/FPS.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -3199,6 +3328,8 @@ Não houve alteração/extração aplicada aos arquivos do jogo.
 - [ ] Criar preparo/diagnóstico de ambiente em Rust, com caminhos detectados,
   sem depender de um script de outra linguagem nem sobrescrever configuração
   Cargo existente sem mesclagem explícita.
+  Progresso: mp_doctor estático com perfil/hash/arquitetura/exports, paths
+  configuráveis e prefixo/presença de dependências; preparo/runtime pendentes.
 - [ ] Tornar o desenvolvimento fora da pasta Steam o fluxo principal: caminho
   do jogo configurável e saídas de build no repositório de fontes.
 - [x] Inicializar Git e vincular o remoto indicado pelo proprietário, preservando
@@ -3464,7 +3595,8 @@ verificada e removida em outra instalação original sem distribuir o jogo.
   Progresso: protocolo (rotação válida/inválida, v1 sem rotação), eco do
   servidor, interpolação/teleporte/extrapolação, fonte `drawn`, visual remoto
   ponta a ponta e sessão com backup têm testes próprios; `dev_env verify` roda
-  tudo. Faltam mudança de versão e sessões com várias conexões.
+  tudo. session_soak acrescenta malha real UDP de 16/32 clientes em loopback;
+  migração entre releases e várias partidas reais ainda pendentes.
 - [x] Simular perda, duplicação, jitter, atraso e reordenação com uma ferramenta
   Rust controlada; registrar parâmetros e resultado reproduzível.
   Entregue `network_lab`, com relógio virtual, seed, filas limitadas, três
@@ -3475,6 +3607,8 @@ verificada e removida em outra instalação original sem distribuir o jogo.
   Isso não converte os resultados virtuais anteriores em provas da partida/LAN.
 - [ ] Testar sessão longa, menus, reload, encerramento abrupto e reconexão, com
   verificações de vazamento e remoção de entidades.
+  Progresso offline: endurance UDP de 16/5 min e 32/1 min, churn e reinícios,
+  recuperação/limpeza e CPU/RSS do processo. Não mede entidades/heap/FPS do jogo.
 - [ ] Ter logs com versão/perfil/estado e coleta opcional de métricas, sem dumps
   completos ou conteúdo do jogo nos relatórios públicos.
   Progresso: `session-status` (cliente, visual, draw, remotos) e métricas de
@@ -3493,6 +3627,8 @@ relevantes podem ser repetidos a partir de instruções e dados próprios.
 
 - [ ] Criar fluxo Rust para detectar/selecionar instalação, validar versão,
   configurar servidor e conectar/desconectar com mensagens claras.
+  Progresso: mp_doctor oferece preflight estático sem processo/injeção;
+  instalador, UI/seleção e teste do fluxo numa máquina limpa ainda pendentes.
 - [ ] Verificar dependências do ambiente sem exigir o toolchain Rust do jogador.
 - [ ] Empacotar somente os binários próprios, configuração de exemplo e avisos
   necessários; disponibilizar fonte e instruções de construção.
