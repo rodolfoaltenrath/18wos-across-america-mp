@@ -12,7 +12,7 @@ use std::{
 };
 
 #[derive(Parser)]
-#[command(about = "Bounded two-way UDP impairment proxy for one v1 client")]
+#[command(about = "Bounded two-way UDP impairment proxy for one v1 or v2 client")]
 struct Args {
     #[arg(long, default_value = "127.0.0.1:39001")]
     listen: SocketAddr,

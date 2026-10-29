@@ -30,6 +30,7 @@ pub struct Options {
     pub load_timeout_ms: u32,
     /// engine_fixture's first stdout line; None targets the real game.
     pub fixture: Option<Value>,
+    pub session: Option<multiplayer_server::session_client::Options>,
 }
 
 fn engine(c: &Controller, dll: &Path, mut b: EngineControl) -> Result<EngineControl> {
@@ -96,7 +97,15 @@ pub fn start(c: &Controller, dll: &Path, o: &Options) -> Result<Value> {
             None => EngineControl::new(api::UI_DRAW_ATTACH),
         };
         step("draw-attach", engine(c, dll, draw).map(drop))?;
-        let mut connect = Control::new(api::START);
+        let mut connect = Control::new(if o.session.is_some() {
+            api::START_SESSION
+        } else {
+            api::START
+        });
+        if let Some(options) = &o.session {
+            api::put(&mut connect.message, &serde_json::to_string(options)?)
+                .map_err(anyhow::Error::msg)?;
+        }
         connect.config.mode = api::DRAWN;
         api::put(&mut connect.config.server, &o.server.to_string()).map_err(anyhow::Error::msg)?;
         api::put(&mut connect.config.profile, profile::ID).map_err(anyhow::Error::msg)?;
@@ -174,10 +183,14 @@ pub fn status(c: &Controller, dll: &Path) -> Result<Value> {
             break;
         }
     }
+    let mut session = Control::new(api::SESSION_STATUS);
+    c.control(dll, &mut session)?;
+    let session: Value =
+        serde_json::from_str(api::text(&session.message).map_err(anyhow::Error::msg)?)?;
     Ok(json!({
         "client": {"status": client.status, "sample_state": client.sample_state, "sent": client.sent,
             "received": client.received, "diagnostic": api::text(&client.message).unwrap_or("")},
-        "visual": visual, "draw": draw, "load_gate": gate, "remotes": remotes,
+        "visual": visual, "draw": draw, "load_gate": gate, "remotes": remotes, "network_session":session,
     }))
 }
 

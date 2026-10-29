@@ -41,6 +41,11 @@ fn main() -> anyhow::Result<()> {
             mode: Mode,
             #[arg(long, default_value_t = 0.0)]
             phase: f32,
+            /// Opt-in v2 room. Requires a local identifier file, never a game save.
+            #[arg(long, requires = "identity_file")]
+            room: Option<String>,
+            #[arg(long, requires = "room")]
+            identity_file: Option<PathBuf>,
         },
         Status,
         Watch {
@@ -75,6 +80,10 @@ fn main() -> anyhow::Result<()> {
             /// Gate deadline from a load request to the recreated visual, in seconds.
             #[arg(long, default_value_t = 120, value_parser = clap::value_parser!(u32).range(1..=600))]
             load_timeout: u32,
+            #[arg(long, requires = "identity_file")]
+            room: Option<String>,
+            #[arg(long, requires = "room")]
+            identity_file: Option<PathBuf>,
         },
         /// Client, visual, draw and relayed players in one JSON report.
         SessionStatus,
@@ -280,6 +289,8 @@ fn main() -> anyhow::Result<()> {
             no_skin,
             no_load_gate,
             load_timeout,
+            room,
+            identity_file,
         } => {
             let backup = match backup {
                 Some(directory) => {
@@ -319,6 +330,7 @@ fn main() -> anyhow::Result<()> {
                 load_gate: !*no_load_gate,
                 load_timeout_ms: *load_timeout * 1000,
                 fixture,
+                session: session_options(room.as_deref(), identity_file.as_deref())?,
             };
             let mut report = launcher_session::start(&controller, &dll, &options)?;
             if let Some(manifest) = backup {
@@ -647,6 +659,8 @@ fn main() -> anyhow::Result<()> {
             server,
             mode,
             phase,
+            room,
+            identity_file,
         } => {
             if matches!(mode, Mode::Game) {
                 ensure!(!args.fixture, "fixture does not load game.dll");
@@ -671,7 +685,16 @@ fn main() -> anyhow::Result<()> {
             api::put(&mut config.server, &server.to_string()).map_err(anyhow::Error::msg)?;
             api::put(&mut config.profile, profile::ID).map_err(anyhow::Error::msg)?;
             controller.load(&dll)?;
-            let mut block = Control::new(api::START);
+            let session = session_options(room.as_deref(), identity_file.as_deref())?;
+            let mut block = Control::new(if session.is_some() {
+                api::START_SESSION
+            } else {
+                api::START
+            });
+            if let Some(options) = session {
+                api::put(&mut block.message, &serde_json::to_string(&options)?)
+                    .map_err(anyhow::Error::msg)?;
+            }
             block.config = config;
             block
         }
@@ -703,6 +726,31 @@ fn main() -> anyhow::Result<()> {
     controller.control(&dll, &mut block)?;
     print_status(args.pid, &block);
     Ok(())
+}
+
+#[cfg(windows)]
+fn session_options(
+    room: Option<&str>,
+    path: Option<&std::path::Path>,
+) -> anyhow::Result<Option<multiplayer_server::session_client::Options>> {
+    match (room, path) {
+        (None, None) => Ok(None),
+        (Some(room), Some(path)) => {
+            anyhow::ensure!(
+                multiplayer_server::session_protocol::room_valid(room),
+                "invalid room name"
+            );
+            let options = multiplayer_server::session_client::Options {
+                room: room.into(),
+                identity: multiplayer_server::identity::load_or_create(path)
+                    .map_err(anyhow::Error::msg)?,
+                profile: client_dll::profile::ID.into(),
+            };
+            options.validate().map_err(anyhow::Error::msg)?;
+            Ok(Some(options))
+        }
+        _ => anyhow::bail!("room and identity file must be provided together"),
+    }
 }
 #[cfg(windows)]
 fn print_status(pid: u32, block: &client_dll::api::Control) {

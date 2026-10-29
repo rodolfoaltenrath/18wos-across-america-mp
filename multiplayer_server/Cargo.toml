@@ -12,6 +12,7 @@ server = ["dep:anyhow", "dep:clap", "dep:tokio"]
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
+getrandom = "0.4.3"
 anyhow = { workspace = true, optional = true }
 clap = { workspace = true, optional = true }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time", "signal", "sync"], optional = true }
@@ -19,4 +20,9 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time",
 [[bin]]
 name = "multiplayer_server"
 path = "src/main.rs"
+required-features = ["server"]
+
+[[bin]]
+name = "session_probe"
+path = "src/bin/session_probe.rs"
 required-features = ["server"]

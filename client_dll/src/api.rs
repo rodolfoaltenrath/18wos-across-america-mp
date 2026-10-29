@@ -3,6 +3,10 @@ pub const ABI_VERSION: u32 = 1;
 pub const START: u32 = 1;
 pub const STATUS: u32 = 2;
 pub const STOP: u32 = 3;
+/// Opt-in wire v2. ClientConfig is unchanged; message carries session Options JSON.
+pub const START_SESSION: u32 = 4;
+/// Status JSON in message (or null for v1). No credentials are returned.
+pub const SESSION_STATUS: u32 = 5;
 pub const SIMULATED: u32 = 1;
 pub const GAME: u32 = 2;
 pub const MEMORY: u32 = 3;

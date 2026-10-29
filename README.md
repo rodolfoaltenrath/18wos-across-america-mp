@@ -36,6 +36,12 @@ e continuidade do desenvolvimento estão em [AGENTS.md](AGENTS.md).
 
 ## Direção do mod definida pelo proprietário
 
+O protocolo de sessão LAN v2 é optativo e tem contrato em
+[docs/NETWORK_PROTOCOL.md](docs/NETWORK_PROTOCOL.md). Ele acrescenta sala,
+aceite/recusa, identidade local, gerações de conexão, heartbeat, timeout,
+retomada, lista de participantes e RTT. O transporte v1 continua sendo o padrão
+das provas anteriores no jogo. V2 ainda precisa da validação na partida/LAN.
+
 O mod oferecerá somente a carreira baseada em **Become a Millionaire**, com
 competição econômica entre transportadoras. Antes de criar um save, será
 possível definir a meta financeira ou marcar **Sem limite**. Com essa opção,
@@ -1067,7 +1073,52 @@ pendentes; mantenha a janela em primeiro plano. A cobertura de
 Novo jogo, morte/reinício e fechar a janela não são interceptados. Continue
 rodando `session-stop` antes de fechar o jogo. `automatic_load_supported` continua `false` até ampliar a matriz.
 
-### Laboratório de rede sem abrir o jogo
+### Sessão v2 sem jogo: servidor e dois clientes nativos
+
+Depois de `dev_env verify`, abra três terminais no Windows. `target/analysis`
+precisa existir; os arquivos de saída precisam ser novos. Os arquivos de
+identidade são criados no primeiro uso e reaproveitados; não os versione nem
+use o mesmo arquivo para jogadores diferentes.
+
+```powershell
+# Terminal 1: cria uma sala, sem depender dos assets ou executável do jogo.
+.\target\x86_64-pc-windows-gnu\release\multiplayer_server.exe --bind 127.0.0.1:39000 --room lan --timeout-secs 5 --run-for-secs 25 --report target/analysis/sala-01.json
+
+# Terminal 2: cliente sintético; força uma retomada da conexão aos 4 segundos.
+.\target\x86_64-pc-windows-gnu\release\session_probe.exe --server 127.0.0.1:39000 --room lan --identity-file target/analysis/jogador-a.json --seconds 15 --phase 100 --reconnect-after-ms 4000 --output target/analysis/cliente-a-01.json
+
+# Terminal 3: outro jogador, com identidade e posição independentes.
+.\target\x86_64-pc-windows-gnu\release\session_probe.exe --server 127.0.0.1:39000 --room lan --identity-file target/analysis/jogador-b.json --seconds 15 --phase 200 --output target/analysis/cliente-b-01.json
+```
+
+No Linux, os mesmos argumentos funcionam com `cargo run -p multiplayer_server
+--bin multiplayer_server --locked -- ...` e `cargo run -p multiplayer_server
+--bin session_probe --locked -- ...`; este bloco ainda não foi reexecutado no
+Linux. `session_probe --no-pose` testa uma sessão que envia somente heartbeat.
+Os relatórios incluem fase, RTT/offset estimado, reconexões, poses e confirmação
+de saída, sem tokens. Não há desenho de caminhões nesse diagnóstico.
+
+Para usar a nova sessão na DLL do host próprio, configure também `AA_MP_ROOM`
+e `AA_MP_IDENTITY_FILE` antes de rodar `client_probe`. Para o launcher:
+
+```text
+mp_launcher --pid PID --dll CAMINHO_DLL connect --server IP:PORTA --mode game --room lan --identity-file ARQUIVO_LOCAL
+mp_launcher --pid PID --dll CAMINHO_DLL session-start --server IP:PORTA --room lan --identity-file ARQUIVO_LOCAL --backup NOVA_PASTA
+```
+
+Essas opções ativam v2; omiti-las preserva v1. A integração v2 no jogo real
+continua pendente: mantenha backups e o procedimento de encerramento. A
+configuração da DLL usa um novo comando da ABI existente, sem mudar os tamanhos
+v1/v3. `session-status` inclui `network_session`; `status=1` sozinho indica
+worker ativo, não aceite da sala. Se as coordenadas ficarem indisponíveis, o
+heartbeat mantém a sessão sem inventar posições.
+
+`udp_proxy` aceita o primeiro `join` v2 ou pose v1 válido, fixando o endpoint.
+Aponte cada cliente ao seu próprio proxy para degradar uma sessão de dois
+clientes. Reinicie o proxy ao mudar a porta de origem do worker. V1 e v2 não
+são misturados no servidor. Salas, IDs, limites e garantias estão no contrato.
+
+### Laboratório virtual de condições de rede
 
 `network_lab` usa relógio virtual, pacotes sintéticos de servidor a 60 Hz,
 o codec do protocolo e a interpolação do projeto. Executa três cenários:

@@ -511,3 +511,34 @@ auxiliares encerrados, proxy terminou pelo prazo e jogo ausente na enumeração.
 Não reconstruir com DLL residente: reenumerar sempre. Próximo marco de integração
 preservado: sessão agrupada exit/menu/map/quit com eco, depois LAN. Não confundir
 esses testes de sockets com negociação/heartbeat/reconexão de M3 ou jogo validado.
+
+Proprietário pediu em 29/10/2026 continuar tudo que puder ser implementado sem
+intervenção prática dele. Não solicitar jogo/movimentos nesta rodada: concluir
+blocos offline, testes automáticos, documentação e commits sem coautor.
+
+M3 v2 entregue optativamente após `d4972ff`: consultar docs/NETWORK_PROTOCOL.md.
+Servidor `--room` cria uma sala; v1 segue padrão. Hub/Client portáveis, handshake
+idempotente com recusa tipada, identidade local persistente, credenciais/generação
+por conexão, retomada/reinício de sequência, heartbeat mesmo sem coordenadas,
+timeout, rosters revisionados periódicos, leave confirmado/repetível, RTT/offset
+diagnóstico e limites antes do parsing. Janela de tráfego não zera ao retomar.
+Identidade não é conta autenticada; ID numérico/cache não persiste no servidor.
+Não aplicar ainda o offset ao render ou tratar tick de rede como física.
+
+DLL/launcher: START_SESSION=4 e SESSION_STATUS=5 na Control v1 existente, sem
+mudar layout. JSON em message; session-start/connect --room --identity-file,
+network_session em session-status. Sem flags: v1. API/deps geram arquivos de
+identidade próprios, sempre locais/ignorados. Tokens só no wire, nunca no status.
+ClientConfig/EngineControl e os hooks do motor não foram ampliados.
+
+Validação Windows: 116 testes x86/125 nativos x64, release, Clippy e rustfmt.
+Fixtures cobrem oito seeds com perda/duplicação/reordenação e reinício da sala.
+DLL real em fixture passou: 2300 ms sem coordenadas (timeout 2000) com heartbeat,
+geração remota nova/histórico zerado, servidor reiniciado, retorno de coordenadas,
+remoção por roster e leave confirmado/descarga. Servidor Tokio com dois clientes
+passou. Smoke release: A via proxy com interrupção de 2500 ms, duas retomadas,
+331 poses e leave confirmado; B recebeu 278 poses, mudança de geração e leave.
+Perfil errado recusado; servidor acabou sem peers. Artefatos session-v2-* em
+target/analysis, ignorados. Nenhum auxiliar ficou aberto. Sem jogo/Linux/LAN
+entre PCs ou prova nova dos cinco comandos. Autenticação/economia, relógio de
+render, modelo/velocidade e sessões longas continuam pendentes.

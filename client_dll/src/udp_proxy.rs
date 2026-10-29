@@ -178,7 +178,15 @@ impl Proxy {
                         report.uplink.foreign += 1;
                         continue;
                     }
-                } else if protocol::decode_client(&buffer[..len]).is_some() {
+                } else if protocol::decode_client(&buffer[..len]).is_some()
+                    || multiplayer_server::session_protocol::decode_client(&buffer[..len])
+                        .is_some_and(|f| {
+                            matches!(
+                                f.message,
+                                multiplayer_server::session_protocol::ClientMessage::Join { .. }
+                            )
+                        })
+                {
                     report.client = Some(source);
                     report.client_started_ms = Some(now);
                     blocked =

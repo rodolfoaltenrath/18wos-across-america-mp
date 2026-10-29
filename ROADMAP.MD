@@ -2659,6 +2659,72 @@ Servidor auxiliar encerrado, proxy terminou pelo prazo; enumeração confirmou
 ausência do jogo. Nenhuma sonda/DLL injetada na partida ou alteração de originais
 e saves neste bloco. Sem nova execução Linux. ABI v1/v3 e wire v1 preservados.
 
+### M3 — Sala e conexões v2, opcionais — 29/10/2026
+
+Continuação autorizada sem solicitar testes manuais. Entregue o contrato
+[docs/NETWORK_PROTOCOL.md](docs/NETWORK_PROTOCOL.md), codec v2 e máquinas de
+estado portáveis `session_hub`/`session_client`; servidor Tokio, cliente nativo
+`session_probe`, DLL e launcher integrados. V1 permanece padrão e separado.
+Não houve nova chamada ao motor, modificação do jogo ou mudança dos tamanhos
+ABI Control v1/EngineControl v3. Os comandos novos são START_SESSION=4 e
+SESSION_STATUS=5 na Control existente; opções/status usam JSON em `message`.
+
+**Entregue:**
+
+- Uma sala por processo (`--room`), criação no servidor, entrada com nonce e
+  aceite/recusa explícita de versão/perfil/sala/capacidade. Sem downgrade.
+- Identificador local persistente com RNG do SO (`getrandom` já no lockfile),
+  IDs de sala/jogador/conexão separados, token por conexão e retomada com prova
+  das credenciais anteriores. Endpoint não é identidade; conta autenticada é
+  uma camada futura. Cache de até 64 identidades, com remoção das inativas mais
+  antigas; ID numérico não persiste após reiniciar sala/evictar cache.
+- Gerações e sequência reiniciada, descarte de datagramas anteriores, histórico
+  remoto reiniciado por geração, heartbeat sem coordenadas, timeout e retomada.
+- Lista completa/revisionada dos participantes reenviada periodicamente; saída
+  com confirmação idempotente e novas tentativas limitadas. Sem confirmação,
+  timeout continua sendo a garantia de limpeza.
+- Pings correlacionados, RTT último/mínimo e offset diagnóstico pelo menor RTT.
+  Instantes/tick do servidor são da rede, não da física. O render continua no
+  relógio local de recepção; não declarar sincronização de relógios concluída.
+- Snapshots até quatro poses/1200 bytes, até 64 peers, limites antes do parsing
+  por endpoint e orçamento compartilhado para origens desconhecidas, fila de
+  recibos/cache limitada, envio não bloqueante e métricas do servidor.
+- Janela de tráfego preservada ao retomar: reconectar não pode zerar o limite.
+- `session-start`/`connect --room --identity-file`, `network_session` no status,
+  env optativo no host próprio e proxy compatível com join v2. `session_probe`
+  exercita as mesmas regras sem DLL, com saída finita e relatório sem tokens.
+
+**Validação Windows:** `dev_env verify` completo passou: **116 testes x86 e
+125 nativos Windows x64**, release dos dois alvos, Clippy e rustfmt.
+Fixtures puras cobrem aceite perdido, repetição de join/leave, incompatibilidade,
+capacidade/cache, tráfego inválido/rate limit, credenciais revogadas, rosters,
+geração e RTT. Oito seeds simulam dois clientes, 25% de perda, 30% de duplicação,
+atraso/jitter, reinício da sala e convergência sem duplicar jogadores, nos dois
+alvos. Teste de sockets do servidor Tokio passou com dois clientes e saída.
+
+`session_dll_workflow` passou com a DLL x86 real em host Rust próprio: heartbeat
+manteve a conexão durante 2300 ms de coordenadas indisponíveis com timeout de
+2000 ms; outro jogador retomou com sequência zerada e histórico novo; reiniciar
+a autoridade foi recuperado; coordenadas voltaram; roster removeu o remoto;
+stop confirmou leave e descarregou a DLL. Sem hooks do motor.
+
+**Smoke com executáveis release reais:** servidor Tokio por 20 s, dois clientes
+nativos por 11 s e um proxy. Cliente A: 10% de perda, 50% de duplicação, atraso
+20 ms/jitter ±40 ms e interrupção de 2500 ms, além de retomada forçada aos 3 s.
+A terminou conectado: três aceites/duas retomadas, 331 poses aceitas, RTT último
+50 ms e leave confirmado. B recebeu 278 poses, observou mudança de geração e
+confirmou a saída. Um cliente com perfil errado foi recusado com exit 1. Servidor:
+quatro aceites, uma expiração e zero peers ao encerrar. Proxy: 126/122 descartes
+durante a interrupção. Todos os auxiliares encerraram. Relatórios/identidades
+em `target/analysis/session-v2-smoke-*`, ignorados, sem tokens nos relatórios;
+log final `target/analysis/verify-windows-20261029-session-v2-final.log`.
+
+**Limites:** não houve jogo, Linux ou LAN entre PCs nesta etapa. Não há contas,
+criptografia, persistência de economia, eventos econômicos confiáveis, modelo/
+velocidade do veículo novos nem offset aplicado à interpolação. Não altera a
+validade histórica das provas v1 nem comprova os outros cinco comandos do gate.
+A próxima prova prática deve agrupar os fluxos do jogo e LAN, quando disponível.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -2840,20 +2906,32 @@ Se algum método exigir alteração de arquivo, documentar e testar restauraçã
 ### M3 — Sessão LAN e protocolo de estado completo
 
 - [x] Ter UDP, alvo de 60 Hz, IDs provisórios, limites e descarte de sequências antigas.
-- [ ] Adicionar negociação de versão, criação/entrada de sala e aceite/recusa.
-- [ ] Definir IDs de sessão/jogador e reinício de sequência por conexão. O
+- [x] Adicionar negociação de versão, criação/entrada de sala e aceite/recusa.
+  Entregue optativamente no v2, com uma sala por processo. Bancada/loopback;
+  prova no jogo e LAN entre PCs continuam pendentes.
+- [x] Definir IDs de sessão/jogador e reinício de sequência por conexão. O
   endereço UDP atual não deve ser a identidade persistente do jogador.
-- [ ] Definir mensagens de entrada, saída, heartbeat, timeout e reconexão.
+  V2: identidade local persistente, credenciais por conexão e geração da pose;
+  ID numérico é de runtime, não conta autenticada ou persistência da economia.
+- [x] Definir mensagens de entrada, saída, heartbeat, timeout e reconexão.
+  V2 entregue e testado na DLL em fixture; não equivale a uma partida LAN.
 - [ ] Acrescentar rotação, tick/timestamp, modelo e velocidade com formatos e
   unidades documentados. Tratar compatibilidade e valores inválidos.
   Progresso: rotação opcional (quaternion unitário, tolerância 2%, v1
   compatível) entregue e testada na bancada e no eco real; tick, modelo e velocidade pendentes.
+  V2 adiciona tick/instantes da rede; tick da física, modelo e velocidade seguem pendentes.
 - [ ] Separar eventos que exigem confirmação/reenvio de snapshots descartáveis.
   Definir IDs, deduplicação e prazos para eventos confiáveis sobre UDP.
 - [ ] Medir RTT, estimar diferença de relógios e ordenar snapshots para interpolação.
+  V2 mede RTT/offset diagnóstico e ordena geração/sequência/revisão. Aplicação do
+  relógio estimado à interpolação e medição na LAN ainda pendentes.
 - [ ] Manter tamanho de datagrama controlado, evitar fragmentação e limitar filas,
   clientes, taxa de pacotes e alocação por origem.
+  V2: 1200 bytes, quatro poses por batch, limites de peers/cache/recibos,
+  orçamento antes do parsing e envio não bloqueante. Sessões longas pendentes.
 - [ ] Adicionar métricas de pacotes, atraso, perda, jitter e tick atrasado.
+  V2: contadores, RTT último/mínimo, refusas, limites, bytes e ticks atrasados;
+  estimativa de perda/jitter da rede real continua pendente.
 - [ ] Medir custo do broadcast atual, que cresce com pares de clientes; avaliar
   agrupamento, frequência e relevância espacial quando os números justificarem.
 - [ ] Testar duas máquinas reais; configurar bind LAN, IP e porta. A configuração

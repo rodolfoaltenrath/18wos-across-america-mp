@@ -11,6 +11,8 @@
 !/AGENTS.md
 !/LICENSE
 !/rust-toolchain.toml
+!/docs/
+!/docs/NETWORK_PROTOCOL.md
 
 !/asset_tools/
 !/asset_tools/Cargo.toml
