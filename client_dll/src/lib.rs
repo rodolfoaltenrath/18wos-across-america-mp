@@ -21,6 +21,7 @@ pub mod command_registry;
 #[cfg(windows)]
 pub mod controller;
 pub mod deferred_load;
+pub mod doctor;
 pub mod draw_observation;
 #[cfg(windows)]
 mod engine_bridge;
@@ -49,20 +50,25 @@ mod engine_transition;
 pub mod engine_values;
 #[cfg(all(windows, target_arch = "x86"))]
 mod engine_visual;
+#[cfg(any(all(windows, target_arch = "x86"), test))]
+mod hook_transaction;
 #[cfg(windows)]
 pub mod inspection;
 pub mod interpolation;
 pub mod load_gate;
 mod memory;
+pub mod network_conditions;
 pub mod pe_exports;
 #[cfg(any(all(windows, target_arch = "x86"), test))]
 mod phase_queue;
+pub mod presentation;
 pub mod profile;
 pub mod release_policy;
 pub mod render_observation;
 pub mod resource_bindings;
 pub mod transition_analysis;
 pub mod transition_observation;
+pub mod udp_proxy;
 
 static WORKER: Mutex<Option<JoinHandle<Result<(), String>>>> = Mutex::new(None);
 static STOP: AtomicBool = AtomicBool::new(false);
@@ -72,6 +78,8 @@ static RECEIVED: AtomicU64 = AtomicU64::new(0);
 static SAMPLE_STATE: AtomicU32 = AtomicU32::new(0);
 static READ_FAILURES: AtomicU64 = AtomicU64::new(0);
 static MESSAGE: Mutex<String> = Mutex::new(String::new());
+static SESSION: Mutex<Option<multiplayer_server::session_client::Status>> = Mutex::new(None);
+static NETWORK_TIMING: Mutex<Option<multiplayer_server::session_timing::Timing>> = Mutex::new(None);
 /// Latest relayed state per player. The render thread only uses try_lock.
 pub(crate) static REMOTES: Mutex<BTreeMap<u64, RemoteEntry>> = Mutex::new(BTreeMap::new());
 /// Local pose observed by the draw probe (same coordinates the game draws with).
@@ -195,13 +203,133 @@ fn configuration() -> Result<(SocketAddr, Source), String> {
     Ok((server, source))
 }
 
-fn run(socket: UdpSocket, mut source: Source) -> Result<(), String> {
+fn publish_remote(update: protocol::ServerUpdate, reset_history: bool) -> Result<(), String> {
+    let mut remotes = REMOTES.lock().map_err(|_| "remote state mutex poisoned")?;
+    let is_new = reset_history
+        || remotes
+            .get(&update.player_id)
+            .is_none_or(|previous| update.sequence > previous.state.sequence);
+    if is_new && (remotes.contains_key(&update.player_id) || remotes.len() < 64) {
+        let previous = remotes.remove(&update.player_id);
+        let mut history = if reset_history {
+            interpolation::History::default()
+        } else {
+            previous.map(|entry| entry.history).unwrap_or_default()
+        };
+        let r = update.rotation.unwrap_or(Rotation {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+            w: 1.0,
+        });
+        history.push(interpolation::Sample {
+            at: interpolation::now(),
+            position: [update.position.x, update.position.y, update.position.z],
+            rotation: [r.x, r.y, r.z, r.w],
+        });
+        remotes.insert(
+            update.player_id,
+            RemoteEntry {
+                history,
+                state: RemoteState {
+                    player_id: update.player_id,
+                    sequence: update.sequence,
+                    x: update.position.x,
+                    y: update.position.y,
+                    z: update.position.z,
+                },
+                rotation: update.rotation,
+                seen: Instant::now(),
+            },
+        );
+        RECEIVED.fetch_add(1, Ordering::Relaxed);
+    }
+    Ok(())
+}
+fn session_events(events: Vec<multiplayer_server::session_client::Event>) -> Result<(), String> {
+    use multiplayer_server::session_client::Event;
+    for event in events {
+        match event {
+            Event::Reset => REMOTES
+                .lock()
+                .map_err(|_| "remote state mutex poisoned")?
+                .clear(),
+            Event::Roster(ids) => REMOTES
+                .lock()
+                .map_err(|_| "remote state mutex poisoned")?
+                .retain(|id, _| u32::try_from(*id).is_ok_and(|id| ids.contains(&id))),
+            Event::Pose {
+                pose,
+                reset_history,
+            } => publish_remote(
+                protocol::ServerUpdate {
+                    version: VERSION,
+                    player_id: u64::from(pose.player),
+                    sequence: pose.sequence,
+                    position: pose.position,
+                    rotation: pose.rotation,
+                },
+                reset_history,
+            )?,
+        }
+    }
+    Ok(())
+}
+fn transmit(socket: &UdpSocket, bytes: &[u8]) -> Result<(), String> {
+    match socket.send(bytes) {
+        Ok(_) => {
+            SENT.fetch_add(1, Ordering::Relaxed);
+            Ok(())
+        }
+        Err(e)
+            if matches!(
+                e.kind(),
+                std::io::ErrorKind::WouldBlock | std::io::ErrorKind::ConnectionRefused
+            ) || e.raw_os_error() == Some(10054) =>
+        {
+            Ok(())
+        }
+        Err(e) => Err(e.to_string()),
+    }
+}
+fn session_snapshot(client: &multiplayer_server::session_client::Client) -> Result<(), String> {
+    *SESSION
+        .lock()
+        .map_err(|_| "session status mutex poisoned")? = Some(client.status());
+    *NETWORK_TIMING
+        .lock()
+        .map_err(|_| "network timing mutex poisoned")? = Some(client.timing());
+    Ok(())
+}
+fn run(
+    socket: UdpSocket,
+    mut source: Source,
+    options: Option<multiplayer_server::session_client::Options>,
+) -> Result<(), String> {
+    use multiplayer_server::{
+        session_client::{Client, Phase},
+        session_protocol as wire,
+    };
+    let mut session = options
+        .map(|o| Client::new(o, multiplayer_server::identity::random_nonce()?))
+        .transpose()?;
     let tick = Duration::from_secs_f64(1.0 / f64::from(TICK_HZ));
     let start = Instant::now();
     let mut next_tick = start;
     let mut sequence = 0u64;
     let mut buffer = [0; MAX_PACKET + 1];
     while !STOP.load(Ordering::Acquire) {
+        if let Some(client) = &mut session {
+            let (frames, events) = client.poll(start.elapsed().as_millis() as u64);
+            session_events(events)?;
+            for frame in frames {
+                transmit(&socket, &wire::encode_client(&frame)?)?;
+            }
+            session_snapshot(client)?;
+            if client.status().phase == Phase::Rejected {
+                return Err(format!("session rejected: {:?}", client.status().refusal));
+            }
+        }
         let sample = match source.sample(start.elapsed().as_secs_f32()) {
             Ok(value) => {
                 if SAMPLE_STATE.swap(1, Ordering::AcqRel) != 1 {
@@ -224,20 +352,21 @@ fn run(socket: UdpSocket, mut source: Source) -> Result<(), String> {
             if !position.is_valid() || !rotation.is_none_or(Rotation::is_valid) {
                 return Err("coordinate sample contains NaN/infinity".into());
             }
-            let bytes = protocol::encode(&ClientUpdate {
-                version: VERSION,
-                sequence,
-                position,
-                rotation,
-            })?;
-            match socket.send(&bytes) {
-                Ok(_) => {
-                    SENT.fetch_add(1, Ordering::Relaxed);
-                }
-                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
-                // Windows can report a previous ICMP port-unreachable response.
-                Err(error) if error.raw_os_error() == Some(10054) => {}
-                Err(error) => return Err(error.to_string()),
+            let bytes = if let Some(client) = &mut session {
+                client
+                    .pose(position, rotation, start.elapsed().as_millis() as u64)
+                    .map(|frame| wire::encode_client(&frame))
+                    .transpose()?
+            } else {
+                Some(protocol::encode(&ClientUpdate {
+                    version: VERSION,
+                    sequence,
+                    position,
+                    rotation,
+                })?)
+            };
+            if let Some(bytes) = bytes {
+                transmit(&socket, &bytes)?;
             }
             sequence = sequence.checked_add(1).ok_or("sequence exhausted")?;
         }
@@ -245,49 +374,24 @@ fn run(socket: UdpSocket, mut source: Source) -> Result<(), String> {
         for _ in 0..256 {
             match socket.recv(&mut buffer) {
                 Ok(size) => {
+                    if let Some(client) = &mut session {
+                        session_events(
+                            client.ingest(&buffer[..size], start.elapsed().as_millis() as u64),
+                        )?;
+                        continue;
+                    }
                     let Some(update) = protocol::decode_server(&buffer[..size]) else {
                         continue;
                     };
-                    let mut remotes = REMOTES.lock().map_err(|_| "remote state mutex poisoned")?;
-                    let is_new = remotes
-                        .get(&update.player_id)
-                        .is_none_or(|previous| update.sequence > previous.state.sequence);
-                    if is_new && (remotes.contains_key(&update.player_id) || remotes.len() < 64) {
-                        let mut history = remotes
-                            .remove(&update.player_id)
-                            .map(|entry| entry.history)
-                            .unwrap_or_default();
-                        let r = update.rotation.unwrap_or(Rotation {
-                            x: 0.0,
-                            y: 0.0,
-                            z: 0.0,
-                            w: 1.0,
-                        });
-                        history.push(interpolation::Sample {
-                            at: interpolation::now(),
-                            position: [update.position.x, update.position.y, update.position.z],
-                            rotation: [r.x, r.y, r.z, r.w],
-                        });
-                        remotes.insert(
-                            update.player_id,
-                            RemoteEntry {
-                                history,
-                                state: RemoteState {
-                                    player_id: update.player_id,
-                                    sequence: update.sequence,
-                                    x: update.position.x,
-                                    y: update.position.y,
-                                    z: update.position.z,
-                                },
-                                rotation: update.rotation,
-                                seen: Instant::now(),
-                            },
-                        );
-                        RECEIVED.fetch_add(1, Ordering::Relaxed);
-                    }
+                    publish_remote(update, false)?;
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => break,
-                Err(error) if matches!(error.raw_os_error(), Some(10040 | 10054)) => continue,
+                Err(error)
+                    if matches!(error.raw_os_error(), Some(10040 | 10054))
+                        || error.kind() == std::io::ErrorKind::ConnectionRefused =>
+                {
+                    continue;
+                }
                 Err(error) => return Err(error.to_string()),
             }
         }
@@ -295,6 +399,9 @@ fn run(socket: UdpSocket, mut source: Source) -> Result<(), String> {
             .lock()
             .map_err(|_| "remote state mutex poisoned")?
             .retain(|_, entry| entry.seen.elapsed() < Duration::from_secs(5));
+        if let Some(client) = &session {
+            session_snapshot(client)?;
+        }
         next_tick += tick;
         let now = Instant::now();
         if next_tick > now {
@@ -303,12 +410,53 @@ fn run(socket: UdpSocket, mut source: Source) -> Result<(), String> {
             next_tick = now;
         } // Skip missed ticks instead of sending a burst.
     }
+    if let Some(client) = &mut session {
+        client.close(start.elapsed().as_millis() as u64);
+        let closing = Instant::now();
+        while closing.elapsed() < Duration::from_millis(220)
+            && client.status().phase != Phase::Closed
+        {
+            let (frames, _) = client.poll(start.elapsed().as_millis() as u64);
+            for frame in frames {
+                transmit(&socket, &wire::encode_client(&frame)?)?;
+            }
+            for _ in 0..32 {
+                match socket.recv(&mut buffer) {
+                    Ok(size) => {
+                        let _ = client.ingest(&buffer[..size], start.elapsed().as_millis() as u64);
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => break,
+                    Err(error)
+                        if matches!(error.raw_os_error(), Some(10040 | 10054))
+                            || error.kind() == std::io::ErrorKind::ConnectionRefused =>
+                    {
+                        continue;
+                    }
+                    Err(error) => return Err(error.to_string()),
+                }
+            }
+            thread::sleep(Duration::from_millis(1));
+        }
+        session_snapshot(client)?;
+    }
     Ok(())
 }
 
 fn start() -> Result<(), String> {
     let (server, source) = configuration()?;
-    start_source(server, source)
+    let options = match (
+        std::env::var_os("AA_MP_ROOM"),
+        std::env::var_os("AA_MP_IDENTITY_FILE"),
+    ) {
+        (None, None) => None,
+        (Some(room), Some(path)) => Some(multiplayer_server::session_client::Options {
+            room: room.into_string().map_err(|_| "room must be UTF-8")?,
+            identity: multiplayer_server::identity::load_or_create(std::path::Path::new(&path))?,
+            profile: profile::ID.into(),
+        }),
+        _ => return Err("set both AA_MP_ROOM and AA_MP_IDENTITY_FILE, or neither".into()),
+    };
+    start_source_session(server, source, options)
 }
 
 fn explicit_configuration(config: &api::ClientConfig) -> Result<(SocketAddr, Source), String> {
@@ -360,6 +508,16 @@ fn explicit_configuration(config: &api::ClientConfig) -> Result<(SocketAddr, Sou
 }
 
 fn start_source(server: SocketAddr, source: Source) -> Result<(), String> {
+    start_source_session(server, source, None)
+}
+fn start_source_session(
+    server: SocketAddr,
+    source: Source,
+    options: Option<multiplayer_server::session_client::Options>,
+) -> Result<(), String> {
+    if let Some(options) = &options {
+        options.validate()?;
+    }
     let mut worker = WORKER.lock().map_err(|_| "worker mutex poisoned")?;
     if worker.as_ref().is_some_and(|handle| !handle.is_finished()) {
         return Err("client already running".into());
@@ -384,13 +542,19 @@ fn start_source(server: SocketAddr, source: Source) -> Result<(), String> {
     RECEIVED.store(0, Ordering::Relaxed);
     READ_FAILURES.store(0, Ordering::Relaxed);
     SAMPLE_STATE.store(0, Ordering::Release);
+    *SESSION
+        .lock()
+        .map_err(|_| "session status mutex poisoned")? = None;
+    *NETWORK_TIMING
+        .lock()
+        .map_err(|_| "network timing mutex poisoned")? = None;
     diagnostic("starting client");
     STATUS.store(1, Ordering::Release);
     *worker = Some(
         thread::Builder::new()
             .name("aa-multiplayer".into())
             .spawn(move || {
-                let result = panic::catch_unwind(AssertUnwindSafe(|| run(socket, source)))
+                let result = panic::catch_unwind(AssertUnwindSafe(|| run(socket, source, options)))
                     .unwrap_or_else(|_| Err("worker panicked".into()));
                 STATUS.store(if result.is_ok() { 2 } else { 3 }, Ordering::Release);
                 if let Err(error) = &result {
@@ -487,6 +651,24 @@ pub unsafe extern "system" fn client_control(block: *mut api::Control) -> u32 {
         let result = match block.command {
             api::START => explicit_configuration(&block.config)
                 .and_then(|(server, source)| start_source(server, source)),
+            api::START_SESSION => (|| {
+                let options: multiplayer_server::session_client::Options =
+                    serde_json::from_str(api::text(&block.message)?)
+                        .map_err(|_| "invalid session options JSON")?;
+                if options.profile != api::text(&block.config.profile)? {
+                    return Err("session/source profile mismatch".into());
+                }
+                let (server, source) = explicit_configuration(&block.config)?;
+                start_source_session(server, source, Some(options))
+            })(),
+            api::SESSION_STATUS => Ok(()),
+            api::NETWORK_TIMING => Ok(()),
+            api::PRESENTATION_SET => serde_json::from_str::<interpolation::Config>(
+                api::text(&block.message).unwrap_or(""),
+            )
+            .map_err(|e| format!("invalid presentation configuration: {e}"))
+            .and_then(presentation::configure),
+            api::PRESENTATION_STATUS => Ok(()),
             api::STATUS => Ok(()),
             api::STOP => {
                 if client_stop() == 0 {
@@ -509,7 +691,39 @@ pub unsafe extern "system" fn client_control(block: *mut api::Control) -> u32 {
         block.sent = client_packets_sent();
         block.received = client_packets_received();
         block.read_failures = READ_FAILURES.load(Ordering::Relaxed);
-        if let Ok(message) = MESSAGE.lock() {
+        if block.command == api::PRESENTATION_STATUS
+            || (block.command == api::PRESENTATION_SET && block.result == 0)
+        {
+            if serde_json::to_string(&presentation::status())
+                .map_err(|e| e.to_string())
+                .and_then(|json| api::put(&mut block.message, &json))
+                .is_err()
+            {
+                block.result = 1;
+            }
+        } else if block.command == api::NETWORK_TIMING {
+            let snapshot = NETWORK_TIMING
+                .lock()
+                .map_err(|_| "network timing mutex poisoned".to_string())
+                .and_then(|s| serde_json::to_string(&*s).map_err(|e| e.to_string()));
+            if snapshot
+                .and_then(|s| api::put(&mut block.message, &s))
+                .is_err()
+            {
+                block.result = 1;
+            }
+        } else if block.command == api::SESSION_STATUS {
+            let snapshot = SESSION
+                .lock()
+                .map_err(|_| "session status mutex poisoned".to_string())
+                .and_then(|s| serde_json::to_string(&*s).map_err(|e| e.to_string()));
+            if snapshot
+                .and_then(|s| api::put(&mut block.message, &s))
+                .is_err()
+            {
+                block.result = 1;
+            }
+        } else if let Ok(message) = MESSAGE.lock() {
             let mut end = message.len().min(block.message.len() - 1);
             while !message.is_char_boundary(end) {
                 end -= 1;

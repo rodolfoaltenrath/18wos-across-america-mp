@@ -7,16 +7,33 @@ license.workspace = true
 
 [features]
 default = ["server"]
-server = ["dep:anyhow", "dep:clap", "dep:tokio"]
+server = ["dep:anyhow", "dep:clap", "dep:tokio", "dep:windows-sys", "dep:libc"]
 
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
+getrandom = "0.4.3"
 anyhow = { workspace = true, optional = true }
 clap = { workspace = true, optional = true }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time", "signal", "sync"], optional = true }
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_System_ProcessStatus"], optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = { version = "0.2", optional = true }
+
 [[bin]]
 name = "multiplayer_server"
 path = "src/main.rs"
+required-features = ["server"]
+
+[[bin]]
+name = "session_soak"
+path = "src/bin/session_soak.rs"
+required-features = ["server"]
+
+[[bin]]
+name = "session_probe"
+path = "src/bin/session_probe.rs"
 required-features = ["server"]

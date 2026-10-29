@@ -74,6 +74,7 @@ dependencies = [
  "image",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "walkdir",
  "zip",
@@ -438,9 +439,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "getrandom",
+ "libc",
  "serde",
  "serde_json",
  "tokio",
+ "windows-sys",
 ]
 
 [[package]]

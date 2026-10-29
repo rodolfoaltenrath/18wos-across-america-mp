@@ -18,23 +18,34 @@ incluindo repetição após recarregar uma partida.
 No Windows, o proprietário já confirmou um caminhão de teste sem textura,
 4 m ao lado do seu, copiando seus movimentos e rotação. É um visual PSM,
 sem física/colisão próprias, não outro jogador conectado.
-Os avanços seguintes têm provas na bancada própria; a última verificação
-registrada passou com 41 testes x86 e 47 nativos, Clippy e formatação.
 O eco num PC já transmitiu/desenhou poses com rotação na partida; após fornecer
 iluminação da cena, o usuário confirmou a textura correta durante movimento.
 Carregar com liberação prévia e recriar explicitamente também passou no jogo.
-Recarga automática com instância retida, vários remotos e LAN entre dois PCs
-continuam sem validação. Ainda não há multiplayer LAN validado.
-O primeiro teste com eco já desenhou poses recebidas, mas o usuário relatou
-material preto e atraso; carregar um save com o visual retido fechou o jogo.
-A recarga automática permanece sem validação real. Ver o procedimento abaixo:
-liberar o visual antes do carregamento, até resolver o lifetime na transição.
+O gate de `map` passou depois em duas recargas reais no Fedora/Proton, com eco
+e visual visível: liberou antes da carga, reexecutou uma vez e recriou o caminhão
+com textura. A extensão a `preview`, `edit`, `exit`, `menu` e `quit` passou na
+bancada; a prova desses cinco comandos no jogo continua pendente.
+Vários remotos, suavização em LAN e LAN entre dois PCs ainda precisam de
+validação. A flag `automatic_load_supported=false` continua conservadora até
+ampliar a matriz. O primeiro crash de recarga está preservado no histórico do
+roadmap; o fallback é `--no-load-gate` com `session-prepare-load` antes de carregar.
 
 O plano completo, os critérios de conclusão e o procedimento para continuar em
 outro computador estão em [ROADMAP.MD](ROADMAP.MD). As orientações de autonomia
 e continuidade do desenvolvimento estão em [AGENTS.md](AGENTS.md).
+As pendências práticas estão agrupadas em
+[docs/GAME_VALIDATION.md](docs/GAME_VALIDATION.md), com preparação, ordem,
+critérios e distinção entre teste disponível e integração ainda não entregue.
 
 ## Direção do mod definida pelo proprietário
+
+O protocolo de sessão LAN v2 é optativo e tem contrato em
+[docs/NETWORK_PROTOCOL.md](docs/NETWORK_PROTOCOL.md). Ele acrescenta sala,
+aceite/recusa, identidade local, gerações de conexão, heartbeat, timeout,
+retomada, lista de participantes e RTT. O transporte v1 continua sendo o padrão
+das provas anteriores no jogo. V2 passou na partida Windows em 29/10/2026:
+eco com textura, reinício do servidor com reconexão, duas recargas automáticas
+e encerramento confirmado. LAN entre dois PCs continua pendente.
 
 O mod oferecerá somente a carreira baseada em **Become a Millionaire**, com
 competição econômica entre transportadoras. Antes de criar um save, será
@@ -85,6 +96,7 @@ client_dll/                cdylib Win32, leitura local de memória e cliente UDP
   src/bin/client_probe.rs  host Rust que carrega a DLL real para testes
   src/bin/memory_tool.rs   busca/comparação de memória e telemetria externa
   src/bin/mp_launcher.rs   controlador Windows x86 para um PID explícito
+  src/bin/mp_doctor.rs     diagnóstico estático nativo, sem iniciar/injetar jogo
   src/bin/proton_host.rs   entrada nativa Linux no prefixo Proton escolhido
   src/bin/test_host.rs     executa a bancada Windows num único runtime
   src/bin/engine_fixture.rs janela Rust ANSI/Unicode para testar o dispatcher
@@ -960,7 +972,8 @@ Esta consulta nova ainda não foi validada numa partida real.
 
 ### Teste no jogo com sessão (um comando)
 
-Compile e verifique tudo antes: `.\target\debug\dev_env.exe verify`. Abra o
+Compile e verifique tudo antes:
+`.\target\x86_64-pc-windows-gnu\release\dev_env.exe verify`. Abra o
 jogo, carregue o save e deixe a janela em primeiro plano. Em outro terminal:
 
 ```text
@@ -1049,6 +1062,13 @@ uso avulso: instale depois de pump/render/draw. A remoção é recusada enquanto
 um carregamento adiado estiver ativo. A sonda passiva `transition-map` e o
 gate são mutuamente exclusivos no mesmo descritor.
 
+A instalação conserva um registro das trocas de callback e das proteções de
+memória até concluir a restauração. Se o rollback falhar, uma nova instalação é
+recusada e a remoção pode ser tentada novamente; callbacks de outro dono nunca
+são sobrescritos. Ao encerrar uma sessão no jogo, `session-stop` agora audita os
+seis descritores e confere **14 slots** no total. Os nove slots das capturas
+históricas abaixo correspondem à versão anterior da conferência.
+
 **Validado no jogo** (Fedora/Proton, eco num PC): duas cargas de `test_mp` pelo
 menu com o caminhão espelhado visível, que voltou nas duas, sem crash, com nove
 slots e sete hashes conferidos. Antes disso, foi validado na bancada própria
@@ -1060,13 +1080,317 @@ pendentes; mantenha a janela em primeiro plano. A cobertura de
 Novo jogo, morte/reinício e fechar a janela não são interceptados. Continue
 rodando `session-stop` antes de fechar o jogo. `automatic_load_supported` continua `false` até ampliar a matriz.
 
+### Sessão v2 sem jogo: servidor e dois clientes nativos
+
+Depois de `dev_env verify`, abra três terminais no Windows. `target/analysis`
+precisa existir; os arquivos de saída precisam ser novos. Os arquivos de
+identidade são criados no primeiro uso e reaproveitados; não os versione nem
+use o mesmo arquivo para jogadores diferentes.
+
+```powershell
+# Terminal 1: cria uma sala, sem depender dos assets ou executável do jogo.
+.\target\x86_64-pc-windows-gnu\release\multiplayer_server.exe --bind 127.0.0.1:39000 --room lan --timeout-secs 5 --run-for-secs 25 --report target/analysis/sala-01.json
+
+# Terminal 2: cliente sintético; força uma retomada da conexão aos 4 segundos.
+.\target\x86_64-pc-windows-gnu\release\session_probe.exe --server 127.0.0.1:39000 --room lan --identity-file target/analysis/jogador-a.json --seconds 15 --phase 100 --reconnect-after-ms 4000 --output target/analysis/cliente-a-01.json
+
+# Terminal 3: outro jogador, com identidade e posição independentes.
+.\target\x86_64-pc-windows-gnu\release\session_probe.exe --server 127.0.0.1:39000 --room lan --identity-file target/analysis/jogador-b.json --seconds 15 --phase 200 --output target/analysis/cliente-b-01.json
+```
+
+No Linux, os mesmos argumentos funcionam com `cargo run -p multiplayer_server
+--bin multiplayer_server --locked -- ...` e `cargo run -p multiplayer_server
+--bin session_probe --locked -- ...`; este bloco ainda não foi reexecutado no
+Linux. `session_probe --no-pose` testa uma sessão que envia somente heartbeat.
+Os relatórios incluem fase, RTT/offset estimado, reconexões, poses e confirmação
+de saída, sem tokens. Não há desenho de caminhões nesse diagnóstico.
+
+Para usar a nova sessão na DLL do host próprio, configure também `AA_MP_ROOM`
+e `AA_MP_IDENTITY_FILE` antes de rodar `client_probe`. Para o launcher:
+
+```text
+mp_launcher --pid PID --dll CAMINHO_DLL connect --server IP:PORTA --mode game --room lan --identity-file ARQUIVO_LOCAL
+mp_launcher --pid PID --dll CAMINHO_DLL session-start --server IP:PORTA --room lan --identity-file ARQUIVO_LOCAL --backup NOVA_PASTA
+```
+
+Essas opções ativam v2; omiti-las preserva v1. A integração v2 passou no jogo
+Windows com eco em 29/10/2026: imagem/textura confirmadas, servidor reiniciado
+com reconexão, duas recargas pelo gate e leave confirmado no stop. O usuário
+relatou atraso leve; suavidade na LAN continua pendente. Durante a interrupção,
+os diagnósticos mostraram remotos zerados e ausência de novas submissões de
+desenho, mas o usuário não percebeu o desaparecimento na tela. Não considerar
+esse efeito visual confirmado. Backups e o procedimento de encerramento continuam
+necessários. Os seis descritores foram restaurados e os sete hashes ficaram
+iguais antes e depois da saída; nenhum teste entre dois PCs foi feito. A
+configuração da DLL usa um novo comando da ABI existente, sem mudar os tamanhos
+v1/v3. `session-status` inclui `network_session`; `status=1` sozinho indica
+worker ativo, não aceite da sala. Se as coordenadas ficarem indisponíveis, o
+heartbeat mantém a sessão sem inventar posições.
+
+`udp_proxy` aceita o primeiro `join` v2 ou pose v1 válido, fixando o endpoint.
+Aponte cada cliente ao seu próprio proxy para degradar uma sessão de dois
+clientes. Reinicie o proxy ao mudar a porta de origem do worker. V1 e v2 não
+são misturados no servidor. Salas, IDs, limites e garantias estão no contrato.
+
+### Diagnóstico da instalação sem abrir a partida
+
+`mp_doctor` lê arquivos e gera um relatório, sem abrir processo, carregar DLL,
+instalar DirectX/.NET ou modificar originais/saves. Usa os mesmos hashes do
+perfil da DLL, sem duplicar os valores em outro catálogo. No Windows, use a
+versão nativa x64 e informe a pasta dos clientes x86:
+
+```powershell
+.\target\x86_64-pc-windows-gnu\release\mp_doctor.exe --game . --client-dir target/i686-pc-windows-gnu/release --check-server --native-dir target/x86_64-pc-windows-gnu/release --output target/doctor-01.json
+```
+
+O servidor é opcional: omitir `--check-server` permite conferir uma instalação
+só de cliente. `--game` prevalece sobre `AA_GAME_DIR`; sem ambos, a ferramenta
+procura `prism3d.exe` em até oito ancestrais do diretório atual. Não varre toda a
+Steam nem escolhe silenciosamente outra instalação. `--client-dir`/`--native-dir`
+usam a pasta do doctor por padrão, útil num kit próprio; na árvore de build,
+informe as pastas separadas como acima. Isso permite manter fontes fora da Steam.
+
+No Linux, compilar/rodar o doctor nativamente (não o helper Windows):
+
+```text
+cargo run -p client_dll --bin mp_doctor --release --locked -- --game /CAMINHO/DO/JOGO --client-dir target/i686-pc-windows-gnu/release --check-server --native-dir target/release --proton-prefix /CAMINHO/compatdata/514160/pfx --output target/doctor-linux-01.json
+```
+
+Confere os cinco binários originais perfilados, arquitetura PE32 x86 de
+DLL/launcher e nomes dos exports necessários. O servidor opcional precisa ser
+PE/ELF da arquitetura/OS do doctor nativo. Prefixo fornecido precisa conter
+`drive_c`, `system.reg` e `user.reg`; apenas a estrutura é lida. Arquivo ausente,
+alterado, grande demais ou arquitetura/export incompatível deixa
+`static_checks_passed=false`, grava o relatório e retorna código diferente de
+zero. Nenhum hash é calculado sobre saves, identidades ou arquivos SCS.
+
+O parser lê imports PE em disco e procura seus nomes em diretórios locais
+conhecidos, com busca limitada. Presença é informativa; API sets, Wine builtins,
+WinSxS e a resolução real do loader podem diferir. Não chama `LoadLibrary` ou
+`ldd`. A verificação de ELF limita-se ao cabeçalho. Ausência nessa busca não é
+diagnóstico conclusivo de runtime faltante nem instrução para instalar algo.
+
+Os relatórios omitem caminhos particulares por padrão; `--include-paths` é
+opt-in para diagnóstico local. `--output` exige arquivo novo/pasta pai existente;
+sem ele, imprime somente o JSON. Perfil estático aprovado não prova DirectX,
+.NET, áudio/vídeo, execução Proton, ABI ao vivo, DLL/launcher da mesma revisão
+ou compatibilidade de mapa/mods. Esses pontos permanecem explicitamente
+`false`/não verificados no relatório. O novo fluxo Linux ainda precisa de
+execução no host Linux; parsers de ELF/prefixo com fixture não substituem isso.
+
+### Teste prolongado sem abrir o jogo
+
+`session_soak` cria uma sala Tokio de produção e 2..64 clientes reais UDP em
+loopback, no mesmo processo. As poses são sintéticas; não usa jogo, DLL,
+identidades persistentes nem endpoint público. Depois do build nativo:
+
+```powershell
+.\target\x86_64-pc-windows-gnu\release\session_soak.exe --clients 16 --seconds 300 --restart-every-secs 45 --outage-ms 3000 --churn-every-secs 2 --abrupt-restarts --output target/soak-01.json
+```
+
+No Linux, usar `cargo run -p multiplayer_server --bin session_soak --release
+--locked -- ...` ou o binário nativo. `--seconds` aceita 1..3600; o arquivo de
+saída precisa ser novo e a pasta pai existente. Sem flags de reinício/churn, o
+teste mantém o grupo conectado pelo período escolhido. Configurações de reinício
+precisam deixar tempo para indisponibilidade e recuperação dentro da execução.
+
+O churn alterna grupos de saídas com confirmação, queda do socket/expiração,
+retomada e troca de identidade temporária. Reinícios normais encerram a sala e
+capturam métricas; `--abrupt-restarts` aborta a tarefa do servidor, aguarda sua
+terminação e reabre o mesmo endpoint após a pausa. Não mata um processo externo.
+Não há métricas finais dos períodos abortados: `epochs[].server` fica null.
+
+O relatório exige troca de poses entre todos os clientes em cada período,
+convergência final, saídas finais confirmadas e servidor sem peers ativos na
+limpeza. Registra recusas/frames inválidos, datagramas, tráfego, churn e atrasos
+do driver/ticks; ultrapassar limites falha o comando após gravar o diagnóstico.
+`first_full_mesh_ms` é um timestamp global do teste; churn concorrente pode
+adiar essa observação, portanto não é uma medida isolada do tempo de reconexão.
+Erros retornados pelo driver geram relatório parcial e encerram seus recursos.
+Interrupção forçada/queda do processo pode deixar o relatório incompleto. Depois
+da duração principal há até 6 s para estabilizar e um período curto de limpeza.
+
+CPU e memória são do processo inteiro: servidor, clientes, driver e runtime.
+10000 em `cpu_basis_points` equivale a um núcleo a 100%; vários núcleos podem
+superar esse valor. RSS é amostrada aproximadamente a cada segundo; o pico do
+SO pode incluir aquecimento anterior. Dados indisponíveis são null. Não é
+medição isolada do servidor, perfil de heap, garantia de ausência de vazamento
+ou FPS do jogo. `game_tested`/`lan_tested` permanecem false. Endpoints/credenciais
+de jogadores não são exportados; os status têm somente IDs de runtime.
+
+### Laboratório virtual de condições de rede
+
+`network_lab` usa relógio virtual, pacotes sintéticos de servidor a 60 Hz,
+o codec do protocolo e a interpolação do projeto. Executa três cenários:
+conexão limpa, condições configuradas e uma interrupção no meio da transmissão
+(até 1,5 s). O mesmo seed e parâmetros reproduzem o relatório JSON.
+
+```sh
+cargo run -p client_dll --bin network_lab --locked -- --packets 3600 --seed 42 --loss-permille 50 --duplicate-permille 100 --delay-ms 40 --jitter-ms 80 --output target/analysis/rede-01.json
+```
+
+No Windows, após `dev_env verify`, o executável nativo está em
+`target/x86_64-pc-windows-gnu/release/network_lab.exe`; no Linux, o comando
+Cargo acima roda nativamente. A pasta de saída precisa existir e o arquivo deve
+ser novo. `50` por mil significa 5% de perda; `100` significa 10% de chance de
+uma cópia extra. O atraso é por sentido simulado, com jitter uniforme entre
+`-80` e `+80` ms nesse exemplo, limitado a zero quando a soma fica negativa.
+
+O relatório conta perdas, cópias extras, descartes por fila cheia, reordenação,
+amostras aceitas, pacotes antigos/duplicados rejeitados, frames ocultados após
+1 s sem amostras e recuperação depois da interrupção. `--queue-capacity` limita
+datagramas em trânsito (padrão 2048, máximo 8192); a fila precisa terminar vazia
+e todas as poses calculadas precisam ser finitas. Os parâmetros de perda e
+atraso não se aplicam ao cenário limpo.
+
+É uma simulação do recebimento de um jogador, com a mesma regra de sequência
+do worker. Não chama o worker, sockets, servidor, DLL injetada ou render do
+jogo. `game_tested` e `lan_tested` ficam `false`: o resultado não mede RTT/FPS
+nem comprova suavidade entre dois PCs ou sincronização de relógios.
+
+### Proxy UDP para testar o worker e os sockets
+
+`udp_proxy` aplica as mesmas condições de `network_lab` a tráfego UDP real, nos
+dois sentidos. Use uma instância por cliente: ela fixa o endereço/porta do
+primeiro remetente com um `ClientUpdate` v1 válido e recusa outros remetentes.
+O socket de saída é conectado ao servidor configurado. Não é uma sala nem
+substitui identidade/autenticação do futuro protocolo de sessão.
+
+No Windows, depois de `dev_env verify`, abra três terminais para testar sem jogo:
+
+```powershell
+# Terminal 1: servidor com eco.
+.\target\x86_64-pc-windows-gnu\release\multiplayer_server.exe --bind 127.0.0.1:39000 --echo
+
+# Terminal 2: proxy por 30 segundos; arquivo novo, pasta já existente.
+.\target\x86_64-pc-windows-gnu\release\udp_proxy.exe --listen 127.0.0.1:39001 --server 127.0.0.1:39000 --duration-ms 30000 --loss-permille 50 --duplicate-permille 100 --delay-ms 40 --jitter-ms 80 --blackout-after-ms 5000 --blackout-for-ms 1500 --output target/analysis/udp-01.json
+
+# Terminal 3: DLL deste projeto dentro do host Rust próprio, por 10 segundos.
+$env:AA_MP_SERVER = '127.0.0.1:39001'
+$env:AA_MP_MODE = 'simulated'
+.\target\i686-pc-windows-gnu\release\client_probe.exe .\target\i686-pc-windows-gnu\release\client_dll.dll 10
+```
+
+No Linux, compile/rode o proxy nativamente com
+`cargo run -p client_dll --bin udp_proxy --locked -- --listen 127.0.0.1:39001 --server 127.0.0.1:39000 --duration-ms 30000`.
+O host da DLL Windows continua exigindo o ambiente Proton próprio descrito
+anteriormente. O fluxo Linux deste bloco ainda não foi executado novamente.
+
+Para uma futura sessão na LAN, mantenha o proxy no PC do cliente e aponte
+`--server` para o IP do servidor. Configure o cliente para o endereço de escuta
+do proxy. Ao reiniciar o worker com outra porta de origem, reinicie o proxy.
+O proxy não foi validado na partida nem entre dois PCs neste bloco; mantenha
+o procedimento de sessão, backup e encerramento já documentado.
+
+As probabilidades são aplicadas independentemente por sentido; perda de 5% em
+cada sentido não significa 5% no percurso completo. A fila padrão comporta 2048
+datagramas por direção, com limite configurável de 8192; datagramas acima de
+1200 bytes são descartados. Cada passagem limita o trabalho de recebimento e
+envio. Erros transitórios de porta UDP inacessível não encerram o proxy.
+`--blackout-after-ms` conta a partir do primeiro cliente válido, para que a
+interrupção não aconteça enquanto você ainda prepara o host. A duração total
+do proxy continua contando desde o início; inicie o cliente dentro desse prazo.
+
+Ele termina pelo prazo (`--duration-ms`, até uma hora), descarta as cópias ainda
+pendentes e registra os contadores por direção, parâmetros, seeds e endereço do
+cliente. Deixe o prazo terminar para obter o relatório: interromper o processo
+pode deixar o arquivo reservado incompleto. Não grava conteúdo dos pacotes.
+O seed controla os sorteios, mas o agendamento e as chegadas reais variam; os
+relatórios de sockets não têm a garantia de igualdade do laboratório virtual.
+`validates_game=false` e `validates_lan=false` deixam explícito que o proxy,
+sozinho, não comprova integração ou LAN.
+
+`udp_proxy_workflow` usa a DLL x86 real numa fixture própria e UDP loopback,
+com perda, duplicação, atraso/jitter, pacotes antigos/inválidos, interrupção e
+retomada. Não instala sondas no motor nem abre o jogo. A fixture observa o estado
+remoto envelhecer, sem afirmar que um caminhão foi ocultado pelo render real.
+
+### Ajustar e medir a suavização sem recompilar
+
+O padrão continua em 100 ms de atraso e até 200 ms de extrapolação. Para
+comparar opções numa futura sessão, `session-start` aceita `--interpolation-ms`
+e `--extrapolation-ms`, ambos entre 0 e 200. Diminuir o atraso pode exigir mais
+previsão e expor jitter; não há um valor novo aprovado na LAN.
+
+Com a DLL atual já carregada, também é possível consultar ou ajustar ao vivo:
+
+```text
+mp_launcher --pid PID --dll CAMINHO_DLL presentation
+mp_launcher --pid PID --dll CAMINHO_DLL presentation --delay-ms 50 --extrapolation-ms 100
+mp_launcher --pid PID --dll CAMINHO_DLL presentation --delay-ms 100 --extrapolation-ms 200
+```
+
+O exemplo de 50/100 ms é uma configuração de comparação, não recomendação
+medida. `extrapolation-ms 0` segura a última posição quando faltam amostras.
+Os dois parâmetros mudam como uma palavra atômica; entrada inválida conserva
+o ajuste anterior. Não muda o servidor, as regras de teleporte nem o limite de
+1 s para deixar de desenhar poses antigas. Iniciar uma sessão aplica seus
+parâmetros (ou os padrões); ajuste avulso dura enquanto essa DLL estiver carregada.
+
+`session-status` agora inclui `presentation`: configuração/revisão e contadores
+de consultas com interpolação, previsão, previsão no limite, pose mantida,
+teleporte e buffer ainda sem histórico suficiente. `stale`, `empty_queries` e
+`lock_misses` ajudam a distinguir dado antigo, consulta sem pose e contenção.
+São diagnósticos aproximados, cumulativos desde a carga da DLL, por consulta/
+remoto; não representam frames de tela nem comprovam desaparecimento percebido.
+Não são zerados ao trocar configuração ou reconectar.
+
+`network_lab` aceita os mesmos orçamentos por `--interpolation-ms` e
+`--extrapolation-ms`. Seu relatório **schema 2** acrescenta modos de avaliação,
+maior previsão e erro médio/máximo contra a trajetória artificial selecionada,
+em milésimos de centímetro (`mean_error_milli_cm`/`max_error_milli_cm`). O erro
+inclui o atraso intencional do buffer; não é precisão da física real. `--delay-ms`
+continua sendo o atraso da rede simulada. Relatórios schema 1 e hashes históricos
+continuam históricos, sem promessa de igualdade com o formato novo.
+`--trajectory linear` conserva a linha a 600 cm/s; `--trajectory stop-turn`
+adiciona duas paradas e mudanças de direção num percurso contínuo de 8 s.
+Comparar apenas a linha favorece a previsão; o segundo percurso serve para
+observar erros nas frenagens e mudanças bruscas. Não reproduz física de caminhão.
+
+Os comandos 6/7 usam o payload JSON da Control v1 existente, sem mudar seus
+1536 bytes ou a Engine v3/664. Transfira launcher e DLL da mesma revisão;
+uma cópia antiga não implementa esses comandos. Sem novo teste no jogo/Linux/LAN
+neste bloco; fixtures próprias verificam controles e contadores da DLL x86.
+
+### Diagnóstico de RTT e chegada de snapshots v2
+
+`session-status` inclui `network_timing`; também existe a consulta independente:
+
+```text
+mp_launcher --pid PID --dll CAMINHO_DLL network-timing
+```
+
+Em v1 ou antes de iniciar v2, o resultado é `null`. Na v2, registra número de
+amostras de RTT, RTT máximo e variação entre RTTs consecutivos. O RTT atual e
+mínimo continuam em `network_session`. `arrival_jitter_us` suaviza a diferença
+absoluta entre o intervalo de chegada local e o intervalo do relógio do servidor,
+com peso 1/16: não precisa de offset de relógio e inclui efeitos do agendamento
+dos processos. Zero com poucas amostras não comprova uma rede sem jitter.
+
+Snapshots com o mesmo tick (batches/duplicatas) não trocam a referência de tempo.
+Ticks/tempos regressivos são contados sem contaminar essa referência.
+`max_receive_gap_ms`, `tick_gap_events` e `largest_tick_step` mostram intervalos e
+lacunas observados; **não estimam perda de pacotes**. Falta de poses, cadência do
+servidor, batching e indisponibilidade também podem produzir lacunas. O contador
+`old` continua sem equivaler a perda.
+
+As métricas reiniciam quando uma nova conexão é aceita e ficam disponíveis após
+o leave. Consulta e status são snapshots separados; não são uma captura atômica
+do jogo ou entre todos os contadores. `session_probe` também exporta `timing`.
+O comando 8 usa a Control v1 existente, sem novos campos no wire e sem token no
+diagnóstico. Linux e medição entre computadores continuam pendentes; manter o
+procedimento de backup/parada para qualquer validação futura na partida.
+
 ### Comportamento do caminhão remoto (referência)
 
 - **Suavização:** cada jogador remoto guarda 16 amostras (tempo de recepção
-  local). O desenho fica 100 ms atrás da mais recente, com interpolação linear
+  local). O desenho usa por padrão 100 ms de atraso, com interpolação linear
   de posição e de quaternion pelo arco curto (nlerp). Se faltar amostra, prevê
   no máximo 200 ms à frente. Acima de 20.000 cm/s implícitos, salta direto ao
   destino (teleporte). Sem amostra há mais de 1 s, não desenha.
+  A previsão usa intervalo mínimo de um tick (1/60 s), pois pacotes recebidos
+  juntos não medem velocidade física. Timestamps iguais conservam só a última
+  pose; amostras inválidas são recusadas e os cálculos evitam overflow de f32.
 - **Vários remotos:** `--player all` desenha cada remoto fresco com a mesma
   instância (até 16 por frame). `engine remotes` lista ID, sequência, idade,
   amostras, posição e rotação.
@@ -1079,12 +1403,15 @@ rodando `session-stop` antes de fechar o jogo. `automatic_load_supported` contin
   iluminação da cena durante o draw e remove o callback/contexto da instância
   logo depois. O usuário confirmou a textura correta após movimento e após
   carregar/recriar com liberação prévia; não houve travamento relatado no reteste.
-- **Recarga:** a recriação ao detectar uma entidade nova passou somente na
-  bancada; o primeiro reload real com a instância retida fechou o processo.
-  `session-prepare-load` antes de carregar e `visual-show` depois passaram no
-  reteste real, com limpeza e hashes conferidos. Manter esse procedimento.
-  `recreated`/`recreate_pending` são diagnósticos da tentativa automática;
-  `fault=2` indica interrupção, não cobertura de todos os riscos do carregamento.
+- **Recarga:** o primeiro reload real com a instância retida fechou o processo.
+  O caminho atual libera ANTES da carga pelo gate de `map`, reexecuta uma vez e
+  recria no ator novo: duas cargas passaram no Fedora/Proton com v1 e mais duas
+  no Windows com v2, com confirmação visual e hashes conferidos. Detectar o ator
+  novo sozinho não substitui essa liberação anterior. Com `--no-load-gate`, usar
+  `session-prepare-load` antes e `visual-show` depois. Os cinco outros comandos
+  continuam sem prova real; parar a sessão antes de fechar o jogo.
+  `recreated`/`recreate_pending` e `fault` são diagnósticos, não cobertura de
+  todos os riscos do carregamento.
 - **Métricas:** `draw_cost_avg_ns`/`draw_cost_max_ns` (custo das nossas chamadas
   ao motor por frame) e `frame_interval_avg_us` (tempo médio de frame local) em
   `visual-status`/`session-status`.
@@ -1224,6 +1551,57 @@ que usa GNU ld também em x86 e não grava caminhos particulares no repositório
 Após trocar toolchain ou limpar `target/`, recompile o helper e repita o fluxo
 atual. Não copie dependências por cima das DLLs originais.
 
+## Auditoria e pacote de fontes para continuidade
+
+`dev_env verify` audita os fontes antes de compilar. A lista de permissão é
+independente do `.gitignore`: um original adicionado com `git add -f` também
+é recusado. A verificação exige Git disponível e a raiz de um repositório.
+
+No Windows, depois de compilar as ferramentas nativas:
+
+```powershell
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe audit-source . --scope worktree
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe audit-source . --scope index
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe audit-source . --scope head
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe source-bundle . --output target/analysis/fontes.zip
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe verify-source-bundle target/analysis/fontes.zip
+```
+
+No Linux, use `cargo run -p asset_tools -- audit-source . --scope index` e os
+mesmos subcomandos. Este bloco foi testado no Windows; execução nova no Linux
+permanece pendente. Crie previamente a pasta de saída. O ZIP precisa ser novo;
+um erro de escrita pode deixar um pacote parcial para inspeção.
+
+`worktree` lê arquivos rastreados e novos não ignorados no disco; `index` lê os
+blobs exatos preparados para o próximo commit; `head` lê o commit atual. Cada
+relatório JSON informa escopo, commit de referência, estado dirty, tamanho e
+SHA-256 por arquivo, sem conteúdo nem caminhos absolutos. A auditoria não
+percorre os arquivos ignorados da instalação. Ela recusa caminhos fora da lista,
+links/reparse points no worktree, modos Git de link/submódulo, conflitos no índice,
+colisões de nomes no Windows e conteúdo binário disfarçado. Limites: 10.000
+fontes, 2 MiB por arquivo e 64 MiB no total.
+
+`source-bundle` usa **somente os blobs do HEAD commitado**, mesmo havendo edições
+locais; faça commit antes de gerar o pacote que deseja levar. O ZIP contém
+fontes próprios e `SOURCE_MANIFEST.json`, com commit, tamanhos e hashes. Não
+inclui `.git`, jogo, assets extraídos, saves, configurações locais, identidades,
+`target/`, executáveis ou DLLs. Duas gerações do mesmo HEAD produzem bytes iguais
+na bancada. `verify-source-bundle` verifica lista, limites e hashes sem extrair.
+Esses hashes comprovam integridade interna, não assinatura/origem/autoria; a
+lista não substitui revisão de texto sensível nem examina o histórico inteiro.
+
+Para continuar em outro PC, prefira clonar o repositório e recompilar conforme
+os fluxos Windows/Linux deste README. O ZIP é um snapshot de fontes, sem
+histórico/remote e sem ambiente pronto; não substitui o clone Git nem representa
+um release instalável do mod. Revisão de dependências/avisos, pacote de binários
+e instalação/restauração de assets continuam pendentes no roadmap.
+
+Ao atualizar `asset_tools` no Windows, o helper `dev_env` move apenas seu próprio
+executável em uso para `target/dev-env-running/`, permitindo que Cargo gere o
+novo `dev_env.exe`. Se o build parar antes disso, restaura o nome original sem
+substituir um executável novo. Cópias antigas desse helper são limpas na próxima
+execução; a configuração `.cargo/config.toml` continua preservada.
+
 ## Ferramenta de assets
 
 Para investigação estática do motor, `engine_report` é um binário Rust nativo
@@ -1278,6 +1656,156 @@ O arquivo resultante usa ZIP sem compressão (`Stored`), com caminhos relativos.
 O destino deve ficar fora da árvore de entrada. Links e arquivos que precisariam
 de ZIP64 são recusados; pacotes de teste devem ficar abaixo de 4 GiB e 65.535
 entradas. A ferramenta não instala o pacote automaticamente na Steam.
+
+### Pacotes de alterações com manifesto (offline)
+
+`mod-example` cria um projeto só com PNG/texto próprios, sem ler o jogo. Depois
+do build nativo, os comandos Windows são:
+
+```powershell
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe mod-example target/mod-project
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe mod-build target/mod-project/project.json target/mod-build-v1 --distributable
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe mod-verify target/mod-build-v1 --distributable
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe mod-stage target/mod-build-v1 target/mod-stage-v1 --distributable
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe mod-unstage target/mod-stage-v1 target/mod-backup-v1
+```
+
+No Linux, use `cargo run -p asset_tools -- mod-example target/mod-project` e os
+mesmos subcomandos, ou o executável nativo `target/release/asset_tools`. O código
+é portátil; os novos comandos foram executados no Windows x64, sem teste Linux
+novo. A suíte completa também conferiu a DLL x86 existente. O diretório
+pai de cada destino precisa existir. Exemplo, stage e backup exigem diretórios
+novos; repetir o build reutiliza a saída apenas se todos os bytes conferirem.
+
+O `project.json` usa schema 1, `id`, `version` e `files`. Cada entrada declara:
+
+```json
+{
+  "source": "inputs/owned/notes.txt",
+  "path": "locale/mp/notes.txt",
+  "origin": "owned",
+  "depends_on": []
+}
+```
+
+`source` é relativo à pasta do projeto. `owned` exige `inputs/owned/`;
+`derived_local` exige `inputs/local/` e marca o pacote como não distribuível.
+`--distributable` recusa qualquer derivação local antes de escrever a saída.
+Origem é uma declaração obrigatória: essa conferência não reconhece cópias do
+jogo declaradas incorretamente como próprias nem comprova autoria. Os caminhos
+locais absolutos não entram no manifesto. `depends_on` lista outros caminhos
+internos do pacote, com correspondência exata; ausências, ciclos, duplicatas e
+colisões de nomes no Windows são recusados. Dependências externas do jogo e
+transformações/conversões ainda não fazem parte desse grafo.
+
+Cada saída contém somente `overlay.scs` e `manifest.json`. O manifesto registra
+origem, tamanho, SHA-256 individual, dependências e SHA-256 do SCS. O ZIP é Stored,
+ordenado, com data/permissões fixas; a verificação também rejeita dados anexados,
+entradas não declaradas e metadados ZIP diferentes do formato canônico. Não é
+assinatura/autenticação. A reutilização de `mod-build` relê e confere todas as
+entradas. O cache de conversão está no comando de receitas abaixo. Uma alteração
+exige outro diretório de saída.
+
+`mod-build` copia os bytes sem recodificar imagem; não converte materiais nem
+valida sua sintaxe no motor. Aceita `.def`, `.shd`, `.mat`, `.txt`, `.tga`, `.png`,
+`.dds`, `.bmp`, `.jpg` e `.jpeg`; textos precisam ser UTF-8 sem controles binários.
+Recusa extensões executáveis/arquivos compactados, assinaturas comuns de PE/ELF/
+ZIP disfarçadas, saves, links e junctions. Limites: 1.024 arquivos, 16 MiB por
+asset, 32 MiB de conteúdo, manifesto de 1 MiB e caminhos ASCII de até 240 bytes.
+Isso não substitui a auditoria de autoria nem permite publicar assets do jogo.
+
+`mod-stage` prepara uma cópia verificada em pasta nova. `mod-unstage` primeiro
+cria e verifica um backup em outra pasta nova, revalida o stage e remove somente
+os dois arquivos conhecidos; arquivos extras ou conteúdo alterado impedem a
+remoção. Para recuperar, use `mod-stage target/mod-backup-v1 target/mod-stage-v1`
+se esse destino já não existir, ou escolha outra pasta nova. Uma falha de escrita
+ou remoção pode deixar uma pasta parcial, que permanece para inspeção; o backup
+verificado não é apagado. Não há sobrescrita automática nem promessa de transação
+contra queda de energia ou gravações concorrentes. Use um único escritor local.
+
+**Ativação no jogo continua pendente.** A instalação atual monta os SCS por
+caminhos explícitos em `aa/init.cfg`. Esses comandos não editam essa configuração,
+não substituem os SCS originais e não fazem o jogo descobrir automaticamente o
+overlay. O exemplo é uma fixture do pipeline, sem efeito visual prometido na
+partida. Montagem, prioridade entre pacotes, instalação integrada e remoção com
+o motor continuam exigindo um teste específico com backup.
+
+### Reconstrução local por receitas e cache
+
+`mod-recipe-build` acrescenta fontes com SHA-256 obrigatório, reconstrução de
+uma entrada ZIP/SCS local e transformações `copy` ou `png`. O exemplo continua
+inteiramente próprio; inclui um ZIP artificial classificado como local para
+exercitar as mesmas restrições dos originais, sem exigir o jogo:
+
+```powershell
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe mod-recipe-example target/recipe-project
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe mod-source-hash target/recipe-project/inputs/local/example-original.zip --entry textures/checker.png
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe mod-recipe-build target/recipe-project/recipe.json target/recipe-build-v1 --cache target/recipe-cache --archive target/recipe-project/inputs/local/example-original.zip
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe mod-verify target/recipe-build-v1
+```
+
+No Linux, os mesmos subcomandos usam o executável nativo ou `cargo run -p
+asset_tools -- ...`; não houve novo teste Linux deste bloco. O exemplo gera
+`recipe.json` completo. Repetir o build confere as fontes outra vez, usa o cache
+e retorna `reused=true` se o pacote já existente for idêntico.
+
+A receita schema 1 tem `id`, `version` e `files`. Cada saída declara `path`,
+`depends_on`, `source` e `transform`. Fontes disponíveis:
+
+| `source.kind` | Campos | Origem da saída |
+| --- | --- | --- |
+| `owned_file` | `path` em `inputs/owned/`, `sha256` | `owned` |
+| `local_file` | `path` em `inputs/local/`, `sha256` | `derived_local` |
+| `local_archive` | `archive_sha256`, `entry`, `sha256` da entrada | `derived_local` |
+
+`mod-source-hash ARQUIVO` calcula o hash do arquivo; `--entry CAMINHO` também
+calcula tamanho/hash da entrada sem extrair. Copiar esses valores para a receita.
+Para arquivos editados derivados de assets, usar `local_file`; autoria continua
+sendo declaração, não reconhecimento automático do conteúdo.
+
+Os caminhos privados dos originais são informados somente por `--archive`,
+repetível até 16 arquivos. A receita identifica cada original pelo hash integral;
+vínculos ausentes, repetidos ou não utilizados são recusados. Hash integral e
+hash da entrada precisam conferir, inclusive num build com cache quente. Os
+originais são lidos sem modificações, até 2 GiB por arquivo/100.000 entradas;
+a entrada selecionada permanece limitada a 16 MiB. O hash integral lê o arquivo
+todo em fluxo; só a entrada necessária é descompactada, sem extração completa
+ou varredura automática da instalação.
+
+Transformações:
+
+- `{"kind":"copy"}` conserva os bytes.
+- `{"kind":"png","flip_y":true,"max_edge":null}` decodifica e escreve PNG.
+  `max_edge` opcional/null ou 1..8192 reduz proporcionalmente com Lanczos3, sem
+  ampliar imagens menores. Sem resize, a fixture RGBA confirma cores/alpha e
+  inversão vertical; fixtures TGA/BMP e PNG 16-bit também conservam os pixels
+  decodificados, incluindo a precisão de 16 bits. Limites de entrada: 8192 por
+  dimensão, 16 megapixels antes
+  da decodificação completa e orçamento de alocação do decoder de 64 MiB; este
+  último é best effort do crate `image`. Metadados ICC/EXIF/mipmaps e sintaxe dos
+  materiais no motor não são preservados/validados por esse contrato.
+
+O pacote de receita usa manifesto schema 2 com a proveniência por entrada:
+fonte/hashes, operação, revisão do pipeline e hash do `Cargo.lock`. Pacotes
+schema 1 anteriores continuam aceitos sem mudar seus bytes. `mod-stage`,
+`mod-unstage` e `mod-verify` aceitam ambos. Converter ou aproveitar cache nunca
+promove `derived_local` a `owned`; `--distributable` continua recusando o pacote.
+O resultado derivado é local, não acompanha os fontes nem vai ao GitHub.
+
+O cache fica em árvore separada de entradas/saída. A chave inclui hash da fonte,
+extensão/decoder, operação, revisão e dependências fixadas. Cada entrada confere
+cabeçalho, chave, tamanho e hash; corrupção interrompe o build, sem sobrescrever
+ou reparar silenciosamente. Escolha outro cache se precisar preservar/investigar
+o anterior. É cache local de confiança, não autenticação contra adulteração
+intencional. Uma mudança de implementação da transformação exige incrementar
+`REVISION`; mudanças no lock invalidam as chaves automaticamente. Cache pode
+conter conteúdo derivado e permanece ignorado pelo Git. `cache_hits` e
+`cache_misses` medem conversões evitadas, não I/O evitado dos originais.
+
+A construção é reproduzível e foi conferida em duas raízes Windows x64, com
+cache frio/quente e com as fixtures próprias. Ativação/montagem e resultado
+visual no motor continuam pendentes no roteiro de validação; não há instalador
+que edite `init.cfg` nem reconstrução automática de todos os assets do jogo.
 
 A varredura dos três arquivos locais encontrou texturas PNG, JPEG e TGA, sem DDS.
 PNG também pode ser um intermediário para edição de outros formatos. Preserve os

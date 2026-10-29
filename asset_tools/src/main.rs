@@ -11,6 +11,67 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Audit own sources; never traverse ignored game assets or print contents.
+    AuditSource {
+        #[arg(default_value = ".")]
+        root: PathBuf,
+        #[arg(long, value_enum, default_value = "worktree")]
+        scope: asset_tools::source_audit::Scope,
+    },
+    /// Export only committed HEAD sources as a NEW deterministic ZIP.
+    SourceBundle {
+        #[arg(default_value = ".")]
+        root: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+    },
+    /// Check a source bundle's allowlist/limits/hashes without extraction.
+    VerifySourceBundle { input: PathBuf },
+    /// Create a NEW project with our own PNG/text fixtures (no game inputs).
+    ModExample { output: PathBuf },
+    /// Create a NEW hash-pinned reconstruction recipe with only our fixtures.
+    ModRecipeExample { output: PathBuf },
+    /// Reconstruct a local overlay using verified inputs and a separate cache.
+    ModRecipeBuild {
+        recipe: PathBuf,
+        output: PathBuf,
+        #[arg(long)]
+        cache: PathBuf,
+        /// Bind a local original archive by SHA-256, never by a private path in the recipe.
+        #[arg(long)]
+        archive: Vec<PathBuf>,
+        #[arg(long)]
+        distributable: bool,
+    },
+    /// Hash a local file and optionally one bounded ZIP/SCS entry, without extraction.
+    ModSourceHash {
+        input: PathBuf,
+        #[arg(long)]
+        entry: Option<String>,
+    },
+    /// Build an immutable deterministic data overlay; reuse only an exact match.
+    ModBuild {
+        project: PathBuf,
+        output: PathBuf,
+        /// Reject every asset declared derived_local.
+        #[arg(long)]
+        distributable: bool,
+    },
+    /// Verify paths, declared origins, dependencies, hashes and canonical ZIP.
+    ModVerify {
+        package: PathBuf,
+        #[arg(long)]
+        distributable: bool,
+    },
+    /// Copy a verified package to a NEW directory; does not activate it in-game.
+    ModStage {
+        package: PathBuf,
+        destination: PathBuf,
+        #[arg(long)]
+        distributable: bool,
+    },
+    /// Backup to a NEW directory, then remove only the two unchanged stage files.
+    ModUnstage { package: PathBuf, backup: PathBuf },
     /// Find ZIP/SCS archives and report entry counts and texture formats.
     Scan {
         #[arg(default_value = ".")]
@@ -78,7 +139,86 @@ enum Command {
 
 fn main() -> Result<()> {
     match Cli::parse().command {
+        Command::AuditSource { root, scope } => {
+            let report = asset_tools::source_audit::audit(&root, scope)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            Ok(())
+        }
+        Command::SourceBundle { root, output } => {
+            let manifest = asset_tools::source_audit::bundle(&root, &output)?;
+            println!(
+                "Bundled {} committed sources from {} into {}",
+                manifest.files.len(),
+                manifest.commit,
+                output.display()
+            );
+            Ok(())
+        }
+        Command::VerifySourceBundle { input } => {
+            let manifest = asset_tools::source_audit::verify_bundle(&input)?;
+            println!(
+                "Verified {} committed sources from {} (integrity, not signature)",
+                manifest.files.len(),
+                manifest.commit
+            );
+            Ok(())
+        }
         Command::Scan { root } => asset_tools::scan(&root),
+        Command::ModExample { output } => asset_tools::mod_package::example(&output),
+        Command::ModRecipeExample { output } => asset_tools::mod_package::recipe::example(&output),
+        Command::ModRecipeBuild {
+            recipe,
+            output,
+            cache,
+            archive,
+            distributable,
+        } => {
+            let report = asset_tools::mod_package::recipe::build(
+                &recipe,
+                &output,
+                &cache,
+                &archive,
+                distributable,
+            )?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            Ok(())
+        }
+        Command::ModSourceHash { input, entry } => {
+            let report = asset_tools::mod_package::recipe::fingerprint(&input, entry.as_deref())?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            Ok(())
+        }
+        Command::ModBuild {
+            project,
+            output,
+            distributable,
+        } => {
+            let report = asset_tools::mod_package::build(&project, &output, distributable)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            Ok(())
+        }
+        Command::ModVerify {
+            package,
+            distributable,
+        } => {
+            let report = asset_tools::mod_package::verify(&package, distributable)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            Ok(())
+        }
+        Command::ModStage {
+            package,
+            destination,
+            distributable,
+        } => {
+            let report = asset_tools::mod_package::stage(&package, &destination, distributable)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            Ok(())
+        }
+        Command::ModUnstage { package, backup } => {
+            let report = asset_tools::mod_package::unstage(&package, &backup)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            Ok(())
+        }
         Command::List { archive, limit } => asset_tools::list(&archive, limit),
         Command::Read {
             archive,

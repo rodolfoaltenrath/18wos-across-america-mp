@@ -113,7 +113,14 @@ fn session_commands_compose_start_status_and_safe_stop() {
         std::fs::read(backup.join("saves/b.sav")).unwrap(),
         b"second"
     );
-    assert_eq!(report["steps"].as_array().unwrap().len(), 8);
+    assert_eq!(report["steps"].as_array().unwrap().len(), 9);
+    assert!(
+        report["steps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|s| s["step"] == "presentation" && s["ok"] == true)
+    );
     // A second start stops at the first refused step and reports it.
     let again = launcher(&[
         "session-start",

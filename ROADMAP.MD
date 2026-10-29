@@ -1,6 +1,62 @@
 # Roadmap — Across America multiplayer em Rust
 
-Última atualização: 28/10/2026. Este arquivo descreve o projeto, não uma promessa
+## Ponto de parada para troca de computador — 29/10/2026
+
+**Retomada no Fedora em 29/10:** o proprietário pediu corrigir a divergência de
+branches e continuar. A `main` local tinha o commit documental `69e71e7` e dez
+commits do outro computador em `origin/main`; os históricos foram unidos sem
+reset/rebase/force-push. O único conflito era o progresso de M4, resolvido
+mantendo as provas mais recentes Fedora/v1 e Windows/v2. A referência
+`backup/main-before-sync-20261029` preserva o ponto local anterior. O worktree
+antigo de `claude/e2e-automation`, ancestral da main, contém trabalho não
+commitado e um `e2e_harness` ignorado; ambos permanecem preservados, sem
+substituir ferramentas atuais por esse experimento. A solicitação atual revoga
+a pausa histórica abaixo. A verificação nativa foi repetida nesta máquina;
+continuidade e validações adicionais serão registradas no próximo bloco.
+
+O proprietário pediu o encerramento para desligar o computador. A tarefa em
+andamento era implementar dois blocos que não exigem abrir o jogo:
+`session_soak` (endurance UDP com clientes reais em loopback) e `mp_doctor`
+(diagnóstico estático da instalação e dos binários). Ambos foram implementados
+e documentados; os detalhes e limites estão no registro **M0/M8/M9 — Diagnóstico
+estático e endurance UDP — 29/10/2026**, abaixo.
+
+**Onde parou:** a última correção foi proteger a validação dos prazos de reinício
+do soak contra overflow, com regressão para `u64::MAX`. A verificação completa
+foi repetida depois dessa correção e terminou: **134 testes x86 e 191 nativos,
+builds release, Clippy nos dois alvos e rustfmt passaram**. Log local ignorado:
+`target/analysis/verify-windows-20261029-soak-doctor.log`. Não há jogo,
+`session_soak`, `mp_doctor`, Cargo ou helper de verificação em execução no ponto
+de parada. Nenhuma nova sessão no jogo foi feita neste bloco.
+
+**Entregue na bancada:** soak de 16 clientes por cinco minutos com seis abortos
+da tarefa do servidor, e de 32 clientes por um minuto com três reinícios normais;
+as duas execuções recuperaram a malha e encerraram com zero clientes ativos.
+Doctor passou na instalação Windows e nas rejeições controladas de arquitetura,
+prefixo ausente e saída já existente. Isso não valida LAN, Linux/Proton, FPS,
+recarga no jogo nem sessões longas de render. Resultados e artefatos estão
+detalhados no registro citado, sem marcar essas etapas práticas como concluídas.
+
+**Retomada:** revisar o commit deste bloco e a seção citada antes de escolher
+o próximo incremento. Os novos recursos não precisam de implementação adicional
+para repetir os comandos documentados; falta exercitá-los no outro sistema.
+Continuam futuros o kit de distribuição somente com binários próprios, CI e o
+fluxo de instalação. A validação prática acumulada permanece no roteiro
+`docs/GAME_VALIDATION.md`, incluindo LAN entre PCs distintos e os comandos de
+teardown ainda pendentes. Não abrir o jogo para cada incremento; agrupar a rodada
+manual conforme a autorização do proprietário.
+
+**Para continuar em outro computador:** levar este commit por Git ou copiar o
+repositório com `.git`; um commit local não aparece no GitHub sem envio. Os
+relatórios e executáveis de `target/` são ignorados e não acompanham o clone.
+Se forem necessários para análise, copiá-los separadamente de forma privada.
+Recompilar pelo fluxo Windows ou Linux do README e recriar a configuração local;
+não executar toolchain Windows nativamente no Linux, nem reutilizar PIDs,
+endereços, caminhos de prefixo ou binários antigos do pendrive. Preservar os
+arquivos comerciais e saves fora do Git. O encerramento inclui auditoria do
+índice e commit local sem coautor; envio remoto não foi solicitado neste ponto.
+
+Última atualização: 29/10/2026. Este arquivo descreve o projeto, não uma promessa
 de prazo. Checkboxes concluídos exigem implementação ou evidência registrada.
 O objetivo é desenvolver ferramentas de assets e multiplayer para a instalação
 original Steam de **18 Wheels of Steel: Across America**, com todo o código e
@@ -45,26 +101,33 @@ depende de instrução para publicar e de um destino conhecido; este roadmap nã
 Essas orientações também estão em [AGENTS.md](AGENTS.md), para acompanhar o
 repositório e orientar futuras sessões de desenvolvimento.
 
+Em 29/10/2026, o proprietário pediu para continuar o que for possível sem abrir
+o jogo, concentrando as provas práticas numa rodada posterior. As pendências
+entregues estão agrupadas em [docs/GAME_VALIDATION.md](docs/GAME_VALIDATION.md),
+com ordem, preparação, critérios e bloqueios técnicos. Não marcar resultados
+práticos a partir da bancada nem confundir integrações futuras com testes prontos.
+
 ## 2. Estado real de partida
 
 | Área | Implementado e validado | Ainda falta |
 | --- | --- | --- |
-| Workspace | Cargo com `asset_tools`, `multiplayer_server`, `client_dll` | Reproduzir o ambiente em outra máquina e automatizar o preparo |
-| Assets | Varredura, listagem, extração ZIP/SCS, conversão de texturas, reempacotamento e inspeção binária/PE | Testar instalação de pacote no jogo, manifesto, restauração e distribuição só das alterações próprias |
-| Servidor | Tokio UDP, retransmissão com alvo de 60 Hz, rotação opcional, IDs, timeout, limites, validação e eco de teste | Sessão de protocolo explícita, identidade persistente, sincronização de relógio, controle de tráfego e mundo compartilhado |
+| Workspace | Cargo com três crates e `mp_doctor` estático nativo/x86 com hashes/perfil, arquitetura e presença informativa de dependências | Reproduzir preparo em outra máquina, validar runtime/fluxo Linux novo e automatizar instalação do ambiente |
+| Assets | Varredura/extração/conversão/PE e overlays determinísticos com manifesto, hashes, dependências, origem declarada e stage/backup/remoção offline | Montagem/instalador integrado no jogo, reconstrução comercial local e auditoria completa de distribuição |
+| Servidor | Tokio UDP v1/v2, sala/identidade/heartbeat/reconexão; `session_soak` passou 16 clientes/5 min e 32/1 min em loopback; v2 passou antes na partida Windows | LAN entre PCs, relógio do render, métricas de perda/jitter e mundo compartilhado |
 | DLL | x86 no jogo sob Proton, perfil por hash, configuração ABI, worker, UDP, dispatcher e sonda do loop | Matriz completa de estados do jogo e APIs de entidades |
 | Host de teste | `client_probe`, controlador entre processos e `test_host`; bancada x86 passou sob Proton | Testes de sessão longa, saída abrupta e duas máquinas |
 | Investigação | `memory_tool` Rust: processos, regiões, busca, filtros, comparação, ponteiros, observação e envio externo | Perfis de versões e ciclo de vida do veículo |
 | Coordenadas | Cadeia validada após movimento, reinício e comparação com save; pose de draw no mesmo corpo, escala em centímetros identificada | Outros estados/versões e amostragem consistente |
-| Multiplayer visual | Eco com pose/rotação e textura iluminada vistos no jogo; liberação antes do load/recriação explícita passaram | Automatizar transição prévia ao unload, testar vários remotos e dois PCs na LAN |
+| Multiplayer visual | Eco com pose/rotação/textura; gate de `map` passou em duas recargas no Fedora/v1 e duas no Windows/v2, com liberação anterior e recriação | Demais comandos de teardown, vários remotos, desaparecimento percebido na desconexão e dois PCs na LAN |
 | GitHub | Remoto `rodolfoaltenrath/18wos-across-america-mp`, histórico inicial Apache-2.0 preservado, exclusão do jogo | Manter staging auditado e documentação atualizada em cada entrega |
 
 O estado atual **não é multiplayer LAN validado entre dois computadores**.
 O proprietário confirmou um visual sem textura ao lado do seu caminhão,
 copiando movimento e rotação; isso não foi um segundo jogador conectado.
-As implementações posteriores têm testes próprios (último registro:
-41 x86/47 nativos, Clippy e formatação). Eco/skin já passaram no reteste abaixo;
-recarga automática e suavização na LAN seguem pendentes. Não rebaixar esse visual a mera
+As implementações posteriores têm testes próprios (último registro Windows:
+134 x86/191 nativos, release, Clippy e formatação). Eco/skin e gate de `map`
+passaram no jogo; a sessão v2 também passou em 29/10/2026. Demais comandos de
+teardown e suavização na LAN seguem pendentes. Não rebaixar esse visual a mera
 alocação privada, nem promover resultados da bancada a validação no jogo.
 
 ### Evidência de memória que deve acompanhar o código
@@ -2502,6 +2565,659 @@ com o visual visível, carregar `test_mp` a partir do menu (restauração),
 outra carga no jogo e, por fim, `quit` pelo menu com o visual visível,
 seguido de `session-verify` após a saída. Em seguida, LAN com dois PCs.
 
+### M4/M8 — Recuperação da instalação do gate e auditoria completa — 29/10/2026
+
+Revisão dos commits até `26ece45` ao retomar no Windows. Preservadas as provas
+reais de duas recargas de `map` no Fedora/Proton; os outros cinco comandos
+continuam comprovados somente na bancada. O resumo do README foi corrigido,
+pois ainda dizia que toda recarga automática estava sem validação.
+
+**Falhas encontradas e corrigidas:**
+
+- A troca do callback podia ter sucesso e a restauração de `VirtualProtect`
+  falhar antes de o slot entrar no registro de rollback. Agora os slots e o
+  journal existem antes da escrita; cada patch guarda separadamente ownership
+  do callback e a proteção original ainda pendente.
+- Um rollback incompleto marcava o gate como removido, impedindo nova tentativa
+  de limpeza. Agora conserva o estado instalado e o journal, recusa reinstalação
+  e permite repetir a remoção. A limpeza tenta todos os patches mesmo quando um
+  deles falha; não sobrescreve um callback estrangeiro.
+- `session-stop` conferia apenas o descritor de `map`. Instalação e conferência
+  final agora compartilham a resolução dos seis comandos pelo registro auditado,
+  com rejeição de nomes ausentes/duplicados, aliases, hash/callback incorretos e
+  endereços inválidos. São **14 slots** conferidos; capturas antigas de nove
+  slots não foram alteradas nem reclassificadas.
+
+**Cobertura nova:** fixtures próprias de falha em cada um dos seis pontos de
+instalação, erro antes/depois da troca, proteção pendente após o callback já
+estar restaurado, conflito de CAS, perda de ownership e palavra ilegível. Um
+teste Windows x86 usa seis palavras numa mesma página real read-only, falha
+controlada na proteção, rollback incompleto e nova tentativa; `VirtualQuery`
+confere a proteção original. Não executa callbacks do jogo nem injeta a DLL.
+
+**Limites e próximo marco:** sem novo teste no jogo neste bloco; não amplia a
+matriz dos comandos nem comprova LAN. Manter o teste real agrupado já descrito
+(saída ao menu, carga a partir dele, outra recarga e saída normal) e depois LAN
+com dois PCs. ABI v3/664 e protocolo v1 preservados. Artefatos locais em
+`target/analysis/verify-windows-20261029-hooks.log`, ignorados pelo Git.
+
+**Validação final no Windows:** `dev_env verify` passou com **101 testes x86 e
+101 nativos Windows x64**, builds release x86/nativo, Clippy dos dois alvos e
+rustfmt. O total inclui o laboratório de rede abaixo; não comparar diretamente
+com o total nativo do Fedora, pois há testes condicionais de Windows. Log final
+em `target/analysis/verify-windows-20261029-complete.log` (ignorado). Nenhum
+processo do jogo foi encontrado antes dos builds; não houve injeção na partida.
+
+### M8 — Laboratório determinístico de rede — 29/10/2026
+
+Entregue `network_lab`, binário Rust do crate `client_dll`, validado no Windows
+x64/x86 e portável para Linux (sem nova execução Linux neste bloco).
+Não exige assets, partida ou sockets.
+Usa o codec de produção e `interpolation::History`; o filtro estrito de sequência
+é simulado, não chama o worker da DLL. Não altera protocolo ou comportamento do
+servidor/cliente em produção.
+
+- Pacotes sintéticos de um remoto a 60 Hz e render com relógio virtual.
+- Perda e duplicação configuráveis por mil, atraso e jitter simétrico em ms,
+  reordenação decorrente dos prazos independentes, RNG/seed determinísticos.
+- Fila limitada, descarte por capacidade, contabilidade das cópias e drenagem.
+- Cenários limpo, degradado e interrupção de até 1,5 s no meio da transmissão.
+- Relatório JSON preserva parâmetros e contadores, ocultação por amostra antiga,
+  retomada com amostra gerada após a interrupção e verificação de poses finitas.
+  Arquivo de saída novo; não sobrescreve capturas.
+- Testes de repetibilidade, codec/interpolação, perda total, saturação da fila,
+  rejeição de parâmetros inválidos, interrupção/recuperação e conservação dos
+  pacotes. `game_tested=false` e `lan_tested=false` por definição.
+
+**Limites:** simula apenas o recebimento de um remoto. Não comprova sockets,
+agendamento do SO, custo do render, reboques, vários clientes, reconexão ou
+suavidade na LAN. RTT, relógio de servidor e negociação de sessão continuam
+pendentes em M3. O teste real agrupado dos comandos e depois LAN com dois PCs
+permanecem o próximo marco de integração. Uso reproduzível no README.
+
+**Lote release validado em ambos os alvos Windows:** `--packets 36000 --seed 42`,
+demais parâmetros padrão (perda 50/1000, duplicação 100/1000, atraso 40 ms,
+jitter ±80 ms, capacidade 2048). São 108.000 pacotes gerados por alvo nos três
+cenários; cada cenário tem dez minutos virtuais, não dez minutos de partida.
+Os dois JSONs foram idênticos byte a byte, SHA-256
+`c63d182b8b980832ccc60abbda6045077512255dbccbc87111b9046ad73ca678`.
+No cenário degradado: 1.826 perdas aleatórias, 3.377 cópias extras, 18.864
+datagramas reordenados, 18.097 amostras aceitas e 19.454 pacotes antigos/cópias
+rejeitados. Na interrupção: 35 frames simulados ocultados e recuperação com
+amostras geradas após a interrupção. Todas as filas terminaram vazias e as poses
+calculadas foram finitas. Relatórios ignorados em
+`target/analysis/network-lab-windows-20261029-{native,x86}.json`.
+
+### M2/M8 — Proxy de condições de rede e worker real — 29/10/2026
+
+Continuação offline após `7ae5f3e`. O laboratório anterior usava relógio virtual
+e simulava o filtro de recebimento. Este bloco acrescenta sockets reais e prova
+do worker da DLL numa fixture própria, sem chamar APIs comerciais ou abrir jogo.
+
+**Implementado:**
+
+- `network_conditions` reúne RNG, condições e fila limitada de datagramas, usado
+  por `network_lab` e pelo novo `udp_proxy`. Mantém as condições/ordem do cenário
+  virtual anterior. Valida tamanho de pacote, parâmetros e limite do relógio;
+  não faz parsing ou chamadas ao jogo.
+- `udp_proxy` nativo, com escuta e destino configuráveis, um cliente fixado após
+  o primeiro pacote v1 válido e socket conectado ao servidor. Trata perda,
+  duplicação, atraso, jitter e reordenação independentemente em cada sentido,
+  com seeds distintos registrados. Outro remetente não troca o dono do proxy.
+- Limites de tamanho (1200 bytes), fila por direção (até 8192), trabalho por
+  passagem e duração (até uma hora). Ao parar, descarta a fila restante e informa
+  `pending_on_stop`; não esvazia a fila enviando tráfego no encerramento.
+- Interrupção programada nos dois sentidos e controle em memória para fixtures.
+  O intervalo programado começa após o primeiro cliente válido; o relatório
+  registra `client_started_ms`. Não consome a interrupção antes da conexão.
+  Erros transitórios de porta inacessível não derrubam a ponte.
+- JSON com contadores por sentido, parâmetros e seeds; arquivo novo reservado
+  antes de aceitar clientes, preenchido ao terminar normalmente. Sem conteúdo
+  de pacotes. O relatório usa relógio real, não promete reprodução byte a byte.
+- Fixture x86 `udp_proxy_workflow`: carrega a DLL real em processo Rust próprio,
+  configura fonte simulada, recebe replies sintéticos por UDP degradado e
+  confere posição/rotação, sequência monotônica e histórico limitado. Injeta
+  sequência antiga com pose errada, versão inválida e pacote grande. Interrompe
+  tráfego até o remoto ter ≥1200 ms sem amostras; worker continua enviando e
+  depois aceita poses novas. Encerra e aguarda o worker antes de descarregar a DLL.
+- Testes de sockets verificam fixação do cliente, rejeição de outro remetente,
+  pacote grande, servidor temporariamente ausente e retomada. Testes puros
+  verificam fila, prazos/empates e limites.
+
+**Limites:** loopback não é LAN entre PCs. O servidor da fixture de worker é
+sintético, não o servidor Tokio; a integração com este pode ser exercitada pelo
+procedimento de três terminais no README. Sem teste novo de render, FPS ou jogo.
+O envelhecimento da linha remota não prova ocultação pelo motor. Sem negociação,
+heartbeat ou reconexão de sessão novos; o proxy fixa a porta de origem durante
+toda a execução. O fluxo Linux continua previsto, sem nova execução neste bloco.
+`validates_game=false`/`validates_lan=false` nos relatórios. Não amplia a prova
+real dos cinco comandos do gate. Próximo marco de integração permanece a sessão
+agrupada exit/menu/map/quit com eco e, depois, LAN entre dois PCs.
+
+**Validação final Windows:** `dev_env verify` passou com **108 testes x86 e
+107 nativos Windows x64**, builds release de ambos, Clippy x86/nativo e rustfmt.
+Log ignorado `target/analysis/verify-windows-20261029-udp-proxy-final.log`.
+A fixture real da DLL passou, incluindo histórico de até 16 amostras, recusa de
+estados antigos após estabelecer uma referência mais nova, versão inválida,
+pacotes grandes, interrupção ≥1200 ms, retomada, stop/join e descarga.
+
+Além da fixture, passou o percurso **servidor Tokio real com eco → proxy nativo
+→ DLL x86 dentro de `client_probe`**, em loopback e fonte simulada. Host rodou
+oito segundos, terminou com exit 0 (worker parado e módulo descarregado),
+476 envios/121 amostras novas aceitas. Durante a interrupção programada de
+1,5 s, o contador ficou em 46/seq 142 enquanto o envio continuou; depois subiu
+até 121/seq 468, com `status=1` durante toda a execução. O proxy durou 20 s,
+registrou 90 descartes de interrupção na subida e 75 na descida, picos de fila
+8/7 e zero pendentes no final. Seeds/condições padrão, interrupção após
+2500 ms do primeiro cliente. O primeiro smoke confirmou o relay mas não a
+interrupção, consumida antes da conexão; a contagem relativa ao primeiro cliente
+e o teste de bordas corrigem isso. Sem prova de FPS, render ou LAN.
+Relatório/logs `target/analysis/udp-proxy-final-*20261029*`, ignorados.
+
+O lote virtual de 36.000 pacotes por cenário também passou nos dois alvos,
+com JSON idêntico entre arquiteturas **e ao relatório anterior à refatoração**:
+SHA-256 `c63d182b8b980832ccc60abbda6045077512255dbccbc87111b9046ad73ca678`.
+Arquivos ignorados `target/analysis/network-lab-shared-20261029-{native,x86}.json`.
+Servidor auxiliar encerrado, proxy terminou pelo prazo; enumeração confirmou
+ausência do jogo. Nenhuma sonda/DLL injetada na partida ou alteração de originais
+e saves neste bloco. Sem nova execução Linux. ABI v1/v3 e wire v1 preservados.
+
+### M3 — Sala e conexões v2, opcionais — 29/10/2026
+
+Continuação autorizada sem solicitar testes manuais. Entregue o contrato
+[docs/NETWORK_PROTOCOL.md](docs/NETWORK_PROTOCOL.md), codec v2 e máquinas de
+estado portáveis `session_hub`/`session_client`; servidor Tokio, cliente nativo
+`session_probe`, DLL e launcher integrados. V1 permanece padrão e separado.
+Não houve nova chamada ao motor, modificação do jogo ou mudança dos tamanhos
+ABI Control v1/EngineControl v3. Os comandos novos são START_SESSION=4 e
+SESSION_STATUS=5 na Control existente; opções/status usam JSON em `message`.
+
+**Entregue:**
+
+- Uma sala por processo (`--room`), criação no servidor, entrada com nonce e
+  aceite/recusa explícita de versão/perfil/sala/capacidade. Sem downgrade.
+- Identificador local persistente com RNG do SO (`getrandom` já no lockfile),
+  IDs de sala/jogador/conexão separados, token por conexão e retomada com prova
+  das credenciais anteriores. Endpoint não é identidade; conta autenticada é
+  uma camada futura. Cache de até 64 identidades, com remoção das inativas mais
+  antigas; ID numérico não persiste após reiniciar sala/evictar cache.
+- Gerações e sequência reiniciada, descarte de datagramas anteriores, histórico
+  remoto reiniciado por geração, heartbeat sem coordenadas, timeout e retomada.
+- Lista completa/revisionada dos participantes reenviada periodicamente; saída
+  com confirmação idempotente e novas tentativas limitadas. Sem confirmação,
+  timeout continua sendo a garantia de limpeza.
+- Pings correlacionados, RTT último/mínimo e offset diagnóstico pelo menor RTT.
+  Instantes/tick do servidor são da rede, não da física. O render continua no
+  relógio local de recepção; não declarar sincronização de relógios concluída.
+- Snapshots até quatro poses/1200 bytes, até 64 peers, limites antes do parsing
+  por endpoint e orçamento compartilhado para origens desconhecidas, fila de
+  recibos/cache limitada, envio não bloqueante e métricas do servidor.
+- Janela de tráfego preservada ao retomar: reconectar não pode zerar o limite.
+- `session-start`/`connect --room --identity-file`, `network_session` no status,
+  env optativo no host próprio e proxy compatível com join v2. `session_probe`
+  exercita as mesmas regras sem DLL, com saída finita e relatório sem tokens.
+
+**Validação Windows:** `dev_env verify` completo passou: **116 testes x86 e
+125 nativos Windows x64**, release dos dois alvos, Clippy e rustfmt.
+Fixtures puras cobrem aceite perdido, repetição de join/leave, incompatibilidade,
+capacidade/cache, tráfego inválido/rate limit, credenciais revogadas, rosters,
+geração e RTT. Oito seeds simulam dois clientes, 25% de perda, 30% de duplicação,
+atraso/jitter, reinício da sala e convergência sem duplicar jogadores, nos dois
+alvos. Teste de sockets do servidor Tokio passou com dois clientes e saída.
+
+`session_dll_workflow` passou com a DLL x86 real em host Rust próprio: heartbeat
+manteve a conexão durante 2300 ms de coordenadas indisponíveis com timeout de
+2000 ms; outro jogador retomou com sequência zerada e histórico novo; reiniciar
+a autoridade foi recuperado; coordenadas voltaram; roster removeu o remoto;
+stop confirmou leave e descarregou a DLL. Sem hooks do motor.
+
+**Smoke com executáveis release reais:** servidor Tokio por 20 s, dois clientes
+nativos por 11 s e um proxy. Cliente A: 10% de perda, 50% de duplicação, atraso
+20 ms/jitter ±40 ms e interrupção de 2500 ms, além de retomada forçada aos 3 s.
+A terminou conectado: três aceites/duas retomadas, 331 poses aceitas, RTT último
+50 ms e leave confirmado. B recebeu 278 poses, observou mudança de geração e
+confirmou a saída. Um cliente com perfil errado foi recusado com exit 1. Servidor:
+quatro aceites, uma expiração e zero peers ao encerrar. Proxy: 126/122 descartes
+durante a interrupção. Todos os auxiliares encerraram. Relatórios/identidades
+em `target/analysis/session-v2-smoke-*`, ignorados, sem tokens nos relatórios;
+log final `target/analysis/verify-windows-20261029-session-v2-final.log`.
+
+**Limites:** não houve jogo, Linux ou LAN entre PCs nesta etapa. Não há contas,
+criptografia, persistência de economia, eventos econômicos confiáveis, modelo/
+velocidade do veículo novos nem offset aplicado à interpolação. Não altera a
+validade histórica das provas v1 nem comprova os outros cinco comandos do gate.
+A próxima prova prática deve agrupar os fluxos do jogo e LAN, quando disponível.
+
+### M5/M8 — Previsão limitada após rajadas UDP — 29/10/2026
+
+Regressão própria reproduziu duas poses separadas por 100 cm, recebidas com
+1 microssegundo de diferença: o código anterior aceitava o par e previa
+20.000.100 cm ao extrapolar 200 ms. O teste falhou antes da correção, sem jogo.
+A previsão agora usa o mesmo intervalo mínimo de um tick (1/60 s) empregado
+na detecção de teleporte: esse caso produz 1.300 cm. Não é medição de velocidade
+do caminhão; a janela de extrapolação continua em 200 ms e o atraso em 100 ms.
+
+Timestamps iguais substituem a última pose sem formar um par de velocidade;
+histórico rejeita timestamps/coordenadas/quaternions inválidos. Consultas não
+finitas não geram pose. Distância, interpolação e previsão usam intermediários
+f64, evitando overflow ao subtrair coordenadas f32 finitas extremas; uma previsão
+não representável conserva a pose mais recente. Read path continua sem alocação.
+Três regressões em `interpolation_burst` cobrem esses comportamentos.
+
+Não altera wire/ABI/hooks, nem aplica offset de relógio de rede ao render.
+Suavidade percebida no jogo, veículos distintos na LAN e sessões longas continuam
+pendentes de prova prática. `dev_env verify` passou no Windows: 119 testes x86,
+128 nativos x64, releases dos dois alvos, Clippy e rustfmt. Log ignorado:
+`target/analysis/verify-windows-20261029-interpolation.log`; a falha anterior
+da regressão está em `interpolation-burst-before.log`. O helper foi executado
+de uma cópia local para permitir atualizar seu próprio executável no Windows;
+a correção permanente desse fluxo fica no bloco seguinte. Não houve jogo.
+
+### M0/M7/M8 — Auditoria e snapshot próprio de fontes — 29/10/2026
+
+`asset_tools audit-source RAIZ --scope worktree|index|head` entrega inventário
+limitado, SHA-256, tamanhos, commit de referência e dirty sem conteúdo/caminhos
+absolutos. O índice e HEAD são lidos por OID; uma versão limpa no disco não
+mascara um blob proibido já preparado. Lista própria permite só os fontes/docs
+atuais e independe do `.gitignore`/`git add -f`. Recusa caminhos de jogo/config,
+binários disfarçados, links/submódulos/reparse points, conflitos do índice,
+colisões Windows e excesso de entradas/bytes. Não percorre ignorados nem
+garante autoria, ausência de texto sensível ou limpeza de todo o histórico.
+
+`source-bundle RAIZ --output NOVO.zip` gera snapshot determinístico somente dos
+blobs do HEAD, mais manifesto com commit/tamanhos/hashes. Não inclui Git privado,
+binários, jogo, extrações, saves ou configurações locais; edições não commitadas
+ficam fora. `verify-source-bundle` confere formato, lista, limites e hashes sem
+extrair/executar. Hash interno não autentica quem produziu o ZIP. Clone Git e
+rebuild continuam o fluxo recomendado para outro computador.
+
+`dev_env verify` passa a auditar o worktree antes do build. Corrigido bloqueio
+do próprio `dev_env.exe` no Windows: renomeia só o helper em execução para
+diretório ignorado, Cargo pode gerar o novo e uma falha pré-link restaura o nome
+sem sobrescrever saída nova. A configuração Cargo local permanece intocada.
+Fixtures próprias cobrem índice diferente do disco, original forçado, links,
+colisão, controles/binários, limite, path traversal, tamper, duplicatas,
+determinismo e restauração do helper.
+
+**Validação Windows:** `dev_env verify` executado pelo caminho normal passou:
+119 testes x86/136 nativos x64, builds release dos dois alvos, Clippy e rustfmt.
+O próprio helper foi atualizado com sucesso durante a execução, sem bloqueio;
+SHA-256 da configuração Cargo local permaneceu igual. A auditoria do worktree
+encontrou 120 fontes próprios (~1,56 MB). Log ignorado:
+`target/analysis/verify-windows-20261029-source-audit.log`.
+
+**Limites:** pacote apenas de fontes, não release de DLL/assets. M7 continua
+aberto para proveniência de assets próprios, auditoria de binários/instalador,
+sobreposição/restauração e teste no jogo. Licenças/avisos de dependências e
+clone limpo em outro PC continuam pendentes. Não houve jogo ou execução Linux.
+
+### M3/M4/M8 — Sessão real Windows com v2, reconexão e recargas — 29/10/2026
+
+Revisão testada: `dd24929`, mesmos binários da bancada Windows de 119 testes
+x86/136 nativos; não houve rebuild durante a DLL residente. Processo histórico
+15204/thread 19152, perfil/hash `steam-aa-1.10-ccb327c2` conferido. Auditoria
+externa leu 33 comandos; instalação dos seis descritores aceitou o perfil.
+Servidor v2 em loopback, sala `validacao`, eco, timeout de 5 s e visual 4 m ao
+lado. Backup incluiu dois saves; cinco originais e os dois saves foram hashados.
+
+**Confirmação do proprietário:** caminhão apareceu com textura correta e copiou
+movimentos/curvas; percebeu atraso leve. Após reiniciar o servidor, continuou
+funcional. Após as duas cargas solicitadas, o caminhão voltou com textura, e
+dirigir/fazer curva/parar funcionou, sem travamento relatado.
+
+**Reconexão:** servidor foi encerrado de forma controlada e iniciado novamente
+no mesmo endpoint. Snapshot durante a interrupção: `phase=reconnecting`, um
+reconnect, lista remota vazia, `last_draw_flush=76643` frente a `flushes=93679`.
+Após reiniciar: outra sala de runtime, `accepted=2`, `reconnects=1`, conectado,
+histórico/draw retomados. O proprietário NÃO percebeu o desaparecimento; os
+contadores comprovam ausência de novas submissões durante o intervalo capturado,
+sem confirmar a aparência dessa ausência na tela. Não marcar esse efeito pronto.
+
+**Recargas:** 12 snapshots foram preservados durante a sequência. Duas chamadas
+de `map`: `deferred/replays/recreated/arguments_restored=2`, retidos/descartados/
+foreign/fallback/busy zerados e gate idle ao final. Uma captura pegou a fase
+execute com `release_confirmed=true` e item zero. O usuário também navegou pelo
+menu, mas só duas chamadas de `map` chegaram aos seis hooks; não houve prova de
+`exit`/`menu`/`preview`/`edit`/`quit`. Não promover navegação na UI a cobertura
+desses callbacks. A conexão continuou aceita, sem novo reconnect nas cargas.
+
+**Parada:** uma consulta/uma tentativa de release, item `[1,1,0]`, doze flushes
+após ocultar, sem recusa. Conferidos 14 slots restaurados. Snapshot posterior:
+visual sem item, gate ausente, worker parado, sessão `closed`/`leave_confirmed`,
+dispatcher inativo, pump removido e pending/running/inflight zerados. Sete hashes
+iguais. O proprietário fechou normalmente; enumeração confirmou jogo ausente
+e `session-verify` pós-saída confirmou novamente os sete arquivos. Servidores
+encerrados, nenhum auxiliar ou processo do jogo restante. Não reutilizar o PID.
+
+Os dois relatórios do servidor foram preservados. Primeiro: 4.757 poses, 229
+pings, um aceite; segundo: 12.466 poses, 610 pings, um aceite/um leave e zero
+conectados ao encerrar. Ambos: zero pacotes inválidos/oversized/limitados,
+recusas e send_errors. `old` no cliente não é estimativa de perda. RTT último
+17 ms em loopback não representa LAN/Internet. Métrica final do trecho de draw:
+média 5.434 ns/máximo 185.400 ns; não mede custo GPU/FPS total nem sessão inteira.
+
+Artefatos completos em `target/analysis/session-v2-game-20261029-01/` (ignorados):
+backup, auditoria de comandos, início, snapshots, dois relatórios do servidor,
+stop, diagnóstico pós-stop e verificação pós-saída. Nesta etapa mudou somente
+documentação; não houve nova suíte após o teste prático, pois o código é o mesmo.
+
+**Próximo marco:** LAN entre dois computadores com jogadores independentes;
+medir atraso/jitter e observar reconexão/desaparecimento real. Antes de novos
+testes de teardown, preparar captura que permita comprovar quais callbacks
+foram executados. Os cinco comandos, outras transições e sessões longas seguem
+pendentes; preservar `automatic_load_supported=false`, v1 padrão e fallback.
+O atraso leve do eco permanece registrado, sem alegar suavidade concluída.
+
+### M5/M8 — Suavização configurável e avaliação offline — 29/10/2026
+
+Após o proprietário informar que o jogo não iniciou no outro PC, retomado o
+trabalho sem depender da LAN. Atraso e orçamento de previsão passam a ser
+ajustáveis entre 0 e 200 ms, mantendo os padrões 100/200 ms. `session-start`
+aceita `--interpolation-ms`/`--extrapolation-ms`; `presentation` consulta ou
+ajusta pela Control v1 (comandos 6/7, JSON, mesmos 1536 bytes). Engine v3/664,
+wire v1/v2 e hooks de teardown não mudam. Nenhum valor novo foi escolhido como
+melhor para o jogo ou LAN; o atraso leve da sessão anterior continua registrado.
+
+Configuração atômica, sem mutex/alocações/I/O adicionais na consulta do render;
+guardas de teleporte/rajada, limites de memória e idade de 1 s preservados.
+Histórico avalia explicitamente interpolação, previsão, previsão limitada,
+retenção, snap e buffer insuficiente. Contadores por consulta/remoto no status
+distinguem stale, ausência de pose e contenção; são aproximados e cumulativos
+durante a carga, não frames exibidos nem prova visual de desaparecimento.
+Zero extrapolação é uma retenção explícita, não uma velocidade infinita.
+
+`network_lab` schema 2 registra os modos, previsão máxima e erro médio/máximo
+contra a própria trajetória artificial, em milésimos de cm. `linear` mantém
+600 cm/s; `stop-turn` acrescenta paradas/mudanças de direção contínuas em 8 s,
+sem supor física real. A linha sozinha favorece previsão; usar ambos. Testes
+comparam orçamentos, custo de menor atraso em maior uso de previsão, limites,
+teleporte, rajada e rejeição sem alterar configuração. A fixture de render
+consulta/altera a DLL x86 real e testemunha retenção/stale/ausência de pose;
+CLI avulsa e sessão passam pelos mesmos controles. JSON máximo cabe nos 512
+bytes existentes; launcher e DLL precisam ser transferidos da mesma revisão.
+
+**Validação Windows:** `dev_env verify` passou: 127 testes x86/148 nativos x64,
+builds release, Clippy nos dois alvos e rustfmt. A fixture consultou a DLL real,
+aplicou ajuste pela API/CLI e observou contadores de retenção/stale/sem pose.
+Log ignorado: `target/analysis/verify-windows-20261029-presentation-timing.log`.
+
+Lote release: duas trajetórias, três orçamentos e dois alvos, 36.000 poses por
+cenário (limpo, degradado e interrupção), total 1.296.000 poses geradas. Os seis
+pares de JSON x86/x64 ficaram idênticos. Tabela do cenário degradado (5% de perda,
+10% de duplicação, atraso 40 ms/jitter ±80 ms); erros média/máximo em cm contra
+a trajetória artificial no instante atual, incluindo atraso intencional:
+
+| Atraso/previsão (ms) | Linha: média / máximo | Paradas/direção: média / máximo | Consultas previsão / limitada |
+| --- | --- | --- | --- |
+| 100 / 200 (padrão) | 67,031 / 130,359 | 56,766 / 462,068 | 95 / 0 |
+| 50 / 100 | 36,575 / 160,000 | 31,202 / 325,730 | 3.910 / 9 |
+| 0 / 50 | 8,322 / 190,000 | 7,511 / 358,111 | 28.149 / 4.301 |
+
+Menor erro médio não garante menor pico; não escolher valor para LAN a partir
+dessa simulação. Filas drenaram e poses permaneceram finitas. Relatórios em
+`target/analysis/offline-presentation-20261029-01/`, ignorados. O formato é
+schema 2, sem comparar seus hashes aos históricos schema 1. Não houve jogo,
+execução Linux ou outra máquina; suavidade e custo real continuam pendentes.
+
+### M3/M8 — Diagnósticos de variação de tempo por conexão — 29/10/2026
+
+`session_timing` entrega métricas inteiras/saturadas por conexão aceita: RTT
+máximo/amostras/EMA de variação, EMA de `|delta_chegada - delta_server_ms|`, maior
+intervalo, lacunas/passos de tick e snapshots não monotônicos. Peso 1/16,
+microssegundos para variações. Batches/duplicatas de mesmo tick não mudam a base;
+regressões são contadas sem envenená-la. Não requer offset nem altera clock do
+render. Lacunas não estimam perda; ausência de poses/cadência/agendamento também
+contribuem. Não muda snapshots/handshake/credenciais/limites do wire v1/v2.
+
+DLL publica snapshot separado pela Control v1 (comando 8). `network-timing`
+consulta sem exigir hooks; `session-status` inclui `network_timing`, `null` no
+v1. A conexão aceita zera as métricas; leave preserva o diagnóstico. Dados não
+são captura atômica com o status da sessão. `session_probe` acrescenta `timing`.
+Fixtures cobrem lotes iguais, reordenação, extremos u64, RTT correlacionado,
+outra sala, reset no aceite e retenção no leave; a DLL real em fixture consulta
+as métricas durante heartbeat sem coordenadas. Sem credenciais nos relatórios.
+
+Validação conjunta: 127 x86/148 nativos, release/Clippy/rustfmt, conforme o bloco
+acima. Teste adicional de executáveis release: servidor Tokio por 25 s, dois
+clientes por 15 s, um direto e outro via proxy com 8% de perda, 20% de duplicação
+e atraso 30 ms/jitter ±30 ms. Ambos conectados ao final e leave confirmado.
+Cliente via proxy: 24 amostras RTT, máximo 198 ms, variação RTT 25.189 us e de
+chegada 10.945 us, 308 snapshots não monotônicos. Direto: 30 amostras, máximo
+19 ms, variações 396/5.022 us e zero não monotônicos. Valores incluem polling/
+agendamento e variam entre execuções, mesmo com sorteio determinístico do proxy.
+Os 242 eventos de lacuna do proxy NÃO foram convertidos em taxa de perda.
+
+Servidor: dois aceites/dois leaves, zero conectados ao encerrar, sem inválidos,
+limites excedidos, recusas ou send_errors; 383 datagramas antigos contados,
+compatíveis com duplicação/reordenação injetadas, sem afirmar perda a partir
+deles. Servidor/proxy/clientes encerraram pelo fluxo/prazo; stderr vazios.
+Artefatos `timing-*` no mesmo diretório ignorado do lote. Sem medição nova no
+jogo/Linux/LAN; qualidade visual real depende de prova prática.
+
+### M7/M8 — Overlays reproduzíveis e preparação reversível — 29/10/2026
+
+Nova frente offline enquanto o teste LAN não está disponível: `mod-example`,
+`mod-build`, `mod-verify`, `mod-stage` e `mod-unstage` em `asset_tools`, sem novos
+crates/dependências e sem tocar no jogo/DLL/rede. O exemplo gera PNG RGBA/texto
+próprios. Projeto schema 1 explicita fontes relativas `inputs/owned/` e
+`inputs/local/`, origem `owned`/`derived_local`, destino interno e dependências.
+O grafo recusa ausências, ciclos, duplicatas e colisões portáveis; só cobre
+dependências dentro do pacote, sem transformação ou dependência comercial externa.
+
+Saída imutável: `overlay.scs` Stored ordenado com data/permissões fixas e
+`manifest.json` com hashes/tamanhos individuais, origem/dependências e hash do
+payload. Sem caminhos absolutos, datas do host ou leitura implícita de pastas
+comerciais. Mesmo conteúdo/ordem de entradas/mtime diferentes produz os mesmos
+bytes. Build existente só é reutilizado após igualdade verificada; alterações
+pedem novo destino. Ainda relê todas as fontes, sem cache de conversões.
+
+Modo `--distributable` recusa derivados locais; o manifesto marca os demais como
+uso local. A origem é declaração obrigatória, não reconhecimento de conteúdo
+comercial/autoria. Filtro de extensões data-only e assinaturas PE/ELF/ZIP reduz
+inclusão acidental; não é auditoria completa ou assinatura de pacote. Limites:
+1.024 entradas, 16 MiB/asset, 32 MiB de conteúdo, 1 MiB de JSON, nomes ASCII até
+240 bytes. ZIP verificado canonicamente, sem extras/dados anexados ou links.
+Bytes de imagem preservados; não há validação de material/modelo pelo motor.
+
+Stage exige pasta nova. Remoção exige só os dois arquivos conhecidos e íntegros,
+cria/confere backup em pasta nova, revalida antes de excluir; restauração é stage
+do backup em outro destino novo. Falhas deixam parciais para inspeção e mantêm
+backup válido; sem transação contra crash/energia ou escritores concorrentes.
+Nunca há remoção recursiva nem substituição de originais/alterações do usuário.
+Links/reparse points de ancestrais são recusados. O teste de criação de symlink
+Windows depende de privilégio e não executou essa parte neste host (erro 1314);
+há fixture Unix para execução futura no Linux, sem alegar prova Linux nova.
+
+**Limite de integração:** `aa/init.cfg` local monta arquivos SCS explicitamente.
+Nenhum dos comandos edita esse arquivo ou monta automaticamente o pacote. M7
+continua parcial: instalador de jogo/prioridade de sobreposição, transformação
+incremental, reconstrução comercial local e teste na partida seguem pendentes.
+Não marcar stage como instalação validada na Steam nem distribuir base.scs.
+
+Validação: 17 testes novos do módulo na bancada nativa Windows, incluindo
+mudança de raiz/ordem/mtime, reutilização sem reescrita, bytes RGBA/alpha,
+dependências e limites, adulteração, origem/local-only, extras, colisões e
+backup/restauração. Um handle Windows que permite leitura e impede exclusão
+provocou falha após remover o primeiro arquivo: backup íntegro preservado e
+restaurado em pasta nova. A condição de symlink indisponível está registrada
+acima; não contar esse ramo como exercitado.
+
+`dev_env verify` passou: 127 testes x86 existentes e 165 nativos (17 novos),
+release x86 do cliente/nativo do workspace, Clippy nos dois alvos e rustfmt.
+Log em `target/analysis/verify-windows-20261029-mod-package.log` (ignorado).
+CLI release nativa também passou exemplo → build → verify → stage → unstage →
+restauração e reutilização `reused=true`. Duas raízes independentes/backup/
+restauração têm o mesmo payload SHA-256
+`25ec0addbfcc2b20f94a5821f2b38c5f4228591760bba5fb95762882031ee8cd` e manifesto
+`960adc8c77396c21e1eda3133c0d13c9fbc261469caa019d618906656b512587`.
+Artefatos em `target/analysis/mod-package-windows-20261029-01/`, ignorados.
+O novo pipeline não foi compilado/testado como CLI x86 ou executado no Linux;
+assets continuam nativos. Nenhum jogo/LAN novo; `session-verify` pós-bloco
+conferiu sete originais/saves inalterados, com jogo ausente e configuração local
+do Cargo preservada. Registro em `verify-originals.log` no mesmo diretório.
+
+Próximo nesta frente: contrato de reconstrução a partir de entradas comerciais
+locais e transformações incrementais, mantendo-as fora de artefatos distribuíveis.
+Ativação/montagem exige prova específica no jogo; não modificar init.cfg por
+hipótese. O próximo marco MP prático continua LAN e outros comandos de teardown.
+
+### M7/M8 — Receitas locais, conversões incrementais e roteiro acumulado — 29/10/2026
+
+`mod-recipe-example`, `mod-source-hash` e `mod-recipe-build` ampliam o pipeline
+sem exigir o jogo aberto. Receita schema 1 identifica arquivo próprio/editado
+local ou entrada de SCS/ZIP por SHA-256 obrigatório. Originais são vinculados
+por `--archive` somente no comando local; os caminhos privados não entram na
+receita/manifesto. São no máximo 16 arquivos de até 2 GiB, lidos em fluxo para
+hash; só a entrada escolhida é descompactada (16 MiB, até 100.000 entradas).
+Vínculo ausente/duplicado/não utilizado, caixa ambígua e links são recusados.
+Não há descoberta automática, extração completa ou escrita nos originais.
+
+Operações `copy`/`png`, flip Y e redução proporcional opcional (1..8192,
+Lanczos3) geram saídas com dependências internas explícitas. Fontes próprias
+ficam em inputs/owned, edições derivadas em inputs/local, arquivo original
+permanece externo e cache/saída têm árvores distintas. PNG tem limites de
+dimensão/16 megapixels antes de decode completo e orçamento best effort de
+64 MiB do decoder. Cor/alpha/inversão e pixels decodificados TGA/BMP/PNG 16-bit
+foram conferidos em fixtures próprias; ICC/EXIF/mipmaps/materiais não fazem
+parte do contrato. Sem escolher codecs proprietários por suposição.
+
+Cache por conteúdo inclui hash da fonte, extensão/decoder, operação, revisão
+do pipeline e hash do Cargo.lock. Header/chave/tamanho/hash são conferidos;
+corrupção interrompe sem reparo ou substituição silenciosa. Mesmo com hit,
+originais/hash de entrada são conferidos de novo. É cache local de confiança,
+sem autenticidade contra adulteração intencional, sem transação de crash ou
+escritores concorrentes. Mudança de implementação exige revisão nova da chave.
+Cache e builds derivados continuam privados/ignorados, não distribuíveis.
+
+Manifesto de pacote schema 2 guarda proveniência/operação/revisão/lock por
+entrada; schema 1 permanece verificável com os mesmos bytes. Derivação de
+arquivo local/entrada comercial continua `derived_local` depois de converter
+ou reutilizar cache, mesmo que os bytes coincidam com uma entrada `owned`.
+`--distributable` recusa antes de emitir; declaração de autoria continua
+responsabilidade do projeto, não é inferida do conteúdo nem autenticada.
+
+14 testes novos nativos cobrem cache frio/quente e raízes distintas, alteração/
+ausência de original com cache quente, corrupção, origem, pins de arquivo e
+entrada, colisões/links de ZIP, grafo, limites, identidade de fontes e formatos
+de textura. O fingerprint recusa diretórios/dispositivos/FIFOs antes de abrir,
+evitando abertura bloqueante no Unix. A fixture Unix adicional de FIFO exige
+mkfifo e ainda não foi executada neste host, assim como a de symlink Unix.
+
+Validação final `dev_env verify`: 127 testes x86 existentes e 179 nativos,
+release x86 do cliente/nativo do workspace, Clippy em ambos e rustfmt limpos.
+Log: target/analysis/verify-windows-20261029-mod-recipes.log. O ramo Windows de
+criação de symlink continua sem privilégio (1314), sem nova prova desse ramo.
+Nenhum jogo foi aberto; não houve teste LAN, Linux ou CLI de assets x86 novo.
+
+CLI release nativa: exemplo próprio, 0 hits/2 misses no build frio e 2 hits/0
+misses no quente, payload/manifesto iguais. Stage/backup/restauração schema 2
+passaram; pacote schema 1 da entrega anterior também passou sem mudança.
+Payload `fb7677d0a53d16b6ae33d59f87d23b055b9aac05cab057d43a74c6ffede8e9f6`,
+manifesto `b702babda3d47d8c650d7fe78b3849ba2b65ddfe6b9897bb4fbe66ef03343625`.
+Artefatos ignorados: target/analysis/mod-recipes-windows-20261029-01/. Também
+foi conferido hash/entrada JPEG do base.scs local, sem extrair ou montar; isso
+não é prova de pacote no motor. Sem execução Linux ou CLI x86 nova.
+Reutilização release após revisão final: 2 hits/0 misses, reused=true. Verificação
+pós-bloco: sete originais/saves iguais, jogo ausente e configuração Cargo local
+preservada. Registros reuse-report.log e verify-originals.log no diretório acima.
+
+`docs/GAME_VALIDATION.md` reúne G1–G8: regressão visual, ajustes/métricas,
+reconexão/desaparecimento, map/fallback/outros comandos, LAN/plataformas,
+duração/custo, ativação de assets e limpeza/integridade. Os caminhos de maior
+risco e o ativador de assets estão explicitamente aguardando preparo técnico.
+Nenhum resultado futuro preenchido; ausência de captura não comprova êxito.
+Allowlist do Git/auditor ampliada somente para esse documento próprio.
+
+Próximos limites: montagem/prioridade/ativador com backup ainda não implementados;
+não editar init.cfg ou iniciar jogo neste bloco. Transformações adicionais,
+dependências externas e pacote mínimo visível exigem outro contrato. LAN,
+demais comandos de teardown e sessões longas aguardam a rodada apropriada.
+
+### M0/M8/M9 — Diagnóstico estático e endurance UDP — 29/10/2026
+
+Entregues dois blocos autorizados sem abrir jogo: `session_soak` e `mp_doctor`.
+Mantidos três crates, perfil existente, valores do wire v1/v2 e ABIs Control
+v1/Engine v3. Nenhuma nova API/hook do motor ou alteração em originais/saves.
+
+**Endurance:** `session_soak` usa `session_server::run` e `session_client::Client`
+de produção, sockets UDP reais em loopback e coordenadas sintéticas. De 2 a 64
+clientes no mesmo processo, duração de 1 s a 1 h, filas/recebimento limitados e
+relatório novo. Churn cobre saída com confirmação, queda de socket/expiração,
+retomada e identidade nova, sem arquivos pessoais. Reinício normal captura
+métricas; abrupto aborta/aguarda a tarefa e depois reabre o mesmo endpoint.
+Não é kill/crash de um processo externo; períodos abortados NÃO têm relatório
+final do servidor, registrado como null, sem inventar métricas perdidas.
+
+Condições: malha de poses observada em cada período, estabilização final,
+saídas finais confirmadas, servidor sem peers ativos e limites de protocolo/
+cache mantidos. Até 6 s de estabilização após o período principal. Timestamp
+de primeira malha é global e pode ser adiado pelo churn concorrente: não mede
+isoladamente latência de recuperação. Recusa de configurações inválidas inclui
+soma de intervalo indisponível sem overflow da API. Erro retornado grava
+relatório parcial; interrupção forçada pode deixar saída incompleta.
+
+Resultados release Windows x64 (cópia própria preservada em pasta ignorada):
+
+| Clientes / período principal | Reinícios | Poses recebidas pelos clientes | Aceites acumulados | Saídas finais / ativos no servidor | CPU do processo / RSS amostrada máxima |
+| --- | --- | --- | --- | --- | --- |
+| 16 / 300 s (302.597 ms totais) | 6 abortos, pausa de 3 s | 3.474.812 | 250 | 16 confirmadas / 0 | 24,57% de um núcleo / 7.655.424 bytes |
+| 32 / 60 s (62.647 ms totais) | 3 normais, pausa de 500 ms | 2.533.024 | 179 | 32 confirmadas / 0 | 67,09% de um núcleo / 6.807.552 bytes |
+
+Ambos `passed=true`, issues vazias, zero frames inválidos/recusas acumulados
+pelos clientes. No teste de 16: 79 churns de saída, 36 quedas de socket,
+31 retomadas e 31 substituições de identidade (subconjunto das saídas).
+Driver teve 123 ticks atrasados no de 16 e zero no de 32. Cache final reteve
+16/32 membros, respectivamente, distinto de peers ativos. Não afirmar que
+todo cache/heap retornou ao SO ou que não existe vazamento.
+
+CPU/WorkingSet no Windows usam o próprio processo; backend Linux usa procfs/
+sysconf, com parser testado por fixture, sem nova execução Linux. Ausentes ficam
+null. CPU soma servidor, todos os clientes, driver e runtime; RSS amostra ~1 Hz,
+sem medir heap/FPs/render. Houve outras compilações/testes no host, portanto
+esses valores não são benchmark isolado ou previsão de capacidade da LAN/jogo.
+`game_tested=false` e `lan_tested=false` em ambos. Não há credenciais/identidades
+ou datagramas crus nos relatórios. libc/windows-sys já fixados passaram a ser
+dependências diretas opcionais apenas da feature server, sem mudar versões.
+
+**Diagnóstico:** `mp_doctor` no crate client_dll reaproveita os hashes de profile,
+confere cinco originais, DLL/launcher PE32 x86, exports necessários e servidor
+nativo opcional. Não carrega/executa dependências nem abre o processo do jogo.
+Leitura limitada a arquivos regulares de até 64 MiB; PE32/PE64 com RVA/contagens/
+strings limitados, ELF só por cabeçalho. Prefixo opcional confere apenas
+drive_c/user.reg/system.reg. Imports PE têm presença informativa em diretórios
+conhecidos; API sets/WinSxS/Wine e resolução real continuam não verificados.
+DirectX/.NET, áudio/vídeo/Proton, ABI ao vivo, igualdade de revisão do par e
+compatibilidade de mapa/mods NÃO são inferidos de um relatório estático aprovado.
+
+Game root configurável por --game, AA_GAME_DIR ou até oito ancestrais do cwd;
+sem varredura integral da Steam. Pastas de cliente/servidor independentes;
+nenhum caminho particular é exportado por padrão. --include-paths opt-in,
+--output novo, sem substituição. Perfil, arquitetura alvo, checks e hashes
+ficam no relatório; não lê saves/identidades/conteúdo SCS. Não instala runtimes,
+configura o toolchain, altera prefixos ou inicia processos de jogo.
+
+Sete testes próprios de diagnóstico (x86/nativo): cabeçalhos/exports/imports,
+limites/truncamento/RVA/nome inseguro, hash alterado, ausência/tipo/tamanho,
+redação de caminhos e prefixo artificial. Cinco novos testes do servidor nativo
+cobrem recursos/procfs, limites e recuperação real UDP com/sem aborto/churn.
+CLI no host: doctor x86 passou sete arquivos; nativo x64 passou oito incluindo
+servidor. Pasta errada de clientes x64 foi recusada; prefixo inexistente recusado
+e tentativa de sobrescrever relatório manteve seu hash idêntico.
+
+Validação completa: dev_env verify passou 134 testes x86 e 191 nativos,
+release x86/nativo, Clippy em ambos e rustfmt. Log em
+target/analysis/verify-windows-20261029-soak-doctor.log (ignorado).
+Artefatos/relatórios em target/analysis/soak-windows-20261029-01/ (ignorado).
+SHA-256 da cópia do soak usada nos dois lotes:
+20c2324196ea7bcc55d86e46c82a07aacf2a2fddb6fa7ed93b6b6e70a4db48cd.
+Verificação pós-bloco: sete originais/saves iguais, configuração Cargo local
+preservada e jogo/soak/doctor ausentes. Não houve jogo, LAN ou execução Linux.
+
+Preparação comum do roteiro G1–G8 agora inclui doctor. M0/M9 seguem parciais:
+preparo automático de runtimes/ambiente, kit de binários e UI de conexão ainda
+pendentes. Próximo marco prático continua LAN, demais comandos de teardown e
+sessão longa no jogo; este endurance não comprova lifecycle/render/FPS.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -2616,11 +3332,16 @@ Não houve alteração/extração aplicada aos arquivos do jogo.
 
 - [x] Criar workspace, lockfile, README e exclusão do jogo por padrão.
 - [x] Registrar roadmap e autonomia em arquivos versionáveis.
+- [x] Auditar fontes em Rust independentemente do ignore, inclusive blobs do
+  índice/HEAD; gerar/verificar snapshot de fontes com manifesto SHA-256.
+  A auditoria acompanha `dev_env verify`; não abrange release de binários/assets.
 - [x] Fixar um toolchain testado em `rust-toolchain.toml`, após verificar os
   componentes necessários para x64 e x86; preservar o `Cargo.lock`.
 - [ ] Criar preparo/diagnóstico de ambiente em Rust, com caminhos detectados,
   sem depender de um script de outra linguagem nem sobrescrever configuração
   Cargo existente sem mesclagem explícita.
+  Progresso: mp_doctor estático com perfil/hash/arquitetura/exports, paths
+  configuráveis e prefixo/presença de dependências; preparo/runtime pendentes.
 - [ ] Tornar o desenvolvimento fora da pasta Steam o fluxo principal: caminho
   do jogo configurável e saídas de build no repositório de fontes.
 - [x] Inicializar Git e vincular o remoto indicado pelo proprietário, preservando
@@ -2683,20 +3404,34 @@ Se algum método exigir alteração de arquivo, documentar e testar restauraçã
 ### M3 — Sessão LAN e protocolo de estado completo
 
 - [x] Ter UDP, alvo de 60 Hz, IDs provisórios, limites e descarte de sequências antigas.
-- [ ] Adicionar negociação de versão, criação/entrada de sala e aceite/recusa.
-- [ ] Definir IDs de sessão/jogador e reinício de sequência por conexão. O
+- [x] Adicionar negociação de versão, criação/entrada de sala e aceite/recusa.
+  Entregue optativamente no v2, com uma sala por processo. Bancada/loopback e
+  partida Windows com reinício do servidor passaram; LAN entre PCs pendente.
+- [x] Definir IDs de sessão/jogador e reinício de sequência por conexão. O
   endereço UDP atual não deve ser a identidade persistente do jogador.
-- [ ] Definir mensagens de entrada, saída, heartbeat, timeout e reconexão.
+  V2: identidade local persistente, credenciais por conexão e geração da pose;
+  ID numérico é de runtime, não conta autenticada ou persistência da economia.
+- [x] Definir mensagens de entrada, saída, heartbeat, timeout e reconexão.
+  V2 passou na DLL em fixture e na partida Windows: reinício/reconexão e leave
+  confirmado. Não equivale a uma partida LAN entre PCs.
 - [ ] Acrescentar rotação, tick/timestamp, modelo e velocidade com formatos e
   unidades documentados. Tratar compatibilidade e valores inválidos.
   Progresso: rotação opcional (quaternion unitário, tolerância 2%, v1
   compatível) entregue e testada na bancada e no eco real; tick, modelo e velocidade pendentes.
+  V2 adiciona tick/instantes da rede; tick da física, modelo e velocidade seguem pendentes.
 - [ ] Separar eventos que exigem confirmação/reenvio de snapshots descartáveis.
   Definir IDs, deduplicação e prazos para eventos confiáveis sobre UDP.
 - [ ] Medir RTT, estimar diferença de relógios e ordenar snapshots para interpolação.
+  V2 mede RTT/offset diagnóstico e ordena geração/sequência/revisão. Aplicação do
+  relógio estimado à interpolação e medição na LAN ainda pendentes.
 - [ ] Manter tamanho de datagrama controlado, evitar fragmentação e limitar filas,
   clientes, taxa de pacotes e alocação por origem.
+  V2: 1200 bytes, quatro poses por batch, limites de peers/cache/recibos,
+  orçamento antes do parsing e envio não bloqueante. Sessões longas pendentes.
 - [ ] Adicionar métricas de pacotes, atraso, perda, jitter e tick atrasado.
+  V2: contadores, RTT último/mínimo/máximo, variações de RTT/chegada, recusas,
+  limites, bytes e ticks atrasados. Lacunas de tick não estimam perda;
+  estimativa de perda e medição de jitter entre computadores continuam pendentes.
 - [ ] Medir custo do broadcast atual, que cresce com pares de clientes; avaliar
   agrupamento, frequência e relevância espacial quando os números justificarem.
 - [ ] Testar duas máquinas reais; configurar bind LAN, IP e porta. A configuração
@@ -2754,10 +3489,10 @@ para o MVP visual sem colisão.
   Progresso: ID remoto → visual (`--player ID|all`), pose interpolada,
   sem desenho após 1 s, recriação automática na troca da entidade local e
   `session-stop` com liberação segura. Eco no jogo e carregamento preparado
-  passaram. Em 28/10 o gate de comandos liberou, carregou e recriou o visual
-  automaticamente em duas cargas reais pelo menu (sem crash); os outros cinco
-  comandos que apagam a cena passam pelo gate só na bancada. Faltam tráfego
-  LAN real e saída de pares.
+  passaram. A primeira carga retida falhou; o gate de `map` foi validado depois
+  em duas recargas Fedora/v1 e duas Windows/v2, com liberação/reexecução/recriação.
+  Os outros cinco comandos que apagam a cena continuam só na bancada.
+  Faltam tráfego LAN real e saída de pares.
 - [ ] Confirmar que mudar o remoto não muda o caminhão local nem os dados do save.
   Progresso: nas sessões de 28/10 os hashes de originais e saves ficaram iguais
   e o caminhão local não foi afetado, mas o visual seguia o próprio jogador.
@@ -2837,18 +3572,30 @@ Colisão e economia compartilhadas podem ser marcos posteriores ao MVP visual.
   Não apenas trocar um símbolo isolado nem depender de cotação cambial real.
 - [x] Ler os três SCS locais, extrair `data.scs`, converter uma TGA para PNG e
   reempacotar 76 arquivos num pacote separado de teste.
-- [ ] Organizar entradas originais, edição própria, cache e saída de build em
+- [x] Organizar entradas originais, edição própria, cache e saída de build em
   caminhos distintos; registrar origem e hash em manifesto gerado.
-- [ ] Criar builds incrementais/determinísticos quando viável, com dependências
+  Entregue offline: inputs próprios/derivados, originais vinculados externamente,
+  cache/saída separados e manifesto com origem, pins e hashes individuais.
+- [x] Criar builds incrementais/determinísticos quando viável, com dependências
   explícitas de texturas, materiais e caminhos internos.
+  Entregue: Stored determinístico, grafo interno, reuso exato e cache de copy/PNG.
+  Dependências externas, transformações adicionais e efeito no motor pendentes.
 - [ ] Preservar canais de cor, transparência, orientação e resolução; adicionar
   codecs/mipmaps apenas quando um asset real exigir e houver validação visual.
+  Progresso: fixtures de cópia/flip/resize, RGBA, TGA/BMP e PNG 16-bit; sem prova
+  nova no motor, sem ICC/EXIF/mipmaps ou codificação proprietária automática.
 - [ ] Definir sobreposição de pacotes e um instalador/restaurador em Rust que
   não sobrescreva silenciosamente originais ou alterações do usuário.
+  Progresso: stage/backup/remoção/restauração offline em pastas novas, com
+  recusa de alterações/extras; montagem e instalador integrado ainda pendentes.
 - [ ] Testar um pacote mínimo no jogo, registrar o resultado e testar sua remoção.
 - [ ] Distribuir código, assets próprios e manifestos; reconstruir localmente o
   que depende de conteúdo comercial. Não publicar o `base.scs` reempacotado.
 - [ ] Criar auditoria Rust que impeça inclusão acidental de originais em artefatos.
+  Parcial: auditoria e ZIP próprio de fontes entregues; originais forçados e
+  binários disfarçados recusados. Overlays data-only têm origem obrigatória,
+  filtro de extensões/assinaturas e modo distribuível que recusa derivados locais;
+  autoria não é inferida. Binários do mod e auditoria completa ainda pendentes.
 
 **Concluído quando:** uma alteração própria pode ser construída, instalada,
 verificada e removida em outra instalação original sem distribuir o jogo.
@@ -2860,11 +3607,20 @@ verificada e removida em outra instalação original sem distribuir o jogo.
   Progresso: protocolo (rotação válida/inválida, v1 sem rotação), eco do
   servidor, interpolação/teleporte/extrapolação, fonte `drawn`, visual remoto
   ponta a ponta e sessão com backup têm testes próprios; `dev_env verify` roda
-  tudo. Faltam mudança de versão e sessões com várias conexões.
-- [ ] Simular perda, duplicação, jitter, atraso e reordenação com uma ferramenta
+  tudo. session_soak acrescenta malha real UDP de 16/32 clientes em loopback;
+  migração entre releases e várias partidas reais ainda pendentes.
+- [x] Simular perda, duplicação, jitter, atraso e reordenação com uma ferramenta
   Rust controlada; registrar parâmetros e resultado reproduzível.
+  Entregue `network_lab`, com relógio virtual, seed, filas limitadas, três
+  cenários e relatório JSON. Escopo: codec/interpolação e recebimento simulado;
+  não é teste do worker, sockets ou LAN. Ver registro de 29/10/2026 e README.
+  Extensão: `udp_proxy` aplica condições a sockets reais; `udp_proxy_workflow`
+  exercita o worker da DLL x86 com interrupção/recuperação em fixture própria.
+  Isso não converte os resultados virtuais anteriores em provas da partida/LAN.
 - [ ] Testar sessão longa, menus, reload, encerramento abrupto e reconexão, com
   verificações de vazamento e remoção de entidades.
+  Progresso offline: endurance UDP de 16/5 min e 32/1 min, churn e reinícios,
+  recuperação/limpeza e CPU/RSS do processo. Não mede entidades/heap/FPS do jogo.
 - [ ] Ter logs com versão/perfil/estado e coleta opcional de métricas, sem dumps
   completos ou conteúdo do jogo nos relatórios públicos.
   Progresso: `session-status` (cliente, visual, draw, remotos) e métricas de
@@ -2883,6 +3639,8 @@ relevantes podem ser repetidos a partir de instruções e dados próprios.
 
 - [ ] Criar fluxo Rust para detectar/selecionar instalação, validar versão,
   configurar servidor e conectar/desconectar com mensagens claras.
+  Progresso: mp_doctor oferece preflight estático sem processo/injeção;
+  instalador, UI/seleção e teste do fluxo numa máquina limpa ainda pendentes.
 - [ ] Verificar dependências do ambiente sem exigir o toolchain Rust do jogador.
 - [ ] Empacotar somente os binários próprios, configuração de exemplo e avisos
   necessários; disponibilizar fonte e instruções de construção.
@@ -3169,6 +3927,17 @@ Referências oficiais: [publicar código local no GitHub](https://docs.github.co
 e [seleção de toolchain com rustup](https://rust-lang.github.io/rustup/overrides.html).
 
 ## 9. Registro de passagem para a próxima etapa
+
+**Atualização 29/10 (sessão Windows v2):** eco texturizado, servidor reiniciado
+com reconexão, duas recargas pelo gate e parada com leave confirmado passaram.
+Quatorze slots restaurados, sete hashes iguais antes/depois da saída, jogo e
+servidores ausentes ao concluir. O proprietário percebe atraso leve e não notou
+desaparecimento na interrupção, apesar de remotos zerados/nenhuma submissão nova
+nos contadores. Só `map` chegou ao gate; os outros cinco comandos não foram
+comprovados pela navegação no menu. Ver a seção da sessão real de 29/10.
+Próximo marco: LAN entre PCs, métricas de atraso/jitter e observação independente;
+instrumentar os demais comandos antes de afirmar sua cobertura. Nenhum teste
+novo Linux nesta etapa. Registros anteriores abaixo são históricos.
 
 **Atualização 28/10 (gate de `map`):** a liberação/recriação automática na
 carga pelo menu foi implementada e VALIDADA no jogo com eco: duas cargas, o

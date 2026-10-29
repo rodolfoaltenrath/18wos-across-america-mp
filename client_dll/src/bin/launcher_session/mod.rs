@@ -20,6 +20,7 @@ use std::{
 
 pub struct Options {
     pub server: SocketAddr,
+    pub presentation: client_dll::interpolation::Config,
     pub player: u32,
     pub offset: [f32; 3],
     /// Apply the AI truck skin (fixture: its own shader name).
@@ -30,6 +31,7 @@ pub struct Options {
     pub load_timeout_ms: u32,
     /// engine_fixture's first stdout line; None targets the real game.
     pub fixture: Option<Value>,
+    pub session: Option<multiplayer_server::session_client::Options>,
 }
 
 fn engine(c: &Controller, dll: &Path, mut b: EngineControl) -> Result<EngineControl> {
@@ -96,7 +98,22 @@ pub fn start(c: &Controller, dll: &Path, o: &Options) -> Result<Value> {
             None => EngineControl::new(api::UI_DRAW_ATTACH),
         };
         step("draw-attach", engine(c, dll, draw).map(drop))?;
-        let mut connect = Control::new(api::START);
+        let mut tuning = Control::new(api::PRESENTATION_SET);
+        api::put(
+            &mut tuning.message,
+            &serde_json::to_string(&o.presentation)?,
+        )
+        .map_err(anyhow::Error::msg)?;
+        step("presentation", c.control(dll, &mut tuning).map(drop))?;
+        let mut connect = Control::new(if o.session.is_some() {
+            api::START_SESSION
+        } else {
+            api::START
+        });
+        if let Some(options) = &o.session {
+            api::put(&mut connect.message, &serde_json::to_string(options)?)
+                .map_err(anyhow::Error::msg)?;
+        }
         connect.config.mode = api::DRAWN;
         api::put(&mut connect.config.server, &o.server.to_string()).map_err(anyhow::Error::msg)?;
         api::put(&mut connect.config.profile, profile::ID).map_err(anyhow::Error::msg)?;
@@ -174,10 +191,24 @@ pub fn status(c: &Controller, dll: &Path) -> Result<Value> {
             break;
         }
     }
+    let mut session = Control::new(api::SESSION_STATUS);
+    c.control(dll, &mut session)?;
+    let session: Value =
+        serde_json::from_str(api::text(&session.message).map_err(anyhow::Error::msg)?)?;
+    let mut presentation = Control::new(api::PRESENTATION_STATUS);
+    c.control(dll, &mut presentation)?;
+    let presentation: Value =
+        serde_json::from_str(api::text(&presentation.message).map_err(anyhow::Error::msg)?)?;
+    let mut timing = Control::new(api::NETWORK_TIMING);
+    c.control(dll, &mut timing)?;
+    let timing: Value =
+        serde_json::from_str(api::text(&timing.message).map_err(anyhow::Error::msg)?)?;
     Ok(json!({
         "client": {"status": client.status, "sample_state": client.sample_state, "sent": client.sent,
             "received": client.received, "diagnostic": api::text(&client.message).unwrap_or("")},
-        "visual": visual, "draw": draw, "load_gate": gate, "remotes": remotes,
+        "visual": visual, "draw": draw, "load_gate": gate, "remotes": remotes, "network_session":session,
+        "presentation": presentation,
+        "network_timing": timing,
     }))
 }
 
@@ -199,21 +230,30 @@ fn verify_slots(pid: u32) -> Result<Vec<Value>> {
         base("p3shared.dll")?,
     );
     let mut rows = Vec::new();
-    for (name, slot, expected) in [
+    let mut expected_slots: Vec<(String, u64, u64)> = [
         ("actors.car draw", game + 0x12580c, game + 0x5a6a0),
         ("actors.car init", game + 0x1257fc, game + 0x50f40),
         ("actors.car done", game + 0x125800, game + 0x515d0),
         ("init_eblock import", game + 0x124560, engine + 0xc270),
         ("destroy_eblock import", game + 0x1242b4, engine + 0xc600),
         ("cmd_argv binding", game + 0x160930, core + 0xe210),
-        (
-            "map descriptor callback",
-            game + u64::from(client_dll::profile::MAP_DESCRIPTOR) + 4,
-            game + u64::from(client_dll::profile::MAP_CALLBACK),
-        ),
         ("render_pool import", core + 0x22240, gfx + 0x3690),
         ("gfx_path_flush binding", game + 0x160ea0, core + 0x4820),
-    ] {
+    ]
+    .into_iter()
+    .map(|(name, slot, expected)| (name.into(), slot, expected))
+    .collect();
+    let audit = client_dll::inspection::commands::inspect(&process)?;
+    for (command, descriptor) in
+        client_dll::command_registry::world_gate_descriptors(&audit).map_err(anyhow::Error::msg)?
+    {
+        expected_slots.push((
+            format!("{} descriptor callback", command.name()),
+            u64::from(descriptor) + 4,
+            u64::from(audit.map_callback),
+        ));
+    }
+    for (name, slot, expected) in expected_slots {
         let mut bytes = [0; 4];
         process.read(slot, &mut bytes)?;
         let actual = u64::from(u32::from_le_bytes(bytes));

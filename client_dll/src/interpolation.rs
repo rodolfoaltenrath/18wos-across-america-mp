@@ -1,6 +1,7 @@
 //! Remote pose buffering: render a fixed delay behind the newest sample,
 //! interpolate between neighbours, extrapolate briefly, never across teleports.
 //! Pure and allocation-free on the read path; units are game centimeters.
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::{sync::OnceLock, time::Instant};
 
@@ -18,6 +19,65 @@ pub const DELAY: f64 = 0.1;
 pub const MAX_EXTRAPOLATION: f64 = 0.2;
 /// Faster implied motion (cm/s, ~720 km/h) is treated as a teleport: snap.
 pub const TELEPORT_SPEED: f32 = 20_000.0;
+/// A receive burst cannot measure velocity faster than the nominal source tick.
+pub const MIN_SAMPLE_INTERVAL: f64 = 1.0 / multiplayer_server::protocol::TICK_HZ as f64;
+
+/// Explicit local presentation budget, unrelated to server/game physics time.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Config {
+    pub delay_ms: u16,
+    pub extrapolation_ms: u16,
+}
+impl Config {
+    pub const DEFAULT: Self = Self {
+        delay_ms: 100,
+        extrapolation_ms: 200,
+    };
+    pub fn validate(self) -> Result<(), String> {
+        if self.delay_ms > 200 || self.extrapolation_ms > 200 {
+            return Err("presentation delay and extrapolation must be 0..=200 ms".into());
+        }
+        Ok(())
+    }
+}
+impl Default for Config {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Mode {
+    Buffering,
+    Interpolated,
+    Predicted,
+    Capped,
+    Held,
+    Snapped,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Evaluation {
+    pub position: [f32; 3],
+    pub rotation: [f32; 4],
+    pub mode: Mode,
+    pub prediction_ms: u16,
+}
+impl Evaluation {
+    fn new(position: [f32; 3], rotation: [f32; 4], mode: Mode) -> Self {
+        Self {
+            position,
+            rotation,
+            mode,
+            prediction_ms: 0,
+        }
+    }
+    fn pose(self) -> ([f32; 3], [f32; 4]) {
+        (self.position, self.rotation)
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Sample {
@@ -27,13 +87,34 @@ pub struct Sample {
     pub rotation: [f32; 4],
 }
 
+impl Sample {
+    fn valid(self) -> bool {
+        self.at.is_finite()
+            && self.at >= 0.0
+            && self.position.into_iter().all(f32::is_finite)
+            && multiplayer_server::protocol::Rotation {
+                x: self.rotation[0],
+                y: self.rotation[1],
+                z: self.rotation[2],
+                w: self.rotation[3],
+            }
+            .is_valid()
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct History(VecDeque<Sample>);
 
 impl History {
-    /// Append in receive order; older or equal timestamps replace nothing.
+    /// Ignore invalid/older samples; equal receive times retain only the latest pose.
     pub fn push(&mut self, sample: Sample) {
-        if self.0.back().is_some_and(|last| sample.at < last.at) {
+        if !sample.valid() || self.0.back().is_some_and(|last| sample.at < last.at) {
+            return;
+        }
+        if let Some(last) = self.0.back_mut()
+            && sample.at == last.at
+        {
+            *last = sample;
             return;
         }
         if self.0.len() == HISTORY {
@@ -52,15 +133,28 @@ impl History {
     }
     /// Pose to draw at local time `now` (already includes no delay).
     pub fn pose(&self, now: f64) -> Option<([f32; 3], [f32; 4])> {
-        pose_at(self.0.iter().copied(), now - DELAY)
+        self.evaluate(now, Config::DEFAULT).map(Evaluation::pose)
+    }
+    pub fn evaluate(&self, now: f64, config: Config) -> Option<Evaluation> {
+        config.validate().ok()?;
+        evaluate_at(
+            self.0.iter().copied(),
+            now - f64::from(config.delay_ms) / 1000.0,
+            f64::from(config.extrapolation_ms) / 1000.0,
+        )
     }
 }
 
 fn lerp(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
-    std::array::from_fn(|i| a[i] + (b[i] - a[i]) * t)
+    std::array::from_fn(|i| {
+        (f64::from(a[i]) + (f64::from(b[i]) - f64::from(a[i])) * f64::from(t)) as f32
+    })
 }
-fn distance(a: [f32; 3], b: [f32; 3]) -> f32 {
-    (0..3).map(|i| (b[i] - a[i]).powi(2)).sum::<f32>().sqrt()
+fn distance(a: [f32; 3], b: [f32; 3]) -> f64 {
+    (0..3)
+        .map(|i| (f64::from(b[i]) - f64::from(a[i])).powi(2))
+        .sum::<f64>()
+        .sqrt()
 }
 /// Normalized linear quaternion blend along the shorter arc.
 pub fn nlerp(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
@@ -75,8 +169,10 @@ pub fn nlerp(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
     }
 }
 fn teleport(a: &Sample, b: &Sample) -> bool {
-    let dt = (b.at - a.at) as f32;
-    dt <= 0.0 || distance(a.position, b.position) > TELEPORT_SPEED * dt.max(1.0 / 60.0)
+    let dt = b.at - a.at;
+    dt <= 0.0
+        || distance(a.position, b.position)
+            > f64::from(TELEPORT_SPEED) * dt.max(MIN_SAMPLE_INTERVAL)
 }
 
 /// Samples must be in non-decreasing time order.
@@ -84,17 +180,32 @@ pub fn pose_at(
     samples: impl DoubleEndedIterator<Item = Sample> + Clone,
     t: f64,
 ) -> Option<([f32; 3], [f32; 4])> {
+    evaluate_at(samples, t, MAX_EXTRAPOLATION).map(Evaluation::pose)
+}
+
+fn evaluate_at(
+    samples: impl DoubleEndedIterator<Item = Sample> + Clone,
+    t: f64,
+    max_extrapolation: f64,
+) -> Option<Evaluation> {
+    if !t.is_finite() || !(0.0..=MAX_EXTRAPOLATION).contains(&max_extrapolation) {
+        return None;
+    }
+    let samples = samples.filter(|sample| sample.valid());
     let mut previous: Option<Sample> = None;
     for s in samples.clone() {
         if s.at >= t {
             return Some(match previous {
-                None => (s.position, s.rotation),
-                Some(p) if teleport(&p, &s) => (s.position, s.rotation),
+                None => Evaluation::new(s.position, s.rotation, Mode::Buffering),
+                Some(p) if teleport(&p, &s) => {
+                    Evaluation::new(s.position, s.rotation, Mode::Snapped)
+                }
                 Some(p) => {
                     let alpha = ((t - p.at) / (s.at - p.at)) as f32;
-                    (
+                    Evaluation::new(
                         lerp(p.position, s.position, alpha),
                         nlerp(p.rotation, s.rotation, alpha),
+                        Mode::Interpolated,
                     )
                 }
             });
@@ -104,18 +215,32 @@ pub fn pose_at(
     // Past the newest sample: bounded linear prediction from the last two.
     let mut newest = samples.rev();
     let last = newest.next()?;
-    let ahead = (t - last.at).min(MAX_EXTRAPOLATION) as f32;
+    let requested = (t - last.at).max(0.0);
+    let ahead = requested.min(max_extrapolation);
     match newest.next() {
         Some(before) if !teleport(&before, &last) => {
-            let dt = (last.at - before.at) as f32;
-            let velocity: [f32; 3] =
-                std::array::from_fn(|i| (last.position[i] - before.position[i]) / dt);
-            Some((
-                std::array::from_fn(|i| last.position[i] + velocity[i] * ahead),
-                last.rotation,
-            ))
+            let dt = (last.at - before.at).max(MIN_SAMPLE_INTERVAL);
+            let position: [f32; 3] = std::array::from_fn(|i| {
+                (f64::from(last.position[i])
+                    + (f64::from(last.position[i]) - f64::from(before.position[i])) / dt * ahead)
+                    as f32
+            });
+            if !position.into_iter().all(f32::is_finite) || max_extrapolation == 0.0 {
+                return Some(Evaluation::new(last.position, last.rotation, Mode::Held));
+            }
+            Some(Evaluation {
+                position,
+                rotation: last.rotation,
+                mode: if requested > max_extrapolation {
+                    Mode::Capped
+                } else {
+                    Mode::Predicted
+                },
+                prediction_ms: (ahead * 1000.0).round() as u16,
+            })
         }
-        _ => Some((last.position, last.rotation)),
+        Some(_) => Some(Evaluation::new(last.position, last.rotation, Mode::Snapped)),
+        None => Some(Evaluation::new(last.position, last.rotation, Mode::Held)),
     }
 }
 

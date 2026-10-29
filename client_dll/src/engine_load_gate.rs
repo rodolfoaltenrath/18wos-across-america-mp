@@ -22,6 +22,7 @@ use crate::{
     deferred_load::{Ack, Action, ActionKind, Gate, OwnedCommand, Phase, World},
     engine_lifecycle::{add, executable},
     engine_render::read,
+    hook_transaction::{self, Memory, Patch},
     inspection::process::Process,
     load_gate::{self, Entry, EntryState, Note, Status, WORLD_COMMANDS, WorldCommand},
     profile,
@@ -50,6 +51,8 @@ static TIMEOUT: AtomicU32 = AtomicU32::new(load_gate::DEFAULT_TIMEOUT_MS);
 /// Hooked `descriptor+4` words; all share the profiled thunk as original.
 static SLOTS: [AtomicUsize; MAX_SLOTS] = [const { AtomicUsize::new(0) }; MAX_SLOTS];
 static SLOT_COUNT: AtomicU32 = AtomicU32::new(0);
+/// Retained until callbacks AND temporary page protections are restored.
+static PATCHES: Mutex<Vec<Patch>> = Mutex::new(Vec::new());
 static ORIGINAL: AtomicUsize = AtomicUsize::new(0);
 /// argc word, argv word and current-handler word. Never functions to call.
 static BINDINGS: [AtomicU32; 3] = [const { AtomicU32::new(0) }; 3];
@@ -500,20 +503,35 @@ pub(crate) fn maintain(fixture: bool) {
         publish(gate);
     }
 }
-fn replace(slot: usize, expected: usize, desired: usize) -> Result<(), String> {
-    let mut old = 0;
-    if unsafe { VirtualProtect(slot as *const c_void, 4, PAGE_READWRITE, &mut old) } == 0 {
-        return Err("cannot unlock command descriptor".into());
+struct DescriptorMemory;
+impl Memory for DescriptorMemory {
+    fn load(&mut self, address: usize) -> Result<usize, String> {
+        word(address as u32)
+            .map(|v| v as usize)
+            .map_err(|_| "command descriptor unreadable".into())
     }
-    let word = unsafe { AtomicUsize::from_ptr(slot as *mut usize) };
-    let exchanged = word.compare_exchange(expected, desired, Ordering::AcqRel, Ordering::Acquire);
-    let mut ignored = 0;
-    if unsafe { VirtualProtect(slot as *const c_void, 4, old, &mut ignored) } == 0 {
-        return Err("command descriptor protection not restored; retry removal".into());
+    fn writable(&mut self, address: usize) -> Result<u32, String> {
+        let mut old = 0;
+        if unsafe { VirtualProtect(address as *const c_void, 4, PAGE_READWRITE, &mut old) } == 0 {
+            return Err("cannot unlock command descriptor".into());
+        }
+        Ok(old)
     }
-    exchanged
-        .map(drop)
-        .map_err(|_| "command descriptor owner changed; refusing overwrite".into())
+    fn exchange(&mut self, address: usize, expected: usize, desired: usize) -> Result<(), String> {
+        // SAFETY: aligned descriptor word, validated before journaling, with
+        // page protection made writable by the transaction immediately above.
+        unsafe { AtomicUsize::from_ptr(address as *mut usize) }
+            .compare_exchange(expected, desired, Ordering::AcqRel, Ordering::Acquire)
+            .map(drop)
+            .map_err(|_| "command descriptor owner changed; refusing overwrite".into())
+    }
+    fn protect(&mut self, address: usize, protection: u32) -> Result<(), String> {
+        let mut ignored = 0;
+        if unsafe { VirtualProtect(address as *const c_void, 4, protection, &mut ignored) } == 0 {
+            return Err("command descriptor protection not restored; retry removal".into());
+        }
+        Ok(())
+    }
 }
 /// Descriptors to hook with their expected names, the shared callback and the
 /// argc/argv/handler words; validated by the caller.
@@ -550,21 +568,10 @@ fn descriptors(process: &Process, b: &EngineControl, fixture: bool) -> Result<Ta
     let core = get("prism3d.exe")?;
     let game = get("game.dll")?;
     executable(audit.map_callback, game)?;
-    let mut list = Vec::new();
-    for command in WORLD_COMMANDS {
-        let entry = audit
-            .entries
-            .iter()
-            .find(|e| e.name == command.name())
-            .ok_or_else(|| format!("{} is not registered", command.name()))?;
-        if entry.callback != audit.map_callback || !entry.hash_matches {
-            return Err(format!(
-                "{} does not use the profiled shared handler",
-                command.name()
-            ));
-        }
-        list.push((entry.address, command.name()));
-    }
+    let list = crate::command_registry::world_gate_descriptors(&audit)?
+        .into_iter()
+        .map(|(command, address)| (address, command.name()))
+        .collect();
     Ok(Targets {
         list,
         callback: audit.map_callback,
@@ -628,34 +635,44 @@ pub fn install(thread: u32, b: &EngineControl) -> Result<(), String> {
     FALLBACK.store(false, Ordering::Release);
     RESTORE_PENDING.store(false, Ordering::Release);
     SLOT_COUNT.store(0, Ordering::Release);
-    STATE.store(1, Ordering::Release);
+    {
+        let mut patches = PATCHES
+            .lock()
+            .map_err(|_| "command patch journal poisoned")?;
+        *patches = hooked
+            .iter()
+            .map(|slot| Patch::new(*slot, callback as usize, gate_shim as *const () as usize))
+            .collect();
+    }
+    // Publish every validated slot BEFORE any write, including a write whose
+    // following VirtualProtect call may fail. Never forget a live callback.
     for (i, slot) in hooked.iter().enumerate() {
-        if let Err(error) = replace(*slot, callback as usize, gate_shim as *const () as usize) {
-            // Roll back the words already ours; the rest were never touched.
+        SLOTS[i].store(*slot, Ordering::Release);
+    }
+    SLOT_COUNT.store(hooked.len() as u32, Ordering::Release);
+    STATE.store(1, Ordering::Release);
+    for index in 0..hooked.len() {
+        let result = PATCHES
+            .lock()
+            .map_err(|_| "command patch journal poisoned")?[index]
+            .install(&mut DescriptorMemory);
+        if let Err(error) = result {
             let rollback = unhook();
-            STATE.store(2, Ordering::Release);
+            // An incomplete rollback remains installed/removable. A subsequent
+            // attach must not erase the journal of a still-live hook.
+            if rollback.is_ok() {
+                STATE.store(2, Ordering::Release);
+            }
             return Err(format!("{error}; rollback={rollback:?}"));
         }
-        SLOTS[i].store(*slot, Ordering::Release);
-        SLOT_COUNT.store(i as u32 + 1, Ordering::Release);
     }
     Ok(())
 }
 fn unhook() -> Result<(), String> {
-    let original = ORIGINAL.load(Ordering::Acquire);
-    let mut first = Ok(());
-    for slot in slots() {
-        let current = unsafe { AtomicUsize::from_ptr(slot as *mut usize) }.load(Ordering::Acquire);
-        let result = if current == original {
-            Ok(())
-        } else {
-            replace(slot, gate_shim as *const () as usize, original)
-        };
-        if first.is_ok() {
-            first = result;
-        }
-    }
-    first
+    let mut patches = PATCHES
+        .lock()
+        .map_err(|_| "command patch journal poisoned")?;
+    hook_transaction::restore_all(&mut patches, &mut DescriptorMemory)
 }
 /// Refuses while a deferred command may still act; terminal jobs are dropped.
 pub fn remove() -> Result<(), String> {
@@ -726,4 +743,96 @@ pub fn control(b: &mut EngineControl) -> Result<(), String> {
     }
     .encode(b);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ptr;
+    use windows_sys::Win32::System::Memory::{
+        MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, MEMORY_BASIC_INFORMATION, PAGE_READONLY,
+        VirtualAlloc, VirtualFree, VirtualQuery,
+    };
+
+    struct Page(*mut c_void);
+    impl Drop for Page {
+        fn drop(&mut self) {
+            unsafe { VirtualFree(self.0, 0, MEM_RELEASE) };
+        }
+    }
+    struct FaultMemory {
+        memory: DescriptorMemory,
+        failure: Option<usize>,
+    }
+    impl Memory for FaultMemory {
+        fn load(&mut self, address: usize) -> Result<usize, String> {
+            self.memory.load(address)
+        }
+        fn writable(&mut self, address: usize) -> Result<u32, String> {
+            self.memory.writable(address)
+        }
+        fn exchange(
+            &mut self,
+            address: usize,
+            expected: usize,
+            desired: usize,
+        ) -> Result<(), String> {
+            self.memory.exchange(address, expected, desired)
+        }
+        fn protect(&mut self, address: usize, protection: u32) -> Result<(), String> {
+            if self.failure == Some(address) {
+                return Err("fixture protection failure".into());
+            }
+            self.memory.protect(address, protection)
+        }
+    }
+    #[test]
+    fn actual_x86_pages_keep_original_protection_after_failed_install_and_rollback_retry() {
+        // Own data only, with all six callback words on ONE real read-only
+        // page. No engine image, injection, commercial callback or global gate.
+        for index in 0..MAX_SLOTS {
+            let page = Page(unsafe {
+                VirtualAlloc(ptr::null(), 4096, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE)
+            });
+            assert!(!page.0.is_null());
+            for offset in 0..MAX_SLOTS {
+                unsafe { page.0.cast::<usize>().add(offset).write(10) };
+            }
+            let mut memory = FaultMemory {
+                memory: DescriptorMemory,
+                failure: None,
+            };
+            memory.protect(page.0 as usize, PAGE_READONLY).unwrap();
+            let addresses: Vec<_> = (0..MAX_SLOTS)
+                .map(|offset| page.0 as usize + offset * 4)
+                .collect();
+            let mut patches: Vec<_> = addresses
+                .iter()
+                .map(|address| Patch::new(*address, 10, 20))
+                .collect();
+            memory.failure = Some(addresses[index]);
+            for (offset, patch) in patches.iter_mut().enumerate() {
+                let result = patch.install(&mut memory);
+                if offset == index {
+                    assert!(result.is_err());
+                    break;
+                }
+                result.unwrap();
+            }
+            assert!(hook_transaction::restore_all(&mut patches, &mut memory).is_err());
+            // Callback words can already be original while protection is still
+            // pending. Retrying must restore READONLY rather than temporary RW.
+            for address in &addresses {
+                assert_eq!(memory.load(*address).unwrap(), 10);
+            }
+            memory.failure = None;
+            hook_transaction::restore_all(&mut patches, &mut memory).unwrap();
+            let mut info = unsafe { std::mem::zeroed::<MEMORY_BASIC_INFORMATION>() };
+            assert_ne!(
+                unsafe { VirtualQuery(page.0, &mut info, std::mem::size_of_val(&info)) },
+                0
+            );
+            assert_eq!(info.Protect, PAGE_READONLY);
+        }
+    }
 }
