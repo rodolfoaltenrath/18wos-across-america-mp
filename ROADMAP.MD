@@ -1,6 +1,6 @@
 # Roadmap — Across America multiplayer em Rust
 
-Última atualização: 28/10/2026. Este arquivo descreve o projeto, não uma promessa
+Última atualização: 29/10/2026. Este arquivo descreve o projeto, não uma promessa
 de prazo. Checkboxes concluídos exigem implementação ou evidência registrada.
 O objetivo é desenvolver ferramentas de assets e multiplayer para a instalação
 original Steam de **18 Wheels of Steel: Across America**, com todo o código e
@@ -51,20 +51,21 @@ repositório e orientar futuras sessões de desenvolvimento.
 | --- | --- | --- |
 | Workspace | Cargo com `asset_tools`, `multiplayer_server`, `client_dll` | Reproduzir o ambiente em outra máquina e automatizar o preparo |
 | Assets | Varredura, listagem, extração ZIP/SCS, conversão de texturas, reempacotamento e inspeção binária/PE | Testar instalação de pacote no jogo, manifesto, restauração e distribuição só das alterações próprias |
-| Servidor | Tokio UDP, retransmissão com alvo de 60 Hz, rotação opcional, IDs, timeout, limites, validação e eco de teste | Sessão de protocolo explícita, identidade persistente, sincronização de relógio, controle de tráfego e mundo compartilhado |
+| Servidor | Tokio UDP v1 e sessão v2 opcional, sala/identidade, heartbeat/reconexão, limites, RTT e eco; v2 passou na partida Windows com reinício do servidor | LAN entre PCs, relógio do render, métricas de perda/jitter e mundo compartilhado |
 | DLL | x86 no jogo sob Proton, perfil por hash, configuração ABI, worker, UDP, dispatcher e sonda do loop | Matriz completa de estados do jogo e APIs de entidades |
 | Host de teste | `client_probe`, controlador entre processos e `test_host`; bancada x86 passou sob Proton | Testes de sessão longa, saída abrupta e duas máquinas |
 | Investigação | `memory_tool` Rust: processos, regiões, busca, filtros, comparação, ponteiros, observação e envio externo | Perfis de versões e ciclo de vida do veículo |
 | Coordenadas | Cadeia validada após movimento, reinício e comparação com save; pose de draw no mesmo corpo, escala em centímetros identificada | Outros estados/versões e amostragem consistente |
-| Multiplayer visual | Eco com pose/rotação e textura iluminada vistos no jogo; liberação antes do load/recriação explícita passaram | Automatizar transição prévia ao unload, testar vários remotos e dois PCs na LAN |
+| Multiplayer visual | Eco com pose/rotação/textura; gate de `map` passou em duas recargas no Fedora/v1 e duas no Windows/v2, com liberação anterior e recriação | Demais comandos de teardown, vários remotos, desaparecimento percebido na desconexão e dois PCs na LAN |
 | GitHub | Remoto `rodolfoaltenrath/18wos-across-america-mp`, histórico inicial Apache-2.0 preservado, exclusão do jogo | Manter staging auditado e documentação atualizada em cada entrega |
 
 O estado atual **não é multiplayer LAN validado entre dois computadores**.
 O proprietário confirmou um visual sem textura ao lado do seu caminhão,
 copiando movimento e rotação; isso não foi um segundo jogador conectado.
-As implementações posteriores têm testes próprios (último registro:
-41 x86/47 nativos, Clippy e formatação). Eco/skin já passaram no reteste abaixo;
-recarga automática e suavização na LAN seguem pendentes. Não rebaixar esse visual a mera
+As implementações posteriores têm testes próprios (último registro Windows:
+119 x86/136 nativos, release, Clippy e formatação). Eco/skin e gate de `map`
+passaram no jogo; a sessão v2 também passou em 29/10/2026. Demais comandos de
+teardown e suavização na LAN seguem pendentes. Não rebaixar esse visual a mera
 alocação privada, nem promover resultados da bancada a validação no jogo.
 
 ### Evidência de memória que deve acompanhar o código
@@ -2788,6 +2789,63 @@ aberto para proveniência de assets próprios, auditoria de binários/instalador
 sobreposição/restauração e teste no jogo. Licenças/avisos de dependências e
 clone limpo em outro PC continuam pendentes. Não houve jogo ou execução Linux.
 
+### M3/M4/M8 — Sessão real Windows com v2, reconexão e recargas — 29/10/2026
+
+Revisão testada: `dd24929`, mesmos binários da bancada Windows de 119 testes
+x86/136 nativos; não houve rebuild durante a DLL residente. Processo histórico
+15204/thread 19152, perfil/hash `steam-aa-1.10-ccb327c2` conferido. Auditoria
+externa leu 33 comandos; instalação dos seis descritores aceitou o perfil.
+Servidor v2 em loopback, sala `validacao`, eco, timeout de 5 s e visual 4 m ao
+lado. Backup incluiu dois saves; cinco originais e os dois saves foram hashados.
+
+**Confirmação do proprietário:** caminhão apareceu com textura correta e copiou
+movimentos/curvas; percebeu atraso leve. Após reiniciar o servidor, continuou
+funcional. Após as duas cargas solicitadas, o caminhão voltou com textura, e
+dirigir/fazer curva/parar funcionou, sem travamento relatado.
+
+**Reconexão:** servidor foi encerrado de forma controlada e iniciado novamente
+no mesmo endpoint. Snapshot durante a interrupção: `phase=reconnecting`, um
+reconnect, lista remota vazia, `last_draw_flush=76643` frente a `flushes=93679`.
+Após reiniciar: outra sala de runtime, `accepted=2`, `reconnects=1`, conectado,
+histórico/draw retomados. O proprietário NÃO percebeu o desaparecimento; os
+contadores comprovam ausência de novas submissões durante o intervalo capturado,
+sem confirmar a aparência dessa ausência na tela. Não marcar esse efeito pronto.
+
+**Recargas:** 12 snapshots foram preservados durante a sequência. Duas chamadas
+de `map`: `deferred/replays/recreated/arguments_restored=2`, retidos/descartados/
+foreign/fallback/busy zerados e gate idle ao final. Uma captura pegou a fase
+execute com `release_confirmed=true` e item zero. O usuário também navegou pelo
+menu, mas só duas chamadas de `map` chegaram aos seis hooks; não houve prova de
+`exit`/`menu`/`preview`/`edit`/`quit`. Não promover navegação na UI a cobertura
+desses callbacks. A conexão continuou aceita, sem novo reconnect nas cargas.
+
+**Parada:** uma consulta/uma tentativa de release, item `[1,1,0]`, doze flushes
+após ocultar, sem recusa. Conferidos 14 slots restaurados. Snapshot posterior:
+visual sem item, gate ausente, worker parado, sessão `closed`/`leave_confirmed`,
+dispatcher inativo, pump removido e pending/running/inflight zerados. Sete hashes
+iguais. O proprietário fechou normalmente; enumeração confirmou jogo ausente
+e `session-verify` pós-saída confirmou novamente os sete arquivos. Servidores
+encerrados, nenhum auxiliar ou processo do jogo restante. Não reutilizar o PID.
+
+Os dois relatórios do servidor foram preservados. Primeiro: 4.757 poses, 229
+pings, um aceite; segundo: 12.466 poses, 610 pings, um aceite/um leave e zero
+conectados ao encerrar. Ambos: zero pacotes inválidos/oversized/limitados,
+recusas e send_errors. `old` no cliente não é estimativa de perda. RTT último
+17 ms em loopback não representa LAN/Internet. Métrica final do trecho de draw:
+média 5.434 ns/máximo 185.400 ns; não mede custo GPU/FPS total nem sessão inteira.
+
+Artefatos completos em `target/analysis/session-v2-game-20261029-01/` (ignorados):
+backup, auditoria de comandos, início, snapshots, dois relatórios do servidor,
+stop, diagnóstico pós-stop e verificação pós-saída. Nesta etapa mudou somente
+documentação; não houve nova suíte após o teste prático, pois o código é o mesmo.
+
+**Próximo marco:** LAN entre dois computadores com jogadores independentes;
+medir atraso/jitter e observar reconexão/desaparecimento real. Antes de novos
+testes de teardown, preparar captura que permita comprovar quais callbacks
+foram executados. Os cinco comandos, outras transições e sessões longas seguem
+pendentes; preservar `automatic_load_supported=false`, v1 padrão e fallback.
+O atraso leve do eco permanece registrado, sem alegar suavidade concluída.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -2973,14 +3031,15 @@ Se algum método exigir alteração de arquivo, documentar e testar restauraçã
 
 - [x] Ter UDP, alvo de 60 Hz, IDs provisórios, limites e descarte de sequências antigas.
 - [x] Adicionar negociação de versão, criação/entrada de sala e aceite/recusa.
-  Entregue optativamente no v2, com uma sala por processo. Bancada/loopback;
-  prova no jogo e LAN entre PCs continuam pendentes.
+  Entregue optativamente no v2, com uma sala por processo. Bancada/loopback e
+  partida Windows com reinício do servidor passaram; LAN entre PCs pendente.
 - [x] Definir IDs de sessão/jogador e reinício de sequência por conexão. O
   endereço UDP atual não deve ser a identidade persistente do jogador.
   V2: identidade local persistente, credenciais por conexão e geração da pose;
   ID numérico é de runtime, não conta autenticada ou persistência da economia.
 - [x] Definir mensagens de entrada, saída, heartbeat, timeout e reconexão.
-  V2 entregue e testado na DLL em fixture; não equivale a uma partida LAN.
+  V2 passou na DLL em fixture e na partida Windows: reinício/reconexão e leave
+  confirmado. Não equivale a uma partida LAN entre PCs.
 - [ ] Acrescentar rotação, tick/timestamp, modelo e velocidade com formatos e
   unidades documentados. Tratar compatibilidade e valores inválidos.
   Progresso: rotação opcional (quaternion unitário, tolerância 2%, v1
@@ -3056,7 +3115,8 @@ para o MVP visual sem colisão.
   sem desenho após 1 s, recriação automática na troca da entidade local e
   `session-stop` com liberação segura. Eco no jogo e carregamento preparado
   passaram. A primeira carga retida falhou; o gate de `map` foi validado depois
-  em duas recargas reais com liberação/reexecução/recriação. Os cinco comandos
+  em duas recargas Fedora/v1 e duas Windows/v2, com liberação/reexecução/recriação.
+  Os cinco comandos
   adicionais continuam só na bancada. Faltam tráfego LAN real e saída de pares.
 - [ ] Confirmar que mudar o remoto não muda o caminhão local nem os dados do save.
   Progresso: nas sessões de 28/10 os hashes de originais e saves ficaram iguais
@@ -3477,6 +3537,17 @@ Referências oficiais: [publicar código local no GitHub](https://docs.github.co
 e [seleção de toolchain com rustup](https://rust-lang.github.io/rustup/overrides.html).
 
 ## 9. Registro de passagem para a próxima etapa
+
+**Atualização 29/10 (sessão Windows v2):** eco texturizado, servidor reiniciado
+com reconexão, duas recargas pelo gate e parada com leave confirmado passaram.
+Quatorze slots restaurados, sete hashes iguais antes/depois da saída, jogo e
+servidores ausentes ao concluir. O proprietário percebe atraso leve e não notou
+desaparecimento na interrupção, apesar de remotos zerados/nenhuma submissão nova
+nos contadores. Só `map` chegou ao gate; os outros cinco comandos não foram
+comprovados pela navegação no menu. Ver a seção da sessão real de 29/10.
+Próximo marco: LAN entre PCs, métricas de atraso/jitter e observação independente;
+instrumentar os demais comandos antes de afirmar sua cobertura. Nenhum teste
+novo Linux nesta etapa. Registros anteriores abaixo são históricos.
 
 **Atualização 28/10 (gate de `map`):** a liberação/recriação automática na
 carga pelo menu foi implementada e VALIDADA no jogo com eco: duas cargas, o

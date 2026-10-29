@@ -40,7 +40,9 @@ O protocolo de sessão LAN v2 é optativo e tem contrato em
 [docs/NETWORK_PROTOCOL.md](docs/NETWORK_PROTOCOL.md). Ele acrescenta sala,
 aceite/recusa, identidade local, gerações de conexão, heartbeat, timeout,
 retomada, lista de participantes e RTT. O transporte v1 continua sendo o padrão
-das provas anteriores no jogo. V2 ainda precisa da validação na partida/LAN.
+das provas anteriores no jogo. V2 passou na partida Windows em 29/10/2026:
+eco com textura, reinício do servidor com reconexão, duas recargas automáticas
+e encerramento confirmado. LAN entre dois PCs continua pendente.
 
 O mod oferecerá somente a carreira baseada em **Become a Millionaire**, com
 competição econômica entre transportadoras. Antes de criar um save, será
@@ -966,7 +968,8 @@ Esta consulta nova ainda não foi validada numa partida real.
 
 ### Teste no jogo com sessão (um comando)
 
-Compile e verifique tudo antes: `.\target\debug\dev_env.exe verify`. Abra o
+Compile e verifique tudo antes:
+`.\target\x86_64-pc-windows-gnu\release\dev_env.exe verify`. Abra o
 jogo, carregue o save e deixe a janela em primeiro plano. Em outro terminal:
 
 ```text
@@ -1106,8 +1109,15 @@ mp_launcher --pid PID --dll CAMINHO_DLL connect --server IP:PORTA --mode game --
 mp_launcher --pid PID --dll CAMINHO_DLL session-start --server IP:PORTA --room lan --identity-file ARQUIVO_LOCAL --backup NOVA_PASTA
 ```
 
-Essas opções ativam v2; omiti-las preserva v1. A integração v2 no jogo real
-continua pendente: mantenha backups e o procedimento de encerramento. A
+Essas opções ativam v2; omiti-las preserva v1. A integração v2 passou no jogo
+Windows com eco em 29/10/2026: imagem/textura confirmadas, servidor reiniciado
+com reconexão, duas recargas pelo gate e leave confirmado no stop. O usuário
+relatou atraso leve; suavidade na LAN continua pendente. Durante a interrupção,
+os diagnósticos mostraram remotos zerados e ausência de novas submissões de
+desenho, mas o usuário não percebeu o desaparecimento na tela. Não considerar
+esse efeito visual confirmado. Backups e o procedimento de encerramento continuam
+necessários. Os seis descritores foram restaurados e os sete hashes ficaram
+iguais antes e depois da saída; nenhum teste entre dois PCs foi feito. A
 configuração da DLL usa um novo comando da ABI existente, sem mudar os tamanhos
 v1/v3. `session-status` inclui `network_session`; `status=1` sozinho indica
 worker ativo, não aceite da sala. Se as coordenadas ficarem indisponíveis, o
@@ -1227,12 +1237,15 @@ remoto envelhecer, sem afirmar que um caminhão foi ocultado pelo render real.
   iluminação da cena durante o draw e remove o callback/contexto da instância
   logo depois. O usuário confirmou a textura correta após movimento e após
   carregar/recriar com liberação prévia; não houve travamento relatado no reteste.
-- **Recarga:** a recriação ao detectar uma entidade nova passou somente na
-  bancada; o primeiro reload real com a instância retida fechou o processo.
-  `session-prepare-load` antes de carregar e `visual-show` depois passaram no
-  reteste real, com limpeza e hashes conferidos. Manter esse procedimento.
-  `recreated`/`recreate_pending` são diagnósticos da tentativa automática;
-  `fault=2` indica interrupção, não cobertura de todos os riscos do carregamento.
+- **Recarga:** o primeiro reload real com a instância retida fechou o processo.
+  O caminho atual libera ANTES da carga pelo gate de `map`, reexecuta uma vez e
+  recria no ator novo: duas cargas passaram no Fedora/Proton com v1 e mais duas
+  no Windows com v2, com confirmação visual e hashes conferidos. Detectar o ator
+  novo sozinho não substitui essa liberação anterior. Com `--no-load-gate`, usar
+  `session-prepare-load` antes e `visual-show` depois. Os cinco outros comandos
+  continuam sem prova real; parar a sessão antes de fechar o jogo.
+  `recreated`/`recreate_pending` e `fault` são diagnósticos, não cobertura de
+  todos os riscos do carregamento.
 - **Métricas:** `draw_cost_avg_ns`/`draw_cost_max_ns` (custo das nossas chamadas
   ao motor por frame) e `frame_interval_avg_us` (tempo médio de frame local) em
   `visual-status`/`session-status`.

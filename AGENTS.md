@@ -570,3 +570,34 @@ configuração Cargo local manteve hash. Fixtures cobrem fonte forçada/disfarç
 ZIP determinístico. Auditoria local: 120 fontes, ~1,56 MB. Artefatos source-*
 em target/analysis ignorados. Nenhum teste novo no jogo/Linux/LAN entre PCs.
 Não solicitar sessão manual a cada incremento; agrupar a matriz pendente depois.
+
+Sessão prática agrupada autorizada e concluída em 29/10/2026, revisão dd24929:
+Windows, PID histórico 15204/thread 19152, v2 sala validacao/eco loopback, seis
+descritores perfilados, backup de dois saves + hashes de cinco originais.
+Proprietário confirmou caminhão com textura/movimento/curvas e atraso leve.
+Servidor encerrado e reiniciado: snapshot reconnecting/remotes vazios; depois
+outra sessão de runtime, accepted=2/reconnects=1 e retorno do draw. Ele NÃO
+percebeu desaparecimento; não marcar visibilidade em desconexão como provada.
+Última submissão ficou 17036 flushes atrás no snapshot da interrupção.
+
+Duas cargas reais pelo gate de map: deferred/replays/recreated/arguments_restored
+=2, sem argumentos retidos/dropped/foreign/fallback/busy; idle ao final. Captura
+execute teve release_confirmed=true/item=0. Usuário navegou pelo menu e aprovou
+as duas voltas do caminhão; só duas chamadas map chegaram aos hooks. Não inferir
+prova de exit/menu/preview/edit/quit nem testar quit ativo sem captura apropriada.
+Conexão permaneceu aceita nas cargas. Atraso leve continua em aberto; buffer
+permanece 100 ms, não foi ajustado cegamente durante a prova.
+
+Stop passou: uma consulta/uma tentativa, sem recusas, 14 slots restaurados e
+sete hashes iguais. Pós-stop: item zero, gate ausente, closed/leave_confirmed,
+worker parado, dispatcher inativo/pump removido, filas/inflight zero. Servidores
+encerrados e relatórios preservados. Usuário fechou normalmente; enumeração
+confirmou ausência do jogo e verificação pós-saída sete arquivos iguais.
+Nenhum processo residente ao concluir; reenumerar, não reutilizar PID/endereço.
+Artefatos ignorados: target/analysis/session-v2-game-20261029-01/. Só documentação
+mudou; usaram-se os binários já aprovados em 119 x86/136 nativos, sem rebuild
+com DLL residente ou alegação de nova suíte após a partida. README/roadmap atuais
+distinguem o gate validado da detecção tardia que causou o crash histórico.
+Próximo marco: dois computadores na LAN, atraso/jitter, vários remotos, saída de
+pares e observação de desaparecimento. Outros comandos/transições e sessões
+longas pendentes. Preservar automatic_load_supported=false, v1 padrão e fallback.
