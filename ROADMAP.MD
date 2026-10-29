@@ -2750,6 +2750,44 @@ da regressão está em `interpolation-burst-before.log`. O helper foi executado
 de uma cópia local para permitir atualizar seu próprio executável no Windows;
 a correção permanente desse fluxo fica no bloco seguinte. Não houve jogo.
 
+### M0/M7/M8 — Auditoria e snapshot próprio de fontes — 29/10/2026
+
+`asset_tools audit-source RAIZ --scope worktree|index|head` entrega inventário
+limitado, SHA-256, tamanhos, commit de referência e dirty sem conteúdo/caminhos
+absolutos. O índice e HEAD são lidos por OID; uma versão limpa no disco não
+mascara um blob proibido já preparado. Lista própria permite só os fontes/docs
+atuais e independe do `.gitignore`/`git add -f`. Recusa caminhos de jogo/config,
+binários disfarçados, links/submódulos/reparse points, conflitos do índice,
+colisões Windows e excesso de entradas/bytes. Não percorre ignorados nem
+garante autoria, ausência de texto sensível ou limpeza de todo o histórico.
+
+`source-bundle RAIZ --output NOVO.zip` gera snapshot determinístico somente dos
+blobs do HEAD, mais manifesto com commit/tamanhos/hashes. Não inclui Git privado,
+binários, jogo, extrações, saves ou configurações locais; edições não commitadas
+ficam fora. `verify-source-bundle` confere formato, lista, limites e hashes sem
+extrair/executar. Hash interno não autentica quem produziu o ZIP. Clone Git e
+rebuild continuam o fluxo recomendado para outro computador.
+
+`dev_env verify` passa a auditar o worktree antes do build. Corrigido bloqueio
+do próprio `dev_env.exe` no Windows: renomeia só o helper em execução para
+diretório ignorado, Cargo pode gerar o novo e uma falha pré-link restaura o nome
+sem sobrescrever saída nova. A configuração Cargo local permanece intocada.
+Fixtures próprias cobrem índice diferente do disco, original forçado, links,
+colisão, controles/binários, limite, path traversal, tamper, duplicatas,
+determinismo e restauração do helper.
+
+**Validação Windows:** `dev_env verify` executado pelo caminho normal passou:
+119 testes x86/136 nativos x64, builds release dos dois alvos, Clippy e rustfmt.
+O próprio helper foi atualizado com sucesso durante a execução, sem bloqueio;
+SHA-256 da configuração Cargo local permaneceu igual. A auditoria do worktree
+encontrou 120 fontes próprios (~1,56 MB). Log ignorado:
+`target/analysis/verify-windows-20261029-source-audit.log`.
+
+**Limites:** pacote apenas de fontes, não release de DLL/assets. M7 continua
+aberto para proveniência de assets próprios, auditoria de binários/instalador,
+sobreposição/restauração e teste no jogo. Licenças/avisos de dependências e
+clone limpo em outro PC continuam pendentes. Não houve jogo ou execução Linux.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -2864,6 +2902,9 @@ Não houve alteração/extração aplicada aos arquivos do jogo.
 
 - [x] Criar workspace, lockfile, README e exclusão do jogo por padrão.
 - [x] Registrar roadmap e autonomia em arquivos versionáveis.
+- [x] Auditar fontes em Rust independentemente do ignore, inclusive blobs do
+  índice/HEAD; gerar/verificar snapshot de fontes com manifesto SHA-256.
+  A auditoria acompanha `dev_env verify`; não abrange release de binários/assets.
 - [x] Fixar um toolchain testado em `rust-toolchain.toml`, após verificar os
   componentes necessários para x64 e x86; preservar o `Cargo.lock`.
 - [ ] Criar preparo/diagnóstico de ambiente em Rust, com caminhos detectados,
@@ -3108,6 +3149,8 @@ Colisão e economia compartilhadas podem ser marcos posteriores ao MVP visual.
 - [ ] Distribuir código, assets próprios e manifestos; reconstruir localmente o
   que depende de conteúdo comercial. Não publicar o `base.scs` reempacotado.
 - [ ] Criar auditoria Rust que impeça inclusão acidental de originais em artefatos.
+  Parcial: auditoria e ZIP próprio de fontes entregues; originais forçados e
+  binários disfarçados recusados. Binários do mod/assets/instalador ainda pendentes.
 
 **Concluído quando:** uma alteração própria pode ser construída, instalada,
 verificada e removida em outra instalação original sem distribuir o jogo.

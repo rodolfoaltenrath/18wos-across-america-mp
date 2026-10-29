@@ -11,6 +11,22 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Audit own sources; never traverse ignored game assets or print contents.
+    AuditSource {
+        #[arg(default_value = ".")]
+        root: PathBuf,
+        #[arg(long, value_enum, default_value = "worktree")]
+        scope: asset_tools::source_audit::Scope,
+    },
+    /// Export only committed HEAD sources as a NEW deterministic ZIP.
+    SourceBundle {
+        #[arg(default_value = ".")]
+        root: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+    },
+    /// Check a source bundle's allowlist/limits/hashes without extraction.
+    VerifySourceBundle { input: PathBuf },
     /// Find ZIP/SCS archives and report entry counts and texture formats.
     Scan {
         #[arg(default_value = ".")]
@@ -78,6 +94,30 @@ enum Command {
 
 fn main() -> Result<()> {
     match Cli::parse().command {
+        Command::AuditSource { root, scope } => {
+            let report = asset_tools::source_audit::audit(&root, scope)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            Ok(())
+        }
+        Command::SourceBundle { root, output } => {
+            let manifest = asset_tools::source_audit::bundle(&root, &output)?;
+            println!(
+                "Bundled {} committed sources from {} into {}",
+                manifest.files.len(),
+                manifest.commit,
+                output.display()
+            );
+            Ok(())
+        }
+        Command::VerifySourceBundle { input } => {
+            let manifest = asset_tools::source_audit::verify_bundle(&input)?;
+            println!(
+                "Verified {} committed sources from {} (integrity, not signature)",
+                manifest.files.len(),
+                manifest.commit
+            );
+            Ok(())
+        }
         Command::Scan { root } => asset_tools::scan(&root),
         Command::List { archive, limit } => asset_tools::list(&archive, limit),
         Command::Read {

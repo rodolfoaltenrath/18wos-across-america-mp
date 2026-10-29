@@ -1372,6 +1372,57 @@ que usa GNU ld também em x86 e não grava caminhos particulares no repositório
 Após trocar toolchain ou limpar `target/`, recompile o helper e repita o fluxo
 atual. Não copie dependências por cima das DLLs originais.
 
+## Auditoria e pacote de fontes para continuidade
+
+`dev_env verify` audita os fontes antes de compilar. A lista de permissão é
+independente do `.gitignore`: um original adicionado com `git add -f` também
+é recusado. A verificação exige Git disponível e a raiz de um repositório.
+
+No Windows, depois de compilar as ferramentas nativas:
+
+```powershell
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe audit-source . --scope worktree
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe audit-source . --scope index
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe audit-source . --scope head
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe source-bundle . --output target/analysis/fontes.zip
+.\target\x86_64-pc-windows-gnu\release\asset_tools.exe verify-source-bundle target/analysis/fontes.zip
+```
+
+No Linux, use `cargo run -p asset_tools -- audit-source . --scope index` e os
+mesmos subcomandos. Este bloco foi testado no Windows; execução nova no Linux
+permanece pendente. Crie previamente a pasta de saída. O ZIP precisa ser novo;
+um erro de escrita pode deixar um pacote parcial para inspeção.
+
+`worktree` lê arquivos rastreados e novos não ignorados no disco; `index` lê os
+blobs exatos preparados para o próximo commit; `head` lê o commit atual. Cada
+relatório JSON informa escopo, commit de referência, estado dirty, tamanho e
+SHA-256 por arquivo, sem conteúdo nem caminhos absolutos. A auditoria não
+percorre os arquivos ignorados da instalação. Ela recusa caminhos fora da lista,
+links/reparse points no worktree, modos Git de link/submódulo, conflitos no índice,
+colisões de nomes no Windows e conteúdo binário disfarçado. Limites: 10.000
+fontes, 2 MiB por arquivo e 64 MiB no total.
+
+`source-bundle` usa **somente os blobs do HEAD commitado**, mesmo havendo edições
+locais; faça commit antes de gerar o pacote que deseja levar. O ZIP contém
+fontes próprios e `SOURCE_MANIFEST.json`, com commit, tamanhos e hashes. Não
+inclui `.git`, jogo, assets extraídos, saves, configurações locais, identidades,
+`target/`, executáveis ou DLLs. Duas gerações do mesmo HEAD produzem bytes iguais
+na bancada. `verify-source-bundle` verifica lista, limites e hashes sem extrair.
+Esses hashes comprovam integridade interna, não assinatura/origem/autoria; a
+lista não substitui revisão de texto sensível nem examina o histórico inteiro.
+
+Para continuar em outro PC, prefira clonar o repositório e recompilar conforme
+os fluxos Windows/Linux deste README. O ZIP é um snapshot de fontes, sem
+histórico/remote e sem ambiente pronto; não substitui o clone Git nem representa
+um release instalável do mod. Revisão de dependências/avisos, pacote de binários
+e instalação/restauração de assets continuam pendentes no roadmap.
+
+Ao atualizar `asset_tools` no Windows, o helper `dev_env` move apenas seu próprio
+executável em uso para `target/dev-env-running/`, permitindo que Cargo gere o
+novo `dev_env.exe`. Se o build parar antes disso, restaura o nome original sem
+substituir um executável novo. Cópias antigas desse helper são limpas na próxima
+execução; a configuração `.cargo/config.toml` continua preservada.
+
 ## Ferramenta de assets
 
 Para investigação estática do motor, `engine_report` é um binário Rust nativo

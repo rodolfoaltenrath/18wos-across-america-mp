@@ -1,4 +1,5 @@
 //! Host-aware Windows builds without changing persistent Cargo configuration.
+mod dev_env_support;
 use anyhow::{Context, Result, ensure};
 use clap::{Parser, Subcommand};
 use std::{
@@ -33,7 +34,23 @@ enum Task {
     Verify,
 }
 fn main() -> Result<()> {
-    match Args::parse().command {
+    let args = Args::parse();
+    #[cfg(windows)]
+    let _running = if matches!(
+        args.command,
+        Task::Verify
+            | Task::Windows {
+                native: true,
+                check: false,
+                tests: false,
+                clippy: false
+            }
+    ) {
+        dev_env_support::RunningExecutable::park(&root())?
+    } else {
+        None
+    };
+    match args.command {
         Task::Unpack { rpms, output } => {
             let mut files: Vec<_> = fs::read_dir(rpms)?.collect::<std::io::Result<Vec<_>>>()?;
             files.retain(|e| e.path().extension().is_some_and(|x| x == "rpm"));
@@ -185,6 +202,13 @@ fn verify() -> Result<()> {
 }
 #[cfg(windows)]
 fn verify() -> Result<()> {
+    let inventory =
+        asset_tools::source_audit::audit(&root(), asset_tools::source_audit::Scope::Worktree)?;
+    println!(
+        "Source audit: {} own files, {} bytes; game/private paths excluded",
+        inventory.files.len(),
+        inventory.total_bytes
+    );
     // The bench loads the release DLL, so build it before the test artifacts.
     windows(false, false, false, false)?;
     // Test artifacts do not refresh the standalone server/asset executables.

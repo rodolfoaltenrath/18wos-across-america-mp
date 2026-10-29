@@ -550,4 +550,23 @@ rejeição de amostras inválidas e intermediários f64/fallback finito. Mantido
 100 ms de atraso e 200 ms de previsão, sem aplicar offset de rede ao render.
 `dev_env verify` Windows passou: 119 x86/128 nativos, release/Clippy/rustfmt.
 Sem jogo ou LAN. Executou-se uma cópia do helper em target/analysis para não
-bloquear sua própria atualização; corrigir esse fluxo ao modificar asset_tools.
+bloquear sua própria atualização; o bloco seguinte corrigiu esse fluxo.
+
+M0/M7/M8 offline: `asset_tools audit-source RAIZ --scope worktree|index|head`,
+`source-bundle RAIZ --output NOVO.zip` e `verify-source-bundle ARQUIVO` entregues.
+Lista de permissão independente do ignore; índice/HEAD leem blobs exatos. ZIP
+somente dos fontes commitados no HEAD, com manifesto/tamanhos/SHA-256; ignora
+edições posteriores e não inclui .git/jogo/extrações/saves/config/binários.
+Não afirmar autoria/assinatura/ausência de texto sensível ou auditoria de todo
+o histórico. Clone e rebuild seguem preferidos. Auditoria de binários/assets,
+instalador e avisos de dependências continuam pendentes.
+
+`dev_env verify` agora audita o worktree. No Windows, estaciona só o próprio
+executável em target/dev-env-running para permitir rebuild; restaura em falha
+pré-link sem sobrescrever saída nova, limpa cópias antigas na próxima execução.
+Fluxo normal passou com 119 testes x86/136 nativos, release, Clippy e rustfmt;
+configuração Cargo local manteve hash. Fixtures cobrem fonte forçada/disfarçada,
+índice diferente do disco, link/case collision, limites, travessia, tamper e
+ZIP determinístico. Auditoria local: 120 fontes, ~1,56 MB. Artefatos source-*
+em target/analysis ignorados. Nenhum teste novo no jogo/Linux/LAN entre PCs.
+Não solicitar sessão manual a cada incremento; agrupar a matriz pendente depois.
