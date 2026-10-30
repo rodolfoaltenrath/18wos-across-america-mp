@@ -1,5 +1,14 @@
 # Orientações para continuar o projeto
 
+Retomada offline de carreira em 29/10: `mp_career` distribui uma cópia congelada
+de um save-base por TCP separado do relay; manifesto/hash/convite privado,
+regras declaradas Become a Millionaire/meta/sem limite, mapa/mods e importação
+nova com recibo. `career_store` fornece lock SO e revisões imutáveis verificadas.
+Não confundir com mundo compartilhado no motor: não carrega save/DLL, não
+sincroniza horário/trânsito/física nem altera vitória original. Convite/save/
+revisões são privados e ignorados; fixtures próprias para testes. Manter
+entregas em blocos completos sem abrir jogos. Ver novo registro no roadmap.
+
 Leia `ROADMAP.MD` e `README.md` antes de implementar. O roadmap registra o estado
 validado, as dependências, os critérios de conclusão e a próxima etapa.
 

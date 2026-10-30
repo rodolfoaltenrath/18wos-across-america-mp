@@ -140,6 +140,46 @@ rodada prática agrupada.
 
 ## Direção do mod definida pelo proprietário
 
+### Save-base do host pela rede, separado da simulação
+
+`mp_career` oferece um primeiro fluxo de carreira fora do jogo: congela uma
+cópia de **um arquivo de save**, registra identidade/regras da carreira e
+fingerprints de perfil/mapa/mods, e distribui esse ponto inicial por TCP. Não
+reescreve saves existentes nem carrega a DLL. A carreira declarada é sempre
+`become_millionaire`, com meta exata em unidades menores ou `--unlimited`;
+isso ainda não altera o cenário/gatilho de vitória dentro do jogo.
+
+Exemplo de bancada/uso explícito, com pastas novas e caminhos reais no seu PC:
+
+```text
+cargo run --release -p multiplayer_server --bin mp_career -- create --data CARREIRA-NOVA --save TESTE.sav --map ARQUIVO-DO-MAPA.scs --unlimited
+target/release/mp_career serve --data CARREIRA-NOVA --bind 0.0.0.0:39001
+mp_career join --server IP-DO-HOST:39001 --invite CONVITE.json --map ARQUIVO-DO-MAPA.scs --output IMPORTACAO-NOVA
+mp_career verify-import --data IMPORTACAO-NOVA
+```
+
+O host fornece **somente `invite.json`**, privadamente, ao participante. O
+convite fixa carreira/hash do manifesto e contém uma chave de acesso: não
+publicar, versionar ou misturar com os diagnósticos. O endpoint TCP é separado
+do relay UDP `39000`; ambos podem rodar no mesmo host. O controle é LAN sem
+TLS/contas, não um serviço para exposição pública. `--mod ARQUIVO` pode ser
+repetido; usar o mesmo papel de arquivo para `--map` e o mesmo conjunto de
+mods nos PCs. Os hashes são calculados localmente; não comprovam, por si, os
+assets efetivamente carregados pelo motor ou a origem do save.
+
+O cliente recusa divergências antes de criar a pasta de destino. Recebe
+`bootstrap.sav`, `manifest.json` e `receipt.json` somente após conferir o
+conteúdo; uma transferência interrompida deixa `INCOMPLETE` e exige uma pasta
+nova para repetir. Limite de save: 64 MiB; não há extração de arquivos remotos,
+nomes fornecidos pelo host ou sobrescrita. A importação fica fora dos saves do
+jogo, com `engine_loaded=false` e `world_synchronized=false`. O carregamento,
+dependências de cada save, integração ao assistente e bloqueio de admissão no
+relay permanecem pendentes. Não instalar esse fluxo durante uma partida ativa.
+
+Compartilhar o save-base aproxima o estado inicial. Manter horário, trânsito,
+física, clima e progresso iguais requer autoridade e adaptadores contínuos no
+motor; copiar novamente um arquivo não sincroniza essas simulações.
+
 O protocolo de sessão LAN v2 é optativo e tem contrato em
 [docs/NETWORK_PROTOCOL.md](docs/NETWORK_PROTOCOL.md). Ele acrescenta sala,
 aceite/recusa, identidade local, gerações de conexão, heartbeat, timeout,

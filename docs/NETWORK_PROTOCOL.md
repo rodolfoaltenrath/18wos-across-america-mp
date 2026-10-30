@@ -1,5 +1,17 @@
 # Protocolo de sessão LAN v2
 
+O controle de carreira/save-base é um canal separado (`mp_career`, TCP 39001),
+não uma alteração deste wire UDP v2. Frames JSON com prefixo de comprimento
+u32 big-endian (1..32768), uma solicitação por conexão, prazo total de 30 s,
+até oito conexões simultâneas. Convite privado contém schema/career/hash do
+manifesto/segredo de 128 bits. Solicitação envia schema/career/segredo e
+fingerprints de compatibilidade; resposta recusa ou fornece manifesto e
+exatamente o blob de tamanho/hash declarados, seguido de EOF. Nenhum path
+remoto é aceito. Cliente confere também o hash do manifesto fixado no convite.
+Sem TLS/contas; restrito a LAN confiável. Fingerprints declarados não provam
+assets carregados pelo jogo. A entrega do save não admite automaticamente o
+jogador no relay nem torna relógio/física/trânsito compartilhados.
+
 Contrato próprio em Rust. O codec v1 continua separado e disponível para as
 provas anteriores. V2 é optativo: servidor com `--room NOME`; cliente com sala
 e arquivo de identidade. Não há downgrade automático ou mistura de jogadores

@@ -1,5 +1,48 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Carreira e save-base distribuído — bloco offline, 29/10/2026
+
+Pedido atual: aproveitar a primeira LAN e seus logs sem reunir os dois PCs,
+e evoluir de saves independentes para entrada na carreira do host. As métricas
+preservadas continuam sendo a prova do visual/transporte; não contêm estado
+econômico, relógio ou física suficientes para simular o mundo comercial.
+
+Entregue neste bloco: `career`, `career_store`, `career_net` e `mp_career`.
+Manifesto versionado, identidade própria da carreira, somente cenário
+declarado Become a Millionaire, meta financeira exata/sem limite e comparação
+de perfil/mapa/conjunto ordenado de mods. Save-base congelado em pasta nova;
+convite privado fixa hash do manifesto. Servidor TCP independente do relay,
+oito conexões simultâneas, frames de 32 KiB, prazo de 30 s e blob de até
+64 MiB. Importação em pasta nova, SHA-256/tamanho, marcador de incompleto e
+recibo final; verificável novamente offline. Não sobrescreve saves, não extrai
+paths recebidos, não envia paths locais/identidades do mod.
+
+Persistência própria: lock do SO liberado ao encerrar, revisões imutáveis com
+checksum de estado e cadeia de hashes, arquivo sincronizado antes da publicação
+por hard link sem replace. Revisões comprometidas ilegíveis/quebradas recusam
+recuperação, sem voltar silenciosamente a um saldo antigo. Escritor com falha
+de commit fica bloqueado até reabrir; temporários órfãos não são commits.
+Hard links requerem filesystem compatível; não há fallback inseguro para
+sobrescrever. Durabilidade de diretório sincronizada em Unix; no Windows a
+publicação usa as garantias do filesystem/SO, sem promessa contra queda de energia.
+
+Limites: bootstrap de um arquivo opaco, não save ao vivo/merge/compartilhamento
+de física. `engine_loaded=false`, `world_synchronized=false`. A regra declarada
+não valida o cenário original nem modifica a vitória. Sem integração ao
+launcher/UI/relay, sem criptografia/autenticação de contas; convite é acesso
+LAN compartilhado e deve ficar privado. M6 continua aberto. Próximo bloco:
+estado autoritativo próprio, contratos e recuperação, antes dos adaptadores do
+motor. Nenhum jogo foi aberto nem arquivos comerciais foram alterados.
+
+Validação: verify Fedora completo com **144 testes x86 da integração e 205
+nativos**, builds release, Clippy nativo/x86 e rustfmt. Adicionalmente, o crate
+do servidor com features completas passou **29 testes Windows x86 sob Proton**
+(incluindo transferência TCP, lock/hard links/recuperação), build release do
+`mp_career.exe` e Clippy x86 próprios. Logs locais `target/analysis/`:
+`verify-fedora-20261029-career-bootstrap.log`, `career-x86-tests.log`,
+`career-x86-release-build.log`, `career-x86-clippy.log`. Isso não é teste de
+LAN entre PCs, save comercial carregado ou novo comportamento da DLL.
+
 ## Ponto de parada para troca de computador — 29/10/2026
 
 **Atualização posterior: primeira LAN real concluída em 29/10.** Windows e
