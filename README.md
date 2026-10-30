@@ -107,6 +107,26 @@ ui_tools inventory --archive data.scs --archive aa/base.scs --archive aa/patch_1
 Plano, limites das fontes/codepage e próxima integração em
 [docs/UI_DESIGN.md](docs/UI_DESIGN.md).
 
+### Tradução PT-BR (textos; dublagem é etapa separada)
+
+A tabela de textos do jogo (`scripts/local.def`) já tem tradução completa em
+`translations/pt-BR/local_def.json`. Somente o texto PT-BR é versionado. O
+pacote é reconstruído a partir da sua instalação, junto com as fontes
+estendidas com os acentos que faltavam, e por isso não é distribuível:
+
+```text
+l10n_tools check --catalog translations/pt-BR/local_def.json
+l10n_tools build --catalog translations/pt-BR/local_def.json --output target/analysis/NOVO/project
+asset_tools mod-build target/analysis/NOVO/project/project.json target/analysis/NOVO/package
+ui_tools install --kind ptbr-text --game . --package target/analysis/NOVO/package --backup target/analysis/NOVO/backup
+```
+
+Instalar e restaurar só com o jogo fechado; `ui_tools restore` volta ao
+`init.cfg` original. Ainda não foi testado no jogo (G11 em
+[docs/GAME_VALIDATION.md](docs/GAME_VALIDATION.md)). Textos fora da tabela,
+dublagem e R$ estão pendentes; detalhes em
+[docs/LOCALIZATION.md](docs/LOCALIZATION.md).
+
 ## Kit local para o segundo PC Windows
 
 `mp_kit` gera uma pasta nova com cinco binários Windows x86 próprios,

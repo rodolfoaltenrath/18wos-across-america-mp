@@ -15,6 +15,11 @@
 !/docs/NETWORK_PROTOCOL.md
 !/docs/GAME_VALIDATION.md
 !/docs/UI_DESIGN.md
+!/docs/LOCALIZATION.md
+# Authored PT-BR translations only; never English source text or game files.
+!/translations/
+!/translations/pt-BR/
+!/translations/pt-BR/local_def.json
 
 !/mod_ui/
 !/mod_ui/Cargo.toml

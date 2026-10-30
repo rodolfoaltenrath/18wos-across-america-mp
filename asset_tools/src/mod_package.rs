@@ -112,7 +112,18 @@ fn asset_path(value: &str) -> Result<()> {
     ensure!(
         matches!(
             ext.as_str(),
-            "def" | "esc" | "shd" | "mat" | "txt" | "tga" | "png" | "dds" | "bmp" | "jpg" | "jpeg"
+            "def"
+                | "esc"
+                | "shd"
+                | "mat"
+                | "txt"
+                | "font"
+                | "tga"
+                | "png"
+                | "dds"
+                | "bmp"
+                | "jpg"
+                | "jpeg"
         ),
         "unsupported data-only asset extension: {value}"
     );
@@ -293,17 +304,25 @@ fn data_only(path: &str, bytes: &[u8]) -> Result<()> {
         .any(|sig| bytes.starts_with(sig)),
         "executable/archive signature disguised as asset: {path}"
     );
-    if matches!(
-        super::extension(Path::new(path)).as_str(),
-        "def" | "esc" | "shd" | "mat" | "txt"
-    ) {
-        let text = std::str::from_utf8(bytes).context("text asset must be UTF-8")?;
-        ensure!(
-            !text
-                .chars()
-                .any(|c| c.is_control() && !matches!(c, '\r' | '\n' | '\t')),
+    match super::extension(Path::new(path)).as_str() {
+        "esc" | "shd" | "mat" | "txt" => {
+            let text = std::str::from_utf8(bytes).context("text asset must be UTF-8")?;
+            ensure!(
+                !text
+                    .chars()
+                    .any(|c| c.is_control() && !matches!(c, '\r' | '\n' | '\t')),
+                "control character in text asset"
+            );
+        }
+        // The engine indexes font slots by byte, so translated tables and font
+        // descriptors are single-byte text: high bytes are allowed, ASCII controls are not.
+        "def" | "font" => ensure!(
+            !bytes
+                .iter()
+                .any(|&b| (b < 0x20 && !matches!(b, b'\r' | b'\n' | b'\t')) || b == 0x7f),
             "control character in text asset"
-        );
+        ),
+        _ => {}
     }
     Ok(())
 }

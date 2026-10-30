@@ -98,6 +98,8 @@ fn allowed(path: &str) -> Result<()> {
             | "docs/NETWORK_PROTOCOL.md"
             | "docs/GAME_VALIDATION.md"
             | "docs/UI_DESIGN.md"
+            | "docs/LOCALIZATION.md"
+            | "translations/pt-BR/local_def.json"
             | "asset_tools/Cargo.toml"
             | "multiplayer_server/Cargo.toml"
             | "client_dll/Cargo.toml"

@@ -1,5 +1,15 @@
 # Orientações para continuar o projeto
 
+Tradução PT-BR em 30/10 (decisão do proprietário): textos e dublagem em
+etapas separadas. T1 entregue offline: `l10n_tools check/stamp/build`, catálogo
+`translations/pt-BR/local_def.json` com 484/484 chaves de `local.def` e 21
+glifos sintetizados em 13 fontes. O pacote `derived_local` nunca é
+distribuível; monta-se com `ui_tools install --kind ptbr-text` (p5). Texto do
+jogo em um byte por caractere (Windows-1252), hipótese pendente de G11. Nunca
+versionar texto inglês, `.def`/fontes/atlas gerados ou prévias. T2 (texto
+fora da tabela) e T3 (dublagem) pendentes: ver docs/LOCALIZATION.md.
+Verify desse bloco: 196 x86/256 nativos, releases, Clippy e rustfmt.
+
 Referência do proprietário em 30/10: redesign SOMENTE no retângulo esquerdo
 do menu principal, mantendo cenário e logotipos do jogo. Não voltar ao fundo
 fullscreen do protótipo inicial. `MAIN_PANEL` compartilha geometria da prévia

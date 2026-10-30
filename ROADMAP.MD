@@ -1,5 +1,46 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Tradução PT-BR — etapa T1 da tabela de textos — 30/10/2026
+
+O proprietário pediu a tradução completa, textos e dublagem em etapas separadas.
+Retomado do ponto em que o Codex parou: `l10n_tools`, decodificador 3nK e
+leitor de fontes já existiam sem commit.
+
+Entregue offline, em detalhe em docs/LOCALIZATION.md:
+- Leitor e reconstrutor de `local.def`: substitui só o valor entre aspas,
+  aplica em chaves duplicadas, corrige a linha sem aspas de `ui_game_over` e
+  preserva o restante byte a byte.
+- Catálogo `translations/pt-BR/local_def.json` com **484/484** chaves e hash
+  do valor de origem.
+- Validação de marcação e codificação de um byte por caractere.
+- Síntese de 21 glifos PT-BR em 13 fontes, com atlas dobrado, shaders das
+  variantes ajustados e prévias PNG.
+- Montagem generalizada no `ui_tools`, com `install --kind ptbr-text` em p5 e
+  `restore`/`status` pelo tipo registrado no backup.
+- O empacotador passou a aceitar `.font` e texto de um byte por caractere em
+  `.def`/`.font`.
+
+Primeira geração real: 56 arquivos, `overlay.scs` de 2.315.676 bytes, aprovado
+por `mod-verify`. A prévia das fontes foi inspecionada visualmente; uma revisão
+trocou o til em zigue-zague, que lia como acento duplo, e o grave das fontes
+pequenas. Artefatos privados em `target/analysis/l10n-ptbr-20261030-01/`.
+
+`dev_env verify` passou no Windows: **196 x86 e 256 nativos** (13 novos),
+releases, Clippy nos dois alvos e rustfmt. Log em
+`target/analysis/verify-windows-20261030-ptbr-text-final.log`. A primeira
+tentativa parou só no Clippy (`as_chunks` no leitor de TGA).
+
+Limites:
+- Jogo não aberto e pacote não instalado.
+- A hipótese de um byte por caractere (Windows-1252) só se confirma no jogo
+  (G11).
+- `default.font` (ASCII, `data.scs`) não foi estendida.
+- Texto fora da tabela (descrições de peças, ESC, PML, cenários, ajuda),
+  dublagem e R$ continuam pendentes.
+
+Próximo: G11 numa rodada local agrupada. Em paralelo, offline, o extrator T2
+por tipo de arquivo, decidindo antes a codificação dos `.esc`.
+
 ## Menu restrito ao painel esquerdo — referência do proprietário, 30/10/2026
 
 O proprietário especificou mudar somente o retângulo da esquerda da captura,
@@ -4124,9 +4165,13 @@ Colisão e economia compartilhadas podem ser marcos posteriores ao MVP visual.
 
 ### M7 — Pipeline de assets e modificações distribuíveis
 
-- [ ] Tradução integral PT-BR (futura): inventário de conteúdo de idioma,
+- [ ] Tradução integral PT-BR: inventário de conteúdo de idioma,
   catálogo próprio, fontes/acentos, layout e validação na partida; registrar
   cobertura e lacunas, incluindo textos embutidos em imagens e eventual áudio.
+  Progresso (30/10): textos e dublagem em etapas separadas. T1 (`local.def`,
+  484/484 chaves + 21 glifos em 13 fontes) gerada e verificada offline, sem
+  teste no jogo (G11). T2 (texto fora da tabela) e T3 (dublagem) pendentes;
+  ver docs/LOCALIZATION.md.
 - [ ] Moeda R$ (futura): definir manutenção/rebalanceamento dos valores, aplicar
   apresentação brasileira em todas as telas e conferir persistência/cálculos.
   Não apenas trocar um símbolo isolado nem depender de cotação cambial real.

@@ -482,3 +482,27 @@ BMP principal inspecionado, pacote gerado, sem instalar ou abrir o jogo.
 
 Registrar observação humana, build/perfil/resolução/escala e resultado por item.
 Nova prova LAN só para o fluxo integrado quando houver dois computadores.
+
+### G11 — Tradução PT-BR da tabela e fontes (T1 entregue offline, 30/10)
+
+Não precisa do segundo PC. Pacote `ptbr-text` gerado localmente: 484/484 chaves
+de `scripts/local.def` e 21 glifos sintetizados em 13 fontes. Comandos e limites
+em docs/LOCALIZATION.md. Prévia PNG inspecionada fora do jogo; nenhuma
+montagem/abertura feita. Dublagem é etapa própria (T3), fora desta rodada.
+
+- [ ] Com jogo fechado, `ui_tools install --kind ptbr-text` com backup novo.
+  Abrir pela Steam: confirmar que a montagem p5 é aceita e que menu, opções e
+  carregamento aparecem em PT-BR.
+- [ ] Acentos: conferir à, â, ã, ç, ê, õ, maiúsculas acentuadas e ú nas fontes
+  pequena (dicas/HUD), média (menus) e grande (títulos/placas). Registrar se
+  algum glifo some, sai deslocado ou aparece como outro caractere: isso
+  refutaria a hipótese de um byte por caractere (Windows-1252).
+- [ ] Layout: textos mais longos que o inglês em botões, opções de controle,
+  Caderno (economia/frota), loja e mensagens de entrega. Anotar cortes.
+- [ ] Chaves com cor (`qh_city_buttonx`, `qh_cargo_listx`) e `<br>` em
+  `ui_gfx_changed` (trocar resolução) exibem cor/quebra corretas.
+- [ ] Textos fora da tabela continuam em inglês (esperado até T2); anotar onde
+  aparecem para priorizar.
+- [ ] Fechar normalmente, `ui_tools restore` e confirmar config original e
+  overlay ausente. Com menu experimental também montado, restaurar na ordem
+  inversa da instalação.

@@ -7,6 +7,13 @@ enum Lang {
     PtBr,
     En,
 }
+#[derive(Clone, Copy, ValueEnum)]
+enum Kind {
+    /// Experimental main menu (priority p4).
+    UiPreview,
+    /// Translated table and extended fonts built by l10n_tools (priority p5).
+    PtbrText,
+}
 #[derive(Parser)]
 struct Args {
     #[command(subcommand)]
@@ -29,7 +36,7 @@ enum Task {
         #[arg(long)]
         output: PathBuf,
     },
-    /// Closed game only: mount our exact experimental menu with backup first.
+    /// Closed game only: mount our exact package with backup first.
     Install {
         #[arg(long)]
         game: PathBuf,
@@ -37,8 +44,11 @@ enum Task {
         package: PathBuf,
         #[arg(long)]
         backup: PathBuf,
+        #[arg(long, value_enum, default_value = "ui-preview")]
+        kind: Kind,
     },
     /// Closed game only; refuses unknown changes, keeps original backup.
+    /// The backup records which package it belongs to.
     Restore {
         #[arg(long)]
         game: PathBuf,
@@ -83,10 +93,19 @@ fn main() -> Result<()> {
             game,
             package,
             backup,
-        } => println!(
-            "{}",
-            serde_json::to_string_pretty(&ui::mount::install(&game, &package, &backup)?)?
-        ),
+            kind,
+        } => {
+            let overlay = match kind {
+                Kind::UiPreview => ui::mount::Overlay::UiPreview,
+                Kind::PtbrText => ui::mount::Overlay::PtBrText,
+            };
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&ui::mount::install_overlay(
+                    &game, &package, &backup, overlay
+                )?)?
+            )
+        }
         Task::Restore { game, backup } => println!(
             "{}",
             serde_json::to_string_pretty(&ui::mount::restore(&game, &backup)?)?

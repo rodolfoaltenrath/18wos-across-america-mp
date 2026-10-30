@@ -1,0 +1,1943 @@
+{
+  "schema": 1,
+  "language": "pt-BR",
+  "source": "scripts/local.def",
+  "entries": {
+    "a_advanced": {
+      "src": "9f088dbebd6c",
+      "text": "Avançado"
+    },
+    "a_allseasonperftires": {
+      "src": "5e75f402a44d",
+      "text": "Desempenho p/ Todas as Estações"
+    },
+    "a_allseasontires": {
+      "src": "c6a34dc7d690",
+      "text": "Todas as Estações"
+    },
+    "a_paint": {
+      "src": "1fc91201eedb",
+      "text": "Pintura"
+    },
+    "a_snowtires": {
+      "src": "4f946da92e82",
+      "text": "Neve"
+    },
+    "a_speed": {
+      "src": "c372fee9b456",
+      "text": "Velocidade"
+    },
+    "a_standard": {
+      "src": "ef6691545d2c",
+      "text": "Padrão"
+    },
+    "a_summertires": {
+      "src": "c0de243c407c",
+      "text": "Verão"
+    },
+    "cn_books": {
+      "src": "9da7f76bc81d",
+      "text": "Livros"
+    },
+    "cn_cars": {
+      "src": "9e499e4cdaf4",
+      "text": "Carros"
+    },
+    "cn_cattle": {
+      "src": "f0b2f2aff573",
+      "text": "Gado"
+    },
+    "cn_chemicals": {
+      "src": "73fda182833f",
+      "text": "Produtos Químicos"
+    },
+    "cn_clothes": {
+      "src": "2ba62c2b69f5",
+      "text": "Roupas"
+    },
+    "cn_coffee": {
+      "src": "b0e1f06cf1e7",
+      "text": "Café"
+    },
+    "cn_cola": {
+      "src": "daa964cf628e",
+      "text": "Refrigerante"
+    },
+    "cn_comp_games": {
+      "src": "ec662e773318",
+      "text": "Jogos de Computador"
+    },
+    "cn_computers": {
+      "src": "680cb3c6fca7",
+      "text": "Computadores"
+    },
+    "cn_corn": {
+      "src": "540647ba037b",
+      "text": "Milho"
+    },
+    "cn_cotton": {
+      "src": "38ba21445431",
+      "text": "Algodão"
+    },
+    "cn_crude_oil": {
+      "src": "04826b42f752",
+      "text": "Petróleo Bruto"
+    },
+    "cn_diesel": {
+      "src": "0a3408c47c37",
+      "text": "Diesel"
+    },
+    "cn_eggs": {
+      "src": "f1c1f57728f9",
+      "text": "Ovos"
+    },
+    "cn_electronics": {
+      "src": "7ae9c23d6592",
+      "text": "Eletrônicos"
+    },
+    "cn_explosives": {
+      "src": "bd53a0ff7178",
+      "text": "Explosivos"
+    },
+    "cn_farm_machinery": {
+      "src": "f5d240b52f4d",
+      "text": "Máquinas Agrícolas"
+    },
+    "cn_fertiliser": {
+      "src": "7ae38500f867",
+      "text": "Fertilizante"
+    },
+    "cn_frozen_food": {
+      "src": "564883441168",
+      "text": "Congelados"
+    },
+    "cn_fruits": {
+      "src": "6c455f5e6343",
+      "text": "Frutas"
+    },
+    "cn_furniture": {
+      "src": "c50440e0e411",
+      "text": "Móveis"
+    },
+    "cn_gasoline": {
+      "src": "3023b176e3ba",
+      "text": "Gasolina"
+    },
+    "cn_glass": {
+      "src": "82c268188cd6",
+      "text": "Vidro"
+    },
+    "cn_grain": {
+      "src": "540faafbd767",
+      "text": "Grãos"
+    },
+    "cn_heavy_machinery": {
+      "src": "c704e1cacba7",
+      "text": "Máquinas Pesadas"
+    },
+    "cn_heavymachines": {
+      "src": "c704e1cacba7",
+      "text": "Máquinas Pesadas"
+    },
+    "cn_huge_constr_part": {
+      "src": "1c64e120cfc4",
+      "text": "Peça de Obra Gigante"
+    },
+    "cn_light_bulbs": {
+      "src": "f0b1d39831a0",
+      "text": "Lâmpadas"
+    },
+    "cn_liquid_nitrogen": {
+      "src": "748286a4986a",
+      "text": "Nitrogênio Líquido"
+    },
+    "cn_liquid_oxygen": {
+      "src": "dc35086e2f96",
+      "text": "Oxigênio Líquido"
+    },
+    "cn_lumber": {
+      "src": "69745f64b661",
+      "text": "Madeira Serrada"
+    },
+    "cn_luxury_goods": {
+      "src": "0ec4ae8723db",
+      "text": "Artigos de Luxo"
+    },
+    "cn_machines": {
+      "src": "c061da196eae",
+      "text": "Máquinas"
+    },
+    "cn_mechanical_parts": {
+      "src": "8e097e6b9350",
+      "text": "Peças Mecânicas"
+    },
+    "cn_medicals": {
+      "src": "34d540fd029a",
+      "text": "Medicamentos"
+    },
+    "cn_military_equipment": {
+      "src": "f42c0d416b15",
+      "text": "Equipamento Militar"
+    },
+    "cn_milk": {
+      "src": "8189b8409b18",
+      "text": "Leite"
+    },
+    "cn_mobile_home": {
+      "src": "3e0dc6b1508f",
+      "text": "Casa Móvel"
+    },
+    "cn_nuclear_waste": {
+      "src": "a56fbb0db97a",
+      "text": "Lixo Nuclear"
+    },
+    "cn_nukewaste": {
+      "src": "a56fbb0db97a",
+      "text": "Lixo Nuclear"
+    },
+    "cn_ore": {
+      "src": "b2b092084f4d",
+      "text": "Minério"
+    },
+    "cn_packaged_food": {
+      "src": "9124ed969e30",
+      "text": "Alimentos Embalados"
+    },
+    "cn_plane": {
+      "src": "c66523fc0372",
+      "text": "Avião"
+    },
+    "cn_poultry": {
+      "src": "174291cef306",
+      "text": "Aves"
+    },
+    "cn_sport_equipment": {
+      "src": "09e07ee0abde",
+      "text": "Artigos Esportivos"
+    },
+    "cn_steel": {
+      "src": "ea9973d1460e",
+      "text": "Aço"
+    },
+    "cn_table_ware": {
+      "src": "e07965f7481f",
+      "text": "Louças"
+    },
+    "cn_timber": {
+      "src": "cf2220833b73",
+      "text": "Toras"
+    },
+    "cn_toys": {
+      "src": "fd16c1f32fde",
+      "text": "Brinquedos"
+    },
+    "cn_vegetables": {
+      "src": "7a500e9eb1ce",
+      "text": "Verduras"
+    },
+    "ct_chemicals": {
+      "src": "73fda182833f",
+      "text": "Químicos"
+    },
+    "ct_goods": {
+      "src": "36574fcce392",
+      "text": "Mercadorias"
+    },
+    "ct_groceries": {
+      "src": "2742b7b24a49",
+      "text": "Mantimentos"
+    },
+    "ct_materials": {
+      "src": "fd10a146e962",
+      "text": "Materiais"
+    },
+    "ct_produces": {
+      "src": "a68d63e3af6b",
+      "text": "Hortifrúti"
+    },
+    "ct_specials": {
+      "src": "90a92d7ef85b",
+      "text": "Especiais"
+    },
+    "gb_east": {
+      "src": "4e2cd851cfda",
+      "text": "Leste"
+    },
+    "gb_north": {
+      "src": "43f853bbb592",
+      "text": "Norte"
+    },
+    "gb_south": {
+      "src": "0dd2dae4dd83",
+      "text": "Sul"
+    },
+    "gb_west": {
+      "src": "41a6741e9a0f",
+      "text": "Oeste"
+    },
+    "mm_movejoydesired": {
+      "src": "f3199acb96bb",
+      "text": "Mova o joystick no eixo desejado"
+    },
+    "mm_pressesctodelete": {
+      "src": "61b05a8e18df",
+      "text": "Pressione ESC para apagar o comando"
+    },
+    "mm_presskeymouse": {
+      "src": "04ef66627cd5",
+      "text": "Pressione uma tecla/botão do mouse"
+    },
+    "mm_presskeymousejoy": {
+      "src": "8745cff68bb6",
+      "text": "Pressione uma tecla/botão do mouse/botão do joystick"
+    },
+    "o_im_4wflasher": {
+      "src": "67c3b952ffea",
+      "text": "Pisca-alerta"
+    },
+    "o_im_attach": {
+      "src": "d80d84c259ed",
+      "text": "Engatar Reboque"
+    },
+    "o_im_back1cam": {
+      "src": "c5cdcbb1d396",
+      "text": "Câmera Traseira"
+    },
+    "o_im_back2cam": {
+      "src": "a6cbadaf8f34",
+      "text": "Câmera de Ré"
+    },
+    "o_im_backward": {
+      "src": "4a7cd4900ddf",
+      "text": "Frear"
+    },
+    "o_im_bumpercam": {
+      "src": "e59b9625e3e5",
+      "text": "Câmera do Para-choque"
+    },
+    "o_im_call911": {
+      "src": "368af292c9af",
+      "text": "Chamar o 911"
+    },
+    "o_im_cam_rotate": {
+      "src": "f7e2c2b0be1a",
+      "text": "Girar Câmera"
+    },
+    "o_im_cruise_ctrl": {
+      "src": "7974bb84b855",
+      "text": "Piloto automático"
+    },
+    "o_im_detach": {
+      "src": "6a3bf7dcf676",
+      "text": "Desengatar Reboque"
+    },
+    "o_im_engine": {
+      "src": "39cc3d92fb1e",
+      "text": "Ligar/Desligar Motor"
+    },
+    "o_im_forward": {
+      "src": "599ca636a25b",
+      "text": "Acelerar"
+    },
+    "o_im_freecam": {
+      "src": "8f54711ced5c",
+      "text": "Câmera Livre"
+    },
+    "o_im_gas_pump": {
+      "src": "914c4888aedf",
+      "text": "Abastecer"
+    },
+    "o_im_gear_down": {
+      "src": "fc9408cff0ec",
+      "text": "Reduzir Marcha"
+    },
+    "o_im_gear_up": {
+      "src": "0b7df8f356f3",
+      "text": "Subir Marcha"
+    },
+    "o_im_handbrake": {
+      "src": "53d4b3db98eb",
+      "text": "Freio de mão"
+    },
+    "o_im_hidehud": {
+      "src": "e8796de74909",
+      "text": "Mostrar/Ocultar HUD"
+    },
+    "o_im_horn": {
+      "src": "9ebf503462b3",
+      "text": "Buzina"
+    },
+    "o_im_insidecam": {
+      "src": "1370fa9b7473",
+      "text": "Câmera Interna"
+    },
+    "o_im_jakebrake": {
+      "src": "498095117d6a",
+      "text": "Freio motor"
+    },
+    "o_im_jukebox": {
+      "src": "b2ced5c6bc6a",
+      "text": "Jukebox"
+    },
+    "o_im_lblinker": {
+      "src": "ffc463dd0444",
+      "text": "Seta Esquerda"
+    },
+    "o_im_left": {
+      "src": "99e27bc0c1cb",
+      "text": "Virar à esquerda"
+    },
+    "o_im_leftmirrorminus": {
+      "src": "262caa5cd833",
+      "text": "Ajustar espelho esquerdo-"
+    },
+    "o_im_leftmirrorplus": {
+      "src": "a1997e0a7d05",
+      "text": "Ajustar espelho esquerdo+"
+    },
+    "o_im_lights": {
+      "src": "18786940ec53",
+      "text": "Faróis"
+    },
+    "o_im_map": {
+      "src": "34ec5e0ba5d7",
+      "text": "Mostrar/Ocultar Mapa"
+    },
+    "o_im_mirrors": {
+      "src": "8d32f50eb02a",
+      "text": "Trocar Espelhos"
+    },
+    "o_im_notebook": {
+      "src": "8f1b260cbefe",
+      "text": "Mostrar/Ocultar Caderno"
+    },
+    "o_im_rblinker": {
+      "src": "78a9293af044",
+      "text": "Seta Direita"
+    },
+    "o_im_right": {
+      "src": "6cedc5198a3b",
+      "text": "Virar à direita"
+    },
+    "o_im_rightmirrorminus": {
+      "src": "f03f9bbb9434",
+      "text": "Ajustar espelho direito-"
+    },
+    "o_im_rightmirrorplus": {
+      "src": "3203e4bd6fc1",
+      "text": "Ajustar espelho direito+"
+    },
+    "o_im_screenshot": {
+      "src": "029320ad166c",
+      "text": "Captura de Tela"
+    },
+    "o_im_service": {
+      "src": "ce486ce32355",
+      "text": "Fazer Manutenção"
+    },
+    "o_im_sidecam": {
+      "src": "f48c8506e820",
+      "text": "Câmera Lateral"
+    },
+    "o_im_topcam": {
+      "src": "3ea7d26ea569",
+      "text": "Câmera Superior"
+    },
+    "o_im_uppercam": {
+      "src": "cf518f39bdf2",
+      "text": "Câmera da Cabine"
+    },
+    "o_im_voice": {
+      "src": "b96eace7dda4",
+      "text": "Comandos de Voz"
+    },
+    "o_im_wipers": {
+      "src": "c962845f491e",
+      "text": "Limpadores"
+    },
+    "pn_addon_filter": {
+      "src": "a73131c517f0",
+      "text": "Filtro Extra"
+    },
+    "pn_addon_flares": {
+      "src": "23999b67d61b",
+      "text": "Luzes de Teto Extras"
+    },
+    "pn_advanced_filters": {
+      "src": "0ac0c70562cb",
+      "text": "Filtros Avançados"
+    },
+    "pn_advanced_horns": {
+      "src": "f28833d8523e",
+      "text": "Buzinas Avançadas"
+    },
+    "pn_advanced_pipes": {
+      "src": "0942bd5d95af",
+      "text": "Escapamentos Avançados"
+    },
+    "pn_antenas": {
+      "src": "3e6a59628d44",
+      "text": "Antenas"
+    },
+    "pn_brake_lights": {
+      "src": "c2bc0a9106e4",
+      "text": "Luzes de Freio"
+    },
+    "pn_cabin": {
+      "src": "dfab94fc4a58",
+      "text": "Cabine"
+    },
+    "pn_decoration": {
+      "src": "7b39a9fd07f8",
+      "text": "Decoração"
+    },
+    "pn_frame": {
+      "src": "c535ede72661",
+      "text": "Peça base"
+    },
+    "pn_front_foglights": {
+      "src": "40bae5262227",
+      "text": "Faróis de Neblina"
+    },
+    "pn_head_lights": {
+      "src": "cadf1f7a423a",
+      "text": "Faróis"
+    },
+    "pn_interior": {
+      "src": "25b5c8ed560b",
+      "text": "Interior"
+    },
+    "pn_left_blinkers": {
+      "src": "6be5e5d9253f",
+      "text": "Seta Esquerda"
+    },
+    "pn_lod": {
+      "src": "5bf9054568b1",
+      "text": "Modelo da interface"
+    },
+    "pn_noseshield": {
+      "src": "6555a213b3cc",
+      "text": "Protetor Frontal"
+    },
+    "pn_rear_lights": {
+      "src": "249af31fed1a",
+      "text": "Lanternas Traseiras"
+    },
+    "pn_reverse_lights": {
+      "src": "9da45eebf90f",
+      "text": "Luzes de Ré"
+    },
+    "pn_right_blikers": {
+      "src": "2c7715443aff",
+      "text": "Seta Direita"
+    },
+    "pn_standard_filters": {
+      "src": "546ebb8eb993",
+      "text": "Filtros"
+    },
+    "pn_standard_flares": {
+      "src": "bdad8ef87b31",
+      "text": "Luzes de Teto"
+    },
+    "pn_standard_horns": {
+      "src": "24801e4a06fb",
+      "text": "Buzinas"
+    },
+    "pn_standard_mirrors": {
+      "src": "239a80c28df7",
+      "text": "Espelhos"
+    },
+    "pn_standard_pipes": {
+      "src": "685afe344181",
+      "text": "Escapamentos"
+    },
+    "pn_sunshield": {
+      "src": "0590c1ee73d2",
+      "text": "Pala de Sol"
+    },
+    "pn_wing": {
+      "src": "2bf331a87c78",
+      "text": "Defletor de Teto"
+    },
+    "qh_btn_buy_part": {
+      "src": "8062b74f631c",
+      "text": "Comprar esta peça"
+    },
+    "qh_btn_buy_truck": {
+      "src": "859ede1f4d2a",
+      "text": "Comprar um caminhão novo para a vaga vazia selecionada"
+    },
+    "qh_btn_buy_truck_cancel": {
+      "src": "e2a0bd491f77",
+      "text": "Cancelar a compra de caminhão"
+    },
+    "qh_btn_color": {
+      "src": "a20f09c52193",
+      "text": "Mudar a cor do caminhão"
+    },
+    "qh_btn_hire": {
+      "src": "b749adfdd110",
+      "text": "Contratar um motorista para o caminhão selecionado"
+    },
+    "qh_btn_replace_truck": {
+      "src": "4152868102f4",
+      "text": "Substituir o caminhão da vaga selecionada"
+    },
+    "qh_btn_sell_part": {
+      "src": "e1878ac11819",
+      "text": "Vender a peça selecionada do caminhão"
+    },
+    "qh_btn_sell_truck": {
+      "src": "3c2bfd00b3fc",
+      "text": "Vender o caminhão e demitir o motorista"
+    },
+    "qh_btn_swap": {
+      "src": "795e35dfcfce",
+      "text": "Trocar motoristas entre caminhões contratados"
+    },
+    "qh_cargo_list0": {
+      "src": "87ad7b6741dc",
+      "text": "\\\\yClique esquerdo \\\\wno botão da carga mostra todas as rotas dessa carga."
+    },
+    "qh_cargo_listx": {
+      "src": "cc17a6e4b843",
+      "text": "\\\\yClique esquerdo \\\\wno botão da carga mostra todas as rotas dessa carga. \\\\gClique direito \\\\wmarca/desmarca a carga como preferida"
+    },
+    "qh_city_button0": {
+      "src": "42bf7dd13ebb",
+      "text": "\\\\yClique esquerdo \\\\wno botão da cidade mostra todas as cargas de entrada/saída."
+    },
+    "qh_city_buttonx": {
+      "src": "caae4bff634e",
+      "text": "\\\\yClique esquerdo \\\\wno botão da cidade mostra todas as cargas de entrada/saída. \\\\gClique direito \\\\wmarca/desmarca a cidade como preferida"
+    },
+    "qh_driverprestige0": {
+      "src": "25e7c90e0c14",
+      "text": "Seu prestígio"
+    },
+    "qh_driverprestige1": {
+      "src": "a8c4eddc76a7",
+      "text": "Prestígio do motorista"
+    },
+    "qh_face_pic0": {
+      "src": "dadd88733bf8",
+      "text": "Seu rosto"
+    },
+    "qh_face_pic1": {
+      "src": "e759c07fc81d",
+      "text": "Rosto do motorista contratado"
+    },
+    "qh_from_the_city": {
+      "src": "7a8386a59320",
+      "text": "Mostra todos os fretes com origem na cidade selecionada"
+    },
+    "qh_hide_cargos": {
+      "src": "f149771bd65c",
+      "text": "Oculta todas as setas de carga, exceto as rotas planejadas"
+    },
+    "qh_jobcount0": {
+      "src": "a27dc71d1576",
+      "text": "Número de fretes feitos por você nesta semana"
+    },
+    "qh_jobcount1": {
+      "src": "c834fc072c5a",
+      "text": "Número de fretes feitos pelo motorista contratado nesta semana"
+    },
+    "qh_jobincome0": {
+      "src": "cc92596ae63f",
+      "text": "Receita total de todos os fretes feitos por você nesta semana"
+    },
+    "qh_jobincome1": {
+      "src": "6bba9725b7c8",
+      "text": "Receita bruta total de todos os fretes feitos pelo motorista nesta semana"
+    },
+    "qh_joblen0": {
+      "src": "1a226f02e5a9",
+      "text": "Distância total de todos os fretes feitos por você nesta semana"
+    },
+    "qh_joblen1": {
+      "src": "30f03da646af",
+      "text": "Distância total de todos os fretes feitos pelo motorista nesta semana"
+    },
+    "qh_loan_10000": {
+      "src": "46e70198fd37",
+      "text": "Pegar um empréstimo bancário de $10,000"
+    },
+    "qh_loan_amount": {
+      "src": "16c293ecb440",
+      "text": "Situação atual do empréstimo bancário"
+    },
+    "qh_name0": {
+      "src": "2c6b2e253c01",
+      "text": "Seu nome"
+    },
+    "qh_name1": {
+      "src": "a97e185e124a",
+      "text": "Nome do motorista contratado"
+    },
+    "qh_net_week_income": {
+      "src": "84fa4f8943aa",
+      "text": "Receita líquida total da semana"
+    },
+    "qh_part_group0": {
+      "src": "b9bf0c84842b",
+      "text": "Motores"
+    },
+    "qh_part_group1": {
+      "src": "188277c62a4c",
+      "text": "Transmissões"
+    },
+    "qh_part_group2": {
+      "src": "1e4fa9d876b4",
+      "text": "Freios"
+    },
+    "qh_part_group3": {
+      "src": "41171d0d57a6",
+      "text": "Pneus"
+    },
+    "qh_part_group4": {
+      "src": "ecfb3e99ec6a",
+      "text": "Diversos"
+    },
+    "qh_performance0": {
+      "src": "558cd3bb678a",
+      "text": "Desempenho do seu caminhão. O total é calculado pela eficiência do caminhão e pelo seu prestígio"
+    },
+    "qh_performance1": {
+      "src": "bdd88098de41",
+      "text": "Desempenho do caminhão do motorista. O total é calculado pela eficiência do caminhão e pelo prestígio do motorista"
+    },
+    "qh_repay_10000": {
+      "src": "166e8bf7b1e1",
+      "text": "Pagar $10,000 do seu empréstimo bancário"
+    },
+    "qh_to_the_city": {
+      "src": "fa15cb392ac4",
+      "text": "Mostra todos os fretes com destino à cidade selecionada"
+    },
+    "qh_total_job_count": {
+      "src": "2836590aa465",
+      "text": "Número total de fretes realizados pela sua empresa."
+    },
+    "qh_total_job_income": {
+      "src": "26ede61a1d64",
+      "text": "Receita total de todos os fretes realizados pela sua empresa."
+    },
+    "qh_total_job_len": {
+      "src": "8f8bafd2ace9",
+      "text": "Distância total de todos os fretes realizados pela sua empresa."
+    },
+    "qh_truck_pic0": {
+      "src": "1b58d84e4f76",
+      "text": "Seu caminhão"
+    },
+    "qh_truck_pic1": {
+      "src": "a503c976fdcc",
+      "text": "Caminhão contratado"
+    },
+    "qh_truck_slot1": {
+      "src": "9c0605337337",
+      "text": "Este botão representa o seu caminhão"
+    },
+    "qh_truck_slotx": {
+      "src": "740b9bb52f76",
+      "text": "Este botão representa um dos caminhões adicionais da sua frota"
+    },
+    "qh_truck_slotx_empty": {
+      "src": "de4587712c56",
+      "text": "Clique neste botão com a página Caminhões ativa para adicionar um caminhão à sua frota"
+    },
+    "qh_week_costs": {
+      "src": "72a7c93975ed",
+      "text": "Custos operacionais totais da semana (diesel, salários, manutenção), descontados de uma vez no fim da semana"
+    },
+    "qh_week_income": {
+      "src": "df126a6cbce1",
+      "text": "Receita bruta total da semana; o saldo é atualizado a cada carga entregue"
+    },
+    "qh_week_loan": {
+      "src": "203d60b399b8",
+      "text": "Total de juros pagos pelo empréstimo"
+    },
+    "qh_your_account": {
+      "src": "77f33dbbccbb",
+      "text": "Saldo da sua conta bancária"
+    },
+    "tn_fcl": {
+      "src": "f132d7a82009",
+      "text": "Frisk L9C"
+    },
+    "tn_fla": {
+      "src": "6ea7e2d6da7a",
+      "text": "Forerunner Aggressor"
+    },
+    "tn_flcc": {
+      "src": "81c9ce408287",
+      "text": "Forerunner 21C"
+    },
+    "tn_fln": {
+      "src": "c8324bd8b4d9",
+      "text": "Frisk N1L"
+    },
+    "tn_kk100": {
+      "src": "cff819fbb932",
+      "text": "Kinetic 1K1"
+    },
+    "tn_kt2000": {
+      "src": "e990dbbe1a98",
+      "text": "Kinetic 2T2"
+    },
+    "tn_kw900": {
+      "src": "710e318f60ca",
+      "text": "Kinetic 9K9"
+    },
+    "tn_mch603": {
+      "src": "ab3537c4cd60",
+      "text": "Metalhorse 60HC3"
+    },
+    "tn_mch613": {
+      "src": "17dac7efc094",
+      "text": "Metalhorse 61HC3"
+    },
+    "tn_p351": {
+      "src": "018bb7bc4ea6",
+      "text": "Pacific 531"
+    },
+    "tn_p362": {
+      "src": "3ba049057e2a",
+      "text": "Pacific 236"
+    },
+    "tn_p379": {
+      "src": "1fab4a799bc5",
+      "text": "Pacific 937"
+    },
+    "tn_police": {
+      "src": "2efeeeb01318",
+      "text": "Polícia"
+    },
+    "tn_slt": {
+      "src": "b1125702df31",
+      "text": "Stormrage TL"
+    },
+    "tn_vvn": {
+      "src": "c1f62651cf30",
+      "text": "Volcano 7NV7"
+    },
+    "tn_ws": {
+      "src": "3af33ec8cbd5",
+      "text": "Whiplash 9004"
+    },
+    "ui_911_repaired": {
+      "src": "19d9eda9f76b",
+      "text": "Parte dos danos foi reparada, mas procure uma oficina para o reparo completo"
+    },
+    "ui_911_rescue_service": {
+      "src": "ecba9999c59a",
+      "text": "Resgate 911"
+    },
+    "ui_Driver": {
+      "src": "9fe4c68ec20d",
+      "text": "Motorista"
+    },
+    "ui_accelerate_axis": {
+      "src": "b2b7be076e75",
+      "text": "Eixo do Acelerador"
+    },
+    "ui_accept": {
+      "src": "89713b9c9c1b",
+      "text": "Aceitar"
+    },
+    "ui_account_balance": {
+      "src": "5b16fbbd11d0",
+      "text": "Saldo da conta"
+    },
+    "ui_after_game_restart": {
+      "src": "cf1e8187396a",
+      "text": "Esta configuração terá efeito depois de reiniciar o jogo."
+    },
+    "ui_age": {
+      "src": "39b7370f30a3",
+      "text": "Idade"
+    },
+    "ui_anisotropic": {
+      "src": "546943134886",
+      "text": "Filtragem anisotrópica"
+    },
+    "ui_apply": {
+      "src": "31e392d1c037",
+      "text": "Aplicar"
+    },
+    "ui_automatic_blinkers": {
+      "src": "48e71ebdd191",
+      "text": "Setas Automáticas"
+    },
+    "ui_automatic_transition": {
+      "src": "521da30f278e",
+      "text": "Câmbio Automático"
+    },
+    "ui_automatic_wipers": {
+      "src": "a5496320fac2",
+      "text": "Limpadores Automáticos"
+    },
+    "ui_avail_parts": {
+      "src": "5d9ab77b201c",
+      "text": "Peças disponíveis"
+    },
+    "ui_back": {
+      "src": "76900f1bfd16",
+      "text": "Voltar"
+    },
+    "ui_became_master_of": {
+      "src": "35402a7c4c6e",
+      "text": "virou transportador preferido de"
+    },
+    "ui_begin_pursuit": {
+      "src": "3fff2b6a2456",
+      "text": "A polícia está na sua cola!"
+    },
+    "ui_bilinear_filter": {
+      "src": "4b6dc33e2e8d",
+      "text": "Filtro bilinear"
+    },
+    "ui_brake_axis": {
+      "src": "23b8f242050f",
+      "text": "Eixo do Freio"
+    },
+    "ui_brightness": {
+      "src": "ec811d30a89c",
+      "text": "Brilho"
+    },
+    "ui_buy": {
+      "src": "64e3cb0e4960",
+      "text": "Comprar"
+    },
+    "ui_buy_truck": {
+      "src": "add23fdc417f",
+      "text": "Comprar caminhão"
+    },
+    "ui_by": {
+      "src": "a7e2d26e8d15",
+      "text": "até"
+    },
+    "ui_cal911_message1": {
+      "src": "7bec4df6ce33",
+      "text": "O resgate vai lhe custar"
+    },
+    "ui_cal911_message2": {
+      "src": "3d07b529fa73",
+      "text": "Você aceita ?"
+    },
+    "ui_cancel": {
+      "src": "19766ed6ccb2",
+      "text": "Cancelar"
+    },
+    "ui_cancel_pursuit": {
+      "src": "81b1cceb1341",
+      "text": "Encerrando a perseguição"
+    },
+    "ui_cargo": {
+      "src": "fc09b38f3535",
+      "text": "Carga"
+    },
+    "ui_cargo_on_time": {
+      "src": "eede1dde41a7",
+      "text": "Você entregou a carga no prazo !"
+    },
+    "ui_cd_check": {
+      "src": "fb5d71cac3c1",
+      "text": "Verificação do CD"
+    },
+    "ui_change_color": {
+      "src": "e5515d759e3b",
+      "text": "Mudar cor"
+    },
+    "ui_check": {
+      "src": "20f65c28671b",
+      "text": "verificação"
+    },
+    "ui_city_bonus": {
+      "src": "29573293d272",
+      "text": "bônus da cidade"
+    },
+    "ui_city_names": {
+      "src": "17f55b7b2bbb",
+      "text": "Nomes das cidades"
+    },
+    "ui_close": {
+      "src": "7d9eb7acb13e",
+      "text": "Fechar"
+    },
+    "ui_combined": {
+      "src": "8036ed3754e1",
+      "text": "Combinados"
+    },
+    "ui_company_color": {
+      "src": "e858ae444f92",
+      "text": "Cor da Empresa"
+    },
+    "ui_company_odo": {
+      "src": "6e664e923fb4",
+      "text": "Hodômetro (milhas)"
+    },
+    "ui_competition": {
+      "src": "449303332f88",
+      "text": "Concorrência"
+    },
+    "ui_congratulations": {
+      "src": "ed7a9987f264",
+      "text": "Parabéns"
+    },
+    "ui_controller": {
+      "src": "31df66dc9f06",
+      "text": "Controle"
+    },
+    "ui_credits": {
+      "src": "2a6b24ad2872",
+      "text": "Créditos"
+    },
+    "ui_custom_filter": {
+      "src": "3e6e71662d4c",
+      "text": "Filtro personalizado"
+    },
+    "ui_damage": {
+      "src": "0c874f581a45",
+      "text": "Danos"
+    },
+    "ui_day": {
+      "src": "8f2364e11b8b",
+      "text": "Dia"
+    },
+    "ui_days": {
+      "src": "e08c0aa8f558",
+      "text": "Dias"
+    },
+    "ui_dead_zone": {
+      "src": "180210667325",
+      "text": "Zona Morta"
+    },
+    "ui_dealer_thanks": {
+      "src": "250f8ac3056d",
+      "text": "Obrigado pela visita. De agora em diante, nosso estoque estará sempre disponível no seu Caderno."
+    },
+    "ui_dealers_offer": {
+      "src": "40ff1777d4f8",
+      "text": "Caminhões à Venda"
+    },
+    "ui_decline": {
+      "src": "a2d285b35287",
+      "text": "Recusar"
+    },
+    "ui_defaults": {
+      "src": "e4ae37f137a6",
+      "text": "Restaurar padrões"
+    },
+    "ui_delete": {
+      "src": "e2d0a54968ea",
+      "text": "Excluir"
+    },
+    "ui_delivered_cargos": {
+      "src": "7b5bf694f771",
+      "text": "Cargas entregues"
+    },
+    "ui_depth": {
+      "src": "d3bb5c56363f",
+      "text": "Profundidade de cor"
+    },
+    "ui_details": {
+      "src": "45989de49fb7",
+      "text": "Detalhes"
+    },
+    "ui_disable_music": {
+      "src": "4ba5334ccc16",
+      "text": "Desativar música"
+    },
+    "ui_disable_sfx": {
+      "src": "8752b7ee4e7d",
+      "text": "Desativar sons"
+    },
+    "ui_drivername": {
+      "src": "4bcd8f1d2ad5",
+      "text": "Nome do motorista"
+    },
+    "ui_drvforhire": {
+      "src": "ccc12eabf9d4",
+      "text": "Motoristas disponíveis"
+    },
+    "ui_drvname": {
+      "src": "4bcd8f1d2ad5",
+      "text": "Nome do motorista"
+    },
+    "ui_easy": {
+      "src": "d6915875decb",
+      "text": "Fácil"
+    },
+    "ui_economy": {
+      "src": "c1d078d516dd",
+      "text": "Economia"
+    },
+    "ui_emulate_3d": {
+      "src": "1ad2e07613f8",
+      "text": "Emular som 3D"
+    },
+    "ui_enter_your_name": {
+      "src": "951ab6519039",
+      "text": "Digite Seu Nome"
+    },
+    "ui_error": {
+      "src": "54a0e8c17ebb",
+      "text": "Erro"
+    },
+    "ui_failed": {
+      "src": "5d28a90f4498",
+      "text": "reprovada"
+    },
+    "ui_feedback_gain": {
+      "src": "039cd78d00ec",
+      "text": "Intensidade do Retorno"
+    },
+    "ui_fire": {
+      "src": "c141faa80e43",
+      "text": "Demitir"
+    },
+    "ui_for": {
+      "src": "10c22bcf4c76",
+      "text": "para"
+    },
+    "ui_force_feedback": {
+      "src": "5745da83d820",
+      "text": "Force feedback"
+    },
+    "ui_frame_sync": {
+      "src": "96bca278d8bf",
+      "text": "Sincronizar cada quadro"
+    },
+    "ui_fri": {
+      "src": "66dab40cea1d",
+      "text": "Sex"
+    },
+    "ui_from": {
+      "src": "218197693424",
+      "text": "De"
+    },
+    "ui_from_city": {
+      "src": "3cd898d4d418",
+      "text": "Mostrar produção"
+    },
+    "ui_fuel_low": {
+      "src": "d457ab02c4f7",
+      "text": "Tanque vazio"
+    },
+    "ui_fullscreen": {
+      "src": "c461dbb2bab7",
+      "text": "Tela cheia"
+    },
+    "ui_gained_level": {
+      "src": "05188df2c7ac",
+      "text": "subiu para o nível"
+    },
+    "ui_game_cheated": {
+      "src": "1eee651e360e",
+      "text": "Uma trapaça foi usada neste jogo salvo !"
+    },
+    "ui_game_over": {
+      "src": "71f10eb014cb",
+      "text": "Fim de Jogo"
+    },
+    "ui_game_paused": {
+      "src": "616b24a8caa2",
+      "text": "Jogo pausado"
+    },
+    "ui_game_title": {
+      "src": "fc0fff2c978f",
+      "text": "18 WoS Across America"
+    },
+    "ui_game_unpaused": {
+      "src": "aa065d9ccffa",
+      "text": "Jogo retomado"
+    },
+    "ui_gas_stations": {
+      "src": "30ebdf279e2c",
+      "text": "Postos de combustível"
+    },
+    "ui_generating_jobs": {
+      "src": "798853590ae7",
+      "text": "Gerando fretes ..."
+    },
+    "ui_gfx_changed": {
+      "src": "7fbbb809f518",
+      "text": "A resolução gráfica foi alterada.<br>Deseja manter estas configurações ?"
+    },
+    "ui_gfx_device": {
+      "src": "24720aabce1e",
+      "text": "Dispositivo gráfico"
+    },
+    "ui_handling": {
+      "src": "90e9482cff03",
+      "text": "Dirigibilidade"
+    },
+    "ui_hard": {
+      "src": "9e73f8fa9cb7",
+      "text": "Difícil"
+    },
+    "ui_has_been_discovered": {
+      "src": "478b291ecf13",
+      "text": "foi descoberta"
+    },
+    "ui_has_delivered": {
+      "src": "f7e92995491b",
+      "text": "entregou"
+    },
+    "ui_has_won_the_contest": {
+      "src": "06852255cb9e",
+      "text": "venceu a competição !"
+    },
+    "ui_hauling_cargo": {
+      "src": "1cfe781f5ce3",
+      "text": "Carga transportada"
+    },
+    "ui_hauling_from": {
+      "src": "df7a4cdb90b3",
+      "text": "Origem da carga"
+    },
+    "ui_hauling_to": {
+      "src": "2167c34da1ec",
+      "text": "Destino da carga"
+    },
+    "ui_headq_location": {
+      "src": "ade0f7975671",
+      "text": "Sede"
+    },
+    "ui_hide": {
+      "src": "ac20a57bfde0",
+      "text": "Ocultar"
+    },
+    "ui_hide_cargos": {
+      "src": "31438b18468e",
+      "text": "Ocultar setas de carga"
+    },
+    "ui_high": {
+      "src": "c4ebc6d4a583",
+      "text": "Alta"
+    },
+    "ui_hire": {
+      "src": "cba8bbf6a3be",
+      "text": "Contratar"
+    },
+    "ui_hired_by": {
+      "src": "c474f07a9979",
+      "text": "Contratado por"
+    },
+    "ui_hired_drivers": {
+      "src": "115f7a944521",
+      "text": "Motoristas contratados"
+    },
+    "ui_hqs": {
+      "src": "ade0f7975671",
+      "text": "Sede"
+    },
+    "ui_independent": {
+      "src": "4148329a64ea",
+      "text": "Caminhoneiro autônomo"
+    },
+    "ui_insert_cd": {
+      "src": "6f3693778539",
+      "text": "Insira o CD do 18 WoS Across America"
+    },
+    "ui_job_description": {
+      "src": "f649eada594c",
+      "text": "Descrição do frete"
+    },
+    "ui_juke_box": {
+      "src": "b2ced5c6bc6a",
+      "text": "Jukebox"
+    },
+    "ui_keyboard": {
+      "src": "2316810a5de3",
+      "text": "Teclado"
+    },
+    "ui_last_week_summary": {
+      "src": "3e629a0992fc",
+      "text": "Resumo da última semana"
+    },
+    "ui_level": {
+      "src": "be44133ed57f",
+      "text": "Dificuldade"
+    },
+    "ui_load": {
+      "src": "8a6bdb6b18da",
+      "text": "Carregar"
+    },
+    "ui_load_game": {
+      "src": "dc415dbd4b1a",
+      "text": "Carregar Jogo"
+    },
+    "ui_loading": {
+      "src": "c95a3d447dec",
+      "text": "Carregando ..."
+    },
+    "ui_loading_aux": {
+      "src": "e3f6178a433e",
+      "text": "Carregando modelos auxiliares ..."
+    },
+    "ui_loading_buildings": {
+      "src": "be0692f293f1",
+      "text": "Carregando edifícios ..."
+    },
+    "ui_loading_free_items": {
+      "src": "0206f59135eb",
+      "text": "Carregando modelos ..."
+    },
+    "ui_loading_prefabs": {
+      "src": "ee3f9e3fcca7",
+      "text": "Carregando pré-fabricados ..."
+    },
+    "ui_loading_railings": {
+      "src": "6efeab3951da",
+      "text": "Carregando modelos de guard-rails ..."
+    },
+    "ui_loading_roads": {
+      "src": "cafc22bb1ac1",
+      "text": "Carregando estradas ..."
+    },
+    "ui_loading_shaders": {
+      "src": "ba42b14ee2ca",
+      "text": "Carregando shaders ..."
+    },
+    "ui_loading_signs": {
+      "src": "c20afcf417fe",
+      "text": "Carregando modelos de placas ..."
+    },
+    "ui_loading_traders": {
+      "src": "f0266550e066",
+      "text": "Carregando comerciantes ..."
+    },
+    "ui_loading_vegetation": {
+      "src": "a24d43ca6eb6",
+      "text": "Carregando vegetação ..."
+    },
+    "ui_loan": {
+      "src": "b138024ee7b4",
+      "text": "Empréstimo"
+    },
+    "ui_loan_10000": {
+      "src": "32ba63835e2a",
+      "text": "Pegar $ 10,000"
+    },
+    "ui_loan_debt": {
+      "src": "82e97091d93f",
+      "text": "Dívida do empréstimo"
+    },
+    "ui_low": {
+      "src": "f793de205ead",
+      "text": "Baixa"
+    },
+    "ui_lw_costs": {
+      "src": "171ff3d0a5a3",
+      "text": "Custos operacionais"
+    },
+    "ui_lw_gross_income": {
+      "src": "4c150fd7f16a",
+      "text": "Receita bruta"
+    },
+    "ui_lw_loan": {
+      "src": "f301a04d2ddb",
+      "text": "Juros do empréstimo"
+    },
+    "ui_lw_net_income": {
+      "src": "7561c934f60f",
+      "text": "Receita líquida"
+    },
+    "ui_maintenance": {
+      "src": "17ccfa5b681e",
+      "text": "Manutenção"
+    },
+    "ui_map": {
+      "src": "baf493d9991d",
+      "text": "Mapa"
+    },
+    "ui_medium": {
+      "src": "8e588cd18774",
+      "text": "Média"
+    },
+    "ui_mon": {
+      "src": "f40d7f51f69e",
+      "text": "Seg"
+    },
+    "ui_money": {
+      "src": "5ccc2e8715d7",
+      "text": "Dinheiro"
+    },
+    "ui_mouse": {
+      "src": "55c1520824a8",
+      "text": "Mouse"
+    },
+    "ui_mouse_sensitivity": {
+      "src": "4571896d8a4d",
+      "text": "Sensibilidade do Mouse"
+    },
+    "ui_music_volume": {
+      "src": "d8773f37c57e",
+      "text": "Volume da música"
+    },
+    "ui_na": {
+      "src": "e2f79e5b6033",
+      "text": "N/D"
+    },
+    "ui_name": {
+      "src": "dcd1d5223f73",
+      "text": "Nome"
+    },
+    "ui_new_game": {
+      "src": "28f9044138a5",
+      "text": "Novo Jogo"
+    },
+    "ui_next": {
+      "src": "1ff57a29d7c9",
+      "text": "Próxima"
+    },
+    "ui_no": {
+      "src": "1ea442a134b2",
+      "text": "Não"
+    },
+    "ui_no_axis": {
+      "src": "964be9bd4508",
+      "text": "Sem Eixo"
+    },
+    "ui_no_cargo": {
+      "src": "36a9e7f1c95b",
+      "text": " "
+    },
+    "ui_no_free_driver": {
+      "src": "23e6c0e751c3",
+      "text": "Nenhum motorista adequado disponível agora. Use o rádio PX para conhecer mais motoristas e aumente seu prestígio para atrair contratados"
+    },
+    "ui_no_loan_available": {
+      "src": "601dfcb66f96",
+      "text": "Nenhum banco quer lhe emprestar dinheiro !"
+    },
+    "ui_no_sound": {
+      "src": "0c08def0624f",
+      "text": "Sem som"
+    },
+    "ui_no_truck_dealer": {
+      "src": "4a7f17fb9ced",
+      "text": "Sem concessionária"
+    },
+    "ui_not_enough_money": {
+      "src": "9bb4295d6a2f",
+      "text": "Você não tem dinheiro suficiente !"
+    },
+    "ui_ok": {
+      "src": "565339bc4d33",
+      "text": "OK"
+    },
+    "ui_opponent": {
+      "src": "c0886e50d42e",
+      "text": "Adversário"
+    },
+    "ui_options": {
+      "src": "d0db8b5e364b",
+      "text": "Opções"
+    },
+    "ui_options1": {
+      "src": "a874fca87cdd",
+      "text": "Gráficos"
+    },
+    "ui_options2": {
+      "src": "799c26913574",
+      "text": "Controles"
+    },
+    "ui_options3": {
+      "src": "46124e023603",
+      "text": "Som"
+    },
+    "ui_overwrite": {
+      "src": "48c146439c4b",
+      "text": "Substituir o arquivo existente ?"
+    },
+    "ui_owned_trucks": {
+      "src": "add3097c0ea8",
+      "text": "Frota de caminhões"
+    },
+    "ui_paint_job": {
+      "src": "6aa71338a235",
+      "text": "Pintura"
+    },
+    "ui_passed": {
+      "src": "284d1e8c4918",
+      "text": "aprovada"
+    },
+    "ui_pedal_mode": {
+      "src": "efa4e1748256",
+      "text": "Modo dos Pedais"
+    },
+    "ui_performance": {
+      "src": "442aded87a55",
+      "text": "Desempenho"
+    },
+    "ui_play": {
+      "src": "436e61016e26",
+      "text": "Jogar"
+    },
+    "ui_power": {
+      "src": "848e96567d6b",
+      "text": "Potência"
+    },
+    "ui_precaching_world": {
+      "src": "92227c51dfac",
+      "text": "Pré-carregando a geometria do mundo ..."
+    },
+    "ui_preparing_economy": {
+      "src": "3912ee528bd8",
+      "text": "Preparando a economia ..."
+    },
+    "ui_prestige": {
+      "src": "75a9809cc884",
+      "text": "Prestígio"
+    },
+    "ui_prev": {
+      "src": "a57b08a480b8",
+      "text": "Anterior"
+    },
+    "ui_price": {
+      "src": "93c91c851e7a",
+      "text": "Preço"
+    },
+    "ui_quit": {
+      "src": "b3eb37acb66b",
+      "text": "Sair"
+    },
+    "ui_really_quit": {
+      "src": "f426738e11e6",
+      "text": "Deseja mesmo sair do jogo ?"
+    },
+    "ui_refund": {
+      "src": "6b37bd35081f",
+      "text": "Reembolso"
+    },
+    "ui_release_handbrake": {
+      "src": "dacef8bce12e",
+      "text": "Solte o freio de mão"
+    },
+    "ui_remain": {
+      "src": "d998dc0f3443",
+      "text": "Seu preço"
+    },
+    "ui_repay_10000": {
+      "src": "efd1b73e6dc0",
+      "text": "Pagar $ 10,000"
+    },
+    "ui_replace_truck": {
+      "src": "4b33ac40968f",
+      "text": "Substituir caminhão"
+    },
+    "ui_resolution": {
+      "src": "d4055fafa379",
+      "text": "Resolução"
+    },
+    "ui_retry": {
+      "src": "942087cc2d41",
+      "text": "Repetir"
+    },
+    "ui_return": {
+      "src": "ed25d3fc832c",
+      "text": "Voltar ao jogo"
+    },
+    "ui_reverse_stereo": {
+      "src": "9fb2b2e477c4",
+      "text": "Inverter estéreo"
+    },
+    "ui_reverting_in": {
+      "src": "493016035bc2",
+      "text": "Revertendo em"
+    },
+    "ui_reward": {
+      "src": "55ac8cbae095",
+      "text": "Recompensa"
+    },
+    "ui_road_names": {
+      "src": "d94abf90f274",
+      "text": "Números das rodovias"
+    },
+    "ui_rotate": {
+      "src": "c3613b1704f5",
+      "text": "Girar"
+    },
+    "ui_routes": {
+      "src": "2c5b669bcdeb",
+      "text": "Rotas"
+    },
+    "ui_salary": {
+      "src": "888b94f3307d",
+      "text": "Salário"
+    },
+    "ui_sat": {
+      "src": "fdeb71b569e0",
+      "text": "Sáb"
+    },
+    "ui_save": {
+      "src": "1509f561f241",
+      "text": "Salvar"
+    },
+    "ui_save_game": {
+      "src": "d64f623d896f",
+      "text": "Salvar Jogo"
+    },
+    "ui_save_name": {
+      "src": "b7297226fd1f",
+      "text": "Nome do save"
+    },
+    "ui_scenario": {
+      "src": "2fcb5d374697",
+      "text": "Cenário"
+    },
+    "ui_sec": {
+      "src": "59f006d63bd0",
+      "text": "segundos"
+    },
+    "ui_sell": {
+      "src": "2ec1e2815946",
+      "text": "Vender"
+    },
+    "ui_sell_truck": {
+      "src": "9b3446f19e73",
+      "text": "Vender caminhão"
+    },
+    "ui_separated": {
+      "src": "90be961b0645",
+      "text": "Separados"
+    },
+    "ui_service_stations": {
+      "src": "11b5d05ab703",
+      "text": "Oficinas"
+    },
+    "ui_set_high": {
+      "src": "7d191c3edb54",
+      "text": "Usar Alta"
+    },
+    "ui_set_low": {
+      "src": "3ff4753f7798",
+      "text": "Usar Baixa"
+    },
+    "ui_set_medium": {
+      "src": "91ccf768f019",
+      "text": "Usar Média"
+    },
+    "ui_sfx_mix_rate": {
+      "src": "8a887f1a1746",
+      "text": "Taxa de mixagem"
+    },
+    "ui_sfx_volume": {
+      "src": "30b92ce79166",
+      "text": "Volume do som"
+    },
+    "ui_shop": {
+      "src": "d00aae6b7fbf",
+      "text": "Loja"
+    },
+    "ui_show": {
+      "src": "0df6f1cad36c",
+      "text": "Mostrar"
+    },
+    "ui_show_room": {
+      "src": "0613d7ba48e3",
+      "text": "Showroom"
+    },
+    "ui_slow_down": {
+      "src": "8afa7b3ac897",
+      "text": "Desacelere primeiro"
+    },
+    "ui_snd_device": {
+      "src": "f9b5c2ca53f9",
+      "text": "Dispositivo de som"
+    },
+    "ui_special_cargo_offer1": {
+      "src": "12ccf91ed2a5",
+      "text": "Uma carga especial precisa ser coletada em"
+    },
+    "ui_special_cargo_offer2": {
+      "src": "910b1f053965",
+      "text": "e entregue em"
+    },
+    "ui_special_cargo_offer_expired": {
+      "src": "c84a88bea531",
+      "text": "A oferta de carga especial expirou"
+    },
+    "ui_starting": {
+      "src": "c7c583f45fb6",
+      "text": "Iniciando ..."
+    },
+    "ui_stealing_trailer": {
+      "src": "7a53eb17e540",
+      "text": "Este reboque não pode ser engatado."
+    },
+    "ui_steer_sensitivity": {
+      "src": "5fb052b8e3d2",
+      "text": "Sensibilidade da Direção"
+    },
+    "ui_steering_axis": {
+      "src": "785d3986a74f",
+      "text": "Eixo da Direção"
+    },
+    "ui_stop": {
+      "src": "cae7d57bc067",
+      "text": "Parar"
+    },
+    "ui_suggested_route": {
+      "src": "00ea1d4fc506",
+      "text": "Rota sugerida"
+    },
+    "ui_sun": {
+      "src": "db18f17fe532",
+      "text": "Dom"
+    },
+    "ui_swap": {
+      "src": "2e0099f76f29",
+      "text": "Trocar motoristas"
+    },
+    "ui_tex_detail": {
+      "src": "a71699b3f84f",
+      "text": "Detalhe de textura"
+    },
+    "ui_tex_filter": {
+      "src": "ca29242abde5",
+      "text": "Filtro de textura"
+    },
+    "ui_tex_quality": {
+      "src": "9a3926d4a3cc",
+      "text": "Qualidade de textura"
+    },
+    "ui_thu": {
+      "src": "7da11212ed34",
+      "text": "Qui"
+    },
+    "ui_time_limit_hit": {
+      "src": "48777af5241c",
+      "text": "O prazo acabou"
+    },
+    "ui_to": {
+      "src": "f4b06ef6d3c8",
+      "text": "Para"
+    },
+    "ui_to_city": {
+      "src": "dc6ec0ded7fa",
+      "text": "Mostrar entregas"
+    },
+    "ui_total_c_income": {
+      "src": "28090e4e870c",
+      "text": "Receita total"
+    },
+    "ui_total_c_jobs": {
+      "src": "6d4f5012171f",
+      "text": "Total de fretes realizados"
+    },
+    "ui_total_c_len": {
+      "src": "89d287a04137",
+      "text": "Distância total de fretes"
+    },
+    "ui_total_income": {
+      "src": "28090e4e870c",
+      "text": "Receita total"
+    },
+    "ui_traffic_density": {
+      "src": "57ded7cef467",
+      "text": "Densidade do trânsito"
+    },
+    "ui_trailer": {
+      "src": "6a7b20d1da8a",
+      "text": "Reboque"
+    },
+    "ui_trailer_lost": {
+      "src": "4ee89b3dc468",
+      "text": "Reboque perdido"
+    },
+    "ui_trailers": {
+      "src": "099cdbe8994e",
+      "text": "Reboques"
+    },
+    "ui_trilinear_filter": {
+      "src": "9242b5e1b760",
+      "text": "Filtro trilinear"
+    },
+    "ui_truck": {
+      "src": "1195427e2c1c",
+      "text": "Caminhão"
+    },
+    "ui_truck_color": {
+      "src": "891485200523",
+      "text": "Cor do caminhão"
+    },
+    "ui_truck_dealers": {
+      "src": "8214bce86033",
+      "text": "Concessionárias"
+    },
+    "ui_truck_desc": {
+      "src": "8ab341a6fa95",
+      "text": "Descrição do caminhão"
+    },
+    "ui_trucks": {
+      "src": "7d185299d0cc",
+      "text": "Caminhões"
+    },
+    "ui_tue": {
+      "src": "d1eb39b09bf5",
+      "text": "Ter"
+    },
+    "ui_verylow": {
+      "src": "3090c619f6f7",
+      "text": "Muito baixa"
+    },
+    "ui_view_dist": {
+      "src": "1cf4c1f3f2b2",
+      "text": "Distância de visão"
+    },
+    "ui_wanna_loan": {
+      "src": "94eaa0b4319e",
+      "text": "Deseja pegar emprestado"
+    },
+    "ui_warning": {
+      "src": "e981ddae45d8",
+      "text": "Aviso"
+    },
+    "ui_wed": {
+      "src": "58339f45df96",
+      "text": "Qua"
+    },
+    "ui_week": {
+      "src": "e78041ab51a8",
+      "text": "Semana"
+    },
+    "ui_week_costs": {
+      "src": "3fcc466b0f6c",
+      "text": "Custos da semana"
+    },
+    "ui_week_income": {
+      "src": "7b0e0ae6bb8a",
+      "text": "Receita da semana"
+    },
+    "ui_week_job_count": {
+      "src": "a79ab08488bc",
+      "text": "Fretes da semana"
+    },
+    "ui_week_job_income": {
+      "src": "7b0e0ae6bb8a",
+      "text": "Receita da semana"
+    },
+    "ui_week_job_len": {
+      "src": "32313916c2d7",
+      "text": "Hodômetro da semana"
+    },
+    "ui_week_loan": {
+      "src": "4ae14834581a",
+      "text": "Juros da semana"
+    },
+    "ui_week_report": {
+      "src": "a149563a67c9",
+      "text": "Relatório semanal disponível."
+    },
+    "ui_weigh_stations": {
+      "src": "5428ac1c065a",
+      "text": "Balanças"
+    },
+    "ui_weight": {
+      "src": "81d27ef6d503",
+      "text": "Peso"
+    },
+    "ui_wipers_message": {
+      "src": "292bb991ef30",
+      "text": "Os limpadores estão no modo automático."
+    },
+    "ui_wrecked": {
+      "src": "4c422e548767",
+      "text": "Caminhão danificado. Procure uma oficina ou chame o resgate"
+    },
+    "ui_wrong_character": {
+      "src": "721e38833a56",
+      "text": "Caractere inválido no nome do save !"
+    },
+    "ui_wrong_delivery": {
+      "src": "7308ebc49208",
+      "text": "Você entregou a carga errada !"
+    },
+    "ui_wrong_plr_character": {
+      "src": "db9c62205bfb",
+      "text": "Caractere inválido no nome do jogador !"
+    },
+    "ui_wrong_save_version": {
+      "src": "0521a5c7070a",
+      "text": "Versão do arquivo salvo incorreta !"
+    },
+    "ui_wrong_track": {
+      "src": "79ee10ff1450",
+      "text": "O nome do arquivo desta música é longo demais !"
+    },
+    "ui_yes": {
+      "src": "85a39ab345d6",
+      "text": "Sim"
+    },
+    "ui_you_have_won_the_contest": {
+      "src": "0f933e12212f",
+      "text": "Você venceu a competição !"
+    },
+    "ui_your_parts": {
+      "src": "43d01c2b8f84",
+      "text": "Peças compradas"
+    },
+    "vom_generic_comment": {
+      "src": "2df37fbea6c3",
+      "text": "Comentário genérico"
+    },
+    "vom_generic_reply": {
+      "src": "a1d434ed8a0a",
+      "text": "Resposta genérica"
+    },
+    "vom_traffic_answ": {
+      "src": "30ba2549281d",
+      "text": "Resposta sobre o trânsito"
+    },
+    "vom_traffic_ask": {
+      "src": "7cb7f571bcd2",
+      "text": "Perguntar o trânsito"
+    },
+    "vom_traffic_cops": {
+      "src": "f273fc52627e",
+      "text": "Polícia à frente"
+    },
+    "vom_traffic_good": {
+      "src": "e364fb339efe",
+      "text": "Trânsito bom"
+    },
+    "vom_traffic_heavy": {
+      "src": "133fc3c612ef",
+      "text": "Trânsito pesado (acidente)"
+    },
+    "vom_traffic_light": {
+      "src": "de3da5c1625f",
+      "text": "Trânsito leve"
+    },
+    "vom_weather_answ": {
+      "src": "75552a7a6391",
+      "text": "Resposta sobre o tempo"
+    },
+    "vom_weather_ask": {
+      "src": "5574ca48fe8e",
+      "text": "Perguntar o tempo"
+    },
+    "vom_weather_nice": {
+      "src": "db0436db7828",
+      "text": "Tempo bom"
+    },
+    "vom_weather_rain_h": {
+      "src": "c723ea3e000c",
+      "text": "Chuva forte"
+    },
+    "vom_weather_rain_l": {
+      "src": "692c2517472e",
+      "text": "Chuva fraca"
+    },
+    "vom_weather_snow": {
+      "src": "4f946da92e82",
+      "text": "Neve"
+    }
+  }
+}

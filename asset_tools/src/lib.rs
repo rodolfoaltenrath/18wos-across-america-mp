@@ -1,4 +1,5 @@
 pub mod bindings;
+pub mod localization;
 pub mod mod_package;
 pub mod source_audit;
 pub mod ui_tools;

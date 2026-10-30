@@ -236,6 +236,17 @@ fn disguised_executables_archives_and_binary_text_are_rejected() {
 }
 
 #[test]
+fn single_byte_tables_and_fonts_allow_accents_but_not_controls() {
+    assert!(data_only("scripts/local.def", b"k:\"A\xe7\xe3o\"\r\n").is_ok());
+    assert!(data_only("fonts/own.font", b"$227, 1, 2, 3, 4, 0, 1, 5 # \xe3\n").is_ok());
+    assert!(data_only("scripts/local.def", b"k:\"\x07\"").is_err());
+    assert!(data_only("fonts/own.font", b"\x7f").is_err());
+    // Script/shader text stays UTF-8.
+    assert!(data_only("ui/own.esc", b"\xe3").is_err());
+    assert!(asset_path("fonts/own.font").is_ok());
+}
+
+#[test]
 fn size_count_and_schema_limits_are_enforced() {
     let f = Fixture::new();
     OpenOptions::new()
