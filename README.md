@@ -25,8 +25,14 @@ O gate de `map` passou depois em duas recargas reais no Fedora/Proton, com eco
 e visual visível: liberou antes da carga, reexecutou uma vez e recriou o caminhão
 com textura. A extensão a `preview`, `edit`, `exit`, `menu` e `quit` passou na
 bancada; a prova desses cinco comandos no jogo continua pendente.
-Vários remotos, suavização em LAN e LAN entre dois PCs ainda precisam de
-validação. A flag `automatic_load_supported=false` continua conservadora até
+Em 29/10/2026, a primeira LAN Windows↔Fedora/Proton passou: o proprietário
+confirmou caminhões visíveis nos dois PCs e recuperação após devolver o foco;
+poses/rotações reais e paradas foram preservadas nos logs de ambos os lados.
+Ao tirar o foco, o remoto desaparece: a fonte ainda depende do draw. O registro
+completo de métricas, limitações e evidências está em
+[docs/GAME_VALIDATION.md](docs/GAME_VALIDATION.md).
+Mais de dois jogadores, suavidade medida, reconexão e sessões longas na LAN
+continuam pendentes. A flag `automatic_load_supported=false` continua conservadora até
 ampliar a matriz. O primeiro crash de recarga está preservado no histórico do
 roadmap; o fallback é `--no-load-gate` com `session-prepare-load` antes de carregar.
 
@@ -81,7 +87,10 @@ pelo construtor, não atesta por si só a procedência/reprodutibilidade do buil
 Não é assinatura de release. A geração recusa destino existente e binários
 fora do formato x86; não altera a instalação original. A pasta local solicitada
 pelo proprietário não equivale a publicar release. LAN real, uso do assistente
-no Windows destinatário e conectividade/firewall continuam dependentes do teste.
+Windows e conectividade foram exercitados na primeira LAN de 29/10, com logs
+de início/status/parada e 14 slots/oito hashes conferidos. Documents
+redirecionado exigiu o caminho real; melhorias de UX, instalação limpa em outros
+ambientes e recuperação ao reabrir o assistente seguem pendentes.
 
 ## Direção do mod definida pelo proprietário
 
@@ -91,7 +100,9 @@ aceite/recusa, identidade local, gerações de conexão, heartbeat, timeout,
 retomada, lista de participantes e RTT. O transporte v1 continua sendo o padrão
 das provas anteriores no jogo. V2 passou na partida Windows em 29/10/2026:
 eco com textura, reinício do servidor com reconexão, duas recargas automáticas
-e encerramento confirmado. LAN entre dois PCs continua pendente.
+e encerramento confirmado. A primeira LAN real Windows↔Fedora passou depois
+com visual mútuo, fonte de pose nos dois lados e limpeza registrada; o roteiro
+acumulado distingue essa prova da matriz ainda pendente.
 
 O mod oferecerá somente a carreira baseada em **Become a Millionaire**, com
 competição econômica entre transportadoras. Antes de criar um save, será

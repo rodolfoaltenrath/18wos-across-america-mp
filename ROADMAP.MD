@@ -2,6 +2,16 @@
 
 ## Ponto de parada para troca de computador — 29/10/2026
 
+**Atualização posterior: primeira LAN real concluída em 29/10.** Windows e
+Fedora/Proton mostraram o caminhão um do outro, sem eco. Fonte ligada a draw
+expira fora de foco e recupera ao voltar, confirmado pelo proprietário. Logs
+dos dois PCs e relatório do servidor foram preservados; ambos os stops
+conferiram 14 slots e oito hashes. O Fedora também passou na verificação
+pós-saída. Consultar o registro "Primeira LAN Windows ↔ Fedora" abaixo e as
+métricas completas em `docs/GAME_VALIDATION.md`. A prova básica não precisa
+ser repetida sem uma regressão concreta; próxima dependência é tratar foco/
+aquisição e isolar as lacunas de snapshots, sem declarar M4/M5/MVP completos.
+
 **Retomada no Fedora em 29/10:** o proprietário pediu corrigir a divergência de
 branches e continuar. A `main` local tinha o commit documental `69e71e7` e dez
 commits do outro computador em `origin/main`; os históricos foram unidos sem
@@ -3356,6 +3366,59 @@ do host conforme necessário. Essa prova, suavização, sessões longas e comand
 de teardown além de `map` continuam pendentes. Não confundir o executável do
 assistente iniciado na bancada com uma sessão do jogo iniciada por ele.
 
+### M3/M4/M5/M9 — Primeira LAN Windows ↔ Fedora — 29/10/2026
+
+Kit de origem `7f2595c`, servidor Rust nativo no Fedora, sala v2 `lan`, UDP
+39000, sem eco e offset zero; jogo Steam perfilado em computadores distintos.
+O proprietário confirmou visual mútuo, desaparecimento ao perder foco e retorno
+ao recuperá-lo. Poses/rotações reais nos dois sentidos estão nos status; não
+foi um espelhamento sintético. Os logs Windows recebidos também comprovaram
+o fluxo interativo do assistente e a pasta real redirecionada ao OneDrive.
+
+Foram preservados snapshots inicial/movimento/métricas/saída de par/parado,
+watch de 60 s, render/pump/dispatcher, preflight, módulos/regiões/SO, configuração
+gráfica selecionada, hashes dos builds, paradas e verificação pós-saída Fedora.
+Os três logs Windows de início/status/parada foram importados como relatórios.
+Notas completas, valores brutos e limites em `docs/GAME_VALIDATION.md`, seção
+"Registro — primeira LAN"; artefatos ignorados em
+`target/analysis/lan-two-pc-20261029-01/`. Pacote de diagnósticos em Downloads,
+com lista explícita que exclui identidade, saves, backups e jogo. Não versionar
+a pasta completa recebida do proprietário, pois inclui dados privados.
+
+Rede: RTT Windows 17 ms, mínimo 16/máximo 34; Fedora até o servidor local
+0/máximo 17. Lacunas de snapshots: Windows 29.933 ms/quatro eventos de salto
+de tick; Fedora 15.817 ms/um. Não são medição de perda física nem prova de
+freeze integral: houve foco/consoles e saída do peer, sem timeline causal.
+Ambos permaneceram numa aceitação, zero reconexões, nenhum inválido/recusa nos
+snapshots. Fonte drawn expira após 500 ms e remoto não é desenhado após 1 s;
+isso é limitação confirmada, não comportamento a ocultar retendo uma pose antiga.
+
+Desenho: Fedora 33.569 draws remotos, média diagnóstica final 1,950 µs/máximo
+161,100 µs; Windows 21.354 no status (21.455 antes de liberar), média 5,026
+µs/máximo 266,300 µs. Três partes com shader, zero fault/foreign/flags nas
+coletas. Não converter intervalo do hook em FPS ou afirmar custo incremental
+do mod/heap estável. CPU/RSS são do processo local jogo/Wine e de amostra curta;
+hardware/renderizador/custo de SO Windows não foram fornecidos.
+
+Encerramento: 14 slots restaurados e oito arquivos iguais em cada stop. Windows
+liberou em uma consulta/tentativa, sem recusa. Fedora aguardou flushes: 118
+consultas, uma tentativa, `[1,1,0]`, item zerado depois. Worker parado, gate null,
+sondas removidas, filas/inflight zero, leave confirmado. Hashes Fedora pós-saída
+iguais, enumeração sem jogo; DLL não residente localmente. Servidor encerrou
+com zero ativos, três leaves (inclui a sonda inicial sem pose), 47.548 poses,
+48.727 envios/15.466.828 bytes e nenhum inválido/refusal/send_error/late_tick.
+Cached_members=3 é cache de retomada, não cliente ativo. Não há segunda prova
+pós-saída Windows; não exige refazer a condução/visual para obtê-la.
+
+Entregue: primeira LAN visual e assistente no destinatário comprovados, com
+evidência dos dois PCs. Não foram exercitados reload/menus nesta rodada (gate
+idle), sessão longa, mais de dois jogadores ou medição controlada de suavidade/
+latência visual. Próximo bloco offline deve melhorar aquisição/foco, timeline
+de diagnóstico e UX dos caminhos/Status/Parar, com fixtures, antes de agrupar a
+próxima prova específica. Não pedir novas voltas apenas para reobter esta base.
+Somente documentação/organização de evidências neste registro: sem rebuild
+da DLL, alteração de protocolo ou novos testes de código neste bloco.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -3544,14 +3607,16 @@ Se algum método exigir alteração de arquivo, documentar e testar restauraçã
 - [x] Ter UDP, alvo de 60 Hz, IDs provisórios, limites e descarte de sequências antigas.
 - [x] Adicionar negociação de versão, criação/entrada de sala e aceite/recusa.
   Entregue optativamente no v2, com uma sala por processo. Bancada/loopback e
-  partida Windows com reinício do servidor passaram; LAN entre PCs pendente.
+  partida Windows com reinício do servidor passaram; primeira LAN visual
+  Windows↔Fedora também passou em 29/10. Ampliar robustez e duração.
 - [x] Definir IDs de sessão/jogador e reinício de sequência por conexão. O
   endereço UDP atual não deve ser a identidade persistente do jogador.
   V2: identidade local persistente, credenciais por conexão e geração da pose;
   ID numérico é de runtime, não conta autenticada ou persistência da economia.
 - [x] Definir mensagens de entrada, saída, heartbeat, timeout e reconexão.
   V2 passou na DLL em fixture e na partida Windows: reinício/reconexão e leave
-  confirmado. Não equivale a uma partida LAN entre PCs.
+  confirmado. O registro posterior da LAN acrescenta presença mútua e saída
+  de par; não repetiu o reinício/reconexão entre computadores.
 - [ ] Acrescentar rotação, tick/timestamp, modelo e velocidade com formatos e
   unidades documentados. Tratar compatibilidade e valores inválidos.
   Progresso: rotação opcional (quaternion unitário, tolerância 2%, v1
@@ -3561,7 +3626,8 @@ Se algum método exigir alteração de arquivo, documentar e testar restauraçã
   Definir IDs, deduplicação e prazos para eventos confiáveis sobre UDP.
 - [ ] Medir RTT, estimar diferença de relógios e ordenar snapshots para interpolação.
   V2 mede RTT/offset diagnóstico e ordena geração/sequência/revisão. Aplicação do
-  relógio estimado à interpolação e medição na LAN ainda pendentes.
+  relógio estimado à interpolação segue pendente. A primeira medição LAN
+  Windows (RTT 16–34 ms) está preservada; caracterização controlada pendente.
 - [ ] Manter tamanho de datagrama controlado, evitar fragmentação e limitar filas,
   clientes, taxa de pacotes e alocação por origem.
   V2: 1200 bytes, quatro poses por batch, limites de peers/cache/recibos,
@@ -3569,11 +3635,12 @@ Se algum método exigir alteração de arquivo, documentar e testar restauraçã
 - [ ] Adicionar métricas de pacotes, atraso, perda, jitter e tick atrasado.
   V2: contadores, RTT último/mínimo/máximo, variações de RTT/chegada, recusas,
   limites, bytes e ticks atrasados. Lacunas de tick não estimam perda;
-  estimativa de perda e medição de jitter entre computadores continuam pendentes.
+  estimativa de perda e caracterização controlada de jitter entre computadores
+  continuam pendentes. A primeira LAN já tem snapshots de timing nos dois PCs.
 - [ ] Medir custo do broadcast atual, que cresce com pares de clientes; avaliar
   agrupamento, frequência e relevância espacial quando os números justificarem.
-- [ ] Testar duas máquinas reais; configurar bind LAN, IP e porta. A configuração
-  atual `127.0.0.1:39000` atende somente o computador local.
+- [x] Testar duas máquinas reais; configurar bind LAN, IP e porta. Primeira
+  sessão Windows↔Fedora, v2 sem eco, com visual mútuo e limpeza registrada.
 
 **Concluído quando:** dois clientes entram, trocam posição/rotação e reconectam,
 com incompatibilidades diagnosticadas e comportamento definido sob perda/reordenação.
@@ -3583,8 +3650,8 @@ com incompatibilidades diagnosticadas e comportamento definido sob perda/reorden
 
 O primeiro visual PSM seguindo o jogador já foi visto na partida, sem textura.
 O caminho escolhido desenha modelos, sem inserir entidades físicas no mundo.
-Agora a dependência é validar as implementações de rede/skin/recarga no jogo e
-em dois PCs; inserção como entidade continua sem contrato e não é pré-requisito
+Rede e visual mútuo passaram entre dois PCs em 29/10. Ampliar foco, lifecycle,
+recarga LAN e suavidade; inserção como entidade continua sem contrato e não é pré-requisito
 para o MVP visual sem colisão.
 
 - [ ] Investigar criação de veículo/modelo, atualização de transform e remoção,
@@ -3630,12 +3697,16 @@ para o MVP visual sem colisão.
   passaram. A primeira carga retida falhou; o gate de `map` foi validado depois
   em duas recargas Fedora/v1 e duas Windows/v2, com liberação/reexecução/recriação.
   Os outros cinco comandos que apagam a cena continuam só na bancada.
-  Faltam tráfego LAN real e saída de pares.
+  LAN real passou depois: saída do Windows deixou a lista Fedora vazia, com
+  stops/slots/hashes conferidos. Reentrada/reconexão e matriz LAN de reload
+  continuam pendentes.
 - [ ] Confirmar que mudar o remoto não muda o caminhão local nem os dados do save.
   Progresso: nas sessões de 28/10 os hashes de originais e saves ficaram iguais
   e o caminhão local não foi afetado, mas o visual seguia o próprio jogador.
   Repetir com remoto real; `session-start --backup` + `session-stop --verify`
   automatizam a conferência.
+  Na LAN de 29/10, os dois stops também conferiram oito arquivos; avaliação
+  específica de interferência em controles/física não foi relatada separadamente.
 - [ ] Usar overlay/indicador apenas como diagnóstico se necessário; isso não
   substitui a entrega de um caminhão remoto no mundo 3D.
 
@@ -3809,7 +3880,8 @@ abaixo continuam futuros e exigem validação própria.
   no Fedora; a integração inicial do jogo/DLL sob Proton também passou.
 - [ ] Ampliar a matriz Proton para outras configurações e sessões longas;
   não depende de portar o jogo original nem de substituir a DLL por uma
-  biblioteca Linux. Coop LAN entre máquinas ainda precisa de teste real.
+  biblioteca Linux. A primeira LAN visual Windows↔Fedora passou em 29/10;
+  ampliar foco, suavidade, reconexão e duração conforme o registro da rodada.
 
 ## 6. Ordem de execução recomendada e riscos
 
@@ -3979,7 +4051,7 @@ quando for gerar a DLL Windows. Não copie a configuração `.cargo` desta máqu
 | Componente | Uso no Linux | Validação já realizada |
 | --- | --- | --- |
 | `asset_tools` | Build/execução nativos; fornecer caminho local dos assets | Fedora 44: build, cinco testes e varredura dos três SCS |
-| `multiplayer_server` | Build/execução nativos; pode atender clientes Windows por UDP | Fedora 44: build e relay local; LAN entre máquinas pendente |
+| `multiplayer_server` | Build/execução nativos; pode atender clientes Windows por UDP | Fedora 44: build/relay e primeira LAN visual Windows↔Fedora com encerramento conferido |
 | Protocolo e lógica portável do cliente | Build/testes nativos, com testes Win32 excluídos por `cfg` | Fedora 44: testes portáveis passaram; integração Win32 não executada |
 | `client_dll` no jogo | Gerar DLL PE x86 e executar no prefixo Proton da Steam | Carga, captura, movimento, menu/outra partida e descarga passaram nesta instalação |
 | `memory_tool` e `client_probe` | Binários Windows via ambiente compatível ou PC Windows | Versões nativas Linux não implementam essas funções |

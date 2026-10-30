@@ -829,3 +829,28 @@ do assistente na partida do destinatário. Não abrir o jogo local neste preparo
 Verify deste bloco: 136 x86/191 nativos, releases, Clippy e fmt; doctor nativo e
 check-only do assistente sob Proton passaram. Menu via Proton recebeu EOF antes
 de qualquer opção; interativo/início/parada do assistente seguem para G5/G8.
+
+Rodada posterior de 29/10: primeira LAN Windows↔Fedora/Proton REAL passou, sem
+eco/offset artificial. Proprietário confirmou presença mútua, sumiço ao perder
+foco e recuperação ao voltar. Logs Windows de início/status/stop foram recebidos
+e cruzados com Fedora/servidor; consultar o registro completo de métricas em
+docs/GAME_VALIDATION.md e o novo registro M3/M4/M5/M9 do roadmap. Preservar essa
+prova, sem repetir percursos só para recuperar números. Pasta privada da rodada
+target/analysis/lan-two-pc-20261029-01; contém identidades/backups fora do Git.
+Exportar somente a lista de diagnósticos, nunca o diretório completo recebido.
+Windows usa Documents redirecionado OneDrive; caminho real resolveu o preparo.
+
+RTT Windows 16 mínimo/17 atual/34 máximo ms; não usar o RTT local do Fedora
+como RTT entre PCs. Gaps entre snapshots Windows 29.933 ms/Fedora 15.817 ms
+não medem silêncio de todos os datagramas nem perda; causa não isolada numa
+rodada com mudanças de foco e saída. Draw expira a pose em 500 ms, visual em
+1 s: próximo alvo é aquisição/foco e timeline, sem fingir movimento por pose
+antiga. Recarga LAN, reconexão, mais jogadores e sessão longa não passaram.
+
+Stops dos dois PCs: 14 slots e oito hashes em cada. Fedora deixou worker
+parado, item zero/gate null, dispatcher/pump removidos, filas zeradas e leave
+confirmado; oito hashes passaram novamente após saída, enumeração sem jogo.
+Servidor parado normalmente, zero ativos (cached_members=3 é cache), três
+leaves incluindo uma sonda inicial sem pose. Windows sem segundo verify após
+saída. Nenhuma DLL residente no jogo local; reenumerar antes do próximo build.
+Não houve mudança de código/rebuild neste registro, só coleta/documentação.

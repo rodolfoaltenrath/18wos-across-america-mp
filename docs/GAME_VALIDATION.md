@@ -1,15 +1,204 @@
 # Rodada acumulada de validação na partida
 
-Atualizado em 29/10/2026. O proprietário pediu para desenvolver sem abrir o jogo
-agora e concentrar a validação prática depois. Este é o roteiro acumulado do
-que já está implementado ou depende de preparação específica; não é registro
-de aprovação. Acrescentar novas entregas aqui antes da próxima rodada.
+Atualizado em 29/10/2026. O proprietário pediu blocos maiores e validação prática
+agrupada. A primeira rodada LAN entre Windows e Fedora/Proton foi realizada e
+está registrada abaixo. A matriz restante continua sendo roteiro de pendências;
+não marcar itens amplos a partir de uma prova parcial.
 
 As provas antigas permanecem no ROADMAP.MD: eco/textura e duas cargas `map`
 passaram no Windows/v2; o usuário percebeu atraso leve. Houve reconexão real,
 mas ele não percebeu o desaparecimento do remoto durante a interrupção. Outros
 comandos de teardown, suavização na LAN, vários jogadores e sessão longa
 continuam pendentes. Testes em fixture/sockets locais não fecham essas lacunas.
+
+## Registro — primeira LAN Windows ↔ Fedora/Proton — 29/10/2026
+
+**Resultado confirmado:** o proprietário viu o caminhão do outro jogador nos
+dois computadores. Ao tirar o foco, o remoto desaparece; devolvendo o foco,
+reaparece. Isso é prova visual entre máquinas distintas, sem eco nem cliente
+sintético enviando poses. O Fedora capturou poses/rotações variando do Windows;
+o log Windows contém a pose/rotação recebida do Fedora. Não repetir essa prova
+básica apenas para preencher documentação. Novos testes devem cobrir regressão
+de mudanças concretas ou lacunas especificadas ao final deste registro.
+
+### Ambiente e procedência
+
+- Build de origem/kit: `7f2595c40ee6cde875d0a9031348b0137423d069`.
+  DLL/launcher/assistente x86 compilados no Fedora; servidor Rust nativo Linux.
+  Os logs Windows não incluem nova medição do hash da DLL do mod no destino.
+- Perfil nos dois PCs: `steam-aa-1.10-ccb327c2`; os cinco originais do backup
+  Windows correspondem aos hashes perfilados. Doctor Fedora passou oito arquivos
+  e a estrutura do prefixo antes da injeção. Assets/mapa inteiros não foram
+  comparados; checks estáticos não substituem a prova executada nesta rodada.
+- Fedora: kernel `7.2.13-200.fc44.x86_64`, Proton Experimental `11.0-100`.
+  Configuração lida: `r_device=dx8_0`, `r_fullscreen=0`,
+  `r_mode=1024x768x32x85`. É configuração, não medição de FPS/refresh efetivo.
+  Módulos observados incluem `d3d8.dll` e `wined3d.dll`; não inferir custo de GPU.
+- Windows: versão exata do SO, hardware, renderizador e resolução não coletados.
+  O save estava em Documents redirecionado ao OneDrive/Documentos. O assistente
+  inicialmente recusou o caminho e o proprietário resolveu sem alteração de
+  código; o texto exato da entrada recusada não foi preservado. Melhorar a
+  descoberta de Documents e o diagnóstico do caminho é uma pendência de UX.
+- Sala `lan`, wire v2, servidor no endereço da interface LAN do Fedora, UDP
+  39000, limite 16, timeout 5 s, `echo=false`. Firewall já permitia a porta;
+  nenhuma regra foi alterada. Offset visual zero nos dois PCs; apresentação
+  100 ms de interpolação / 200 ms de extrapolação.
+- IDs desta sessão: Windows 2, Fedora 3. O ID 1 era uma sonda nativa de dois
+  segundos com `--no-pose`, encerrada antes da sessão visual; não é terceiro
+  jogador. Identidades independentes. Não versionar identidade, paths locais,
+  saves ou os arquivos comerciais recebidos junto dos logs.
+
+### Rede e apresentação — valores brutos preservados
+
+Os snapshots não foram coletados no mesmo instante nem sincronizados entre
+relógios. Coluna Fedora usa o estado após a parada, com contadores mantidos;
+Windows usa o status anterior à parada. A saída foi capturada separadamente.
+São contadores/estimativas locais, não um benchmark de percurso controlado.
+
+| Campo | Fedora | Windows |
+| --- | ---: | ---: |
+| Enviados / recebidos (`client`) | 22.197 / 24.028 | 27.089 / 19.561 |
+| Aceites / reconexões | 1 / 0 | 1 / 0 |
+| Inválidos / recusas da sessão | 0 / nenhuma | 0 / nenhuma |
+| `old` (descarte do protocolo, não perda estimada) | 449 | 972 |
+| RTT atual / mínimo / máximo (ms) | 0 / 0 / 17 | 17 / 16 / 34 |
+| Amostras RTT | 984 | 878 |
+| Variação RTT suavizada (`rtt_jitter_us`) | 1.880 | 2.183 |
+| Snapshots admitidos pelo recorder | 24.477 | 20.539 |
+| Variação de chegada suavizada (µs) | 1.120 | 22.787 |
+| Maior intervalo entre snapshots (ms) | 15.817 | 29.933 |
+| Eventos de salto de tick / maior passo | 1 / 949 | 4 / 1.796 |
+| Snapshots não monotônicos | 0 | 0 |
+| Consultas interpoladas / previstas | 33.493 / 15 | 21.102 / 51 |
+| `buffering` / `capped` | 7 / 54 | 24 / 177 |
+| `stale` / `empty_queries` | 311 / 973 | 929 / 6.229 |
+| `lock_misses` / `held` / `snapped` | 6 / 0 / 0 | 4 / 0 / 0 |
+
+O RTT Fedora é até o servidor no próprio computador, não o RTT Windows↔Fedora.
+`clock_offset_ms` era diagnóstico relativo à época do servidor, não latência:
+677.759 no Fedora final e 644.904 no Windows. Não usar a diferença para estimar
+atraso de ponta a ponta ou afirmar relógios sincronizados.
+
+`max_receive_gap_ms` mede intervalos **entre snapshots**, não silêncio de todos
+os datagramas. Saltos de tick não medem perda. As lacunas ocorreram numa rodada
+com alternância de foco/consoles e remoção do peer, sem trace que isole a causa;
+não atribuir automaticamente a defeito do UDP, perda física ou freeze integral
+do processo. Antes das lacunas, os snapshots Fedora preservados registraram
+maior intervalo 33–34 ms e maior passo 1. Preservar também os valores finais
+maiores; não selecionar apenas os bons trechos.
+
+Poses individuais e quaternions completos estão nos JSONs. Exemplos Fedora:
+remoto Windows começou em `[-1127781.875, 19977.296875, 273040.375]`, sequência
+2.465; depois `[-1126020.5, 19977.50390625, 273258.6875]`, sequência 8.780;
+na segunda coleta de métricas, `[-1128268, 19990.048828125, 272233.09375]`,
+sequência 23.794. São centímetros do mundo, não coordenadas geográficas.
+O Windows registrou o Fedora em `[-1127316.875, 19977.681640625, 273321.6875]`,
+sequência 20.298. Ambos tinham rotação e buffer de 16 amostras; idade do remoto
+Fedora 0–13 ms nas coletas com peer, Windows 72 ms naquele snapshot.
+
+### Desenho, loop e memória
+
+| Campo | Fedora | Windows |
+| --- | ---: | ---: |
+| Thread proprietária observada (histórica) | 400 | 21.304 |
+| Desenhos remotos | 33.569 | 21.354 no status; 21.455 antes de liberar |
+| Custo médio de draw no último diagnóstico (µs) | 1,950 | 5,026 |
+| Maior custo de draw registrado (µs) | 161,100 | 266,300 |
+| Intervalo médio observado no hook (µs) | 4.234 | 6.427 |
+| Partes com shader | 3 | 3 |
+| `fault` / acesso residual / chamadas estrangeiras / flags | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
+| Desenhos locais / flushes no snapshot correspondente | 103.710 / 414.876 (parado) | 82.761 / 331.044 |
+| Draws pulados (`skipped`) | 70.075 | 61.407 |
+
+No Fedora, os custos médios expostos oscilaram entre 1,487 e 2,259 µs nas
+coletas anteriores; não são média ponderada da sessão. O intervalo do hook
+também não é FPS medido do jogo inteiro. `skipped` inclui passes/contextos
+inelegíveis, não quadros necessariamente perdidos. Três partes com shader não
+substituem inspeção específica de cores/iluminação em todas as câmeras; o relato
+do proprietário confirma presença mútua e foco/retorno, não toda a matriz G1.
+
+Sonda de render Fedora, snapshot próprio: 703.124 chamadas pool / 290.414
+flushes, flags e foreign zerados. É cobertura do ponto perfilado, não todos os
+passes. Loop antes do stop: thread da janela/execução/fase 400, nenhuma tarefa
+pendente/em curso. Preflight visível recusou por `visible`, em `[1,1,0]`,
+profundidades pump/janela/draw/render `1/0/0/0`, sem ocultar/liberar.
+
+O contador rotulado `read_failures` no Fedora atingiu 3.222 numa coleta; ele
+também soma `SampleError::Unavailable` da fonte `drawn`, cujo diagnóstico foi
+`waiting for a drawn exterior pose (game in foreground)`. Não classificá-lo
+inteiro como falha de leitura de memória. O watch preservou transição de
+`sample=2` para `sample=1`, além da recuperação visual relatada.
+
+Observações do SO local (coleta curta, sem baseline antes da injeção): jogo
+RSS 453.800–453.804 KiB (~443,2 MiB); servidor RSS 4.012 KiB (~3,92 MiB).
+Duas amostras intervalares do top: jogo 229,8% e 226,3% CPU, servidor 0,5%
+em cada uma; percentual é por núcleo, inclui jogo/Wine, não apenas o mod.
+Não há medição de CPU/RSS Windows, GPU/VRAM, crescimento de heap ou FPS isolado.
+VirtualQuery Fedora: regiões graváveis committed PRIVATE 328.327.168 bytes
+(313,12 MiB) e IMAGE 3.309.568 bytes (3,16 MiB). Não é RSS nem todo o heap.
+Lista de módulos, maiores regiões e estado do processo foram preservados.
+
+### Servidor e encerramento
+
+Relatório final do servidor: recebidos 49.454; poses 47.548; pings 1.900;
+ticks 72.598; snapshots 45.870; enviados 48.727 / 15.466.828 bytes. Inválidos,
+oversized, rate_limited, recusados, stale, unauthenticated, expirados,
+send_errors e late_ticks: todos zero no relatório. Aceites/leaves: 3/3,
+incluindo a sonda sem pose. `active_on_shutdown=0`, `cached_members=3`;
+cache de retomada não é cliente ativo nem prova de toda memória liberada.
+
+- Windows: log de parada prova 14 slots restaurados, oito arquivos iguais ao
+  backup (cinco originais/três saves), worker status 2, uma consulta de preflight
+  e uma tentativa de release, sem recusas; `[1,1,0]`, 12 flushes após ocultar e
+  21 após último draw. Retorno na thread 21.304, profundidades `1/0/0/0`.
+- Fedora: 14 slots restaurados, oito arquivos iguais (cinco originais/três
+  saves), uma tentativa de release após 118 consultas de preflight; aguardou
+  consumo de draws com recusa retryable, sem forçar liberação. Último check
+  pronto em `[1,1,0]`, 108 flushes após ocultar / 1.089 após último draw.
+- Estado posterior Fedora: worker 2/parado, `leave_confirmed=true`, sessão
+  `closed`, sem remotos, visual `item=0/shown=0/state=0`, gate null;
+  dispatcher inativo, loop removido (`pump_state=2`), tarefas pending/running
+  e inflight zero. O `load_gate.installed=true` no relatório **de parada** é
+  snapshot anterior à remoção; o status posterior confirma gate ausente.
+- Enumeração após saída do Fedora não encontrou o jogo e a verificação
+  independente de PID/DLL confirmou novamente os oito arquivos iguais.
+  Servidor encerrado normalmente, socket removido. Não há DLL residente no
+  jogo local ao concluir; reenumerar antes de futuros builds.
+- No Windows, o proprietário relatou que o assistente liberou o fechamento;
+  os logs comprovam a limpeza antes da saída. Não foi coletada uma segunda
+  verificação pós-saída nem enumeração remota do processo. Isso não exige
+  repetir o percurso LAN: a verificação pode ser feita independentemente do jogo.
+
+### Evidências e próximos testes específicos
+
+Originais de diagnóstico locais em `target/analysis/lan-two-pc-20261029-01/`
+(ignorado): status inicial/pós-movimento/duas métricas/saída do par/parado,
+watch de 60 s, render/pump/dispatcher/controle, preflight, módulos/regiões/SO,
+configuração de vídeo selecionada, hashes dos builds, backup/stop/verificação
+pós-saída e relatório final do servidor. Os três logs Windows de início,
+status e parada foram copiados para `windows-start/status/stop.json`.
+Os arquivos completos fornecidos pelo proprietário permanecem privados fora
+do Git. O pacote de evidências em Downloads inclui somente a lista explícita
+de relatórios/logs; exclui identidades, backups, saves e arquivos do jogo.
+
+Pendências delimitadas, sem repetir a prova já obtida:
+
+1. Separar atualização/envio de pose da disponibilidade de draw/foco, com prova
+   de thread e lifecycle; não manter pose antiga como se fosse movimento atual.
+   O contrato atual expira a fonte após 500 ms e não desenha remoto após 1 s.
+   Regressão futura deve mirar perda/retorno de foco e transições de mundo.
+2. Isolar as lacunas de snapshots com timeline monotônica de foco, fonte,
+   envio/recepção/tick, sem concluir perda de pacotes pelos contadores atuais.
+3. Quantificar suavidade, latência visual ponta a ponta e FPS/custo incremental
+   em trecho controlado; não foram fornecidas notas específicas de conforto,
+   saltos, câmeras, curvas/rampas, textura/iluminação nesta rodada.
+4. Reconexão/entrada/saída percebida de um peer, vários jogadores (>2), menus/
+   recargas na LAN e sessão longa permanecem específicos. Gate ficou idle,
+   sem calls/replays/recriações; não houve novo teste de reload neste bloco.
+5. Descobrir/persistir Documents real, explicar caminho inexistente/arquivo/
+   permissão no assistente e melhorar a clareza de Status/Parar/retorno ao jogo.
+   O fluxo interativo Windows passou nesta rodada; console via Proton continua
+   fora deste teste. Não solicitar novas voltas/menu/load só por essa melhoria.
 
 ## Preparação comum
 
@@ -52,7 +241,7 @@ e o fallback estão no README; não usar PIDs ou endereços históricos.
 | G3 | Interrupção/reconexão e desaparecimento percebido | Recuperação anterior passou; visibilidade pendente |
 | G4 | Menus e recargas pelo gate/fallback | `map` anterior passou; ampliar matriz |
 | G4b | `exit`/`menu`/`quit`/`preview`/`edit` | Bancada; exige preparar cada caminho real |
-| G5 | LAN com dois PCs, vários remotos e plataformas | Pendente; exige outras máquinas funcionais |
+| G5 | LAN com dois PCs, vários remotos e plataformas | Visual mútuo Windows↔Fedora passou; ampliar conforme registro acima |
 | G6 | Sessão longa, custo e retenção de recursos | Pendente |
 | G7 | Pacotes/receitas/cores no motor e restauração da instalação | Pipeline offline pronto; ativador ainda não implementado |
 | G8 | Encerramento, restauração de hooks e integridade | Obrigatório em cada sub-sessão, inclusive falhas |
@@ -124,20 +313,21 @@ processos novos entre grupos; rodada agrupada não significa uma única injeçã
 
 ### G5 — LAN e plataformas
 
-- [ ] No destinatário Windows, copiar o kit local inteiro para a raiz e testar
+- [x] No destinatário Windows, copiar o kit local inteiro para a raiz e testar
   `mp_lan.exe`: checagem do perfil/hashes, PID correto, confirmação da pasta
-  real de saves, backup, identidade nova, início/status/parada e logs.
-  Recuperar a parada ao reabrir o assistente e verificar após a saída.
-  A bancada não comprova o fluxo de injeção do novo assistente nesse PC.
+  real de saves, backup, identidade nova, início/status/parada e logs passaram.
+  Recuperação ao reabrir e verificação Windows após saída seguem pendentes.
   Servidor no Fedora, sem eco; mesma sala e offset zero nos dois clientes.
-- [ ] Dois PCs com jogo original funcional, mesmo perfil/mapa e builds compatíveis;
+- [x] Dois PCs com jogo original funcional, perfil suportado e kit compatível;
   sala v2 em bind LAN, endpoint configurável e identidades locais diferentes.
   Não há lista de servidores nem negociação automática de mapa/mods entregue.
 - [ ] Sem `--echo`, cada jogador vê o OUTRO dirigir independentemente. Medir
   ambos os sentidos, curvas/paradas, entrada/saída e reconexão de um só PC.
+  Presença visual mútua e poses/rotações dos dois lados passaram; permanece
+  aberta a matriz inteira de movimento controlado e reconexão.
 - [ ] Conferir que o remoto não altera o caminhão local ou save. Mais de dois
   jogadores exige PCs/clientes reais adicionais; eco não substitui essa prova.
-- [ ] Windows↔Linux/Proton quando o jogo Linux estiver funcional. Separar falha
+- [x] Primeira sessão visual Windows↔Linux/Proton. Separar falha
   de instalação/Proton de falha de rede; build cruzado não valida a partida.
   O doctor estático já passou também no Fedora em 29/10; isso não valida
   execução na partida, loader nem tráfego entre computadores.
