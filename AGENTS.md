@@ -815,3 +815,17 @@ Nenhuma partida ou ação humana neste bloco. G5/G6 continuam pendentes, assim
 como teardown real dos demais comandos. Próximo incremento offline pode
 preparar kit próprio/identificação de builds, sem publicar release; manter
 docs/GAME_VALIDATION.md para a rodada prática agrupada.
+
+Em 29/10 o proprietário confirmou um segundo PC Windows na mesma LAN e pediu
+uma pasta em Downloads com os arquivos para a raiz do jogo. Isso autoriza o
+kit binário local, não uma release pública. `mp_kit` empacota somente cinco
+binários próprios x86 e configuração/instruções/licença/manifesto SHA-256;
+`mp_lan` confere perfil/integridade e compõe backup/início/status/parada via
+mp_launcher. Identidade, backup, logs e parada pendente ficam no LOCALAPPDATA
+do destinatário, nunca no kit nem Git. Room v2 igual, identidades diferentes,
+offset zero e servidor no Fedora sem --echo. Conferir o registro M9 novo e
+G5/G8; build/fixtures/checagem estática não aprovam LAN nem o início/parada
+do assistente na partida do destinatário. Não abrir o jogo local neste preparo.
+Verify deste bloco: 136 x86/191 nativos, releases, Clippy e fmt; doctor nativo e
+check-only do assistente sob Proton passaram. Menu via Proton recebeu EOF antes
+de qualquer opção; interativo/início/parada do assistente seguem para G5/G8.

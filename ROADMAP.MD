@@ -40,8 +40,9 @@ detalhados no registro citado, sem marcar essas etapas práticas como concluída
 **Retomada:** revisar o commit deste bloco e a seção citada antes de escolher
 o próximo incremento. Os novos recursos não precisam de implementação adicional
 para repetir os comandos documentados; falta exercitá-los no outro sistema.
-Continuam futuros o kit de distribuição somente com binários próprios, CI e o
-fluxo de instalação. A validação prática acumulada permanece no roteiro
+O kit local de binários próprios foi acrescentado posteriormente a pedido do
+proprietário (registro M9 "Kit local para o segundo PC"); CI e instalação
+automática continuam futuros. A validação prática acumulada permanece no roteiro
 `docs/GAME_VALIDATION.md`, incluindo LAN entre PCs distintos e os comandos de
 teardown ainda pendentes. Não abrir o jogo para cada incremento; agrupar a rodada
 manual conforme a autorização do proprietário.
@@ -3303,6 +3304,58 @@ permanece estático mesmo com o sucesso da bancada. O primeiro verify (134/187)
 precedeu a correção do churn e a fixture adicional de escape de pfx; o final
 inclui ambas. Consultar `verify-fedora-20261029-final.log` (ignorado).
 
+### M9 — Kit local para o segundo PC Windows — 29/10/2026
+
+O proprietário confirmou o jogo aberto num segundo PC Windows na mesma LAN e
+solicitou uma pasta em Downloads para copiar à raiz. Entregue gerador Rust
+`mp_kit`, com lista fechada de cinco binários próprios x86: DLL, launcher,
+assistente `mp_lan`, doctor e memory_tool. Inclui configuração local de
+endpoint/sala, licença, instruções e manifesto SHA-256/bytes/target/perfil/revisão.
+Nenhum asset, save, identidade, prefixo ou servidor comercial é distribuído.
+O servidor Rust nativo permanece no Fedora; esta entrega não publica release.
+
+O gerador valida PE32 x86/papel DLL-EXE e presença de todos os arquivos antes
+de criar uma pasta nova; recusa destino existente. A conferência rejeita
+hash divergente, arquivo ausente, duplicata, lista adulterada/paths externos
+e perfil/target incompatível. Revisão é informada pelo construtor; não é
+atestado criptográfico de procedência nem build reproduzível. Inspeção dos
+imports dos cinco executáveis/DLL só encontrou componentes do Windows;
+nenhuma DLL auxiliar MinGW foi necessária neste build. Isso não é prova do
+loader na máquina destinatária. Alvo de uso: Windows 10/11 com jogo Steam
+perfilado. O destinatário não precisa do toolchain Rust nem de Proton.
+
+O assistente de console confere manifesto/perfil, seleciona o único processo
+da instalação, confirma endpoint/sala/saves, salva backup antes da injeção e
+chama os comandos existentes de sessão v2, sem eco/offset artificial. Identidade
+por instalação/PC, logs, backups e marcador de parada ficam no LOCALAPPDATA,
+fora do kit. Caminho de saves é confirmado, inclusive quando redirecionado.
+Confere identidade/tempo de criação antes dos comandos; parada pendente impede
+novo início e é recuperável ao reabrir. Remoção do marcador exige parada e
+hashes aprovados, ou enumeração confirmando PID ausente e verificação pós-saída.
+Recusa PID ainda existente/reutilizado e não interpreta erro de consulta como
+saída. Parar ANTES de fechar o jogo permanece obrigatório. Início/parada têm
+cinco segundos para o usuário devolver foco; não há automação de teclado/menu.
+
+Validação Fedora: `dev_env verify` passou **136 testes x86 sob Proton e 191
+nativos**, releases, Clippy nos dois alvos e rustfmt. Fixtures de empacotamento
+cobrem entrada incompleta/arquitetura, não sobrescrita, adulteração/duplicata e
+escape na lista. Kit intermediário passou doctor nativo (sete arquivos) e
+`mp_lan.exe --check-only` sob Proton; ambos sem injetar/abrir jogo. Checagem de
+hashes não comprova igualdade de ABI ao vivo nem LAN. Nenhuma partida foi
+iniciada, original/save alterado ou publicação remota feita neste bloco.
+Tentativa de alimentar o menu pela entrada do host Proton terminou por EOF,
+tanto com pipe quanto PTY, antes de executar uma opção; isso não aprova nem
+diagnostica o console Windows destinatário. O uso interativo continua pendente.
+
+Artefatos locais ignorados: `target/analysis/verify-fedora-20261029-lan-kit.log`,
+`kit-smoke-20261029*`, `kit-assistant-*`, `doctor-kit-*`. A pasta final em
+Downloads tem os hashes dos binários efetivamente copiados e revisão do bloco.
+Próximo: copiar o kit inteiro, testar o assistente no Windows destinatário e
+rodada G5/G8 entre PCs com sala v2 sem eco; configurar conectividade/firewall
+do host conforme necessário. Essa prova, suavização, sessões longas e comandos
+de teardown além de `map` continuam pendentes. Não confundir o executável do
+assistente iniciado na bancada com uma sessão do jogo iniciada por ele.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
@@ -3725,10 +3778,13 @@ relevantes podem ser repetidos a partir de instruções e dados próprios.
 - [ ] Criar fluxo Rust para detectar/selecionar instalação, validar versão,
   configurar servidor e conectar/desconectar com mensagens claras.
   Progresso: mp_doctor oferece preflight estático sem processo/injeção;
-  instalador, UI/seleção e teste do fluxo numa máquina limpa ainda pendentes.
+  mp_lan acrescenta console com PID da instalação, endpoint/sala, backup,
+  identidade privada e recuperação de parada; instalador/GUI e prova no
+  destinatário ainda pendentes.
 - [ ] Verificar dependências do ambiente sem exigir o toolchain Rust do jogador.
-- [ ] Empacotar somente os binários próprios, configuração de exemplo e avisos
+- [x] Empacotar somente os binários próprios, configuração de exemplo e avisos
   necessários; disponibilizar fonte e instruções de construção.
+  Kit local sob solicitação; não é publicação de release nem teste LAN.
 - [ ] Versionar protocolo e release; gerar hashes, changelog e lista de suporte.
 - [ ] Testar instalação e remoção numa máquina sem a árvore de desenvolvimento.
 - [ ] Publicar release somente após a entrega estar verificável e haver instrução

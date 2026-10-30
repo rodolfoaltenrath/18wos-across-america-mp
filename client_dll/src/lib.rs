@@ -55,6 +55,7 @@ mod hook_transaction;
 #[cfg(windows)]
 pub mod inspection;
 pub mod interpolation;
+pub mod lan_kit;
 pub mod load_gate;
 mod memory;
 pub mod network_conditions;

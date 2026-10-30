@@ -37,6 +37,52 @@ As pendências práticas estão agrupadas em
 [docs/GAME_VALIDATION.md](docs/GAME_VALIDATION.md), com preparação, ordem,
 critérios e distinção entre teste disponível e integração ainda não entregue.
 
+## Kit local para o segundo PC Windows
+
+`mp_kit` gera uma pasta nova com cinco binários Windows x86 próprios,
+configuração de endpoint/sala, licença, instruções PT-BR e manifesto SHA-256.
+Alvo do kit: Windows 10/11 com a instalação Steam do perfil suportado.
+Não inclui jogo, saves, identidade, prefixo Proton ou servidor: neste fluxo o
+servidor nativo permanece no Fedora. O destinatário não precisa de Rust.
+Depois do build/verificação x86, execute o gerador nativo (endereço de exemplo;
+usar o IPv4 real do host LAN):
+
+```text
+cargo run --release -p client_dll --bin mp_kit -- --build-dir target/i686-pc-windows-gnu/release --output /PASTA/EXISTENTE/kit-NOVO --revision COMMIT --server 192.0.2.1:39000 --room lan
+```
+
+Copiar **todo o conteúdo** da pasta gerada para a raiz da outra instalação,
+ao lado de `prism3d.exe`. Abrir o jogo pela Steam, carregar um save de teste e
+executar `mp_lan.exe`. O assistente confere os hashes do kit/perfil do jogo,
+detecta o PID atual dessa instalação, confirma endpoint/sala/pasta de saves e
+faz backup antes de iniciar a sessão v2, com offset zero. Cada PC cria sua
+própria identidade em `%LOCALAPPDATA%/18wos-mp/<instalacao>/`; não copiar essa
+pasta entre PCs. Saves redirecionados para OneDrive exigem informar o caminho
+real. Não é um sincronizador de saves: começar próximos no mesmo mapa.
+
+Menu: **1** iniciar, **2** status, **3** parar/verificar, **4** verificar após
+saída, **0** fechar o assistente. Para iniciar/parar, ele dá cinco segundos para
+devolver foco ao jogo. Usar **3 antes de fechar o jogo**, aguardar a limpeza,
+depois sair normalmente. Logs, backup e marcador de sessão ficam na pasta
+local; reabrir o assistente recupera a parada pendente. Ele confere a identidade
+do processo antes das operações e recusa limpar um PID reutilizado. Falha de
+permissão ao consultar o processo não é tratada como saída confirmada.
+
+O servidor deve escutar o endpoint anunciado, com a mesma sala e **sem `--echo`**:
+
+```text
+target/release/multiplayer_server --bind 0.0.0.0:39000 --room lan
+```
+
+`mp_lan.exe --check-only` executa apenas checagens estáticas, sem injeção nem
+criação de dados privados; `--game PASTA` permite uma instalação explícita.
+O manifesto identifica os arquivos efetivamente copiados; a revisão é informada
+pelo construtor, não atesta por si só a procedência/reprodutibilidade do build.
+Não é assinatura de release. A geração recusa destino existente e binários
+fora do formato x86; não altera a instalação original. A pasta local solicitada
+pelo proprietário não equivale a publicar release. LAN real, uso do assistente
+no Windows destinatário e conectividade/firewall continuam dependentes do teste.
+
 ## Direção do mod definida pelo proprietário
 
 O protocolo de sessão LAN v2 é optativo e tem contrato em

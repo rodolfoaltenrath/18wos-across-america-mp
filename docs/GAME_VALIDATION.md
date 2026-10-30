@@ -124,6 +124,12 @@ processos novos entre grupos; rodada agrupada não significa uma única injeçã
 
 ### G5 — LAN e plataformas
 
+- [ ] No destinatário Windows, copiar o kit local inteiro para a raiz e testar
+  `mp_lan.exe`: checagem do perfil/hashes, PID correto, confirmação da pasta
+  real de saves, backup, identidade nova, início/status/parada e logs.
+  Recuperar a parada ao reabrir o assistente e verificar após a saída.
+  A bancada não comprova o fluxo de injeção do novo assistente nesse PC.
+  Servidor no Fedora, sem eco; mesma sala e offset zero nos dois clientes.
 - [ ] Dois PCs com jogo original funcional, mesmo perfil/mapa e builds compatíveis;
   sala v2 em bind LAN, endpoint configurável e identidades locais diferentes.
   Não há lista de servidores nem negociação automática de mapa/mods entregue.
