@@ -3,7 +3,7 @@
 use crate::{
     flow::{App, Screen},
     locale::{self, Language},
-    view::{Kind, View},
+    view::{Kind, MAIN_PANEL, Rect, View, main_button_rect},
 };
 fn quoted(text: &str) -> String {
     let text = locale::native_ascii(text);
@@ -29,17 +29,40 @@ fn text(value: &str, x: i32, y: i32, w: i32, h: i32) -> String {
     )
 }
 fn wrap(children: &str, handler: Option<&str>) -> String {
+    wrap_at(
+        children,
+        handler,
+        Rect {
+            x: 0,
+            y: 0,
+            w: 1024,
+            h: 768,
+        },
+    )
+}
+fn coords(r: Rect) -> String {
+    format!("{} {} {} {}", r.x, 768 - r.y - r.h, r.x + r.w, 768 - r.y)
+}
+fn wrap_at(children: &str, handler: Option<&str>, bounds: Rect) -> String {
     let handler = handler
         .map(|s| format!("entity \"{s}\" {{ evalues {{ }} }}"))
         .unwrap_or_default();
     format!(
-        "estruct {{\n client {{\n entities {{\n entity \"ui.window\" {{\n evalues {{\n \"wclass\" : \"edited\"\n \"name\" : \"window\"\n \"coords\" : \"0 0 1024 768\"\n \"fitting\" : \"true\"\n }}\n entities {{\n{children}\n }}\n }}\n{handler}\n }}\n }}\n}}\n"
+        "estruct {{\n client {{\n entities {{\n entity \"ui.window\" {{\n evalues {{\n \"wclass\" : \"edited\"\n \"name\" : \"window\"\n \"coords\" : \"{}\"\n \"fitting\" : \"true\"\n }}\n entities {{\n{children}\n }}\n }}\n{handler}\n }}\n }}\n}}\n",
+        coords(bounds)
     )
 }
 pub fn screen(app: &App) -> String {
     let v = View::build(app);
-    let mut out = text(&v.title, 72, 590, 880, 60);
-    out.push_str(&text(&v.subtitle, 72, 550, 880, 30));
+    let main = app.screen == Screen::Main;
+    let mut out = if main {
+        text(&v.title, 47, 444, 280, 28)
+    } else {
+        text(&v.title, 72, 590, 880, 60)
+    };
+    if !main {
+        out.push_str(&text(&v.subtitle, 72, 550, 880, 30));
+    }
     for widget in v.widgets {
         let y = 768 - widget.rect.y - widget.rect.h;
         match widget.kind {
@@ -79,36 +102,64 @@ pub fn screen(app: &App) -> String {
             )),
         }
     }
-    wrap(&out, None)
+    if main {
+        wrap_at(&out, None, MAIN_PANEL)
+    } else {
+        wrap(&out, None)
+    }
 }
-/// Only the proven legacy IDs are interactive. MP is an explicitly inactive label,
-/// not an unknown ID sent to the original compiled handler.
-pub fn main_preview(language: Language) -> String {
-    let mut out = component(
+fn block(r: Rect, color: &str) -> String {
+    component(
         "ui.comp.text",
         &[
             ("layer", "-1".into()),
             (
                 "text",
-                "<img src=/shaders/ui/desktop.shd xscale=stretch yscale=stretch color=FF101923>"
-                    .into(),
+                format!(
+                    "<img src=/shaders/ui/desktop.shd xscale=stretch yscale=stretch color={color}>"
+                ),
             ),
-            ("coords", "0 0 1024 768".into()),
+            ("coords", coords(r)),
         ],
-    );
-    out.push_str(&text(locale::text("brand", language), 72, 640, 880, 70));
-    out.push_str(&text(locale::text("main", language), 72, 580, 880, 44));
+    )
+}
+/// Only the proven legacy IDs are interactive. MP is an explicitly inactive label,
+/// not an unknown ID sent to the original compiled handler.
+pub fn main_preview(language: Language) -> String {
+    let mut out = block(MAIN_PANEL, "CC101923");
+    out.push_str(&text(
+        locale::text("menu.title", language),
+        47,
+        444,
+        280,
+        28,
+    ));
     for (i, (id, key, name)) in [
-        (10, "career", "new game"),
-        (20, "load", "load game"),
-        (30, "settings", "options"),
-        (40, "credits", "credits"),
-        (50, "exit", "quit"),
+        (Some(10), "career", "new game"),
+        (Some(20), "load", "load game"),
+        (None, "native.pending", ""),
+        (Some(30), "settings", "options"),
+        (Some(40), "credits", "credits"),
+        (Some(50), "exit", "quit"),
     ]
     .into_iter()
     .enumerate()
     {
-        let y = 470 - i as i32 * 60;
+        let r = main_button_rect(i);
+        out.push_str(&block(
+            r,
+            if id.is_none() { "CC895D25" } else { "CC223344" },
+        ));
+        let Some(id) = id else {
+            out.push_str(&text(
+                locale::text(key, language),
+                r.x,
+                768 - r.y - r.h,
+                r.w,
+                r.h,
+            ));
+            continue;
+        };
         out.push_str(&component(
             "ui.comp.common.button",
             &[
@@ -117,26 +168,12 @@ pub fn main_preview(language: Language) -> String {
                 ("layer", "2".into()),
                 ("id", id.to_string()),
                 ("name", name.into()),
-                ("area", format!("72 {y} 540 {}", y + 40)),
-                ("coords", format!("72 {y} 540 {}", y + 40)),
+                ("area", coords(r)),
+                ("coords", coords(r)),
             ],
         ));
     }
-    out.push_str(&text(
-        locale::text("native.pending", language),
-        600,
-        410,
-        380,
-        60,
-    ));
-    out.push_str(&text(
-        locale::text("native.note", language),
-        72,
-        80,
-        880,
-        30,
-    ));
-    wrap(&out, Some("ui.handler.menu.main"))
+    wrap_at(&out, Some("ui.handler.menu.main"), MAIN_PANEL)
 }
 pub fn name(screen: Screen) -> &'static str {
     match screen {
@@ -160,6 +197,8 @@ mod tests {
         assert!(text.contains("ui.handler.menu.main"));
         assert!(!text.contains("6000"));
         assert!(text.is_ascii());
+        assert!(text.contains("\"coords\" : \"27 80 347 490\""));
+        assert!(!text.contains("0 0 1024 768"));
         for &s in crate::flow::SCREENS {
             let text = screen(&App::preview(s, Language::PtBr));
             assert!(!text.contains("ui.handler"));

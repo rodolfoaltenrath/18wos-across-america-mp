@@ -1,5 +1,16 @@
 # Orientações para continuar o projeto
 
+Referência do proprietário em 30/10: redesign SOMENTE no retângulo esquerdo
+do menu principal, mantendo cenário e logotipos do jogo. Não voltar ao fundo
+fullscreen do protótipo inicial. `MAIN_PANEL` compartilha geometria da prévia
+e ESC (`27 80 347 490`); pacote próprio 0.2.0. Multiplayer nativo segue inativo,
+não chamar o handler antigo com ID novo. Backup antigo continua restaurável.
+Ver registro do painel no ROADMAP.MD e G10; aparência nativa ainda pendente.
+Verify deste ajuste passou: 196 x86/243 nativos, releases, Clippy e rustfmt;
+log em target/analysis/verify-windows-20261030-left-menu.log. BMP principal x86
+inspecionado e pacote 0.2.0 gerado. Não instalado nem testado no jogo; a prova
+anterior de instalação/restauração real corresponde ao pacote 0.1.0.
+
 Prioridade de UI confirmada em 30/10: o proprietário pode testar localmente no
 jogo, mas está sem o segundo PC. Preparar telas antes da tradução integral do
 jogo. Ler docs/UI_DESIGN.md e G10 de docs/GAME_VALIDATION.md. `mod_ui` é o quarto

@@ -450,10 +450,13 @@ fica inativo. Nenhum teste de GDI/fixture fecha os itens abaixo. Procedimento,
 comandos e limitações em README e docs/UI_DESIGN.md.
 
 Verify Windows passou: 196 x86 e 243 nativos, releases, Clippy e fmt. Instalar/
-restaurar os arquivos reais com jogo fechado também passou: config original
+restaurar os arquivos reais do pacote inicial 0.1.0 com jogo fechado também
+passou: config original
 com hash igual ao backup, overlay ausente no fim. Nove BMPs próprios foram
 gerados e o teste de glifos/GDI passou. Não houve abertura do jogo, interação
 humana com a prévia, nova LAN ou execução Linux/Proton neste incremento.
+O ajuste posterior ao painel esquerdo 0.2.0 repetiu verify com os mesmos totais;
+BMP principal inspecionado, pacote gerado, sem instalar ou abrir o jogo.
 
 - [ ] Abrir a prévia, navegar por mouse/Tab/Escape, substituir inputs com Ctrl+A;
   conferir metas, sem limite, mensagens e troca PT-BR/inglês. Redimensionar e
@@ -461,6 +464,9 @@ humana com a prévia, nova LAN ou execução Linux/Proton neste incremento.
 - [ ] Com jogo fechado e backup novo, instalar o menu experimental. Abrir pela
   Steam e confirmar que a montagem p4 é aceita, o fundo/textos aparecem e não
   há erro de recurso. Não iniciar uma sessão multiplayer por esse protótipo.
+  Usar pacote 0.2.0 ou posterior: somente o retângulo esquerdo deve mudar;
+  cenário animado, logo superior e logotipos inferiores devem continuar visíveis.
+  Conferir semitransparência, posição dos seis itens e hover das ações antigas.
 - [ ] Conferir cinco ações antigas (nova carreira sem criar save, carregar sem
   sobrescrever, opções, créditos e sair), retorno e resoluções/fullscreen.
   Não assumir suporte a outros cenários além do que o handler original oferece;

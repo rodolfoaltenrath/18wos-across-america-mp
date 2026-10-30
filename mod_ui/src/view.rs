@@ -11,6 +11,22 @@ pub struct Rect {
     pub w: i32,
     pub h: i32,
 }
+/// Original main-menu footprint, in our top-down 1024x768 coordinates.
+/// Native ESC uses the same rectangle as `27 80 347 490` (bottom-up).
+pub const MAIN_PANEL: Rect = Rect {
+    x: 27,
+    y: 278,
+    w: 320,
+    h: 410,
+};
+pub fn main_button_rect(slot: usize) -> Rect {
+    Rect {
+        x: 47,
+        y: 334 + slot as i32 * 48,
+        w: 280,
+        h: 32,
+    }
+}
 impl Rect {
     pub fn hit(self, x: f64, y: f64) -> bool {
         x >= self.x as f64
@@ -48,7 +64,7 @@ pub struct View {
 impl View {
     pub fn build(a: &App) -> Self {
         let (title, sub) = match a.screen {
-            Screen::Main => ("main", "main.sub"),
+            Screen::Main => ("menu.title", ""),
             Screen::Multiplayer => ("multiplayer", "mp.sub"),
             Screen::Host => ("host", "host.sub"),
             Screen::Join => ("join", "join.sub"),
@@ -94,17 +110,25 @@ impl View {
         };
         match a.screen {
             Screen::Main => {
+                add("career", button(Screen::Host), true, false);
                 add(
-                    "continue",
+                    "load",
                     Kind::Button {
                         action: Action::Start,
                     },
                     true,
                     false,
                 );
-                add("career", button(Screen::Host), true, false);
                 add("multiplayer", button(Screen::Multiplayer), true, true);
                 add("settings", button(Screen::Settings), true, false);
+                add(
+                    "credits",
+                    Kind::Button {
+                        action: Action::Start,
+                    },
+                    true,
+                    false,
+                );
                 add(
                     "exit",
                     Kind::Button {
@@ -269,6 +293,12 @@ impl View {
                 add("settings", button(Screen::Settings), true, false);
             }
         }
+        if a.screen == Screen::Main {
+            v.subtitle.clear();
+            for (slot, widget) in v.widgets.iter_mut().enumerate() {
+                widget.rect = main_button_rect(slot);
+            }
+        }
         if !matches!(a.screen, Screen::Main | Screen::Error | Screen::Loading) {
             v.widgets.push(Widget {
                 id: 6999,
@@ -334,6 +364,14 @@ mod tests {
                 assert!(ids.insert(w.id));
                 assert!(w.rect.y + w.rect.h <= 768);
                 assert!(w.rect.x + w.rect.w <= 1024);
+                if screen == Screen::Main {
+                    assert!(w.rect.x >= MAIN_PANEL.x && w.rect.y >= MAIN_PANEL.y);
+                    assert!(w.rect.x + w.rect.w <= MAIN_PANEL.x + MAIN_PANEL.w);
+                    assert!(w.rect.y + w.rect.h <= MAIN_PANEL.y + MAIN_PANEL.h);
+                }
+            }
+            if screen == Screen::Main {
+                assert!(v.hit(500.0, 400.0).is_none());
             }
             for (width, height) in [(1024, 768), (1920, 1080), (800, 600), (2560, 1080)] {
                 let t = Transform::new(width, height).unwrap();

@@ -176,7 +176,7 @@ fn install_guarded(
     );
     let m = crate::mod_package::verify(&package, true)?;
     ensure!(
-        m.id == "mp-ui-foundation" && m.version == "0.1.0" && m.files.len() == 10,
+        m.id == "mp-ui-foundation" && m.version == super::PACKAGE_VERSION && m.files.len() == 10,
         "not the native menu-preview project"
     );
     let mut main = false;

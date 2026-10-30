@@ -7,6 +7,17 @@ próxima rodada: UI local primeiro, LAN somente quando houver mudança concreta.
 
 ## Fluxo e linguagem visual
 
+Referência visual confirmada pelo proprietário: alterar **somente o retângulo
+do menu esquerdo**. Manter cenário animado e logotipos originais carregados
+pelo jogo. Nenhuma imagem de referência/comercial é copiada para os fontes.
+Janela principal, preenchimento e hit areas ficam no retângulo nativo
+`27 80 347 490` (1024×768, origem inferior), em vez de um overlay fullscreen.
+Seis linhas: nova carreira, carregar, Multiplayer, configurações, créditos e
+sair. Multiplayer nativo continua indicação inativa; os outros cinco mantêm
+IDs/nomes originais. A coluna principal da prévia acompanha esse posicionamento;
+o resto da janela é um espaço neutro explicativo, sem reprodução do cenário.
+As outras oito telas continuam bases separadas para integração posterior.
+
 Estilo inicial: painel escuro, destaque âmbar, tipografia legível, botões amplos,
 tema de estrada. Sem assets comerciais novos, webview ou JavaScript. Layout
 lógico 1024×768, escalado com barras laterais quando necessário; os mesmos
@@ -14,7 +25,7 @@ retângulos alimentam render e hit testing. Formulários preservam os rascunhos.
 
 | Tela | Base disponível | Integração ainda necessária |
 | --- | --- | --- |
-| Principal | Continuar, nova carreira, Multiplayer, configurações e sair | Inicialização do mod e callbacks nativos |
+| Principal | Painel esquerdo: nova carreira, carregar, Multiplayer, configurações, créditos e sair | Inicialização do mod e callbacks nativos; carregar/créditos são placeholders na prévia |
 | Multiplayer | Hospedar/entrar, voltar e exemplos visuais na prévia | Compor início/parada seguros |
 | Hospedar | Nome, sala, capacidade, meta exata e sem limite | Escolher save, criar carreira e ligar serviços |
 | Entrar | Nome, endereço, procura LAN e validação | Descoberta real, convite/importação/ticket |
@@ -64,6 +75,10 @@ original e apenas IDs/nomes das cinco ações existentes (10/20/30/40/50).
 Multiplayer aparece como indicação inativa "em preparo", sem enviar um ID novo
 a um handler que pode não aceitá-lo. A prévia redesenha o menu; não altera os
 outros cenários, não implementa a carreira financeira no motor nem faz login.
+O pacote agora é 0.2.0; o instalador só aceita a geometria/template desta versão.
+Recibos de restauração antigos continuam válidos, sem exigir o template novo.
+Semitransparência e aspecto dos componentes dentro do painel ainda precisam
+da conferência no motor. Não confundir limites geométricos com essa prova.
 
 `ui_tools install` só aceita esse pacote exato, com dez entradas próprias,
 hashes válidos e módulo do perfil suportado. Exige todos os `prism3d.exe`
@@ -108,6 +123,13 @@ de contrato próprio. Não distribuir SCS/fontes/prosa comercial extraídos; man
 o inventário e os backups privados e versionar somente trabalho próprio.
 
 ## Evidências locais deste bloco
+
+Rodada do painel esquerdo 0.2.0: verify Windows novamente com 196 x86/243
+nativos, releases, Clippy e rustfmt. Nove BMPs x86 e layouts exportados; principal
+inspecionado. Pacote gerado, sem instalação ou abertura do jogo. Log privado
+`target/analysis/verify-windows-20261030-left-menu.log`; artefatos próprios em
+`target/analysis/ui-left-menu-20261030-01/`. A prova de instalação/restauração
+real abaixo corresponde ao pacote inicial 0.1.0; G10 cobre o menu 0.2.0.
 
 `dev_env verify` Windows: 196 testes x86 e 243 nativos, builds release,
 Clippy nos três escopos e rustfmt passaram. Log privado ignorado em

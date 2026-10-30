@@ -1,9 +1,9 @@
 //! GDI preview in OUR OWN window/DIB. Never paints/hooks/injects a game window.
 use anyhow::{Result, ensure};
 use mod_ui::{
-    flow::{Action, App, Effect},
+    flow::{Action, App, Effect, Screen},
     locale,
-    view::{Kind, Rect as UiRect, Transform, View},
+    view::{Kind, MAIN_PANEL, Rect as UiRect, Transform, View},
 };
 use std::{
     ffi::c_void,
@@ -99,13 +99,23 @@ fn text(dc: HDC, t: Transform, r: UiRect, value: &str, f: &Object, color: u32) {
 }
 fn paint(dc: HDC, width: i32, height: i32, app: &App, focus: Option<u16>) -> Result<()> {
     let t = Transform::new(width, height).ok_or_else(|| anyhow::anyhow!("invalid viewport"))?;
+    let main = app.screen == Screen::Main;
     let bg = brush(rgb(13, 20, 29))?;
     let panel = brush(rgb(23, 34, 46))?;
     let accent = brush(rgb(239, 166, 65))?;
     let field = brush(rgb(34, 47, 62))?;
-    let small = font((17.0 * t.scale).max(10.0) as i32, false)?;
-    let body = font((20.0 * t.scale).max(11.0) as i32, false)?;
-    let title = font((36.0 * t.scale).max(14.0) as i32, true)?;
+    let small = font(
+        ((if main { 13.0 } else { 17.0 }) * t.scale).max(10.0) as i32,
+        false,
+    )?;
+    let body = font(
+        ((if main { 18.0 } else { 20.0 }) * t.scale).max(11.0) as i32,
+        false,
+    )?;
+    let title = font(
+        ((if main { 24.0 } else { 36.0 }) * t.scale).max(14.0) as i32,
+        true,
+    )?;
     let all = RECT {
         left: 0,
         top: 0,
@@ -118,65 +128,118 @@ fn paint(dc: HDC, width: i32, height: i32, app: &App, focus: Option<u16>) -> Res
     fill(
         dc,
         t,
-        UiRect {
-            x: 30,
-            y: 30,
-            w: 964,
-            h: 708,
+        if main {
+            MAIN_PANEL
+        } else {
+            UiRect {
+                x: 30,
+                y: 30,
+                w: 964,
+                h: 708,
+            }
         },
         &panel,
     );
     fill(
         dc,
         t,
-        UiRect {
-            x: 72,
-            y: 102,
-            w: 68,
-            h: 4,
+        if main {
+            UiRect {
+                x: 47,
+                y: 326,
+                w: 68,
+                h: 3,
+            }
+        } else {
+            UiRect {
+                x: 72,
+                y: 102,
+                w: 68,
+                h: 4,
+            }
         },
         &accent,
     );
-    text(
-        dc,
-        t,
-        UiRect {
-            x: 72,
-            y: 52,
-            w: 880,
-            h: 35,
-        },
-        locale::text("brand", app.language),
-        &body,
-        rgb(239, 166, 65),
-    );
+    if !main {
+        text(
+            dc,
+            t,
+            UiRect {
+                x: 72,
+                y: 52,
+                w: 880,
+                h: 35,
+            },
+            locale::text("brand", app.language),
+            &body,
+            rgb(239, 166, 65),
+        );
+    }
     let view = View::build(app);
     text(
         dc,
         t,
-        UiRect {
-            x: 72,
-            y: 122,
-            w: 880,
-            h: 54,
+        if main {
+            UiRect {
+                x: 47,
+                y: 292,
+                w: 280,
+                h: 28,
+            }
+        } else {
+            UiRect {
+                x: 72,
+                y: 122,
+                w: 880,
+                h: 54,
+            }
         },
         &view.title,
         &title,
         rgb(239, 242, 246),
     );
-    text(
-        dc,
-        t,
-        UiRect {
-            x: 72,
-            y: 177,
-            w: 880,
-            h: 30,
-        },
-        &view.subtitle,
-        &small,
-        rgb(165, 181, 198),
-    );
+    if main {
+        text(
+            dc,
+            t,
+            UiRect {
+                x: 440,
+                y: 320,
+                w: 540,
+                h: 50,
+            },
+            locale::text("menu.background", app.language),
+            &title,
+            rgb(165, 181, 198),
+        );
+        text(
+            dc,
+            t,
+            UiRect {
+                x: 440,
+                y: 375,
+                w: 540,
+                h: 35,
+            },
+            locale::text("menu.background.note", app.language),
+            &small,
+            rgb(165, 181, 198),
+        );
+    } else {
+        text(
+            dc,
+            t,
+            UiRect {
+                x: 72,
+                y: 177,
+                w: 880,
+                h: 30,
+            },
+            &view.subtitle,
+            &small,
+            rgb(165, 181, 198),
+        );
+    }
     for w in view.widgets {
         let label = matches!(w.kind, Kind::Label);
         if !label {
@@ -234,11 +297,20 @@ fn paint(dc: HDC, width: i32, height: i32, app: &App, focus: Option<u16>) -> Res
         text(
             dc,
             t,
-            UiRect {
-                x: 490,
-                y: 690,
-                w: 462,
-                h: 24,
+            if main {
+                UiRect {
+                    x: 47,
+                    y: 646,
+                    w: 280,
+                    h: 24,
+                }
+            } else {
+                UiRect {
+                    x: 490,
+                    y: 690,
+                    w: 462,
+                    h: 24,
+                }
             },
             locale::text("preview", app.language),
             &small,

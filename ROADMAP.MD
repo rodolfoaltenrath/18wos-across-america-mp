@@ -1,5 +1,32 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Menu restrito ao painel esquerdo — referência do proprietário, 30/10/2026
+
+O proprietário especificou mudar somente o retângulo da esquerda da captura,
+mantendo background animado e logotipos originais. O protótipo foi ajustado:
+`MAIN_PANEL` compartilha o footprint original entre layout/click e ESC;
+janela/preenchimento nativos limitados a `27 80 347 490`. Seis linhas internas:
+nova carreira, carregar, Multiplayer, configurações, créditos e sair. Nenhum
+recurso de cenário/logo é empacotado ou trocado, nenhuma imagem comercial é
+copiada ao Git. No nativo, Multiplayer permanece estático/em preparo sem ID;
+as cinco ações antigas mantêm IDs/nomes. Carregar/créditos na prévia mostram
+limite explícito; não abrem arquivos nem simulam seus handlers.
+
+Prévia independente usa a coluna esquerda e área neutra explicativa à direita;
+essa área não vai no overlay. As oito telas restantes não foram redesenhadas
+neste ajuste. Pacote 0.2.0 distingue o template restrito do antigo fullscreen;
+o instalador rejeita pacotes antigos, mantendo restauração por recibos anteriores.
+Prévia x86 renderizou as nove telas e exportou layouts/catálogos; BMP principal
+inspecionado, seis linhas legíveis dentro do painel. Pacote distributable 0.2.0
+com dez entradas próprias gerado, sem instalação na árvore do jogo. Evidência
+privada em `target/analysis/ui-left-menu-20261030-01/`. `dev_env verify` passou
+novamente no Windows: **196 x86 e 243 nativos**, releases, Clippy nos três
+escopos e rustfmt. Log em `target/analysis/verify-windows-20261030-left-menu.log`.
+Os testes existentes agora também verificam limites do painel, ausência de
+hit fora dele e ausência de fundo fullscreen no ESC principal. Aparência nativa,
+alpha/hover/fontes e ações antigas continuam pendentes em G10. Não abrir jogo
+nem instalar o overlay automaticamente só para transformar geometria em prova.
+
 ## Bases das telas e preparação PT-BR — 30/10/2026
 
 O proprietário priorizou entrada simples e redesign do menu: consegue testar

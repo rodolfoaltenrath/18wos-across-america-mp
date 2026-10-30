@@ -50,6 +50,10 @@ entrar, sala, preparação, erro, configurações e pausa. O executável abaixo 
 uma **janela própria de prévia**, sem iniciar o jogo, rede ou sessão. Pode ser
 aberto com duplo clique. Clique/Tab selecionam, Ctrl+A substitui um campo e
 Escape volta. Hospedar/conectar ainda mostram explicitamente que são prévia.
+Carregar e Créditos também são demonstrativos nessa janela.
+O menu principal agora ocupa somente o painel inferior esquerdo, como no jogo.
+A área neutra à direita da prévia indica onde permanece o cenário original;
+não é um novo background para instalar.
 
 ```text
 target\x86_64-pc-windows-gnu\release\mp_ui.exe
@@ -70,7 +74,13 @@ São testes da prévia, não do render/fontes do jogo.
 Há também um protótipo ESC nativo com montagem reversível. **Multiplayer ainda
 fica inativo nesse menu**: ligar o botão aos serviços exige integrar os eventos
 do motor. As cinco ações antigas conservam IDs e nomes; os outros layouts
-exportados ainda não têm handlers nativos. Com jogo fechado e saídas novas:
+exportados ainda não têm handlers nativos.
+
+O pacote 0.2.0 limita janela, fundo e botões ao retângulo esquerdo original
+(`27 80 347 490` em coordenadas ESC), sem cobrir a tela inteira ou substituir
+recursos do cenário/logotipos. Pacotes 0.1.0 antigos não são aceitos pelo novo
+instalador; gere projeto/pacote novos. Seus backups continuam restauráveis.
+Com jogo fechado e saídas novas:
 
 ```text
 ui_tools project --output target/analysis/ui-project --main-menu-preview

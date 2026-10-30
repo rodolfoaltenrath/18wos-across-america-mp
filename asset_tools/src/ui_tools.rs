@@ -2,6 +2,7 @@
 //! No original assets are extracted into versioned sources. No game is launched.
 pub mod inventory;
 pub mod mount;
+pub const PACKAGE_VERSION: &str = "0.2.0";
 use crate::mod_package::{Input, Origin, Project};
 use anyhow::{Result, ensure};
 use mod_ui::{
@@ -74,7 +75,7 @@ pub fn project(output: &Path, main_preview: bool, language: Language) -> Result<
     let p = Project {
         schema: 1,
         id: "mp-ui-foundation".into(),
-        version: "0.1.0".into(),
+        version: PACKAGE_VERSION.into(),
         files,
     };
     write_new(
