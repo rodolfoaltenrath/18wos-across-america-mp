@@ -131,6 +131,7 @@ fn peer(server: SocketAddr) -> Peer {
         socket.set_nonblocking(true).unwrap();
         let mut client = Client::new(
             Options {
+                admission: None,
                 room: "lan".into(),
                 identity: "b".repeat(32),
                 profile: w::PROFILE.into(),
@@ -272,6 +273,7 @@ fn dll_heartbeats_without_coordinates_restarts_histories_recovers_server_and_rem
     api::put(
         &mut start.message,
         &serde_json::to_string(&Options {
+            admission: None,
             room: "lan".into(),
             identity: "a".repeat(32),
             profile: w::PROFILE.into(),

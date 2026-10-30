@@ -173,8 +173,9 @@ conteúdo; uma transferência interrompida deixa `INCOMPLETE` e exige uma pasta
 nova para repetir. Limite de save: 64 MiB; não há extração de arquivos remotos,
 nomes fornecidos pelo host ou sobrescrita. A importação fica fora dos saves do
 jogo, com `engine_loaded=false` e `world_synchronized=false`. O carregamento,
-dependências de cada save, integração ao assistente e bloqueio de admissão no
-relay permanecem pendentes. Não instalar esse fluxo durante uma partida ativa.
+dependências de cada save e integração ao assistente permanecem pendentes.
+O relay de carreira com ticket está descrito abaixo; não instalar saves durante
+uma partida ativa.
 
 Compartilhar o save-base aproxima o estado inicial. Manter horário, trânsito,
 física, clima e progresso iguais requer autoridade e adaptadores contínuos no
@@ -236,8 +237,9 @@ máximo um contrato ativo. `deliver` exige confirmação explícita do host e um
 checkpoint anterior; o hash não prova, sozinho, transporte/chegada reais.
 Não há aceitação de entregas enviada por clientes de jogo. O canal TCP expõe
 somente bootstrap e consultas autenticadas pelo convite; não concede poder de
-alterar saldos remotamente. A identidade do sidecar ainda não é vinculada às
-credenciais dos jogadores no relay v2.
+alterar saldos remotamente. A admissão opcional abaixo vincula a identidade
+do mod ao ticket; não registra automaticamente uma empresa nem concede poder
+de enviar operações econômicas.
 
 Limites desta versão: 64 empresas, 128 contratos e 512 operações confirmadas
 por carreira. Atingir o limite recusa novas operações; não descarta o histórico
@@ -245,6 +247,60 @@ que impede duplicar pagamentos. Compaction/migrações ainda pendentes. O lock
 impede administração concorrente ao serviço. Nenhum saldo, checkpoint ou regra
 é aplicado ao jogo nesta etapa: os adaptadores e a entrada pelo assistente
 continuam para um próximo marco agrupado.
+
+### Entrada de carreira no launcher e relay com ticket — 30/10/2026
+
+`mp_career host` reúne TCP e UDP com a mesma autoridade em memória. O relay
+recusa a entrada sem um ticket emitido após o bootstrap da carreira. A sala,
+perfil, identidade e manifesto/regras ficam vinculados à emissão; o ticket
+não concede poder de alterar o ledger. `serve` continua somente TCP, e o
+`multiplayer_server --room` continua sendo a sala visual independente.
+
+Exemplos com os executáveis próprios no PATH (no Windows, usar `mp_career.exe`
+nativo em `target/x86_64-pc-windows-gnu/release/`; launcher/DLL são x86):
+
+```text
+mp_career host --data CARREIRA --tcp-bind 0.0.0.0:39001 --udp-bind 0.0.0.0:39000 --advertise IP-DO-HOST:39000 --room carreira
+mp_career join --server IP-DO-HOST:39001 --invite CONVITE.json --map MAPA.scs --output IMPORTACAO-NOVA
+mp_career prepare-launch --server IP-DO-HOST:39001 --invite CONVITE.json --import IMPORTACAO-NOVA --map MAPA.scs --identity-file IDENTIDADE.json --output LANCAMENTO-NOVO.json
+mp_career check-launch --launch LANCAMENTO-NOVO.json --import IMPORTACAO-NOVA --map MAPA.scs --identity-file IDENTIDADE.json --room carreira --relay IP-DO-HOST:39000
+```
+
+`prepare-launch` usa a mesma identidade local da sessão, criando-a somente se
+ausente, depois das verificações locais. O arquivo de lançamento é privado,
+novo e exclusivo daquele jogador. `check-launch` não cria identidade nem acessa
+processos; seu resultado não consulta a validade do ticket no servidor. Repetir
+`--mod` para os arquivos adicionais nas três operações, usando o mesmo conjunto.
+
+O launcher recebe o arquivo e revalida o save/recibo/manifesto, mapa/mods,
+identidade, sala e endpoint **antes de abrir o processo ou fazer backup/injeção**:
+
+```text
+mp_launcher.exe --pid PID-ATUAL --dll CAMINHO/client_dll.dll session-start --server IP-DO-HOST:39000 --room carreira --identity-file IDENTIDADE.json --career-launch LANCAMENTO-NOVO.json --career-import IMPORTACAO-NOVA --career-map MAPA.scs --backup BACKUP-NOVO --saves PASTA-DE-SAVES
+```
+
+Repetir `--career-mod` no launcher para cada mod. O procedimento normal de
+`session-stop --verify BACKUP-NOVO` continua obrigatório antes de fechar o jogo.
+O assistente `mp_lan` e o kit instalado anteriormente ainda não oferecem esse
+fluxo: usar os binários desta revisão juntos, sem substituir um kit em uso.
+O comando acima é referência para a próxima validação agrupada, não prova nova
+de execução dentro do jogo.
+
+Tickets valem por até uma hora para entradas/reconexões e são apagados quando
+o host encerra. Repetir `prepare-launch` durante a validade reutiliza o ticket
+sem prolongá-lo; após expiração/reinício, preparar um arquivo novo e reiniciar
+a sessão do cliente com ele. A expiração não expulsa uma conexão já aceita.
+Há no máximo 64 identidades com tickets não expirados. Se TCP ou UDP falhar,
+o host encerra o outro serviço, sem deixar um relay separado com tickets antigos.
+
+Limites: LAN sem TLS/contas; convite e ticket são segredos de acesso, nunca
+diagnósticos ou arquivos de Git. Quem tem o convite pode declarar identidades;
+isso não autentica uma pessoa nem é defesa contra clientes modificados. O
+servidor recebe uma declaração de importação, não prova de arquivo carregado.
+O save permanece em staging: não é instalado nem carregado automaticamente.
+`engine_loaded=false`/`world_synchronized=false`; relógio, vitória, saldo e
+física do jogo continuam locais. Esses adaptadores e a interface do assistente
+permanecem pendentes.
 
 `dev_env windows --server-tools` compila os utilitários Windows x86 do servidor;
 aceita também `--tests`, `--check` e `--clippy`, com manifesto de testes separado.

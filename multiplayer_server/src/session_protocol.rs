@@ -62,6 +62,8 @@ pub enum ClientMessage {
         profile: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         resume: Option<Credentials>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        admission: Option<crate::career_entry::Proof>,
     },
     Pose {
         credentials: Credentials,
@@ -82,6 +84,7 @@ pub enum ClientMessage {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Refusal {
+    Admission,
     Version,
     Room,
     Profile,
@@ -176,12 +179,16 @@ impl ClientFrame {
                 identity,
                 profile,
                 resume,
+                admission,
             } => {
                 *request != 0
                     && room_valid(room)
                     && identity_valid(identity)
                     && profile_valid(profile)
                     && resume.as_ref().is_none_or(Credentials::valid)
+                    && admission
+                        .as_ref()
+                        .is_none_or(crate::career_entry::Proof::valid)
             }
             ClientMessage::Pose {
                 credentials,
@@ -360,6 +367,7 @@ mod tests {
                 identity: "a".repeat(32),
                 profile: PROFILE.into(),
                 resume: None,
+                admission: None,
             },
         };
         assert!(decode_client(&crate::protocol::encode(&frame).unwrap()).is_some());

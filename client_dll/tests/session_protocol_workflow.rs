@@ -10,6 +10,28 @@ use multiplayer_server::{
 fn addr(port: u16) -> std::net::SocketAddr {
     ([127, 0, 0, 1], port).into()
 }
+#[test]
+fn career_session_options_fit_control_abi_and_redact_the_ticket() {
+    let ticket = "e".repeat(32);
+    let options = Options {
+        room: "a".repeat(32),
+        identity: "b".repeat(32),
+        profile: "p".repeat(64),
+        admission: Some(multiplayer_server::career_entry::Proof {
+            ticket: ticket.clone(),
+        }),
+    };
+    let mut control = client_dll::api::Control::new(client_dll::api::START_SESSION);
+    client_dll::api::put(
+        &mut control.message,
+        &serde_json::to_string(&options).unwrap(),
+    )
+    .unwrap();
+    let decoded: Options =
+        serde_json::from_str(client_dll::api::text(&control.message).unwrap()).unwrap();
+    assert_eq!(decoded.admission.unwrap().ticket, ticket);
+    assert!(!format!("{options:?}").contains(&ticket));
+}
 fn hub() -> Hub {
     Hub::new(
         Settings {
@@ -26,6 +48,7 @@ fn hub() -> Hub {
 fn client(id: u64) -> Client {
     Client::new(
         Options {
+            admission: None,
             room: "lan".into(),
             identity: format!("{id:032x}"),
             profile: w::PROFILE.into(),

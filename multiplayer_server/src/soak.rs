@@ -221,6 +221,7 @@ fn socket(endpoint: SocketAddr) -> Result<UdpSocket> {
 impl Peer {
     fn new(slot: usize, endpoint: SocketAddr) -> Result<Self> {
         let options = Options {
+            admission: None,
             room: "soak".into(),
             profile: wire::PROFILE.into(),
             identity: identity::random_id().map_err(anyhow::Error::msg)?,

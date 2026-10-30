@@ -1,6 +1,6 @@
 # Rodada acumulada de validação na partida
 
-Atualizado em 29/10/2026. O proprietário pediu blocos maiores e validação prática
+Atualizado em 30/10/2026. O proprietário pediu blocos maiores e validação prática
 agrupada. A primeira rodada LAN entre Windows e Fedora/Proton foi realizada e
 está registrada abaixo. A matriz restante continua sendo roteiro de pendências;
 não marcar itens amplos a partir de uma prova parcial.
@@ -19,8 +19,9 @@ checkpoints e recuperação. Verify: 183 testes x86 sob Proton e 214 nativos,
 releases, Clippy e fmt. Lote de 1.000 ciclos por alvo nativo/Windows x86: cada
 um com 7.000 operações persistidas, 3.000 reaberturas de recuperação e 1.000
 transferências de fixture; relatórios iguais. ACK perdido e reinício do store
-são simulados; sockets/arquivos/locks/hard links são reais. O controle TCP
-não está ligado à admissão UDP, ao launcher nem ao motor. Não são testes novos
+são simulados; sockets/arquivos/locks/hard links são reais. O controle TCP desse
+bloco ainda não era ligado à admissão UDP/launcher; a extensão de 30/10 está em
+G9. Nenhum deles está ligado ao mundo do motor. Não são testes novos
 de saves comerciais ou LAN entre PCs. Atestado de entrega vem do host/fixture;
 não é leitura de chegada no jogo. Mais detalhes no novo registro do roadmap.
 
@@ -408,6 +409,32 @@ mp_launcher --pid 0 --dll DLL session-verify --backup BACKUP
 - [ ] Registrar por ID: commit/ambiente, parâmetros, resultado (`passou`,
   `falhou`, `não exercitado` ou `bloqueado`), observação humana e arquivo de
   evidência. Contadores, screenshots e hashes não são provas intercambiáveis.
+
+### G9 — Entrada de carreira (nova implementação offline, 30/10)
+
+Preparação já disponível sem abrir jogo: `mp_career host`, `join`,
+`prepare-launch`, `check-launch` e preflight do launcher. TCP/UDP de produção
+com fixtures próprias não comprovam o cenário carregado nem economia compartilhada.
+Verify completo Windows em 30/10: 192 testes x86 e 227 nativos, builds release,
+Clippy e fmt passaram. Inclui CLI real do launcher recusando divergências antes
+da DLL/processo/backup e dois clientes TCP+UDP; nenhuma partida foi aberta.
+Não reunir os dois PCs apenas para repetir a presença visual já comprovada.
+Executar quando seleção pelo assistente e leitura do motor formarem um marco
+concreto; até lá, estas pendências permanecem abertas.
+
+- [ ] Repetir nativo Linux/Windows e x86/Proton o fluxo de preparo com dados
+  próprios; testar mensagem de ticket recusado no launcher/DLL desta revisão.
+- [ ] Confirmar carreira/manifesto/identidade/sala/endpoint, mapa/mods iguais e
+  backup antes da injeção. Divergência deve recusar antes de abrir o processo.
+  Não modificar originais para testar rejeição; usar cópias próprias.
+- [ ] Demonstrar qual save/cenário o motor realmente carrega; verificação de
+  arquivo em staging não é essa prova. O fluxo atual não instala o save.
+- [ ] Em sessão agrupada, confirmar poses/visual e limpeza com ticket, sem
+  interferência na carreira/saves locais. Relógio/saldo continuam locais.
+- [ ] Exercitar recusa após expiração/reinício do host e o procedimento de
+  parar, preparar ticket novo e iniciar cliente novamente. Sem refresh automático.
+- [ ] Manter convites, tickets, identidades, recibos e saves fora dos exports
+  de diagnóstico/Git; compartilhar somente evidência tipada sem credenciais.
 
 Só atualizar checkboxes após evidência correspondente. PT-BR/R$ e integração
 de economia/contratos/carreira configurável no motor permanecem tarefas de

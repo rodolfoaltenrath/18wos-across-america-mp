@@ -148,6 +148,7 @@ fn main() -> Result<()> {
         "invalid server"
     );
     let options = Options {
+        admission: None,
         room: args.room,
         profile: args.profile,
         identity: identity::load_or_create(&args.identity_file).map_err(anyhow::Error::msg)?,

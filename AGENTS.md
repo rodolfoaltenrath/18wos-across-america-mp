@@ -1,5 +1,21 @@
 # Orientações para continuar o projeto
 
+Retomada Windows em 30/10: `career_entry`, `mp_career host/prepare-launch/
+check-launch` e preflight de `mp_launcher session-start --career-launch` ligam
+importação/identidade/manifesto à admissão do relay por ticket. Ver o primeiro
+registro do ROADMAP.MD para validação e limites. Registro efêmero de 64 leases,
+uma hora para novos joins/resumes, sem renovação implícita; reinício requer
+ticket/arquivo novo e nova sessão do cliente. Sem ticket, as salas visuais
+anteriores continuam disponíveis. Não há nova conta/autoridade econômica,
+instalação/carregamento de save ou mundo sincronizado. Assistente/kit/motor
+continuam pendentes. Não abrir jogos para esse bloco; G9 agrupa prova prática.
+Verify Windows final: 192 x86 (146 integração/46 servidor) e 227 nativos,
+releases, Clippy nos três escopos e rustfmt. Log ignorado em
+target/analysis/verify-windows-20261030-career-entry-final.log. Nenhum jogo,
+nova LAN, execução Linux/Proton ou atualização do kit instalado neste bloco.
+Resumo geral do roadmap corrigido para reconhecer a primeira LAN real de 29/10;
+não voltar a declarar ausência dessa prova a partir de notas históricas.
+
 Retomada offline de carreira em 29/10: `mp_career` distribui uma cópia congelada
 de um save-base por TCP separado do relay; manifesto/hash/convite privado,
 regras declaradas Become a Millionaire/meta/sem limite, mapa/mods e importação

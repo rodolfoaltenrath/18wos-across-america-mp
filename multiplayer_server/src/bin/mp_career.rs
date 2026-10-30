@@ -2,20 +2,14 @@
 use anyhow::{Result, ensure};
 use clap::{Args, Parser, Subcommand};
 use multiplayer_server::{
-    career::{self, Compatibility, Goal},
+    career::{Compatibility, Goal},
+    career_entry,
     career_net::{self, Invite},
     career_store as store,
     career_world::{Operation, WorldStore},
     session_protocol,
 };
-use sha2::{Digest, Sha256};
-use std::{
-    fs::File,
-    io::Read,
-    net::SocketAddr,
-    path::{Path, PathBuf},
-    time::Duration,
-};
+use std::{net::SocketAddr, path::PathBuf, time::Duration};
 
 #[derive(Parser)]
 #[command(about = "Carreira LAN e distribuição de save-base (sem sincronização do motor)")]
@@ -36,24 +30,59 @@ struct Content {
 }
 impl Content {
     fn resolve(&self) -> Result<Compatibility> {
-        ensure!(self.mods.len() <= career::MAX_MODS, "too many mods");
-        let mut mods_sha256 = self
-            .mods
-            .iter()
-            .map(|p| fingerprint(p))
-            .collect::<Result<Vec<_>>>()?;
-        mods_sha256.sort();
-        let result = Compatibility {
-            profile: self.profile.clone(),
-            map_sha256: fingerprint(&self.map)?,
-            mods_sha256,
-        };
-        result.validate().map_err(anyhow::Error::msg)?;
-        Ok(result)
+        career_entry::compatibility(&self.profile, &self.map, &self.mods)
+            .map_err(anyhow::Error::msg)
     }
 }
 #[derive(Subcommand)]
 enum Command {
+    /// Read-only launcher checks without opening a process or creating identity files.
+    CheckLaunch {
+        #[arg(long)]
+        launch: PathBuf,
+        #[arg(long)]
+        import: PathBuf,
+        #[arg(long)]
+        identity_file: PathBuf,
+        #[arg(long)]
+        room: String,
+        #[arg(long)]
+        relay: SocketAddr,
+        #[command(flatten)]
+        content: Content,
+    },
+    /// Career control and admission-guarded v2 relay with one lifetime.
+    Host {
+        #[arg(long)]
+        data: PathBuf,
+        #[arg(long, default_value = "127.0.0.1:39001")]
+        tcp_bind: SocketAddr,
+        #[arg(long, default_value = "127.0.0.1:39000")]
+        udp_bind: SocketAddr,
+        /// Reachable UDP endpoint advertised to clients (same port/family as bind).
+        #[arg(long)]
+        advertise: SocketAddr,
+        #[arg(long)]
+        room: String,
+        #[arg(long,value_parser=clap::value_parser!(u64).range(1..=86400))]
+        run_for_secs: Option<u64>,
+    },
+    /// Verify a staged import and obtain a PRIVATE one-hour launch ticket.
+    PrepareLaunch {
+        #[arg(long)]
+        server: SocketAddr,
+        #[arg(long)]
+        invite: PathBuf,
+        #[arg(long)]
+        import: PathBuf,
+        #[arg(long)]
+        identity_file: PathBuf,
+        /// New private JSON file; never copy to another player's machine.
+        #[arg(long)]
+        output: PathBuf,
+        #[command(flatten)]
+        content: Content,
+    },
     /// Freeze a copy of a closed test save into a NEW sidecar folder.
     Create {
         #[arg(long)]
@@ -135,37 +164,87 @@ enum Command {
         iterations: u32,
     },
 }
-fn fingerprint(path: &Path) -> Result<String> {
-    let mut file = File::open(path)?;
-    let before = file.metadata()?;
-    ensure!(
-        before.is_file() && before.len() > 0 && before.len() <= 4 * 1024 * 1024 * 1024u64,
-        "invalid archive size/type"
-    );
-    let mut hash = Sha256::new();
-    let mut buffer = [0; 64 * 1024];
-    let mut total = 0u64;
-    loop {
-        let count = file.read(&mut buffer)?;
-        if count == 0 {
-            break;
-        }
-        total += count as u64;
-        ensure!(total <= before.len(), "archive changed during fingerprint");
-        hash.update(&buffer[..count]);
-    }
-    let after = file.metadata()?;
-    ensure!(
-        total == before.len()
-            && before.len() == after.len()
-            && before.modified()? == after.modified()?,
-        "archive changed during fingerprint"
-    );
-    Ok(format!("{:x}", hash.finalize()))
-}
 #[tokio::main]
 async fn main() -> Result<()> {
     match Cli::parse().command {
+        Command::CheckLaunch {
+            launch,
+            import,
+            identity_file,
+            room,
+            relay,
+            content,
+        } => {
+            let launch: career_entry::Launch =
+                store::read_json(&launch).map_err(anyhow::Error::msg)?;
+            let identity = multiplayer_server::identity::load_existing(&identity_file)
+                .map_err(anyhow::Error::msg)?;
+            launch
+                .preflight(&import, &content.resolve()?, &identity, &room, relay)
+                .map_err(anyhow::Error::msg)?;
+            println!(
+                "{}",
+                serde_json::json!({"local_preflight_passed":true,"server_lease_checked":false,"engine_loaded":false,"world_synchronized":false})
+            );
+        }
+        Command::Host {
+            data,
+            tcp_bind,
+            udp_bind,
+            advertise,
+            room,
+            run_for_secs,
+        } => {
+            let (manifest, _) = store::load(&data).map_err(anyhow::Error::msg)?;
+            let settings = multiplayer_server::session_hub::Settings {
+                room,
+                profile: manifest.compatibility.profile,
+                max_clients: 16,
+                timeout_ms: 5000,
+                echo: false,
+            };
+            let listener = tokio::net::TcpListener::bind(tcp_bind).await?;
+            let socket = tokio::net::UdpSocket::bind(udp_bind).await?;
+            eprintln!(
+                "Carreira TCP {} / UDP {} (admissão; motor permanece local)",
+                listener.local_addr()?,
+                socket.local_addr()?
+            );
+            let report=career_net::serve_room(listener,socket,&data,settings,advertise,async {
+                if let Some(seconds)=run_for_secs { tokio::select! { _=tokio::time::sleep(Duration::from_secs(seconds))=>{}, _=tokio::signal::ctrl_c()=>{} } }
+                else { let _=tokio::signal::ctrl_c().await; }
+            }).await?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        }
+        Command::PrepareLaunch {
+            server,
+            invite,
+            import,
+            identity_file,
+            output,
+            content,
+        } => {
+            ensure!(!output.try_exists()?, "launch destination already exists");
+            let local = content.resolve()?;
+            career_net::inspect_import(&import)?;
+            let invite: Invite = store::read_json(&invite).map_err(anyhow::Error::msg)?;
+            let (manifest, _) = store::load(&import).map_err(anyhow::Error::msg)?;
+            invite.check(&manifest)?;
+            manifest
+                .compatibility
+                .compare(&local)
+                .map_err(anyhow::Error::msg)?;
+            let identity = multiplayer_server::identity::load_or_create(&identity_file)
+                .map_err(anyhow::Error::msg)?;
+            let launch =
+                career_net::prepare_launch(server, &invite, local, &import, &identity).await?;
+            store::write_new(&output, &store::json(&launch).map_err(anyhow::Error::msg)?)
+                .map_err(anyhow::Error::msg)?;
+            println!(
+                "{}",
+                serde_json::json!({"prepared":true,"valid_for_secs":launch.valid_for_secs,"engine_loaded":false,"world_synchronized":false})
+            );
+        }
         Command::Create {
             data,
             save,

@@ -1,7 +1,8 @@
 # Protocolo de sessão LAN v2
 
-O controle de carreira/save-base é um canal separado (`mp_career`, TCP 39001),
-não uma alteração deste wire UDP v2. Frames JSON com prefixo de comprimento
+O controle de carreira/save-base é um canal separado (`mp_career`, TCP 39001).
+A admissão optativa acrescenta somente um ticket ao Join UDP v2, descrito abaixo.
+No TCP, frames JSON têm prefixo de comprimento
 u32 big-endian (1..262144), uma solicitação por conexão, prazo total de 30 s,
 até oito conexões simultâneas. Convite privado contém schema/career/hash do
 manifesto/segredo de 128 bits. Solicitação envia schema/career/segredo e
@@ -12,13 +13,16 @@ Sem TLS/contas; restrito a LAN confiável. Fingerprints declarados não provam
 assets carregados pelo jogo. A entrega do save não admite automaticamente o
 jogador no relay nem torna relógio/física/trânsito compartilhados.
 
-`action` opcional é `bootstrap` (padrão) ou `status`. `status` devolve manifesto
+`action` opcional é `bootstrap` (padrão), `status` ou `admit` (host com relay).
+`status` devolve manifesto
 e snapshot validado do sidecar, sem blob, seguido de EOF. Snapshot informa
 revisão persistente, clock/último checkpoint de clock, ranking e contratos;
 omite histórico de operações e chaves. Clock é do sidecar, não o horário do
 motor. Administração econômica ocorre somente em CLI local com lock exclusivo;
 não há operação de crédito/entrega neste wire. Identidades da carreira/empresa
-e credenciais do relay permanecem contratos distintos nesta etapa.
+e credenciais do relay permanecem contratos distintos; `admit` vincula uma
+declaração de identidade/importação ao ticket de entrada, sem registrar empresa
+nem autorizar operações econômicas.
 
 Contrato próprio em Rust. O codec v1 continua separado e disponível para as
 provas anteriores. V2 é optativo: servidor com `--room NOME`; cliente com sala
@@ -139,6 +143,41 @@ O envio/recebimento UDP apenas publica dados Rust. Acesso a instâncias PSM,
 render e liberação continuam na integração do motor e em sua thread/fase.
 
 ## Limites e observabilidade
+
+### Extensão optativa de admissão de carreira — 30/10/2026
+
+`Join` pode conter `admission: {"ticket":"32 dígitos hex minúsculos"}`.
+Na ausência do campo, o JSON anterior permanece igual. O controle ABI v1/256
+bytes de mensagem e o diagnóstico ABI v3/664 bytes não mudam. O tamanho máximo
+de Options, com sala/perfil/identidade/ticket nos limites, é testado contra o
+buffer existente; datagramas continuam limitados a 1200 bytes.
+
+O host `mp_career host` compartilha um registro limitado de tickets entre seu
+TCP e seu relay. A emissão exige convite/compatibilidade e uma declaração de
+recibo/save-base correspondente ao manifesto. O registro associa ticket aleatório
+de 128 bits, identidade, sala, perfil e manifesto/regras. Cada Join, incluindo
+resume, verifica o ticket antes de criar/trocar conexão. Falhas retornam
+`Rejected(reason="admission")`, terminal para o cliente desta revisão.
+
+A sala visual sem autoridade de carreira recusa Join com ticket, evitando
+fallback silencioso nesse tipo de servidor. Não enviar esta extensão a um
+servidor antigo: por ter decoder estrito, ele a descarta. Clientes antigos não
+interpretam a nova recusa. Usar launcher/DLL/host da revisão atual para carreira;
+o fluxo sem ticket continua compatível com as salas v2 anteriores.
+
+Até 64 leases por host, expiração monotônica de uma hora; consultar/preparar
+novamente não prolonga um ticket vivo. Reconexão após expiração exige novo
+ticket; conexões já aceitas continuam usando suas credenciais normais. Reiniciar
+o host descarta o registro, mesmo que o manifesto permaneça idêntico. Os IDs
+de sessão/conexão, tokens UDP e ticket são credenciais diferentes. O ticket
+nunca aparece no status ou relatório do servidor; seu Debug é redigido.
+
+TCP limita frames/pares/prazos como no bootstrap. Não há TLS, contas ou
+atestado remoto do save carregado; portadores do convite podem reivindicar IDs.
+O ticket não autoriza operações econômicas. O launcher confere arquivos locais
+antes da injeção, mas isso não comprova cenário/horário/física no motor.
+
+### Limites comuns das salas
 
 - Até 64 conexões e 64 identidades em cache por sala; padrão 16 conexões.
 - Até 240 datagramas por janela de 1 s por endpoint conhecido. Compartilhado:

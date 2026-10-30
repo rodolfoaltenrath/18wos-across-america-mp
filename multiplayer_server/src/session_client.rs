@@ -16,12 +16,15 @@ pub struct Options {
     pub room: String,
     pub identity: String,
     pub profile: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub admission: Option<crate::career_entry::Proof>,
 }
 impl Options {
     pub fn validate(&self) -> Result<(), String> {
         if !wire::room_valid(&self.room)
             || !wire::identity_valid(&self.identity)
             || !wire::profile_valid(&self.profile)
+            || self.admission.as_ref().is_some_and(|p| !p.valid())
         {
             return Err("invalid room, identity or profile".into());
         }
@@ -177,6 +180,7 @@ impl Client {
                         identity: self.options.identity.clone(),
                         profile: self.options.profile.clone(),
                         resume: self.credentials.clone(),
+                        admission: self.options.admission.clone(),
                     }));
                 }
             }

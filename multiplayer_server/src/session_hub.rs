@@ -97,6 +97,7 @@ pub struct Hub {
     unknown_rate: Window,
     roster_dirty: bool,
     roster_at: u64,
+    admission: Option<crate::career_entry::Registry>,
 }
 pub type Datagram = (SocketAddr, ServerFrame);
 impl Hub {
@@ -119,10 +120,21 @@ impl Hub {
             unknown_rate: Window::default(),
             roster_dirty: true,
             roster_at: 0,
+            admission: None,
         })
     }
     pub fn clients(&self) -> usize {
         self.peers.len()
+    }
+    pub fn with_admission(
+        settings: Settings,
+        session: u64,
+        registry: crate::career_entry::Registry,
+    ) -> Result<Self, String> {
+        registry.check_settings(&settings.room, &settings.profile)?;
+        let mut hub = Self::new(settings, session)?;
+        hub.admission = Some(registry);
+        Ok(hub)
     }
     pub fn members(&self) -> usize {
         self.members.len()
@@ -193,6 +205,7 @@ impl Hub {
             identity,
             profile,
             resume,
+            admission,
         } = frame.message
         else {
             unreachable!()
@@ -206,6 +219,13 @@ impl Hub {
         }
         if profile != self.settings.profile {
             return Ok(self.reject(address, request, Refusal::Profile));
+        }
+        let admitted = match &self.admission {
+            Some(registry) => registry.allows(&identity, &room, &profile, admission.as_ref()),
+            None => admission.is_none(),
+        };
+        if !admitted {
+            return Ok(self.reject(address, request, Refusal::Admission));
         }
         let active = self
             .peers

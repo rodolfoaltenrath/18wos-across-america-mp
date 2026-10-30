@@ -28,6 +28,7 @@ fn join(identity: u32, request: u64, resume: Option<Credentials>) -> ClientFrame
         identity: format!("{identity:032x}"),
         profile: w::PROFILE.into(),
         resume,
+        admission: None,
     })
 }
 fn ingest(hub: &mut Hub, port: u16, frame: &ClientFrame, now: u64) -> Vec<Datagram> {

@@ -93,6 +93,8 @@ fn main() -> anyhow::Result<()> {
             /// Gate deadline from a load request to the recreated visual, in seconds.
             #[arg(long, default_value_t = 120, value_parser = clap::value_parser!(u32).range(1..=600))]
             load_timeout: u32,
+            #[command(flatten)]
+            career: Box<CareerArgs>,
             #[arg(long, requires = "identity_file")]
             room: Option<String>,
             #[arg(long, requires = "room")]
@@ -125,6 +127,18 @@ fn main() -> anyhow::Result<()> {
             #[arg(long)]
             verify: Option<PathBuf>,
         },
+    }
+    #[derive(clap::Args)]
+    struct CareerArgs {
+        /// PRIVATE ticket emitted by mp_career prepare-launch. Checked before opening the process.
+        #[arg(long, requires_all=["career_import", "career_map", "room", "identity_file"])]
+        career_launch: Option<PathBuf>,
+        #[arg(long, requires = "career_launch")]
+        career_import: Option<PathBuf>,
+        #[arg(long, requires = "career_launch")]
+        career_map: Option<PathBuf>,
+        #[arg(long = "career-mod", requires = "career_launch")]
+        career_mods: Vec<PathBuf>,
     }
     #[derive(Subcommand)]
     enum EngineTask {
@@ -251,6 +265,64 @@ fn main() -> anyhow::Result<()> {
         Drawn,
     }
     let args = Args::parse();
+    // Complete local career checks before process access, backups, injection or hooks.
+    let career_options = if let Task::SessionStart {
+        career,
+        room,
+        identity_file,
+        server,
+        ..
+    } = &args.command
+        && let Some(path) = &career.career_launch
+    {
+        use multiplayer_server::{
+            career_entry::{self, Launch},
+            career_store, identity, session_client,
+        };
+        ensure!(
+            !args.fixture,
+            "career launch requires the real game profile; fixtures use their own session options"
+        );
+        let launch: Launch = career_store::read_json(path).map_err(anyhow::Error::msg)?;
+        let local = career_entry::compatibility(
+            profile::ID,
+            career
+                .career_map
+                .as_deref()
+                .context("career map required")?,
+            &career.career_mods,
+        )
+        .map_err(anyhow::Error::msg)?;
+        let identity =
+            identity::load_existing(identity_file.as_deref().context("identity required")?)
+                .map_err(anyhow::Error::msg)?;
+        let room = room.as_deref().context("career room required")?;
+        launch
+            .preflight(
+                career
+                    .career_import
+                    .as_deref()
+                    .context("career import required")?,
+                &local,
+                &identity,
+                room,
+                *server,
+            )
+            .map_err(anyhow::Error::msg)?;
+        let options = session_client::Options {
+            room: room.into(),
+            identity,
+            profile: profile::ID.into(),
+            admission: Some(launch.proof),
+        };
+        options.validate().map_err(anyhow::Error::msg)?;
+        // ABI v1 message is fixed at 256 bytes. Refuse before touching the target.
+        let mut message = [0; 256];
+        api::put(&mut message, &serde_json::to_string(&options)?).map_err(anyhow::Error::msg)?;
+        Some(options)
+    } else {
+        None
+    };
     // File verification must remain available after the game has crashed/exited.
     if let Task::SessionVerify { backup } = &args.command {
         println!(
@@ -339,6 +411,7 @@ fn main() -> anyhow::Result<()> {
             load_timeout,
             room,
             identity_file,
+            career: _,
         } => {
             let backup = match backup {
                 Some(directory) => {
@@ -382,7 +455,10 @@ fn main() -> anyhow::Result<()> {
                 load_gate: !*no_load_gate,
                 load_timeout_ms: *load_timeout * 1000,
                 fixture,
-                session: session_options(room.as_deref(), identity_file.as_deref())?,
+                session: match career_options {
+                    Some(options) => Some(options),
+                    None => session_options(room.as_deref(), identity_file.as_deref())?,
+                },
             };
             let mut report = launcher_session::start(&controller, &dll, &options)?;
             if let Some(manifest) = backup {
@@ -795,6 +871,7 @@ fn session_options(
                 "invalid room name"
             );
             let options = multiplayer_server::session_client::Options {
+                admission: None,
                 room: room.into(),
                 identity: multiplayer_server::identity::load_or_create(path)
                     .map_err(anyhow::Error::msg)?,

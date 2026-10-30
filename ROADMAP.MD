@@ -1,5 +1,76 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Admissão de carreira e preflight do launcher — bloco offline, 30/10/2026
+
+Retomada no Windows depois dos commits de carreira e da primeira LAN real.
+Preservada a prova visual Windows↔Fedora e seus limites; nenhum jogo foi aberto
+neste incremento. O pedido atual é continuar o roadmap sem repetir essa rodada.
+
+`career_entry` compartilha a inspeção de importação e os fingerprints com as
+ferramentas e o launcher. `mp_career host` reúne o TCP da carreira e um relay UDP
+v2 com registro de tickets em memória. Cada ticket fica associado à identidade,
+sala, perfil e manifesto da carreira (inclui regras/meta/sem limite/save-base).
+É exigido em todo Join/resume, antes da criação/troca de conexão; ausente,
+inválido, expirado ou de outra identidade recebe recusa `admission`. Sala
+visual aberta recusa Join com ticket; não há fallback silencioso para ela.
+
+Emissão após importação: `prepare-launch` verifica convite fixado, recibo/bytes,
+manifesto e mapa/mods locais, usa/cria a identidade privada e pede o ticket ao
+TCP. Salva somente em arquivo novo privado, sem imprimir ticket/convite nos
+relatórios. `check-launch` repete o preflight sem processo, escrita ou criação
+de identidade. O servidor recebe uma declaração de importação; não atesta
+arquivo no disco do cliente nem qual save o motor está usando.
+
+`mp_launcher session-start --career-launch --career-import --career-map`
+(mais `--career-mod` quando necessário) verifica os arquivos e os argumentos
+reais de identidade/sala/endpoint antes de abrir o processo, fazer backup ou
+injetar. Usa os mesmos Options verificados para iniciar o worker. O ticket
+viaja no JSON já reservado do controle, sem mudar layout ABI v1 nem engine
+ABI v3/664. O Join v2 ganhou campo opcional; ausência preserva JSON antigo.
+Clientes/servidores antigos de decoder estrito não entendem o novo campo/recusa:
+carreira exige binários desta revisão juntos. Salas sem ticket permanecem.
+
+Registro limitado a 64 identidades, validade monotônica de uma hora para novas
+entradas/reconexões. Preparar novamente não prolonga nem substitui ticket vivo;
+recupera o mesmo, sem invalidar o cliente ativo. Expiração não expulsa conexões
+já aceitas. Reinício descarta tickets; exige preparar arquivo novo e reiniciar
+a sessão do cliente. TCP e UDP compartilham lifetime: término/falha de um
+encerra e aguarda o outro. O ledger continua sob o lock exclusivo do serviço.
+
+Limites: acesso LAN por convite/bearer, sem TLS/contas. Portador do convite
+pode declarar identidades, sem autenticar pessoa/hardware; nenhuma nova
+autoridade econômica remota foi concedida. O ticket não instala/carrega saves,
+sincroniza motor, valida cenário original ou altera vitória. O assistente
+`mp_lan`, kit e UI de seleção de carreira ainda não foram integrados. Não
+substituir o kit instalado nem pedir nova LAN apenas por esse bloco.
+
+Validação concluída no Windows: `dev_env verify` passou **192 testes x86
+(146 da integração e 46 do servidor/utilitários) e 227 nativos**, releases
+x86/nativo, Clippy nos três escopos e rustfmt. A verificação completa foi
+repetida após corrigir o tamanho das variantes internas no host x64 e revalidar
+o tamanho/tipo do arquivo pelo handle aberto; JSON e layouts ABI preservados.
+Fixtures próprias cobrem tickets/contexto,
+capacidade/expiração/reinício, importação alterada, arquivos de mapa/mods,
+identidade ausente, limite do controle e redaction. Bancada TCP+UDP reúne dois
+clientes, seis recusas, poses e resume; serviço somente bootstrap não emite
+tickets e falha de lock no TCP não deixa relay em execução.
+
+O teste do launcher executa o CLI real com DLL deliberadamente ausente e PID
+zero: carreira válida chega à checagem da DLL; identidade/save divergentes
+falham antes dela, sem criar backup nem abrir processo. As rotas novas de help
+também foram conferidas nos executáveis release. Logs privados/ignorados:
+`target/analysis/verify-windows-20261030-career-entry-final.log` e
+`career-entry-clippy-final-20261030.log`. A primeira execução completa ficou
+preservada em `verify-windows-20261030-career-entry.log`, com a recusa de Clippy
+x64 antes da correção. Sem nova LAN, partida ou execução Linux/Proton neste
+bloco; nenhum kit instalado foi atualizado. Reenumerar antes de outro build.
+
+Próximo: integrar seleção/preparo ao assistente e acrescentar leitura de
+cenário/relógio/save carregado antes de anunciar entrada na mesma carreira do
+motor. A prova prática dessa revisão será agrupada em G9 de
+`docs/GAME_VALIDATION.md`, sem marcar fixtures como teste do jogo. Leases,
+arquivos de lançamento, convites e saves continuam privados/ignorados.
+
 ## Estado autoritativo próprio e recuperação — segundo bloco offline, 29/10/2026
 
 Continuando o bloco de bootstrap abaixo: `career_world` implementa empresas por
@@ -178,7 +249,7 @@ endereços, caminhos de prefixo ou binários antigos do pendrive. Preservar os
 arquivos comerciais e saves fora do Git. O encerramento inclui auditoria do
 índice e commit local sem coautor; envio remoto não foi solicitado neste ponto.
 
-Última atualização: 29/10/2026. Este arquivo descreve o projeto, não uma promessa
+Última atualização: 30/10/2026. Este arquivo descreve o projeto, não uma promessa
 de prazo. Checkboxes concluídos exigem implementação ou evidência registrada.
 O objetivo é desenvolver ferramentas de assets e multiplayer para a instalação
 original Steam de **18 Wheels of Steel: Across America**, com todo o código e
@@ -233,24 +304,27 @@ práticos a partir da bancada nem confundir integrações futuras com testes pro
 
 | Área | Implementado e validado | Ainda falta |
 | --- | --- | --- |
-| Workspace | Cargo com três crates e `mp_doctor` estático nativo/x86 com hashes/perfil, arquitetura e presença informativa de dependências | Reproduzir preparo em outra máquina, validar runtime/fluxo Linux novo e automatizar instalação do ambiente |
+| Workspace | Três crates Rust, doctor e verificador Windows/Fedora; kit próprio usado na primeira LAN | Instalação limpa, revisão do assistente e novos incrementos no par Windows/Linux |
 | Assets | Varredura/extração/conversão/PE e overlays determinísticos com manifesto, hashes, dependências, origem declarada e stage/backup/remoção offline | Montagem/instalador integrado no jogo, reconstrução comercial local e auditoria completa de distribuição |
-| Servidor | Tokio UDP v1/v2, sala/identidade/heartbeat/reconexão; `session_soak` passou 16 clientes/5 min e 32/1 min em loopback; v2 passou antes na partida Windows | LAN entre PCs, relógio do render, métricas de perda/jitter e mundo compartilhado |
+| Servidor | Tokio UDP v1/v2, sala/identidade/heartbeat/reconexão; soak loopback e primeira LAN Windows↔Fedora; host de carreira TCP+UDP com tickets na bancada | Reconexão/recarga/sessão longa na LAN, relógio do render, perda/jitter e mundo compartilhado |
+| Carreira | Save-base congelado por TCP, ledger/checkpoints próprios, pagamento único e recuperação; preflight do launcher e admissão com ticket em fixtures | Assistente, save/cenário carregado no motor, economia/relógio/física e vitória originais |
 | DLL | x86 no jogo sob Proton, perfil por hash, configuração ABI, worker, UDP, dispatcher e sonda do loop | Matriz completa de estados do jogo e APIs de entidades |
-| Host de teste | `client_probe`, controlador entre processos e `test_host`; bancada x86 passou sob Proton | Testes de sessão longa, saída abrupta e duas máquinas |
+| Host de teste | `client_probe`, controlador entre processos e `test_host`; bancada x86 passou sob Proton e Windows | Sessão longa, saída abrupta e restante da matriz prática na LAN |
 | Investigação | `memory_tool` Rust: processos, regiões, busca, filtros, comparação, ponteiros, observação e envio externo | Perfis de versões e ciclo de vida do veículo |
 | Coordenadas | Cadeia validada após movimento, reinício e comparação com save; pose de draw no mesmo corpo, escala em centímetros identificada | Outros estados/versões e amostragem consistente |
-| Multiplayer visual | Eco com pose/rotação/textura; gate de `map` passou em duas recargas no Fedora/v1 e duas no Windows/v2, com liberação anterior e recriação | Demais comandos de teardown, vários remotos, desaparecimento percebido na desconexão e dois PCs na LAN |
+| Multiplayer visual | Eco com textura e gate de `map`; primeira LAN real Windows↔Fedora com visual mútuo e recuperação ao devolver foco | Demais comandos de teardown, mais jogadores, suavidade medida, reconexão e sessão longa na LAN; captura sem foco |
 | GitHub | Remoto `rodolfoaltenrath/18wos-across-america-mp`, histórico inicial Apache-2.0 preservado, exclusão do jogo | Manter staging auditado e documentação atualizada em cada entrega |
 
-O estado atual **não é multiplayer LAN validado entre dois computadores**.
-O proprietário confirmou um visual sem textura ao lado do seu caminhão,
-copiando movimento e rotação; isso não foi um segundo jogador conectado.
-As implementações posteriores têm testes próprios (último registro Windows:
-134 x86/191 nativos, release, Clippy e formatação). Eco/skin e gate de `map`
-passaram no jogo; a sessão v2 também passou em 29/10/2026. Demais comandos de
-teardown e suavização na LAN seguem pendentes. Não rebaixar esse visual a mera
-alocação privada, nem promover resultados da bancada a validação no jogo.
+A primeira LAN real entre Windows e Fedora/Proton **foi validada em 29/10**:
+o proprietário viu o outro caminhão nos dois PCs, sem eco, e confirmou retorno
+ao devolver o foco. Logs e limpeza estão no registro próprio e em
+`docs/GAME_VALIDATION.md`. O visual sem textura seguindo o jogador era uma
+prova histórica anterior; não descreve o limite atual. Eco/skin e gate de `map`
+também passaram nas sessões registradas. Restam os demais comandos de teardown,
+aquisição sem foco, matriz completa de movimento/reconexão/recarga e duração na
+LAN. O bloco de carreira mais recente continua sendo bancada, sem save/mundo
+sincronizado no motor. Os totais e ambientes de cada verificação estão nos
+registros datados acima; não promover fixtures a prova de gameplay.
 
 ### Evidência de memória que deve acompanhar o código
 
@@ -3931,7 +4005,9 @@ suave, e perda temporária de pacotes não produz movimentos indefinidos.
 - [ ] Negociar mapa, versão, mods e ponto de entrada compatíveis antes de criar
   remotos; impedir entrada em mundos incompatíveis com mensagem útil.
   O controle TCP de carreira já compara perfil/mapa/mods e fixa o manifesto
-  pelo convite; ligação obrigatória com admissão do relay/launcher pendente.
+  pelo convite; host com tickets e preflight do launcher entregues na bancada
+  em 30/10. Assistente e confirmação de qual mundo o motor carrega permanecem
+  pendentes; esta negociação não fecha o critério amplo de mundos compatíveis.
 - [ ] Definir relógio, clima, pausa e carregamento durante a sessão.
 - [ ] Definir spawn que evite sobreposição e respeite a disponibilidade do mapa.
 - [ ] Escolher dono e ciclo de anexar/desanexar reboques; eventos devem ser idempotentes.

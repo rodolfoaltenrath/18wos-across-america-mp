@@ -41,6 +41,10 @@ fn read(path: &Path) -> Result<String, String> {
     }
     Ok(stored.identity)
 }
+/// Read-only identity lookup for launch preflight; never creates a new identity.
+pub fn load_existing(path: &Path) -> Result<String, String> {
+    read(path)
+}
 pub fn load_or_create(path: &Path) -> Result<String, String> {
     if path.try_exists().map_err(|e| e.to_string())? {
         return read(path);

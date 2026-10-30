@@ -41,10 +41,19 @@ pub async fn run(
     settings: Settings,
     shutdown: impl Future<Output = ()>,
 ) -> Result<Report> {
-    let mut hub = Hub::new(
-        settings,
-        identity::random_nonce().map_err(anyhow::Error::msg)?,
-    )
+    run_with_admission(socket, settings, None, shutdown).await
+}
+pub async fn run_with_admission(
+    socket: UdpSocket,
+    settings: Settings,
+    admission: Option<crate::career_entry::Registry>,
+    shutdown: impl Future<Output = ()>,
+) -> Result<Report> {
+    let session = identity::random_nonce().map_err(anyhow::Error::msg)?;
+    let mut hub = match admission {
+        Some(registry) => Hub::with_admission(settings, session, registry),
+        None => Hub::new(settings, session),
+    }
     .map_err(anyhow::Error::msg)?;
     let start = Instant::now();
     let tick = Duration::from_secs_f64(1.0 / f64::from(TICK_HZ));
@@ -136,6 +145,7 @@ mod tests {
             socket.connect(endpoint).await.unwrap();
             let mut client = Client::new(
                 Options {
+                    admission: None,
                     room: "lan".into(),
                     identity: format!("{id:032x}"),
                     profile: wire::PROFILE.into(),

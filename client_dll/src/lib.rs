@@ -453,6 +453,7 @@ fn start() -> Result<(), String> {
     ) {
         (None, None) => None,
         (Some(room), Some(path)) => Some(multiplayer_server::session_client::Options {
+            admission: None,
             room: room.into_string().map_err(|_| "room must be UTF-8")?,
             identity: multiplayer_server::identity::load_or_create(std::path::Path::new(&path))?,
             profile: profile::ID.into(),
