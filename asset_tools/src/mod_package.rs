@@ -112,7 +112,7 @@ fn asset_path(value: &str) -> Result<()> {
     ensure!(
         matches!(
             ext.as_str(),
-            "def" | "shd" | "mat" | "txt" | "tga" | "png" | "dds" | "bmp" | "jpg" | "jpeg"
+            "def" | "esc" | "shd" | "mat" | "txt" | "tga" | "png" | "dds" | "bmp" | "jpg" | "jpeg"
         ),
         "unsupported data-only asset extension: {value}"
     );
@@ -128,7 +128,7 @@ fn asset_path(value: &str) -> Result<()> {
 
 /// Check every existing ancestor, including Windows junctions. This is for
 /// a local tree with no concurrent writers, not a handle-relative sandbox.
-fn checked(path: &Path) -> Result<PathBuf> {
+pub(crate) fn checked(path: &Path) -> Result<PathBuf> {
     let absolute = if path.is_absolute() {
         path.to_owned()
     } else {
@@ -295,7 +295,7 @@ fn data_only(path: &str, bytes: &[u8]) -> Result<()> {
     );
     if matches!(
         super::extension(Path::new(path)).as_str(),
-        "def" | "shd" | "mat" | "txt"
+        "def" | "esc" | "shd" | "mat" | "txt"
     ) {
         let text = std::str::from_utf8(bytes).context("text asset must be UTF-8")?;
         ensure!(

@@ -55,6 +55,9 @@ fn stage_and_head_audit_exact_git_blobs_not_dirty_worktree() {
 #[test]
 fn forced_game_and_private_paths_fail_even_with_ignore_rules() {
     assert!(allowed("docs/GAME_VALIDATION.md").is_ok());
+    assert!(allowed("docs/UI_DESIGN.md").is_ok());
+    assert!(allowed("mod_ui/Cargo.toml").is_ok());
+    assert!(allowed("mod_ui/src/locale.rs").is_ok());
     let temp = repository();
     write(temp.path(), ".gitignore", b"*.scs\n");
     write(temp.path(), "base.scs", b"own dummy, not a game file");

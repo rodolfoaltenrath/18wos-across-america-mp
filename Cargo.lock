@@ -72,11 +72,13 @@ dependencies = [
  "clap",
  "iced-x86",
  "image",
+ "mod_ui",
  "serde",
  "serde_json",
  "sha2",
  "tempfile",
  "walkdir",
+ "windows-sys",
  "zip",
 ]
 
@@ -183,6 +185,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "mod_ui",
  "multiplayer_server",
  "serde",
  "serde_json",
@@ -427,6 +430,14 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys",
+]
+
+[[package]]
+name = "mod_ui"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

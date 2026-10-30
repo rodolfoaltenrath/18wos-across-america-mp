@@ -1,6 +1,7 @@
 pub mod bindings;
 pub mod mod_package;
 pub mod source_audit;
+pub mod ui_tools;
 use anyhow::{Context, Result, ensure};
 use image::{ImageFormat, imageops::FilterType};
 use std::{

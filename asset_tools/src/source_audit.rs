@@ -97,9 +97,11 @@ fn allowed(path: &str) -> Result<()> {
             | "rust-toolchain.toml"
             | "docs/NETWORK_PROTOCOL.md"
             | "docs/GAME_VALIDATION.md"
+            | "docs/UI_DESIGN.md"
             | "asset_tools/Cargo.toml"
             | "multiplayer_server/Cargo.toml"
             | "client_dll/Cargo.toml"
+            | "mod_ui/Cargo.toml"
     );
     let rust = path.ends_with(".rs")
         && [
@@ -107,6 +109,7 @@ fn allowed(path: &str) -> Result<()> {
             "multiplayer_server/src/",
             "client_dll/src/",
             "client_dll/tests/",
+            "mod_ui/src/",
         ]
         .iter()
         .any(|prefix| path.starts_with(prefix));

@@ -43,6 +43,60 @@ As pendências práticas estão agrupadas em
 [docs/GAME_VALIDATION.md](docs/GAME_VALIDATION.md), com preparação, ordem,
 critérios e distinção entre teste disponível e integração ainda não entregue.
 
+## Telas do mod: prévia local
+
+As bases de nove telas estão em `mod_ui`: principal, Multiplayer, hospedar,
+entrar, sala, preparação, erro, configurações e pausa. O executável abaixo abre
+uma **janela própria de prévia**, sem iniciar o jogo, rede ou sessão. Pode ser
+aberto com duplo clique. Clique/Tab selecionam, Ctrl+A substitui um campo e
+Escape volta. Hospedar/conectar ainda mostram explicitamente que são prévia.
+
+```text
+target\x86_64-pc-windows-gnu\release\mp_ui.exe
+```
+
+Compilar tudo com `dev_env verify`. Depois do primeiro build, é possível
+recompilar somente a prévia com o helper atualizado:
+
+```text
+target\x86_64-pc-windows-gnu\release\dev_env.exe windows --native --package client_dll --bin mp_ui
+```
+
+Para exportar layouts e catálogos próprios, use `mp_ui --export PASTA-NOVA`;
+isso também funciona no Linux. `--render PASTA-NOVA` gera nove BMPs no Windows,
+e `--self-test` verifica desenho, glifos PT-BR e liberação de recursos gráficos.
+São testes da prévia, não do render/fontes do jogo.
+
+Há também um protótipo ESC nativo com montagem reversível. **Multiplayer ainda
+fica inativo nesse menu**: ligar o botão aos serviços exige integrar os eventos
+do motor. As cinco ações antigas conservam IDs e nomes; os outros layouts
+exportados ainda não têm handlers nativos. Com jogo fechado e saídas novas:
+
+```text
+ui_tools project --output target/analysis/ui-project --main-menu-preview
+asset_tools mod-build target/analysis/ui-project/project.json target/analysis/ui-package --distributable
+ui_tools install --game . --package target/analysis/ui-package --backup target/analysis/ui-backup
+ui_tools status --game . --backup target/analysis/ui-backup
+ui_tools restore --game . --backup target/analysis/ui-backup
+```
+
+`ui_tools` e `asset_tools` ficam em `target/x86_64-pc-windows-gnu/release/`.
+O instalador confere o perfil, salva o config original antes de montar o overlay
+próprio e recusa alterações desconhecidas. Não abre o jogo. Aparência, prioridade
+de montagem e ações antigas ainda exigem a rodada local G10; restaure com o
+jogo fechado antes de voltar a outras validações.
+
+A tradução integral do jogo vem **depois das telas**. A UI própria já separa
+PT-BR/inglês; isso não traduz os menus/HUD/textos existentes. O inventário
+privado pode ser gerado sem extração:
+
+```text
+ui_tools inventory --archive data.scs --archive aa/base.scs --archive aa/patch_1_10.scs --output target/analysis/ui-inventory.json
+```
+
+Plano, limites das fontes/codepage e próxima integração em
+[docs/UI_DESIGN.md](docs/UI_DESIGN.md).
+
 ## Kit local para o segundo PC Windows
 
 `mp_kit` gera uma pasta nova com cinco binários Windows x86 próprios,
@@ -360,7 +414,7 @@ usado nos testes e não devem ser copiadas como configuração nativa Linux.
 ## Estrutura
 
 ```text
-Cargo.toml                 workspace com três crates
+Cargo.toml                 workspace com quatro crates
 Cargo.lock                 versões resolvidas das dependências
 asset_tools/               CLI de assets e inspeção de arquivos binários
 multiplayer_server/        servidor Tokio e biblioteca do protocolo compartilhado
@@ -374,16 +428,20 @@ client_dll/                cdylib Win32, leitura local de memória e cliente UDP
   src/bin/engine_fixture.rs janela Rust ANSI/Unicode para testar o dispatcher
   src/bin/fixture_actor/   factories e métodos virtuais próprios da bancada x86
   tests/                  teste entre processos com fixture própria em Rust
+mod_ui/                    modelo de telas, textos e exportação ESC próprios
+  src/                     navegação sem rede, processos ou ponteiros do motor
 ```
 
 O cliente depende da biblioteca de protocolo de `multiplayer_server` com as
-features do servidor desativadas; não é necessário um quarto crate.
+features do servidor desativadas. O quarto crate, `mod_ui`, permite compartilhar
+as telas entre prévia, assets e futuro adaptador do motor sem acoplar o servidor
+à interface.
 
 ## Git e arquivos do jogo
 
 O `.gitignore` ignora tudo por padrão e libera explicitamente os manifests,
 `Cargo.lock`, este README, `ROADMAP.MD`, `AGENTS.md` e os fontes `.rs` dentro dos
-três crates, incluindo os testes Rust de `client_dll/tests`. Arquivos do
+quatro crates, incluindo os testes Rust de `client_dll/tests`. Arquivos do
 jogo, extrações, imagens, `.scs`, `.zip`, DLLs, executáveis, logs e `target/`
 permanecem locais. Novos tipos de arquivos próprios, como documentação adicional
 ou fixtures de testes, precisarão de regras explícitas antes de serem versionados.

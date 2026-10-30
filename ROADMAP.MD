@@ -1,5 +1,61 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Bases das telas e preparação PT-BR — 30/10/2026
+
+O proprietário priorizou entrada simples e redesign do menu: consegue testar
+neste PC, mas está sem o segundo computador. Implementar telas primeiro e
+traduzir integralmente o jogo depois. Não repetir a primeira LAN já comprovada.
+
+Entregue um quarto crate puro `mod_ui`: nove telas, navegação, cancelamento
+por request, formulários preservados, validação de endereço/capacidade/meta
+financeira exata e opção sem limite. Catálogo PT-BR/inglês com chaves estáveis
+e placeholders. A prévia `mp_ui` usa GDI Rust em janela própria, inputs e
+letterboxing, exporta JSON/ESC e renderiza BMPs fora da tela. Não abre jogo,
+rede, processos ou saves. Intenções hospedar/entrar são recusadas explicitamente
+pelo adaptador de prévia; sala/preparação ilustrativas não simulam conexão real.
+
+`ui_tools project` gera somente recursos próprios: nove layouts ESC sem handler
+e, opcionalmente, menu principal experimental com IDs/nomes antigos. Multiplayer
+nativo é indicação inativa, ainda sem callback. `install/status/restore` usam
+perfil/hash, pacote exato, guarda de jogo fechado e backup sincronizado antes
+da montagem p4; recusam colisões/alterações desconhecidas e conservam backup.
+Não substituem SCS originais. Prioridade p4, componentes e ações antigas ainda
+exigem prova local. Não equiparar instalação/restauração de arquivos ao render
+do motor ou a integração da UI com o multiplayer.
+
+Inventário `ui_tools inventory` limitado e somente leitura: hashes, referências
+`@@chave@@`, recursos UTF-8/legados e hints de codepage, sem exportar prosa.
+Declarações 1250 não comprovam encoding ativo nem cobertura de glifos. ESC usa
+ASCII provisório; catálogo próprio continua Unicode. Tradução integral requer
+auditar literais/strings embutidas/fontes/imagens e placeholders/PML, depois
+revisão de layout em todas as telas. R$ continua requisito separado.
+
+`dev_env windows --package ... --bin ... [--native]` permite builds focados
+mantendo GNU ativo; verify completo continua necessário ao fechar o bloco.
+`dev_env verify` final passou no Windows: **196 testes x86 e 243 nativos**,
+releases x86/nativo, Clippy nos três escopos e rustfmt. A primeira tentativa
+detectou o alias Win32 de SetWindowLongPtrW com LONG de 32 bits; o cast foi
+corrigido e a verificação completa repetida. Log final ignorado em
+`target/analysis/verify-windows-20261030-ui-foundation-final.log`; tentativa
+anterior preservada sem o sufixo final. Não houve execução Linux/Proton neste
+bloco; compatibilidade nova nesse ambiente continua pendente.
+Prévia fora da tela: nove BMPs gerados, principal/hospedar inspecionados; teste
+de 27 desenhos manteve cinco objetos GDI antes/depois e confirmou glifos PT-BR
+da fonte Windows. Ciclo real de arquivos com jogo fechado passou: installed →
+restored, config com hash idêntico ao backup e overlay ausente. Não houve
+abertura do jogo nem prova de aparência nativa. Inventário privado dos três SCS:
+293 chaves únicas referenciadas, 3.197 recursos selecionados, 19 não UTF-8 e
+cinco hints de codepage. Isso não mede percentual da tradução. Artefatos em
+`target/analysis/ui-foundation-20261030-01/`, todos ignorados.
+
+Próximo: conferir a aparência do protótipo e as cinco ações antigas em G10;
+investigar registro/handler de telas e eventos com ABI/thread/ownership antes
+de ativar Multiplayer. Ligar o modelo aos serviços/admissão/encerramento já
+existentes e inicialização simples fora de DllMain. Depois testar o fluxo local
+completo; prova LAN dos novos fluxos somente quando houver o segundo PC.
+Detalhes e limitações em docs/UI_DESIGN.md. Nenhum requisito de UI ou tradução
+integral marcado concluído a partir da prévia.
+
 ## Admissão de carreira e preflight do launcher — bloco offline, 30/10/2026
 
 Retomada no Windows depois dos commits de carreira e da primeira LAN real.
@@ -304,7 +360,8 @@ práticos a partir da bancada nem confundir integrações futuras com testes pro
 
 | Área | Implementado e validado | Ainda falta |
 | --- | --- | --- |
-| Workspace | Três crates Rust, doctor e verificador Windows/Fedora; kit próprio usado na primeira LAN | Instalação limpa, revisão do assistente e novos incrementos no par Windows/Linux |
+| Workspace | Quatro crates Rust (inclui UI pura), doctor e verificador Windows/Fedora; kit próprio usado na primeira LAN | Instalação limpa, revisão do assistente e novos incrementos no par Windows/Linux |
+| Telas | Modelo de nove telas, prévia própria e ESC experimental reversível; catálogo próprio PT-BR/inglês | Aparência nativa, handlers/eventos, bootstrap completo e tradução integral após UI |
 | Assets | Varredura/extração/conversão/PE e overlays determinísticos com manifesto, hashes, dependências, origem declarada e stage/backup/remoção offline | Montagem/instalador integrado no jogo, reconstrução comercial local e auditoria completa de distribuição |
 | Servidor | Tokio UDP v1/v2, sala/identidade/heartbeat/reconexão; soak loopback e primeira LAN Windows↔Fedora; host de carreira TCP+UDP com tickets na bancada | Reconexão/recarga/sessão longa na LAN, relógio do render, perda/jitter e mundo compartilhado |
 | Carreira | Save-base congelado por TCP, ledger/checkpoints próprios, pagamento único e recuperação; preflight do launcher e admissão com ticket em fixtures | Assistente, save/cenário carregado no motor, economia/relógio/física e vitória originais |

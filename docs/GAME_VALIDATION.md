@@ -383,8 +383,9 @@ processos novos entre grupos; rodada agrupada não significa uma única injeçã
 
 ### G7 — Assets no motor (aguarda ativador)
 
-- [ ] Primeiro implementar/revisar montagem e prioridade do overlay com backup e
-  restauração de `aa/init.cfg`. `mod-stage` NÃO ativa um pacote na Steam.
+- [ ] Revisar no motor prioridade/montagem do overlay. `ui_tools` já fornece
+  ativação restrita ao menu próprio, backup e restauração de `aa/init.cfg`;
+  isso não é um ativador genérico. `mod-stage` NÃO ativa um pacote na Steam.
 - [ ] Escolher alteração mínima com formato/nome/material que o motor use;
   o PNG/texto do exemplo é fixture e não promete mudança visível na partida.
 - [ ] Conferir cores, transparência, orientação, resolução e material antes/
@@ -439,3 +440,39 @@ concreto; até lá, estas pendências permanecem abertas.
 Só atualizar checkboxes após evidência correspondente. PT-BR/R$ e integração
 de economia/contratos/carreira configurável no motor permanecem tarefas de
 desenvolvimento. O sidecar offline não fecha esses testes de gameplay.
+
+### G10 — Telas e fontes locais (base entregue, 30/10)
+
+Não precisa do segundo PC. `mp_ui` é janela própria de prévia, sem jogo/rede;
+`ui_tools` gera ESC experimental e monta somente seu pacote exato com backup.
+Os nove layouts ainda não têm adaptador nativo e o Multiplayer do menu do jogo
+fica inativo. Nenhum teste de GDI/fixture fecha os itens abaixo. Procedimento,
+comandos e limitações em README e docs/UI_DESIGN.md.
+
+Verify Windows passou: 196 x86 e 243 nativos, releases, Clippy e fmt. Instalar/
+restaurar os arquivos reais com jogo fechado também passou: config original
+com hash igual ao backup, overlay ausente no fim. Nove BMPs próprios foram
+gerados e o teste de glifos/GDI passou. Não houve abertura do jogo, interação
+humana com a prévia, nova LAN ou execução Linux/Proton neste incremento.
+
+- [ ] Abrir a prévia, navegar por mouse/Tab/Escape, substituir inputs com Ctrl+A;
+  conferir metas, sem limite, mensagens e troca PT-BR/inglês. Redimensionar e
+  conferir clique/foco/legibilidade, inclusive escala de tela do Windows.
+- [ ] Com jogo fechado e backup novo, instalar o menu experimental. Abrir pela
+  Steam e confirmar que a montagem p4 é aceita, o fundo/textos aparecem e não
+  há erro de recurso. Não iniciar uma sessão multiplayer por esse protótipo.
+- [ ] Conferir cinco ações antigas (nova carreira sem criar save, carregar sem
+  sobrescrever, opções, créditos e sair), retorno e resoluções/fullscreen.
+  Não assumir suporte a outros cenários além do que o handler original oferece;
+  restringir cenários à carreira financeira ainda depende de implementação.
+- [ ] Fechar normalmente, restaurar pelo backup e confirmar config original
+  byte a byte e overlay ausente. Reabrir e conferir menu original.
+- [ ] Depois de implementar o adaptador: botão Multiplayer funcional, edição
+  nativa, trabalho sem bloquear UI, cancelamento e retorno, admissão/carreira/
+  save/limpeza reais. Ainda tarefa de desenvolvimento, não só teste pendente.
+- [ ] Depois das telas: tradução integral, glyphs/atlas/codepage nativos,
+  placeholders/PML e layout em menus/HUD/diálogos. Prévia Unicode não valida
+  fontes do jogo; ASCII provisório não é tradução final.
+
+Registrar observação humana, build/perfil/resolução/escala e resultado por item.
+Nova prova LAN só para o fluxo integrado quando houver dois computadores.

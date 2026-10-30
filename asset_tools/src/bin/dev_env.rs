@@ -26,6 +26,11 @@ enum Task {
         /// Build/check the portable server/career tools on Windows x86.
         #[arg(long, conflicts_with = "native")]
         server_tools: bool,
+        /// Build one own tool quickly without rebuilding every workspace binary.
+        #[arg(long, requires="package", conflicts_with_all=["tests", "clippy", "server_tools"])]
+        bin: Option<String>,
+        #[arg(long, requires="bin",value_parser=["client_dll","asset_tools","multiplayer_server","mod_ui"])]
+        package: Option<String>,
         #[arg(long, conflicts_with = "tests")]
         check: bool,
         #[arg(long)]
@@ -43,17 +48,18 @@ enum Task {
 fn main() -> Result<()> {
     let args = Args::parse();
     #[cfg(windows)]
-    let _running = if matches!(
-        args.command,
-        Task::Verify { .. }
-            | Task::Windows {
-                native: true,
-                check: false,
-                tests: false,
-                clippy: false,
-                ..
-            }
-    ) {
+    let _running = if match &args.command {
+        Task::Verify { .. } => true,
+        Task::Windows {
+            native: true,
+            check: false,
+            tests: false,
+            clippy: false,
+            bin,
+            ..
+        } => bin.as_deref().is_none_or(|name| name == "dev_env"),
+        _ => false,
+    } {
         dev_env_support::RunningExecutable::park(&root())?
     } else {
         None
@@ -87,10 +93,15 @@ fn main() -> Result<()> {
         Task::Windows {
             native,
             server_tools,
+            bin,
+            package,
             check,
             tests,
             clippy,
-        } => windows(native, check, tests, clippy, server_tools)?,
+        } => match (bin, package) {
+            (Some(binary), Some(package)) => windows_binary(native, check, &package, &binary)?,
+            _ => windows(native, check, tests, clippy, server_tools)?,
+        },
         Task::Verify {
             #[cfg(target_os = "linux")]
             proton,
@@ -108,6 +119,33 @@ fn root() -> PathBuf {
         .parent()
         .unwrap()
         .to_path_buf()
+}
+fn windows_binary(native: bool, check: bool, package: &str, binary: &str) -> Result<()> {
+    ensure!(
+        !binary.is_empty()
+            && binary.len() <= 64
+            && binary
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || b"_-".contains(&c)),
+        "invalid binary target"
+    );
+    let root = root();
+    let (mut command, target) = windows_command(&root, native)?;
+    command.current_dir(root).args([
+        if check { "check" } else { "build" },
+        "-p",
+        package,
+        "--bin",
+        binary,
+        "--target",
+        target,
+        "--locked",
+    ]);
+    if !check {
+        command.arg("--release");
+    }
+    ensure!(command.status()?.success(), "targeted Windows build failed");
+    Ok(())
 }
 fn windows(native: bool, check: bool, tests: bool, clippy: bool, server_tools: bool) -> Result<()> {
     ensure!(
@@ -405,6 +443,36 @@ fn windows_command(root: &Path, native: bool) -> Result<(Command, &'static str)>
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn focused_ui_builds_require_explicit_package_and_do_not_replace_test_scope() {
+        use super::*;
+        use clap::Parser;
+        assert!(
+            Args::try_parse_from([
+                "dev_env",
+                "windows",
+                "--native",
+                "--package",
+                "client_dll",
+                "--bin",
+                "mp_ui"
+            ])
+            .is_ok()
+        );
+        assert!(Args::try_parse_from(["dev_env", "windows", "--bin", "mp_ui"]).is_err());
+        assert!(
+            Args::try_parse_from([
+                "dev_env",
+                "windows",
+                "--package",
+                "client_dll",
+                "--bin",
+                "mp_ui",
+                "--tests"
+            ])
+            .is_err()
+        );
+    }
     #[test]
     fn server_tools_have_a_separate_x86_manifest_and_explicit_scope() {
         use super::*;

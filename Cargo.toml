@@ -1,5 +1,5 @@
 [workspace]
-members = ["asset_tools", "multiplayer_server", "client_dll"]
+members = ["asset_tools", "multiplayer_server", "client_dll", "mod_ui"]
 resolver = "3"
 
 [workspace.package]

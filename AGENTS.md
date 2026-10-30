@@ -1,5 +1,26 @@
 # Orientações para continuar o projeto
 
+Prioridade de UI confirmada em 30/10: o proprietário pode testar localmente no
+jogo, mas está sem o segundo PC. Preparar telas antes da tradução integral do
+jogo. Ler docs/UI_DESIGN.md e G10 de docs/GAME_VALIDATION.md. `mod_ui` é o quarto
+crate puro; `mp_ui` abre janela própria de prévia, sem rede/jogo. Não confundir
+isso com menus já integrados. `ui_tools` gera ESC próprio, inventaria chaves e
+monta/restaura somente o pacote exato de menu experimental, com jogo fechado e
+backup primeiro. Multiplayer nativo continua inativo; eventos/handler/admissão
+ainda precisam de adaptador. Não enviar ID novo ao handler antigo por hipótese.
+O overlay conserva apenas IDs/nomes das cinco ações existentes; outros layouts
+não têm handlers. Não instalar/abrir automaticamente para marcar prova visual.
+PT-BR Unicode da prévia não comprova fontes nativas: ESC usa ASCII provisório.
+Preservar as provas LAN anteriores; agrupar próximos testes locais e manter
+pendente o que depende da integração e dos dois PCs. Nunca versionar inventário,
+extração, overlay compilado, screenshots ou backup do jogo.
+Verify UI final Windows: 196 x86 e 243 nativos, releases, Clippy nos três
+escopos e rustfmt passaram. Log privado:
+target/analysis/verify-windows-20261030-ui-foundation-final.log.
+Nove BMPs próprios, glifos PT-BR/GDI e instalação/
+restauração real de arquivos com jogo fechado passaram; config original
+restaurado e overlay ausente. Nenhuma nova prova no jogo ou Linux/Proton.
+
 Retomada Windows em 30/10: `career_entry`, `mp_career host/prepare-launch/
 check-launch` e preflight de `mp_launcher session-start --career-launch` ligam
 importação/identidade/manifesto à admissão do relay por ticket. Ver o primeiro

@@ -14,6 +14,13 @@
 !/docs/
 !/docs/NETWORK_PROTOCOL.md
 !/docs/GAME_VALIDATION.md
+!/docs/UI_DESIGN.md
+
+!/mod_ui/
+!/mod_ui/Cargo.toml
+!/mod_ui/src/
+!/mod_ui/src/**/
+!/mod_ui/src/**/*.rs
 
 !/asset_tools/
 !/asset_tools/Cargo.toml
