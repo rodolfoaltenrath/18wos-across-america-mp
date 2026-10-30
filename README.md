@@ -186,6 +186,31 @@ do runtime fez a inspeção de fixtures retornar acesso negado. Encerre o winese
 exclusivo dos testes antes de repetir a bancada em outro runtime; nunca encerre
 o wineserver da partida para limpar a bancada.
 
+Depois de preparar esse prefixo exclusivo, o Fedora/Linux também tem a
+verificação completa em um comando Rust:
+
+```sh
+cargo run -p asset_tools --bin dev_env -- verify --steam "$AA_STEAM" \
+  --compat target/proton-tests --proton "$AA_PROTON" --runtime "$AA_RUNTIME"
+```
+
+O helper audita os fontes próprios, atualiza os builds release nativo/x86,
+compila os testes Windows, executa todos pelo `test_host` num único runtime,
+roda a suíte nativa e termina com Clippy nos dois alvos e rustfmt. Exige testes
+efetivamente contados, além do código de saída dos processos. Usa o
+`proton_host` release que acabou de compilar; não executa ferramentas Windows
+como programas Linux e não reescreve `.cargo/config.toml`.
+
+O compatdata precisa existir e resolver estritamente dentro de `target/`;
+symlinks para o prefixo da Steam ou para um `pfx` externo são recusados.
+O helper encerra somente o wineserver desse prefixo de teste antes/depois da
+bancada. A presença de `prism3d.exe` em `/proc` impede reconstrução/limpeza;
+essa checagem é preventiva, não um bloqueio global contra abrir o jogo depois.
+Não abra a partida durante a verificação. `target/verify-linux.lock` impede
+duas verificações simultâneas no workspace. Após interrupção forçada, confira
+se o processo terminou antes de remover um lock residual. No Windows,
+`dev_env verify` continua sem esses argumentos Proton.
+
 Para o jogo, abra a instalação original pela Steam, entre numa partida de teste
 e localize o **PID Windows** atual (não o PID Linux):
 
@@ -1175,8 +1200,10 @@ opt-in para diagnóstico local. `--output` exige arquivo novo/pasta pai existent
 sem ele, imprime somente o JSON. Perfil estático aprovado não prova DirectX,
 .NET, áudio/vídeo, execução Proton, ABI ao vivo, DLL/launcher da mesma revisão
 ou compatibilidade de mapa/mods. Esses pontos permanecem explicitamente
-`false`/não verificados no relatório. O novo fluxo Linux ainda precisa de
-execução no host Linux; parsers de ELF/prefixo com fixture não substituem isso.
+`false`/não verificados no relatório. Em 29/10, o doctor nativo passou no Fedora
+com os cinco originais, cliente x86, servidor ELF e estrutura do prefixo;
+recusas de prefixo ausente e pasta de clientes errada também foram exercitadas.
+Isso continua sendo diagnóstico estático, sem validação de jogo/loader/LAN.
 
 ### Teste prolongado sem abrir o jogo
 
@@ -1194,8 +1221,13 @@ saída precisa ser novo e a pasta pai existente. Sem flags de reinício/churn, o
 teste mantém o grupo conectado pelo período escolhido. Configurações de reinício
 precisam deixar tempo para indisponibilidade e recuperação dentro da execução.
 
-O churn alterna grupos de saídas com confirmação, queda do socket/expiração,
-retomada e troca de identidade temporária. Reinícios normais encerram a sala e
+O churn alterna saídas com confirmação, queda do socket/expiração, retomada e
+troca de identidade temporária, distribuindo os quatro modos entre os clientes.
+Uma nova perturbação aguarda a malha completa observada; `--churn-every-secs`
+define espaçamento mínimo, não uma frequência garantida. `churn_wait_ticks`
+registra os ticks adiados. Isso evita exigir malha completa enquanto o próprio
+driver mantém clientes intencionalmente fora dela, inclusive após reiniciar.
+Reinícios normais encerram a sala e
 capturam métricas; `--abrupt-restarts` aborta a tarefa do servidor, aguarda sua
 terminação e reabre o mesmo endpoint após a pausa. Não mata um processo externo.
 Não há métricas finais dos períodos abortados: `epochs[].server` fica null.

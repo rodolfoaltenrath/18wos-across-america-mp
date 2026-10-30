@@ -11,8 +11,8 @@ mantendo as provas mais recentes Fedora/v1 e Windows/v2. A referência
 antigo de `claude/e2e-automation`, ancestral da main, contém trabalho não
 commitado e um `e2e_harness` ignorado; ambos permanecem preservados, sem
 substituir ferramentas atuais por esse experimento. A solicitação atual revoga
-a pausa histórica abaixo. A verificação nativa foi repetida nesta máquina;
-continuidade e validações adicionais serão registradas no próximo bloco.
+a pausa histórica abaixo. A continuidade e as validações desta máquina estão
+no bloco "Retomada Fedora, verificador completo e correção do endurance".
 
 O proprietário pediu o encerramento para desligar o computador. A tarefa em
 andamento era implementar dois blocos que não exigem abrir o jogo:
@@ -63,8 +63,8 @@ original Steam de **18 Wheels of Steel: Across America**, com todo o código e
 automação próprios em **Rust**. O jogo original permanece instalado separadamente
 e não será distribuído pelo projeto.
 
-**Ambiente atual: Windows, após retorno do Fedora em 28/10/2026.** Preservar o
-fluxo Linux documentado e validar o host Windows com Rust 1.99.0. Ferramentas e
+**Ambiente desta retomada: Fedora/Linux, em 29/10/2026.** As provas Windows de
+28–29/10 permanecem registradas; preservar ambos os fluxos com Rust 1.99.0. Ferramentas e
 servidor nativos e DLL para Windows x86 têm fluxos de compilação diferentes.
 A seção 8 contém o procedimento Linux. A análise de continuidade abaixo registra
 build e testes nativos em Fedora. A entrega de integração abaixo acrescenta
@@ -3217,6 +3217,91 @@ Preparação comum do roteiro G1–G8 agora inclui doctor. M0/M9 seguem parciais
 preparo automático de runtimes/ambiente, kit de binários e UI de conexão ainda
 pendentes. Próximo marco prático continua LAN, demais comandos de teardown e
 sessão longa no jogo; este endurance não comprova lifecycle/render/FPS.
+
+### M0/M8/M9 — Retomada Fedora, verificador completo e correção do endurance — 29/10/2026
+
+A divergência entre a main local `69e71e7` e os dez commits do outro computador
+foi resolvida pelo merge `2901603`, sem reescrever histórico. O conflito era
+documental: preservar as duas provas Fedora/v1 e as duas Windows/v2 do gate de
+map. A branch de backup conserva o ponto anterior. O worktree antigo de
+`claude/e2e-automation` continua com três arquivos modificados e fontes de
+`e2e_harness` ignorados; não foram apagados, movidos ou incorporados ao código
+atual. A branch é ancestral, não outra versão mais recente do roadmap.
+
+**Verificação Linux entregue:** `dev_env verify` aceita caminhos explícitos de
+Steam/Proton/runtime e prefixo de bancada. Audita fontes, atualiza release
+nativo/x86, compila os testes Windows, usa `proton_host` release + `test_host`
+num único runtime, roda testes nativos, Clippy nos dois alvos e rustfmt. Exige
+contagem positiva de testes, além do status dos processos. O fluxo Windows
+sem flags Proton foi preservado; o ramo Windows do helper também foi conferido
+por compilação cruzada, sem declarar uma nova execução Windows.
+
+Compatdata deve resolver estritamente sob o target deste workspace e conter
+um pfx inicializado também contido nele. Recusa symlinks externos, prefixo da
+partida fora de target e estruturas ausentes. Só encerra o wineserver desse
+prefixo de teste antes/depois da bancada, inclusive após falha de teste. Lock
+exclusivo impede verificações simultâneas; remoção do lock é condicional à
+propriedade. Checagem de /proc recusa prism3d.exe antes de reconstruir/limpar;
+não é um bloqueio global contra abrir o jogo durante o build. O helper não
+cria/copia prefixos nem prepara runtimes. Configuração Cargo local conferida
+antes/depois, sem reescrevê-la. Fixtures cobrem lock, processo em execução,
+prefixo fora de target e escapes por symlink no compatdata e no pfx.
+
+**Falha reproduzida no último bloco e corrigida:** o soak inicial de 16 clientes,
+60 s, reinício a cada 15 s, pausa de 1.500 ms, churn a cada 1 s e abortos terminou
+com a malha final recuperada, mas `epoch_1_no_full_mesh`. A rodada foi mantida
+como falha em `soak-fedora-20261029-abrupt.json`. O driver antigo agendava quedas
+de sockets em grupo, com duração maior que o intervalo entre elas; assim podia
+manter alguém intencionalmente offline durante uma época inteira enquanto
+exigia observar todos online. Esse resultado não isolava uma falha do protocolo.
+
+O driver agora só inicia outro churn após observar a malha completa, inclusive
+depois de reabrir o servidor. Alterna os quatro modos e distribui cada modo
+entre todos os peers. O intervalo solicitado é mínimo; `churn_wait_ticks`
+registra esperas. O calendário dos reinícios continua independente, e a
+exigência de malha em cada época, recuperação final, leaves e zero ativos finais
+foi preservada. Config abrupt sem intervalo também é recusada na API, como já
+era na CLI. Testes cobrem a distribuição para 2/3/16/64 clientes e recuperação
+UDP com aborto/churn efetivos, incluindo ticks adiados.
+
+Resultados release nativos Fedora após a correção, com relatórios novos:
+
+| Cenário | Épocas/reinícios | Poses recebidas | Leaves finais / ativos finais |
+| --- | --- | --- | --- |
+| 16 clientes, 60 s, mesmos parâmetros da falha | 4 épocas, 3 abortos | 601.298 | 16 / 0 |
+| 32 clientes, 30 s, reinício 10 s, pausa 500 ms, churn 1 s | 3 épocas, 2 normais | 1.328.067 | 32 / 0 |
+
+Ambos passaram sem issues, recusas ou frames inválidos. Foram 1.179/660 ticks
+de churn adiados, respectivamente. Épocas abortadas continuam sem métricas
+finais (null); épocas encerradas para reinício ainda podiam ter peers ativos.
+Zero refere-se ao encerramento final após os leaves. Procfs forneceu CPU/RSS;
+houve builds/testes e dois soaks concorrentes, portanto não é benchmark isolado,
+prova de heap estável, render/FPS ou LAN. O agendamento anterior teve resultados
+Windows válidos no bloco histórico; esta revisão nova foi exercitada no Fedora.
+
+**Doctor no Linux:** executável nativo passou os oito arquivos esperados
+(cinco originais perfilados, DLL/launcher PE32 e servidor ELF), com estrutura do
+prefixo e sem paths privados no relatório. Prefixo ausente e pasta errada de
+clientes foram recusados. Repetir output existente foi recusado e o SHA-256 do
+relatório anterior permaneceu igual. Game/runtime/LAN, resolução real do loader,
+mesma revisão do par e compatibilidade de assets continuam false/não verificados.
+
+Artefatos privados em `target/analysis/verify-fedora-20261029-*`,
+`doctor-fedora-*` e `soak-fedora-*`. Nenhuma abertura de jogo, ação manual,
+injeção ou alteração de originais/saves neste bloco. Roteiro G5/G6 continua
+pendente; próxima evolução offline pode preparar kit de binários próprios e
+identificação de builds, sem publicar releases nem antecipar economia. Testes
+práticos acumulados permanecem em `docs/GAME_VALIDATION.md`.
+
+Verificação integral FINAL pelo novo comando Linux: **134 testes x86 sob
+Proton e 189 testes nativos Fedora**, builds release nativo/x86, Clippy nos dois
+alvos e rustfmt passaram. Ramo Windows do helper conferido por cross-check,
+sem reutilizar o toolchain host Windows como programa Linux. A suíte nativa
+exerceu também a fixture FIFO antes pendente neste sistema. Config Cargo
+preservada, lock removido e prefixo exclusivo de testes encerrado. O doctor
+permanece estático mesmo com o sucesso da bancada. O primeiro verify (134/187)
+precedeu a correção do churn e a fixture adicional de escape de pfx; o final
+inclui ambas. Consultar `verify-fedora-20261029-final.log` (ignorado).
 
 ## 3. Primeira versão jogável e limites
 

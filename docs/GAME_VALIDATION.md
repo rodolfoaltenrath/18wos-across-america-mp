@@ -133,8 +133,8 @@ processos novos entre grupos; rodada agrupada não significa uma única injeçã
   jogadores exige PCs/clientes reais adicionais; eco não substitui essa prova.
 - [ ] Windows↔Linux/Proton quando o jogo Linux estiver funcional. Separar falha
   de instalação/Proton de falha de rede; build cruzado não valida a partida.
-  O novo doctor precisa também de execução Linux nativa antes de ampliar essa
-  cobertura; fixtures ELF/prefixo e relatório Windows não são essa prova.
+  O doctor estático já passou também no Fedora em 29/10; isso não valida
+  execução na partida, loader nem tráfego entre computadores.
 
 ### G6 — Duração e custo
 
@@ -143,6 +143,8 @@ processos novos entre grupos; rodada agrupada não significa uma única injeçã
   `session_soak` agora mede sala/clientes reais em loopback, sem jogo, no mesmo
   processo. Seus resultados de 16/32 clientes e recuperação não fecham G5/G6,
   não medem heap/FPS/render e não comprovam desaparecimento visual.
+  O reteste Fedora passou 16 clientes/60 s e 32/30 s; churn agora aguarda a
+  malha observada e registra ticks adiados. As mesmas limitações permanecem.
 - [ ] Comparar pontos equivalentes após várias recargas; distinguir aquecimento
   de cache de crescimento repetido. Medir no mesmo mapa/câmera/foco.
 - [ ] Rede indisponível prolongadamente e recuperação. Encerramento abrupto só

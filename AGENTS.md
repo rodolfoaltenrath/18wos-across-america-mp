@@ -779,3 +779,39 @@ também passou no verify completo: 134 x86/191 nativos, release, Clippy e fmt.
 Não continuar a implementação nesta parada. Bloco preservado por commit local
 sem coautor; é necessário transferir o commit para retomar em outra máquina.
 Artefatos ignorados não viajam pelo Git; não confundir com prova Linux/LAN/jogo.
+
+Retomada autorizada em 29/10 no Fedora: a pausa histórica acima foi revogada
+pelo pedido de continuar. Main local divergente reconciliada com origin/main
+por merge `2901603`, preservando `69e71e7` e os dez commits Windows. Backup em
+`backup/main-before-sync-20261029`. Worktree antigo de claude/e2e-automation
+(ancestral) com três arquivos alterados e e2e_harness ignorado foi preservado;
+não trocar o código atual por esse experimento nem apagá-lo silenciosamente.
+
+`dev_env verify` agora também tem fluxo Linux: flags --steam/--compat/--proton/
+--runtime, prefixo já inicializado exclusivamente de bancada sob target com
+canonicalização, lock exclusivo, guarda de prism3d.exe em /proc, release
+nativo/x86, bancada x86 num runtime via proton_host/test_host, testes nativos,
+Clippy ambos e fmt. Encerra apenas o wineserver do prefixo de teste validado;
+nunca apontar ao compatdata da partida. Confere config Cargo sem reescrevê-la.
+Windows mantém verify sem flags Proton e seu parking do executável em uso.
+
+Último bloco ec5d993 revisado e exercitado no Linux: doctor passou oito arquivos,
+servidor ELF/prefixo e recusas controladas, sem paths privados. Continua sem
+prova de loader, par da mesma revisão, assets, runtime do jogo ou LAN.
+Soak inicial Fedora 16/60 s falhou epoch_1_no_full_mesh apesar da recuperação
+final: quedas agendadas em grupo podiam impedir a observação exigida pelo
+próprio driver. Preservado o relatório falho. Agora churn aguarda malha completa,
+alterna modos entre peers e registra churn_wait_ticks; intervalo é mínimo.
+Calendário de reinício e exigências por época/limpeza final mantidos.
+Reteste 16/60 s com três abortos e 32/30 s com dois reinícios normais passou,
+todos os leaves confirmados, zero ativos finais, sem issues/invalid/refusal.
+Não declarar zero ativos nos reinícios intermediários nem métricas de épocas
+abortadas; CPU/RSS são do processo inteiro e houve cargas concorrentes.
+
+Verify final Fedora: 134 x86 sob Proton/189 nativos, releases, Clippy e rustfmt
+passaram; ramo Windows do helper conferido por build check cruzado. Logs em
+target/analysis/verify-fedora-20261029-final.log e doctor-fedora-*/soak-fedora-*.
+Nenhuma partida ou ação humana neste bloco. G5/G6 continuam pendentes, assim
+como teardown real dos demais comandos. Próximo incremento offline pode
+preparar kit próprio/identificação de builds, sem publicar release; manter
+docs/GAME_VALIDATION.md para a rodada prática agrupada.

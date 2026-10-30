@@ -1,5 +1,7 @@
 //! Windows permits renaming a mapped executable, but not overwriting it.
 //! Park only our normal build output so Cargo can refresh dev_env itself.
+#[cfg(target_os = "linux")]
+pub mod linux;
 #[cfg(windows)]
 use anyhow::{Context, Result};
 #[cfg(windows)]

@@ -30,15 +30,19 @@ enum Task {
         #[arg(long, conflicts_with_all=["check", "tests"])]
         clippy: bool,
     },
-    /// Windows host: x86/native release, both test benches, Clippy and rustfmt.
-    Verify,
+    /// Release builds, native/x86 benches, Clippy and rustfmt for this host.
+    Verify {
+        #[cfg(target_os = "linux")]
+        #[command(flatten)]
+        proton: dev_env_support::linux::Options,
+    },
 }
 fn main() -> Result<()> {
     let args = Args::parse();
     #[cfg(windows)]
     let _running = if matches!(
         args.command,
-        Task::Verify
+        Task::Verify { .. }
             | Task::Windows {
                 native: true,
                 check: false,
@@ -82,7 +86,15 @@ fn main() -> Result<()> {
             tests,
             clippy,
         } => windows(native, check, tests, clippy)?,
-        Task::Verify => verify()?,
+        Task::Verify {
+            #[cfg(target_os = "linux")]
+            proton,
+        } => {
+            #[cfg(target_os = "linux")]
+            dev_env_support::linux::run(proton)?;
+            #[cfg(not(target_os = "linux"))]
+            verify()?;
+        }
     }
     Ok(())
 }
@@ -171,11 +183,12 @@ fn bench(native: bool) -> Result<(u32, u32)> {
         "target/i686-pc-windows-gnu/release/test_host.exe"
     });
     ensure!(host.is_file(), "missing {}", host.display());
-    let mut child = Command::new(host)
-        .arg(manifest(native))
-        .current_dir(&root)
-        .stdout(Stdio::piped())
-        .spawn()?;
+    let mut command = Command::new(host);
+    command.arg(manifest(native)).current_dir(&root);
+    bench_command(command)
+}
+fn bench_command(mut command: Command) -> Result<(u32, u32)> {
+    let mut child = command.stdout(Stdio::piped()).spawn()?;
     let (mut passed, mut failed) = (0, 0);
     for line in BufReader::new(child.stdout.take().unwrap()).lines() {
         let line = line?;
@@ -189,12 +202,12 @@ fn bench(native: bool) -> Result<(u32, u32)> {
     }
     let ok = child.wait()?.success();
     ensure!(
-        ok && failed == 0,
+        ok && failed == 0 && passed > 0,
         "bench failed: {passed} passed, {failed} failed"
     );
     Ok((passed, failed))
 }
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 fn verify() -> Result<()> {
     anyhow::bail!(
         "verify runs the Windows benches; on Linux use proton_host/test_host as documented"

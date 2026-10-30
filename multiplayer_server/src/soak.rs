@@ -42,6 +42,10 @@ impl Config {
             "duration must be 1..=3600 seconds"
         );
         ensure!(self.outage_ms <= 10000, "outage exceeds 10 seconds");
+        ensure!(
+            !self.abrupt_restarts || self.restart_every_ms.is_some(),
+            "abrupt restarts require a restart interval"
+        );
         if let Some(n) = self.restart_every_ms {
             ensure!(
                 n >= 1000
@@ -115,6 +119,9 @@ pub struct Report {
     pub passed: bool,
     pub issues: Vec<String>,
     pub driver_late_ticks: u64,
+    /// Due churn ticks postponed until the production clients observe a full
+    /// mesh. The requested interval is a minimum spacing, not a promised rate.
+    pub churn_wait_ticks: u64,
     pub full_mesh_before_close: bool,
     pub cpu_elapsed_ms: Option<u64>,
     /// 10000 = 100% of one core; can exceed that on a multithreaded runtime.
@@ -397,6 +404,13 @@ fn full_mesh(peers: &[Peer], now: u64, previous_session: u64) -> bool {
                     .all(|(_, at)| now.saturating_sub(*at) < 2000)
         })
 }
+/// Rotate both failure mode and peer. Grouping by all peers first can keep
+/// someone intentionally offline for an entire epoch, making its witness
+/// impossible even when every individual recovery succeeds.
+fn churn_target(round: usize, peers: usize) -> (usize, usize) {
+    let kind = round % 4;
+    ((round / 4 + kind) % peers, kind)
+}
 
 pub async fn run(config: Config) -> Result<Report> {
     config.validate()?;
@@ -422,6 +436,7 @@ pub async fn run(config: Config) -> Result<Report> {
     let (mut epoch_start, mut first_mesh) = (0, None);
     let (mut epochs, mut issues) = (Vec::new(), Vec::new());
     let (mut churn_round, mut late, mut previous_tick) = (0usize, 0u64, 0u64);
+    let mut churn_wait_ticks = 0;
     let converged;
     loop {
         interval.tick().await;
@@ -469,11 +484,16 @@ pub async fn run(config: Config) -> Result<Report> {
             epoch_start = now;
         }
         if !settling && now >= next_churn {
-            let index = churn_round % peers.len();
-            let kind = churn_round / peers.len();
-            peers[index].churn(kind, now);
-            churn_round += 1;
-            next_churn = now + config.churn_every_ms.unwrap();
+            // Allow recovery to be observed before intentionally interrupting
+            // another peer, especially in a freshly rebound server epoch.
+            if server.is_some() && full_mesh(&peers, now, previous_session) {
+                let (index, kind) = churn_target(churn_round, peers.len());
+                peers[index].churn(kind, now);
+                churn_round += 1;
+                next_churn = now + config.churn_every_ms.unwrap();
+            } else {
+                churn_wait_ticks += 1;
+            }
         }
         for peer in &mut peers {
             peer.pump(endpoint, now, true)?;
@@ -603,6 +623,7 @@ pub async fn run(config: Config) -> Result<Report> {
         passed: issues.is_empty(),
         issues,
         driver_late_ticks: late,
+        churn_wait_ticks,
         full_mesh_before_close: converged,
         cpu_elapsed_ms,
         cpu_basis_points: cpu_elapsed_ms.map(|ms| ms.saturating_mul(10000) / elapsed.max(1)),
@@ -640,6 +661,21 @@ mod tests {
         let mut c = config();
         c.restart_every_ms = Some(u64::MAX);
         assert!(c.validate().is_err());
+        let mut c = config();
+        c.abrupt_restarts = true;
+        assert!(c.validate().is_err());
+    }
+    #[test]
+    fn churn_rotates_modes_and_covers_every_peer_without_a_long_group_of_overlapping_drops() {
+        for peers in [2, 3, 16, 64] {
+            let mut observed = vec![[0u32; 4]; peers];
+            for round in 0..peers * 4 {
+                let (peer, kind) = churn_target(round, peers);
+                assert_eq!(kind, round % 4);
+                observed[peer][kind] += 1;
+            }
+            assert!(observed.iter().all(|counts| *counts == [1; 4]));
+        }
     }
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn production_room_mesh_and_confirmed_cleanup_are_observed_with_real_udp() {
@@ -684,5 +720,6 @@ mod tests {
                 > 0
         );
         assert!(report.peers.iter().map(|p| p.counts.resumes).sum::<u64>() > 0);
+        assert!(report.churn_wait_ticks > 0);
     }
 }
