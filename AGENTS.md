@@ -854,3 +854,18 @@ Servidor parado normalmente, zero ativos (cached_members=3 é cache), três
 leaves incluindo uma sonda inicial sem pose. Windows sem segundo verify após
 saída. Nenhuma DLL residente no jogo local; reenumerar antes do próximo build.
 Não houve mudança de código/rebuild neste registro, só coleta/documentação.
+
+Depois dessa rodada o proprietário pediu explicitamente reutilizar os logs e
+implementar offline, reduzindo o uso do desktop e do laptop da esposa. Não
+abrir jogos nem pedir nova conexão para cada incremento. `assistant_paths`
+consulta Documents via Known Folder Windows (memória CoTaskMemFree), expande
+variáveis sem shell/recursão e valida caminhos com erros específicos. `mp_lan`
+lembra preferências privadas, simplifica mensagens, salva status automaticamente
+no início/antes/depois do stop e exporta apenas campos tipados em diagnosticos.
+`session_report` analisa status/stop antigos/novos por um peer em ordem explícita,
+sem processo/injeção; logs reais da primeira LAN foram reprocessados. Não
+publicar raw logs/identidade/backups no Git nem chamar replay offline de novo
+teste LAN. Controle ABI v1 e engine ABI v3/664 preservados; captura/render/gate
+e o sumiço por foco não foram alterados. Consultar a validação deste bloco no
+roadmap antes de instalar outro kit; a revisão do assistente no Windows real
+fica para marco agrupado, não requer nova prova só para o analisador.

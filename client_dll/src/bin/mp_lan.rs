@@ -12,10 +12,13 @@ struct Args {
     /// Installation root; defaults to the folder containing this executable.
     #[arg(long)]
     game: Option<PathBuf>,
+    /// Resolve a saves folder only (supports %USERPROFILE%); never injects.
+    #[arg(long)]
+    check_saves: Option<String>,
 }
 fn main() -> Result<()> {
     let args = Args::parse();
-    let interactive = !args.check_only;
+    let interactive = !args.check_only && args.check_saves.is_none();
     let result = run(args);
     if interactive && let Err(error) = &result {
         eprintln!("\nFalha: {error:#}\nPressione Enter para fechar.");
@@ -25,6 +28,11 @@ fn main() -> Result<()> {
 }
 
 fn run(args: Args) -> Result<()> {
+    if let Some(input) = args.check_saves {
+        let path = client_dll::assistant_paths::directory(&input)?;
+        println!("Pasta de saves confirmada: {}", path.display());
+        return Ok(());
+    }
     let kit = std::env::current_exe()?.parent().unwrap().to_path_buf();
     let manifest = client_dll::lan_kit::verify(&kit)?;
     let root = args.game.unwrap_or_else(|| kit.clone()).canonicalize()?;
@@ -60,8 +68,10 @@ fn run(args: Args) -> Result<()> {
 mod windows {
     use anyhow::{Context, Result, ensure};
     use client_dll::{
+        assistant_paths::{self, Preferences},
         inspection::process::{Identity, Process, processes},
         lan_kit::{self, Settings},
+        session_evidence::{self, Capture},
     };
     use serde::{Deserialize, Serialize};
     use sha2::{Digest, Sha256};
@@ -71,7 +81,8 @@ mod windows {
         io::{self, Write},
         path::{Path, PathBuf},
         process::Command,
-        time::{Duration, SystemTime, UNIX_EPOCH},
+        sync::OnceLock,
+        time::{Duration, Instant, SystemTime, UNIX_EPOCH},
     };
 
     #[derive(Serialize, Deserialize)]
@@ -88,7 +99,7 @@ mod windows {
             io::stdin().read_line(&mut text)? != 0,
             "entrada encerrada; reabra o assistente para recuperar uma parada pendente"
         );
-        let text = text.trim().trim_matches('"');
+        let text = text.trim();
         Ok(if text.is_empty() {
             default.into()
         } else {
@@ -139,9 +150,20 @@ mod windows {
         if live {
             current(session)?;
         }
-        let tick = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-        let log = session.run.join(format!("command-{tick}.log"));
-        let mut file = File::create_new(&log)?;
+        let unix = SystemTime::now().duration_since(UNIX_EPOCH)?;
+        let tick = unix.as_nanos();
+        let role = match action.first().and_then(|v| v.to_str()) {
+            Some("session-backup") => "backup",
+            Some("session-start") => "start",
+            Some("session-status") => "status",
+            Some("session-stop") => "stop",
+            Some("session-verify") => "verify",
+            _ => anyhow::bail!("unsupported assistant operation"),
+        };
+        let stem = format!("command-{tick}-{role}");
+        let mut stdout = File::create_new(session.run.join(format!("{stem}.stdout.log")))?;
+        let mut stderr = File::create_new(session.run.join(format!("{stem}.stderr.log")))?;
+        let mut receipt = File::create_new(session.run.join(format!("{stem}.json")))?;
         if focus {
             println!(
                 "Volte ao jogo em ate 5 segundos e mantenha-o em primeiro plano durante a operacao."
@@ -152,6 +174,8 @@ mod windows {
             current(session)?;
         }
         // Paths/argv are separate OS arguments, never interpreted by a shell.
+        let elapsed = HELPER_CLOCK.get_or_init(Instant::now).elapsed().as_millis();
+        let started = Instant::now();
         let output = Command::new(kit.join("mp_launcher.exe"))
             .arg("--pid")
             .arg(session.identity.pid.to_string())
@@ -159,15 +183,90 @@ mod windows {
             .arg(kit.join("client_dll.dll"))
             .args(action)
             .output()?;
-        file.write_all(&output.stdout)?;
-        file.write_all(&output.stderr)?;
-        file.sync_all()?;
+        stdout.write_all(&output.stdout)?;
+        stderr.write_all(&output.stderr)?;
+        stdout.sync_all()?;
+        stderr.sync_all()?;
+        receipt.write_all(&serde_json::to_vec_pretty(&serde_json::json!({
+            "schema":1, "operation":role, "requested_unix_ms":unix.as_millis(),
+            "helper_process":std::process::id(), "execution_start_helper_ms":elapsed,
+            "focus_countdown_ms":if focus {5000} else {0},
+            "operation_duration_ms":started.elapsed().as_millis(),
+            "success":output.status.success(), "exit_code":output.status.code(),
+            "stdout":format!("{stem}.stdout.log"), "stderr":format!("{stem}.stderr.log"),
+            "focus_measured":false,
+        }))?)?;
+        receipt.sync_all()?;
+        if let Ok(bytes) = session_evidence::sanitize(&output.stdout) {
+            let exported = session.run.join("diagnosticos");
+            let saved = (|| -> Result<()> {
+                fs::create_dir_all(&exported)?;
+                let mut file = File::create_new(exported.join(format!("{tick}-{role}.json")))?;
+                file.write_all(&bytes)?;
+                file.sync_all()?;
+                Ok(())
+            })();
+            if let Err(e) = saved {
+                eprintln!(
+                    "Exportacao do diagnostico indisponivel: {e:#}; o log bruto foi preservado."
+                );
+            } else {
+                println!("Diagnosticos para analise: {}", exported.display());
+            }
+        }
+        if output.status.success() {
+            match session_evidence::parse(&output.stdout) {
+                Ok(Capture::Snapshot { snapshot, .. }) => {
+                    println!(
+                        "Conexao: {} | caminhões remotos: {} | origem: {}",
+                        snapshot
+                            .network_session
+                            .as_ref()
+                            .map(|s| match s.phase {
+                                multiplayer_server::session_client::Phase::Joining => "entrando",
+                                multiplayer_server::session_client::Phase::Connected => "conectado",
+                                multiplayer_server::session_client::Phase::Reconnecting =>
+                                    "reconectando",
+                                multiplayer_server::session_client::Phase::Rejected => "recusado",
+                                multiplayer_server::session_client::Phase::Closing => "encerrando",
+                                multiplayer_server::session_client::Phase::Closed => "encerrado",
+                            }
+                            .to_owned())
+                            .unwrap_or_else(|| "v1".into()),
+                        snapshot.remotes.len(),
+                        if snapshot.client.sample_state == 1 {
+                            "disponivel"
+                        } else {
+                            "sem pose recente; confira o jogo em primeiro plano"
+                        }
+                    );
+                    if let Some(s) = &snapshot.network_session {
+                        println!(
+                            "RTT ate o servidor (ms): {}",
+                            s.rtt_ms
+                                .map(|n| n.to_string())
+                                .unwrap_or_else(|| "aguardando".into())
+                        );
+                        if let Some(reason) = s.refusal {
+                            println!("Conexao recusada: {reason:?}");
+                        }
+                    }
+                }
+                Ok(Capture::Stop { summary, .. }) => println!(
+                    "Parada: {} de {} slots conferidos; {} arquivos iguais ao backup.",
+                    summary.matching_slots,
+                    summary.reported_slots,
+                    summary.unchanged_files_reported.unwrap_or(0)
+                ),
+                Err(_) => println!("Operacao {role} concluida."),
+            }
+        } else {
+            eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+        }
         println!(
-            "{}{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
+            "Diagnostico salvo: {}",
+            session.run.join(format!("{stem}.stdout.log")).display()
         );
-        println!("Log: {}", log.display());
         ensure!(
             output.status.success(),
             "comando falhou; consulte o log. Uma sessao pendente continua registrada para limpeza"
@@ -177,8 +276,23 @@ mod windows {
     fn args(parts: &[&OsStr]) -> Vec<OsString> {
         parts.iter().map(|v| v.to_os_string()).collect()
     }
+    static HELPER_CLOCK: OnceLock<Instant> = OnceLock::new();
+    fn capture_status(kit: &Path, session: &Session) {
+        if let Err(error) = command(
+            kit,
+            session,
+            &args(&[OsStr::new("session-status")]),
+            false,
+            true,
+        ) {
+            eprintln!(
+                "Diagnostico automatico indisponivel: {error:#}. A parada continua disponivel."
+            );
+        }
+    }
 
     pub fn interactive(kit: &Path, root: &Path) -> Result<()> {
+        let _ = HELPER_CLOCK.set(Instant::now());
         let bytes = fs::read(kit.join(lan_kit::CONFIG)).context("mp-lan.json ausente")?;
         let defaults: Settings = serde_json::from_slice(&bytes)?;
         defaults.validate()?;
@@ -188,9 +302,31 @@ mod windows {
         fs::create_dir_all(&data)?;
         let pending = data.join("pending.json");
         let last = data.join("last.json");
+        let preferences_path = data.join("preferences.json");
+        let mut preferences: Option<Preferences> = match fs::read(&preferences_path) {
+            Ok(bytes) => match serde_json::from_slice::<Preferences>(&bytes)
+                .and_then(|p| p.validate().map(|_| p).map_err(serde::de::Error::custom))
+            {
+                Ok(p) => Some(p),
+                Err(_) => {
+                    eprintln!(
+                        "Preferencias invalidas; usando configuracao do kit e Documents do Windows."
+                    );
+                    None
+                }
+            },
+            Err(e) if e.kind() == io::ErrorKind::NotFound => None,
+            Err(e) => {
+                eprintln!("Nao foi possivel ler preferencias: {e}; a limpeza continua disponivel.");
+                None
+            }
+        };
         println!(
-            "\nDados locais: {}\n1 Iniciar | 2 Status | 3 Parar | 4 Verificar apos saida | 0 Fechar assistente",
+            "\nDados locais: {}\n1 Iniciar multiplayer | 2 Consultar conexao | 3 Parar multiplayer (antes de fechar jogo) | 4 Conferir arquivos apos saida | 0 Fechar assistente",
             data.display()
+        );
+        println!(
+            "O diagnostico e salvo automaticamente ao iniciar e parar. Digite a opcao e pressione Enter."
         );
         println!(
             "Use 3 ANTES de fechar o jogo. Se o assistente fechar, reabra-o para retomar a limpeza."
@@ -206,25 +342,46 @@ mod windows {
                         );
                         let identity = game(root)?;
                         let settings = Settings {
-                            server: prompt("Servidor IP:porta", &defaults.server.to_string())?
-                                .parse()?,
-                            room: prompt("Sala", &defaults.room)?,
+                            server: prompt(
+                                "Servidor IP:porta",
+                                &preferences
+                                    .as_ref()
+                                    .map(|p| p.server)
+                                    .unwrap_or(defaults.server)
+                                    .to_string(),
+                            )?
+                            .parse()?,
+                            room: prompt(
+                                "Sala",
+                                preferences
+                                    .as_ref()
+                                    .map(|p| p.room.as_str())
+                                    .unwrap_or(&defaults.room),
+                            )?,
                         };
                         settings.validate()?;
-                        let default_saves =
-                            PathBuf::from(std::env::var_os("USERPROFILE").context("USERPROFILE")?)
-                                .join("Documents/18 WoS Across America/saves");
-                        let saves = PathBuf::from(prompt(
-                            "Pasta real dos saves",
-                            &default_saves.to_string_lossy(),
-                        )?);
-                        ensure!(
-                            saves.is_dir(),
-                            "pasta de saves ausente; informe o caminho real (inclusive OneDrive, se usado)"
+                        let profile =
+                            PathBuf::from(std::env::var_os("USERPROFILE").context("USERPROFILE")?);
+                        let documents = assistant_paths::documents().map_err(|e| eprintln!("Documents do Windows indisponivel: {e}; confirme o caminho manualmente.")).ok();
+                        let default_saves = assistant_paths::default_saves(
+                            preferences.as_ref().map(|p| p.saves.as_path()),
+                            documents.as_deref(),
+                            &profile,
                         );
+                        println!(
+                            "Informe a PASTA que contem os .sav (pode colar o endereco do Explorador). Digite 0 para cancelar."
+                        );
+                        let saves = loop {
+                            let input = prompt("Pasta de saves", &default_saves.to_string_lossy())?;
+                            ensure!(input != "0", "inicio cancelado");
+                            match assistant_paths::directory(&input) {
+                                Ok(path) => break path,
+                                Err(e) => eprintln!("{e:#}"),
+                            }
+                        };
                         ensure!(
                             prompt("Save de teste carregado? Digite sim para iniciar", "nao")?
-                                == "sim",
+                                .eq_ignore_ascii_case("sim"),
                             "inicio cancelado"
                         );
                         lan_kit::verify(kit)?;
@@ -250,6 +407,18 @@ mod windows {
                             false,
                             true,
                         )?;
+                        let next_preferences = Preferences {
+                            server: settings.server,
+                            room: settings.room.clone(),
+                            saves,
+                        };
+                        if let Err(e) = fs::write(
+                            &preferences_path,
+                            serde_json::to_vec_pretty(&next_preferences)?,
+                        ) {
+                            eprintln!("Nao foi possivel lembrar estas preferencias: {e}");
+                        }
+                        preferences = Some(next_preferences);
                         save_new(&pending, &session)?;
                         let identity_file = data.join("identity.json");
                         command(
@@ -267,8 +436,9 @@ mod windows {
                             true,
                             true,
                         )?;
+                        capture_status(kit, &session);
                         println!(
-                            "Inicio solicitado. Use 2 para conferir o aceite de rede e os remotos."
+                            "Multiplayer iniciado. Volte ao jogo; use 3 aqui antes de fechar o jogo."
                         );
                     }
                     "2" | "3" => {
@@ -282,6 +452,7 @@ mod windows {
                                 true,
                             )?;
                         } else {
+                            capture_status(kit, &session);
                             command(
                                 kit,
                                 &session,
@@ -293,6 +464,7 @@ mod windows {
                                 true,
                                 true,
                             )?;
+                            capture_status(kit, &session);
                             fs::write(&last, serde_json::to_vec_pretty(&session)?)?;
                             fs::remove_file(&pending)?;
                             println!(

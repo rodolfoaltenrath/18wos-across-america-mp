@@ -63,8 +63,12 @@ executar `mp_lan.exe`. O assistente confere os hashes do kit/perfil do jogo,
 detecta o PID atual dessa instalação, confirma endpoint/sala/pasta de saves e
 faz backup antes de iniciar a sessão v2, com offset zero. Cada PC cria sua
 própria identidade em `%LOCALAPPDATA%/18wos-mp/<instalacao>/`; não copiar essa
-pasta entre PCs. Saves redirecionados para OneDrive exigem informar o caminho
-real. Não é um sincronizador de saves: começar próximos no mesmo mapa.
+pasta entre PCs. A revisão posterior à primeira LAN consulta Documents real
+do Windows (incluindo OneDrive), prefere a última pasta válida escolhida e
+lembra endpoint/sala. O campo aceita endereço completo entre aspas ou variáveis
+como `%USERPROFILE%`; arquivo `.sav`, pasta inexistente e acesso negado têm
+diagnósticos distintos. Não cria uma pasta vazia para mascarar falha de backup.
+Não é um sincronizador de saves: começar próximos no mesmo mapa.
 
 Menu: **1** iniciar, **2** status, **3** parar/verificar, **4** verificar após
 saída, **0** fechar o assistente. Para iniciar/parar, ele dá cinco segundos para
@@ -74,6 +78,16 @@ local; reabrir o assistente recupera a parada pendente. Ele confere a identidade
 do processo antes das operações e recusa limpar um PID reutilizado. Falha de
 permissão ao consultar o processo não é tratada como saída confirmada.
 
+O status é capturado automaticamente após iniciar, antes e depois de parar;
+a opção 2 fica disponível para checkpoints adicionais. Cada comando salva stdout,
+stderr e recibo separado com operação, resultado e duração/relógio monotônico
+do assistente. Esses instantes não são timestamps da física nem medem foco.
+A subpasta `run-.../diagnosticos/` recebe apenas campos conhecidos de status e
+parada, sem mensagens arbitrárias, paths, poses, argumentos, tokens ou backups.
+É a pasta indicada para análise; os logs brutos continuam privados na pasta do
+run. Falha de coleta opcional não impede tentar a parada segura. Preferências
+corrompidas também não impedem acessar a limpeza pendente.
+
 O servidor deve escutar o endpoint anunciado, com a mesma sala e **sem `--echo`**:
 
 ```text
@@ -82,6 +96,9 @@ target/release/multiplayer_server --bind 0.0.0.0:39000 --room lan
 
 `mp_lan.exe --check-only` executa apenas checagens estáticas, sem injeção nem
 criação de dados privados; `--game PASTA` permite uma instalação explícita.
+`mp_lan.exe --check-saves CAMINHO` resolve somente a pasta informada, sem exigir
+kit/jogo, criar diretórios, alterar arquivos ou injetar. Útil para diagnóstico
+de Documents sem reunir os dois PCs.
 O manifesto identifica os arquivos efetivamente copiados; a revisão é informada
 pelo construtor, não atesta por si só a procedência/reprodutibilidade do build.
 Não é assinatura de release. A geração recusa destino existente e binários
@@ -91,6 +108,35 @@ Windows e conectividade foram exercitados na primeira LAN de 29/10, com logs
 de início/status/parada e 14 slots/oito hashes conferidos. Documents
 redirecionado exigiu o caminho real; melhorias de UX, instalação limpa em outros
 ambientes e recuperação ao reabrir o assistente seguem pendentes.
+
+### Analisar a sessão gravada sem abrir os jogos
+
+`session_report` é nativo no Fedora e também possui binário Windows x86.
+Recebe relatórios JSON de `session-status`/`session-stop`, inclusive os antigos
+`command-....log`, ou os novos JSONs de `diagnosticos`. Fornecer os arquivos
+explicitamente na ordem de captura, **de um único cliente por análise**:
+
+```text
+target/release/session_report CAPTURA-INICIAL.json CAPTURA-FINAL.json PARADA.json --output ANALISE-NOVA.json
+```
+
+Limites: 256 relatórios, 1 MiB por arquivo, saída nova em pasta existente.
+Entradas truncadas/incompatíveis são recusadas antes de criar a análise;
+não sobrescreve captura existente. A saída seleciona somente campos tipados,
+hashes dos inputs, estados e contadores. Compara deltas apenas na mesma
+session/connection/player; mudança de geração, contador regressivo/wrap ou
+ausência de epoch v1 impedem inventar deltas. Relata fonte indisponível mesmo
+com conexão ativa e a recuperação observada, sem alegar que mediu o foco do SO.
+Nos stops, confere coerência de `restored` com os valores expected/actual dos
+slots relatados; não reabre o processo nem recalcula os hashes dos arquivos.
+
+O relatório mantém `analysis_only=true`, `focus_measured=false` e
+`packet_loss_estimated=false`. Lacunas são entre snapshots, RTT é até o servidor
+desse cliente e custo de draw não é FPS/latência visual do jogo inteiro. Os logs
+da primeira LAN já foram processados com essa ferramenta, separadamente por PC.
+A análise não recupera uma timeline que não foi capturada nem valida uma nova
+DLL na partida; permite investigar e testar correções offline antes da próxima
+rodada prática agrupada.
 
 ## Direção do mod definida pelo proprietário
 

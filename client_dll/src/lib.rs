@@ -17,6 +17,7 @@ use std::{
 
 pub mod addresses;
 pub mod api;
+pub mod assistant_paths;
 pub mod command_registry;
 #[cfg(windows)]
 pub mod controller;
@@ -67,6 +68,7 @@ pub mod profile;
 pub mod release_policy;
 pub mod render_observation;
 pub mod resource_bindings;
+pub mod session_evidence;
 pub mod transition_analysis;
 pub mod transition_observation;
 pub mod udp_proxy;

@@ -3419,6 +3419,80 @@ próxima prova específica. Não pedir novas voltas apenas para reobter esta bas
 Somente documentação/organização de evidências neste registro: sem rebuild
 da DLL, alteração de protocolo ou novos testes de código neste bloco.
 
+### M0/M8/M9 — Assistente e análise offline a partir da primeira LAN — 29/10/2026
+
+O proprietário pediu reutilizar os mesmos logs para implementar sem reunir o
+desktop e o laptop da esposa a cada incremento. Entregue um bloco completo
+sem iniciar jogos, servidor LAN ou solicitar ação humana. A prova real anterior
+permanece preservada; este bloco não a repete nem afirma novo teste na partida.
+
+`assistant_paths`: consulta `FOLDERID_Documents` por `SHGetKnownFolderPath`, com
+liberação da memória retornada por `CoTaskMemFree`. Respeita redirecionamento
+OneDrive sem adivinhar nomes traduzidos. Resolução independente expande variáveis
+uma única vez, sem shell, aceita aspas/Unicode, rejeita variáveis desconhecidas,
+paths relativos/NUL e distingue arquivo, pasta ausente, permissão e erro de
+consulta. Não cria diretório de saves para esconder ausência. Prefere a última
+escolha válida e usa Documents/legado como candidatos. Preferências privadas
+de pasta/endpoint/sala persistem localmente; configuração corrompida não bloqueia
+parada pendente. Não há mudança dos saves ou da instalação original.
+
+`mp_lan`: menu/mensagens mais diretos e diagnóstico de conexão/contagem de
+remotos sem despejar o JSON inteiro na tela. Status automático após início,
+antes e depois da parada; falha de checkpoint opcional não impede tentar o
+stop. Logs brutos stdout/stderr separados, com operação explícita e recibo de
+resultado/duração, instante solicitado e início monotônico dentro do assistente.
+O recibo registra `focus_measured=false`: não é timeline da física/foco do SO.
+A subpasta `diagnosticos` recebe somente status/stop tipados, sem paths,
+mensagens arbitrárias, poses, tokens, identidade ou backups. Dados brutos
+continuam privados na pasta do run; arquivos novos não sobrescrevem os antigos.
+Não pedir ao usuário para copiar toda a pasta de dados na próxima análise.
+
+`session_evidence`/`session_report`: analisador Rust nativo e Windows x86 de
+relatórios antigos e novos. Um peer por análise, ordem explícita, até 256
+inputs/1 MiB cada, leitura limitada e saída nova. Conserva SHA-256 do input e
+campos tipados; recusa JSON truncado, dados de identidade/backup e formatos
+incompatíveis. Deltas somente para a mesma session/connection/player; mudança
+de epoch, ausência de identidade v1 ou regressão/wrap não geram diferenças
+inventadas. Diferencia fonte indisponível com sessão conectada e recuperações
+observadas, sem inferir causa pelo foco. Confere expected/actual dos slots
+relatados, além do bool restored, mas não acessa o processo nem recalcula hashes.
+Mantém `analysis_only=true`, `focus_measured=false`,
+`packet_loss_estimated=false` e amostragem não atômica explícita. Não mexe em
+captação, draw, gate, prazos de pose ou layouts ABI v1/v3 (664 bytes).
+
+Fixtures próprias reproduzem indisponibilidade/recuperação com sessão ativa,
+lacuna de 29.933 ms, troca de epoch, regressão/wrap, slot contraditório,
+entrada truncada/fora de limites e remoção de campos privados. Paths usam
+Documents redirecionado simulado, Unicode/aspas/variáveis e arquivo próprio;
+teste x86 consultou somente Documents do prefixo de bancada.
+
+Reutilização real OFFLINE: sete relatórios Fedora e dois Windows da primeira
+LAN processados em análises separadas. Identificados fonte indisponível com
+conexão ativa, transição para indisponível/parado e os dois stops com 14 slots
+relatados coerentes/oito arquivos. Windows analisado também pelo executável
+x86 sob Proton: JSON idêntico byte a byte ao nativo. Repetir output existente
+foi recusado, mantendo o hash do relatório anterior; input não relacionado
+recusado sem criar saída. Nenhuma pose, nome de usuário, path de origem ou
+campo identidade/token foi copiado para as análises. Isso não recupera a
+timeline de foco que faltou na captura, nem é nova prova do motor/rede.
+
+Validação Fedora: **144 testes x86 sob Proton e 198 nativos**, builds release,
+Clippy x86/nativo e rustfmt passaram por `dev_env verify`. `mp_lan --check-saves`
+x86 validou `%USERPROFILE%/Documents` no prefixo próprio; rejeitou um arquivo
+de relatório e uma pasta inexistente com diagnósticos diferentes. Imports novos
+do assistente são `shell32.dll`/`combase.dll`, componentes Windows, sem DLL MinGW
+auxiliar. Logs em `target/analysis/verify-fedora-20261029-offline-evidence.log`
+e `target/analysis/offline-after-lan-20261029/` (ignorados). Reenumerado antes dos
+builds: jogo ausente. Sem alteração de `.cargo/config.toml` ou assets/saves.
+
+Pendências: a nova revisão de preferências/UI/coleta automática precisa de
+prova Windows real agrupada com o próximo marco; o caminho Known Folder passou
+somente sob Proton/bancada. O sumiço por foco NÃO foi corrigido: falta aquisição
+independente de draw, ABI/thread/lifecycle demonstrados e timeline suficiente.
+Não trocar isso por retransmitir pose velha como se fosse movimento atual.
+Usar os logs/fixtures para o próximo bloco offline; não pedir nova condução
+para validar o analisador nem republicar o teste LAN básico como pendente.
+
 ## 3. Primeira versão jogável e limites
 
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,

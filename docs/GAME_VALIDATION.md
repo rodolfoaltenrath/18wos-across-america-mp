@@ -202,6 +202,17 @@ Pendências delimitadas, sem repetir a prova já obtida:
 
 ## Preparação comum
 
+Revisão offline posterior à primeira LAN (sem novos jogos): `mp_lan` agora
+consulta Documents real, lembra a pasta/endpoint/sala, explica erros de caminho
+e salva status automaticamente no início/antes/depois do stop. Gera subpasta
+`diagnosticos` tipada e separada dos dados privados; `session_report` analisa os
+relatórios antigos/novos offline, com limites e sem inferir foco/perda/limpeza
+real a partir dos JSONs. Os logs desta rodada já foram reutilizados como
+entradas, além de fixtures próprias de indisponibilidade/recuperação, mudança
+de epoch, regressão/wrap e slot contraditório. O fluxo novo no Windows real
+e as coletas automáticas ainda aguardam o próximo marco agrupado. Não repetir
+o percurso LAN básico apenas para testar o analisador ou a descoberta de pasta.
+
 1. Registrar commit, builds, sistema, renderizador, resolução, foco da janela,
    versão do jogo/perfil por hash e configuração do servidor. Compilar/conferir
    antes de abrir o jogo; nunca reconstruir a DLL enquanto estiver residente.
@@ -318,6 +329,10 @@ processos novos entre grupos; rodada agrupada não significa uma única injeçã
   real de saves, backup, identidade nova, início/status/parada e logs passaram.
   Recuperação ao reabrir e verificação Windows após saída seguem pendentes.
   Servidor no Fedora, sem eco; mesma sala e offset zero nos dois clientes.
+- [ ] Próxima revisão do assistente: confirmar Documents redirecionado sem
+  digitar caminho, preferência persistida, mensagens simples e status/exportação
+  automáticos. Isso pode ser agrupado com a próxima prova de correção do motor;
+  consultas estáticas e análise dos logs não exigem nova partida LAN.
 - [x] Dois PCs com jogo original funcional, perfil suportado e kit compatível;
   sala v2 em bind LAN, endpoint configurável e identidades locais diferentes.
   Não há lista de servidores nem negociação automática de mapa/mods entregue.
