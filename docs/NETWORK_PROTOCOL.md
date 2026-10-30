@@ -2,7 +2,7 @@
 
 O controle de carreira/save-base é um canal separado (`mp_career`, TCP 39001),
 não uma alteração deste wire UDP v2. Frames JSON com prefixo de comprimento
-u32 big-endian (1..32768), uma solicitação por conexão, prazo total de 30 s,
+u32 big-endian (1..262144), uma solicitação por conexão, prazo total de 30 s,
 até oito conexões simultâneas. Convite privado contém schema/career/hash do
 manifesto/segredo de 128 bits. Solicitação envia schema/career/segredo e
 fingerprints de compatibilidade; resposta recusa ou fornece manifesto e
@@ -11,6 +11,14 @@ remoto é aceito. Cliente confere também o hash do manifesto fixado no convite.
 Sem TLS/contas; restrito a LAN confiável. Fingerprints declarados não provam
 assets carregados pelo jogo. A entrega do save não admite automaticamente o
 jogador no relay nem torna relógio/física/trânsito compartilhados.
+
+`action` opcional é `bootstrap` (padrão) ou `status`. `status` devolve manifesto
+e snapshot validado do sidecar, sem blob, seguido de EOF. Snapshot informa
+revisão persistente, clock/último checkpoint de clock, ranking e contratos;
+omite histórico de operações e chaves. Clock é do sidecar, não o horário do
+motor. Administração econômica ocorre somente em CLI local com lock exclusivo;
+não há operação de crédito/entrega neste wire. Identidades da carreira/empresa
+e credenciais do relay permanecem contratos distintos nesta etapa.
 
 Contrato próprio em Rust. O codec v1 continua separado e disponível para as
 provas anteriores. V2 é optativo: servidor com `--room NOME`; cliente com sala

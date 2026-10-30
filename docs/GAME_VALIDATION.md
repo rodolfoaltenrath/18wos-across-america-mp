@@ -11,6 +11,25 @@ mas ele não percebeu o desaparecimento do remoto durante a interrupção. Outro
 comandos de teardown, suavização na LAN, vários jogadores e sessão longa
 continuam pendentes. Testes em fixture/sockets locais não fecham essas lacunas.
 
+## Incremento offline de carreira — 29/10/2026
+
+Sem abrir os jogos: `mp_career` passou em transferência TCP de save-base e
+consulta do estado próprio, manifesto/regras/mapa/mods, ledger de contratos,
+checkpoints e recuperação. Verify: 183 testes x86 sob Proton e 214 nativos,
+releases, Clippy e fmt. Lote de 1.000 ciclos por alvo nativo/Windows x86: cada
+um com 7.000 operações persistidas, 3.000 reaberturas de recuperação e 1.000
+transferências de fixture; relatórios iguais. ACK perdido e reinício do store
+são simulados; sockets/arquivos/locks/hard links são reais. O controle TCP
+não está ligado à admissão UDP, ao launcher nem ao motor. Não são testes novos
+de saves comerciais ou LAN entre PCs. Atestado de entrega vem do host/fixture;
+não é leitura de chegada no jogo. Mais detalhes no novo registro do roadmap.
+
+Os sete relatórios Fedora e dois Windows preservados abaixo foram novamente
+analisados; saídas byte a byte iguais às anteriores. Captura por draw, sumiço
+sem foco, render/gate/ABIs e limitações da primeira LAN permanecem os mesmos.
+Nenhum kit instalado foi substituído. Não repetir a prova visual básica para
+validar esta ferramenta: o próximo teste humano exige adaptadores concretos.
+
 ## Registro — primeira LAN Windows ↔ Fedora/Proton — 29/10/2026
 
 **Resultado confirmado:** o proprietário viu o caminhão do outro jogador nos
@@ -390,6 +409,6 @@ mp_launcher --pid 0 --dll DLL session-verify --backup BACKUP
   `falhou`, `não exercitado` ou `bloqueado`), observação humana e arquivo de
   evidência. Contadores, screenshots e hashes não são provas intercambiáveis.
 
-Só atualizar checkboxes após evidência correspondente. PT-BR/R$, economia,
-contratos, carreira configurável e demais features ainda não implementadas não
-entram como testes reprovados: permanecem tarefas de desenvolvimento no roadmap.
+Só atualizar checkboxes após evidência correspondente. PT-BR/R$ e integração
+de economia/contratos/carreira configurável no motor permanecem tarefas de
+desenvolvimento. O sidecar offline não fecha esses testes de gameplay.

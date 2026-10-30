@@ -1,5 +1,73 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Estado autoritativo próprio e recuperação — segundo bloco offline, 29/10/2026
+
+Continuando o bloco de bootstrap abaixo: `career_world` implementa empresas por
+ID persistente, ranking/saldo em unidades menores, contrato com aceite exclusivo,
+carga identificada e checkpoint de veículo/posição/quaternion/contrato/carga.
+Entrega atestada localmente pelo host exige checkpoint, limpa a carga e credita
+numa única revisão. A chave de operação retém hash dos argumentos/resultado;
+retry idêntico após reinício devolve o resultado, ID com outros argumentos ou
+nova entrega de contrato pago são recusados. Saldo é conferido contra os
+contratos entregues na recuperação. Falha ambígua de commit exige reabertura.
+Lock, checksum da última revisão e cadeia/gaps foram exercitados. A cadeia não
+é assinatura nem detecta, sozinha, remoção deliberada de toda a cauda de revisões.
+
+Relógio próprio do servidor: epoch zero do sidecar, pausa/escala 1..3600,
+avanço monotônico com overflow recusado, sem avanço durante servidor desligado.
+Checkpoint de relógio a cada 30 s de operação e no encerramento; crash pode
+perder o tempo desde o último checkpoint. Alterações econômicas são persistidas
+antes do recibo e não aguardam esse intervalo. Consultas TCP `world-status`
+compartilham clock/ranking/contratos; validam novamente manifesto, bounds,
+saldo e ownership. Frame limitado a 256 KiB, oito conexões/prazo de 30 s.
+O bootstrap continua separado, sem enviar um save vivo ou sobrescrever arquivos.
+
+`mp_career apply` administra localmente arquivos JSON tipados com ID de operação
+explícito; `world` lê o checkpoint offline. Ambos exigem ownership exclusivo;
+serviço em execução impede outro escritor. O convite remoto permite só leitura
+e bootstrap, não comandos econômicos. Sem contas/autenticação de jogador,
+vínculo com credenciais do relay ou aplicação ao motor. `deliver` usa atestado
+do host/fixture, não deduz entrega real de poses. Limites: 64 empresas, 128
+contratos, 512 operações, sem expulsão de histórico de deduplicação. Compactação,
+gestão contínua e despesas ainda futuras; não anunciar economia jogável.
+
+`mp_career lab` exercita store/ledger/TCP de produção com fixtures próprias:
+dois leitores, transferência, incompatibilidade/convite, segundo aceite
+recusado, carga/checkpoint, restart antes da entrega e depois de pagamento com
+ACK perdido. Exemplos e relatório sem ativos comerciais, paths privados ou
+credenciais reais. `dev_env windows --server-tools` e verify agora compilam,
+testam e rodam Clippy do pacote completo do servidor também em Windows x86,
+com manifesto separado; bancada da DLL/ABI permanece separada e preservada.
+
+Nenhum horário/trânsito/física/economia foi aplicado ao jogo. O estado próprio
+nunca declara `engine_adapters`/`original_save_updated` verdadeiros. Gatilho de
+vitória original, cenário real do save, carregamento/spawn automático e vínculo
+do manifesto com a admissão UDP continuam pendentes. Próximo bloco: vincular
+identidade/admissão/bootstrap ao launcher e investigar por leitura relógio/
+cenário do motor, preservando fallback e os originais. Não pedir a LAN só para
+repetir a prova básica: só agrupar nova sessão quando esses adaptadores forem
+concretos. M6 e a matriz prática continuam abertos.
+
+Validação concluída: verify completo com **183 testes Windows x86 sob Proton
+(144 da integração + 39 dos utilitários/servidor) e 214 nativos**, releases
+nativo/x86, Clippy nos três escopos e rustfmt. O ramo Windows de `dev_env`
+também passou em check cruzado próprio. `mp_career lab --iterations 1000`
+passou nativo e Windows x86: **em cada alvo**, 7.000 operações duráveis, 2.000
+recibos duplicados sem novo efeito, 4.000 operações recusadas, 3.000 reaberturas
+de recuperação, 1.000 bootstraps TCP, 2.000 snapshots e 2.000 recusas TCP.
+Relatórios dos dois alvos byte a byte idênticos; fixtures de origem preservadas.
+São reaberturas/ACK perdido simulados com store real e sockets loopback, não
+crashes do jogo ou sessões entre os PCs. Também reprocessados os sete relatórios
+Fedora e dois Windows da primeira LAN: análises idênticas às anteriores.
+
+Artefatos ignorados: `target/analysis/verify-fedora-20261029-career-world.log`,
+`career-world-dev-env-windows-check.log`, diretórios
+`career-world-lab-native-1000`/`career-world-lab-x86-1000` (report/example) e
+`career-world-{fedora,windows}-lan-reanalysis.json`. Nenhum jogo iniciado,
+nenhuma DLL injetada, nenhum kit antigo sobrescrito/instalado. O prefixo usado
+foi exclusivamente o de bancada. Não pedir reinstalação/teste humano apenas
+para essa fundação de ferramentas.
+
 ## Carreira e save-base distribuído — bloco offline, 29/10/2026
 
 Pedido atual: aproveitar a primeira LAN e seus logs sem reunir os dois PCs,
@@ -3862,6 +3930,8 @@ suave, e perda temporária de pacotes não produz movimentos indefinidos.
   original de vitória, inclusive para metas menores/maiores e sem limite.
 - [ ] Negociar mapa, versão, mods e ponto de entrada compatíveis antes de criar
   remotos; impedir entrada em mundos incompatíveis com mensagem útil.
+  O controle TCP de carreira já compara perfil/mapa/mods e fixa o manifesto
+  pelo convite; ligação obrigatória com admissão do relay/launcher pendente.
 - [ ] Definir relógio, clima, pausa e carregamento durante a sessão.
 - [ ] Definir spawn que evite sobreposição e respeite a disponibilidade do mapa.
 - [ ] Escolher dono e ciclo de anexar/desanexar reboques; eventos devem ser idempotentes.
@@ -3875,12 +3945,16 @@ suave, e perda temporária de pacotes não produz movimentos indefinidos.
   preservar economia local; compartilhar somente com regras e persistência próprias.
 - [ ] Provar um contrato compartilhado com aceite exclusivo, validação da entrega
   e pagamento único; testar duplicação, desconexão e reinício com fixtures próprias.
+  Ledger/recuperação passaram na bancada com atestado do host, sem motor;
+  falta transportar/entregar de fato na partida e ligar comandos de jogadores.
 - [ ] Introduzir empresas dos jogadores e ranking com identidade persistente;
   depois ampliar compra/manutenção de frota. Motoristas IA, licitações,
   cooperativas e concorrentes IA configuráveis dependem dessa base.
 - [ ] Persistir regras da carreira e checkpoints de jogador/veículo/carga/contrato,
   separados dos snapshots de movimento e dos saves normais. Banco/migrações e
   formato versionado serão definidos com o contrato; não inferir suporte atual.
+  Formato inicial versionado e journal imutável entregues no sidecar; migrações,
+  compactação e aplicação desses checkpoints ao mundo continuam pendentes.
 - [ ] Isolar dados multiplayer dos saves de uso normal, com backup/restauração
   e tratamento de desconexão durante eventos importantes.
 

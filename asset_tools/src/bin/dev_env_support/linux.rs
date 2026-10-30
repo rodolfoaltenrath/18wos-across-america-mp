@@ -93,7 +93,7 @@ impl Prepared {
         );
         Ok(())
     }
-    fn command(&self, workspace: &Path) -> Command {
+    fn command(&self, workspace: &Path, server_tools: bool) -> Command {
         let mut command = Command::new(workspace.join("target/release/proton_host"));
         command
             .current_dir(workspace)
@@ -107,7 +107,7 @@ impl Prepared {
             .arg(&self.runtime)
             .arg("--")
             .arg(workspace.join("target/i686-pc-windows-gnu/release/test_host.exe"))
-            .arg(workspace.join("target/windows-tests.json"));
+            .arg(workspace.join(super::super::manifest(false, server_tools)));
         command
     }
 }
@@ -190,14 +190,20 @@ pub fn run(options: Options) -> Result<()> {
         inventory.files.len(),
         inventory.total_bytes
     );
-    windows(false, false, false, false)?;
+    windows(false, false, false, false, false)?;
+    windows(false, false, false, false, true)?;
     cargo(
         &workspace,
         &["build", "--workspace", "--release", "--locked"],
     )?;
-    windows(false, false, true, false)?;
+    windows(false, false, true, false, false)?;
+    windows(false, false, true, false, true)?;
     prepared.stop_test_server()?;
-    let x86 = bench_command(prepared.command(&workspace));
+    let x86 = (|| {
+        let client = bench_command(prepared.command(&workspace, false))?;
+        let server = bench_command(prepared.command(&workspace, true))?;
+        Ok::<_, anyhow::Error>((client.0 + server.0, client.1 + server.1))
+    })();
     // Cleanup even after a failed test; only the validated test prefix is used.
     let cleanup = prepared.stop_test_server();
     let x86 = x86?;
@@ -207,7 +213,8 @@ pub fn run(options: Options) -> Result<()> {
         .args(["test", "--workspace", "--all-targets", "--locked"])
         .current_dir(&workspace);
     let native = bench_command(native)?;
-    windows(false, false, false, true)?;
+    windows(false, false, false, true, false)?;
+    windows(false, false, false, true, true)?;
     cargo(
         &workspace,
         &[

@@ -9,6 +9,16 @@ sincroniza horário/trânsito/física nem altera vitória original. Convite/save
 revisões são privados e ignorados; fixtures próprias para testes. Manter
 entregas em blocos completos sem abrir jogos. Ver novo registro no roadmap.
 
+Segundo bloco: `career_world` fornece ledger/checkpoints/relógio próprios;
+aceite exclusivo, entrega com atestado local do host e pagamento único com
+deduplicação persistente. TCP só bootstrap/consulta, sem autoridade econômica
+para portadores do convite. `mp_career lab` usa dados próprios e TCP real,
+sem prova do motor. `dev_env verify` agora inclui ferramentas do servidor x86
+(`windows --server-tools`, manifesto separado). Não anunciar saldo/horário/
+física sincronizados no jogo nem vitória original alterada. Ver limites e
+resultados no novo registro do roadmap; nenhum jogo deve ser aberto por esse
+incremento. Próximo: admissão/bootstrap ligados ao launcher e leitura do motor.
+
 Leia `ROADMAP.MD` e `README.md` antes de implementar. O roadmap registra o estado
 validado, as dependências, os critérios de conclusão e a próxima etapa.
 

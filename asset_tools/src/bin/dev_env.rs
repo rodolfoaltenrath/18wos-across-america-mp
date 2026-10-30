@@ -23,6 +23,9 @@ enum Task {
         /// Build the native Windows GNU workspace instead of only the x86 client.
         #[arg(long)]
         native: bool,
+        /// Build/check the portable server/career tools on Windows x86.
+        #[arg(long, conflicts_with = "native")]
+        server_tools: bool,
         #[arg(long, conflicts_with = "tests")]
         check: bool,
         #[arg(long)]
@@ -47,7 +50,8 @@ fn main() -> Result<()> {
                 native: true,
                 check: false,
                 tests: false,
-                clippy: false
+                clippy: false,
+                ..
             }
     ) {
         dev_env_support::RunningExecutable::park(&root())?
@@ -82,10 +86,11 @@ fn main() -> Result<()> {
         }
         Task::Windows {
             native,
+            server_tools,
             check,
             tests,
             clippy,
-        } => windows(native, check, tests, clippy)?,
+        } => windows(native, check, tests, clippy, server_tools)?,
         Task::Verify {
             #[cfg(target_os = "linux")]
             proton,
@@ -104,7 +109,11 @@ fn root() -> PathBuf {
         .unwrap()
         .to_path_buf()
 }
-fn windows(native: bool, check: bool, tests: bool, clippy: bool) -> Result<()> {
+fn windows(native: bool, check: bool, tests: bool, clippy: bool, server_tools: bool) -> Result<()> {
+    ensure!(
+        !(native && server_tools),
+        "--server-tools is the x86 scope; native already builds the workspace"
+    );
     let root = root();
     let (mut command, target) = windows_command(&root, native)?;
     command.current_dir(&root);
@@ -120,7 +129,14 @@ fn windows(native: bool, check: bool, tests: bool, clippy: bool) -> Result<()> {
     if native {
         command.arg("--workspace");
     } else {
-        command.args(["-p", "client_dll"]);
+        command.args([
+            "-p",
+            if server_tools {
+                "multiplayer_server"
+            } else {
+                "client_dll"
+            },
+        ]);
     }
     command.args(["--target", target, "--locked"]);
     if tests {
@@ -139,7 +155,7 @@ fn windows(native: bool, check: bool, tests: bool, clippy: bool) -> Result<()> {
         }
         ensure!(child.wait()?.success(), "Windows test build failed");
         ensure!(!paths.is_empty(), "Cargo returned no test artifacts");
-        let manifest = root.join(manifest(native));
+        let manifest = root.join(manifest(native, server_tools));
         fs::write(&manifest, serde_json::to_vec_pretty(&paths)?)?;
         println!("Windows test manifest: {}", manifest.display());
         return Ok(());
@@ -151,9 +167,11 @@ fn windows(native: bool, check: bool, tests: bool, clippy: bool) -> Result<()> {
     ensure!(command.status()?.success(), "Windows build failed");
     Ok(())
 }
-fn manifest(native: bool) -> &'static str {
+fn manifest(native: bool, server_tools: bool) -> &'static str {
     if native {
         "target/windows-native-tests.json"
+    } else if server_tools {
+        "target/windows-server-tests.json"
     } else {
         "target/windows-tests.json"
     }
@@ -175,7 +193,7 @@ fn totals(line: &str) -> Option<(u32, u32)> {
 }
 #[cfg_attr(not(windows), allow(dead_code))]
 /// Run one bench through this project's test_host, echoing output and summing results.
-fn bench(native: bool) -> Result<(u32, u32)> {
+fn bench(native: bool, server_tools: bool) -> Result<(u32, u32)> {
     let root = root();
     let host = root.join(if native {
         "target/x86_64-pc-windows-gnu/debug/test_host.exe"
@@ -184,7 +202,9 @@ fn bench(native: bool) -> Result<(u32, u32)> {
     });
     ensure!(host.is_file(), "missing {}", host.display());
     let mut command = Command::new(host);
-    command.arg(manifest(native)).current_dir(&root);
+    command
+        .arg(manifest(native, server_tools))
+        .current_dir(&root);
     bench_command(command)
 }
 fn bench_command(mut command: Command) -> Result<(u32, u32)> {
@@ -223,15 +243,20 @@ fn verify() -> Result<()> {
         inventory.total_bytes
     );
     // The bench loads the release DLL, so build it before the test artifacts.
-    windows(false, false, false, false)?;
+    windows(false, false, false, false, false)?;
+    windows(false, false, false, false, true)?;
     // Test artifacts do not refresh the standalone server/asset executables.
-    windows(true, false, false, false)?;
-    windows(false, false, true, false)?;
-    let x86 = bench(false)?;
-    windows(true, false, true, false)?;
-    let native = bench(true)?;
-    windows(false, false, false, true)?;
-    windows(true, false, false, true)?;
+    windows(true, false, false, false, false)?;
+    windows(false, false, true, false, false)?;
+    let client = bench(false, false)?;
+    windows(false, false, true, false, true)?;
+    let server = bench(false, true)?;
+    let x86 = (client.0 + server.0, client.1 + server.1);
+    windows(true, false, true, false, false)?;
+    let native = bench(true, false)?;
+    windows(false, false, false, true, false)?;
+    windows(false, false, false, true, true)?;
+    windows(true, false, false, true, false)?;
     let format = Command::new("cargo")
         .args(["fmt", "--all", "--check"])
         .current_dir(root())
@@ -380,6 +405,17 @@ fn windows_command(root: &Path, native: bool) -> Result<(Command, &'static str)>
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn server_tools_have_a_separate_x86_manifest_and_explicit_scope() {
+        use super::*;
+        use clap::Parser;
+        assert!(Args::try_parse_from(["dev_env", "windows", "--server-tools", "--tests"]).is_ok());
+        assert!(
+            Args::try_parse_from(["dev_env", "windows", "--server-tools", "--native"]).is_err()
+        );
+        assert_ne!(manifest(false, false), manifest(false, true));
+        assert_ne!(manifest(true, false), manifest(false, true));
+    }
     #[test]
     fn parses_libtest_summaries_only() {
         assert_eq!(

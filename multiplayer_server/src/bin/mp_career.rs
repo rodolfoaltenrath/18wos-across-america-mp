@@ -4,7 +4,9 @@ use clap::{Args, Parser, Subcommand};
 use multiplayer_server::{
     career::{self, Compatibility, Goal},
     career_net::{self, Invite},
-    career_store as store, session_protocol,
+    career_store as store,
+    career_world::{Operation, WorldStore},
+    session_protocol,
 };
 use sha2::{Digest, Sha256};
 use std::{
@@ -101,6 +103,37 @@ enum Command {
         #[arg(long)]
         data: PathBuf,
     },
+    /// Read-only shared sidecar clock/ranking/contracts. No game writes.
+    WorldStatus {
+        #[arg(long)]
+        server: SocketAddr,
+        #[arg(long)]
+        invite: PathBuf,
+        #[command(flatten)]
+        content: Content,
+    },
+    /// Local host administration. Refuses while another writer/server owns data.
+    Apply {
+        #[arg(long)]
+        data: PathBuf,
+        #[arg(long)]
+        operation: PathBuf,
+        /// Retain this exact ID when retrying after an uncertain result.
+        #[arg(long)]
+        operation_id: String,
+    },
+    /// Offline checkpoint/ranking query, with exclusive store ownership.
+    World {
+        #[arg(long)]
+        data: PathBuf,
+    },
+    /// Actual TCP/store/contract recovery, using only synthetic owned fixtures.
+    Lab {
+        #[arg(long)]
+        output: PathBuf,
+        #[arg(long,default_value_t=100,value_parser=clap::value_parser!(u32).range(1..=1000))]
+        iterations: u32,
+    },
 }
 fn fingerprint(path: &Path) -> Result<String> {
     let mut file = File::open(path)?;
@@ -194,6 +227,39 @@ async fn main() -> Result<()> {
         Command::Inspect { data } => {
             let (manifest, _) = store::load(&data).map_err(anyhow::Error::msg)?;
             println!("{}", serde_json::to_string_pretty(&manifest)?);
+        }
+        Command::WorldStatus {
+            server,
+            invite,
+            content,
+        } => {
+            let invite: Invite = store::read_json(&invite).map_err(anyhow::Error::msg)?;
+            let snapshot = career_net::world_status(server, &invite, content.resolve()?).await?;
+            println!("{}", serde_json::to_string_pretty(&snapshot)?);
+        }
+        Command::Apply {
+            data,
+            operation,
+            operation_id,
+        } => {
+            let operation: Operation = store::read_json(&operation).map_err(anyhow::Error::msg)?;
+            let mut world = WorldStore::open(&data).map_err(anyhow::Error::msg)?;
+            let receipt = world
+                .execute(&operation_id, &operation)
+                .map_err(anyhow::Error::msg)?;
+            println!("{}", serde_json::to_string_pretty(&receipt)?);
+        }
+        Command::World { data } => {
+            let world = WorldStore::open(&data).map_err(anyhow::Error::msg)?;
+            println!("{}", serde_json::to_string_pretty(&world.snapshot())?);
+        }
+        Command::Lab { output, iterations } => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(
+                    &multiplayer_server::career_lab::run(&output, iterations).await?
+                )?
+            );
         }
     }
     Ok(())

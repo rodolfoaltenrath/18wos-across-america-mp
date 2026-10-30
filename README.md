@@ -180,6 +180,79 @@ Compartilhar o save-base aproxima o estado inicial. Manter horário, trânsito,
 física, clima e progresso iguais requer autoridade e adaptadores contínuos no
 motor; copiar novamente um arquivo não sincroniza essas simulações.
 
+### Estado persistente da carreira e bancada sem jogo
+
+O mesmo serviço agora mantém um **estado próprio**, separado do `.sav`:
+empresas por identidade persistente, ranking por saldo exato, fretes com dono
+exclusivo, checkpoint de veículo/pose/carga/contrato e pagamento único. O relógio
+do sidecar começa em zero, tem pausa e escala de 1 a 3600, avança pelo tempo
+monotônico do servidor e conserva o último checkpoint ao reiniciar. Não avança
+durante o período desligado; não é ainda o calendário lido/escrito no jogo.
+Mudanças econômicas são sincronizadas em disco antes do recibo; o relógio é
+gravado a cada 30 s de operação e na parada normal. Em crash, a parcela de tempo
+posterior ao último checkpoint pode se perder. O ranking usa o saldo próprio;
+`ledger_goal_reached` não dispara uma vitória no motor.
+
+```text
+target/release/mp_career lab --output target/analysis/career-lab-NOVO --iterations 100
+target/release/mp_career world --data CARREIRA-NOVA
+mp_career world-status --server IP-DO-HOST:39001 --invite CONVITE.json --map ARQUIVO-DO-MAPA.scs
+```
+
+`lab` cria apenas fixtures próprias numa pasta nova. Exercita o armazenamento
+e os clientes/servidor TCP reais: dois leitores, transferência, rejeições,
+aceite exclusivo, checkpoint, entrega atestada pela fixture do host, pagamento,
+recuperação com ACK perdido e consultas consistentes. Salva `report.json` e
+`world-example.json`; remove somente os casos sintéticos criados por esse run.
+Os relatórios mantêm `game_tested=false`/`two_pc_lan_tested=false`. Funciona
+nativo e como `mp_career.exe` Windows x86 na bancada Proton, sem abrir a partida.
+
+Administração **local do host**, com servidor parado:
+
+```text
+mp_career apply --data CARREIRA-NOVA --operation OPERACAO.json --operation-id 00000000000000000000000000000001
+```
+
+O JSON é tipado (`kind`) e não executa código. Repetir o mesmo ID de 32 dígitos
+hex com os mesmos argumentos devolve o resultado sem repetir o efeito; mudar
+os argumentos desse ID é recusado. Uma operação recusada antes do commit pode
+ser repetida depois de corrigir a pré-condição. Exemplo de registro:
+
+```json
+{"kind":"register","player":"00000000000000000000000000000001","name":"Transportadora A"}
+```
+
+| `kind` | Campos adicionais |
+| --- | --- |
+| `offer` | `contract` (ID hex), `origin`, `destination`, `reward_minor` |
+| `accept` | `player`, `contract` |
+| `checkpoint` | `player`, `vehicle`, `position` (`x/y/z`), `rotation` quaternion (`x/y/z/w`) |
+| `deliver` | `player`, `contract`, `host_attestation_sha256` |
+| `configure_clock` | `paused`, `scale` |
+
+O servidor atribui o ID da carga no aceite; checkpoints carregam o contrato do
+dono e a entrega limpa a carga junto com o crédito. Uma empresa carrega no
+máximo um contrato ativo. `deliver` exige confirmação explícita do host e um
+checkpoint anterior; o hash não prova, sozinho, transporte/chegada reais.
+Não há aceitação de entregas enviada por clientes de jogo. O canal TCP expõe
+somente bootstrap e consultas autenticadas pelo convite; não concede poder de
+alterar saldos remotamente. A identidade do sidecar ainda não é vinculada às
+credenciais dos jogadores no relay v2.
+
+Limites desta versão: 64 empresas, 128 contratos e 512 operações confirmadas
+por carreira. Atingir o limite recusa novas operações; não descarta o histórico
+que impede duplicar pagamentos. Compaction/migrações ainda pendentes. O lock
+impede administração concorrente ao serviço. Nenhum saldo, checkpoint ou regra
+é aplicado ao jogo nesta etapa: os adaptadores e a entrada pelo assistente
+continuam para um próximo marco agrupado.
+
+`dev_env windows --server-tools` compila os utilitários Windows x86 do servidor;
+aceita também `--tests`, `--check` e `--clippy`, com manifesto de testes separado.
+`dev_env verify` inclui automaticamente esse escopo na bancada x86, além da DLL
+e do workspace nativo. No Windows, o servidor de uso normal continua sendo o
+binário x64 documentado; a variante x86 permite exercitar os mesmos fluxos no
+runtime da bancada.
+
 O protocolo de sessão LAN v2 é optativo e tem contrato em
 [docs/NETWORK_PROTOCOL.md](docs/NETWORK_PROTOCOL.md). Ele acrescenta sala,
 aceite/recusa, identidade local, gerações de conexão, heartbeat, timeout,

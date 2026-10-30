@@ -180,6 +180,9 @@ impl<T: Serialize + DeserializeOwned + Clone> Journal<T> {
     pub fn state(&self) -> &T {
         &self.state
     }
+    pub fn requires_recovery(&self) -> bool {
+        self.poisoned
+    }
     pub fn commit(
         &mut self,
         state: T,
@@ -285,5 +288,23 @@ pub(crate) mod tests {
         fs::write(dest.join("bootstrap.sav"), b"tampered").unwrap();
         assert!(load(&dest).is_err());
         assert_eq!(fs::read(input).unwrap(), b"own fixture");
+    }
+    #[test]
+    fn last_revision_checksum_and_missing_intermediate_fail_closed() {
+        let dir = Temp::new();
+        let validate = |_: &u64| Ok(());
+        let mut j = Journal::open(&dir.0, 0u64, validate).unwrap();
+        j.commit(1, validate).unwrap();
+        j.commit(2, validate).unwrap();
+        drop(j);
+        let last = dir.0.join("revision-00000000000000000002.json");
+        let original = fs::read(&last).unwrap();
+        let mut value: serde_json::Value = serde_json::from_slice(&original).unwrap();
+        value["state"] = 99.into();
+        fs::write(&last, json(&value).unwrap()).unwrap();
+        assert!(Journal::open(&dir.0, 0u64, validate).is_err());
+        fs::write(&last, original).unwrap();
+        fs::remove_file(dir.0.join("revision-00000000000000000001.json")).unwrap();
+        assert!(Journal::open(&dir.0, 0u64, validate).is_err());
     }
 }
