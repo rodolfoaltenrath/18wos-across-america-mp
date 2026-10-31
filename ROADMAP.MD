@@ -1,5 +1,68 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Revisão dos blocos recentes e fontes suavizadas — 30/10/2026
+
+Retomado de `fed7ac5` no Fedora, árvore inicialmente limpa. Revistos os quatro
+blocos desde a carreira offline: admissão por ticket/preflight (`0e10a59`),
+quarto crate/modelo/prévia e montagem reversível (`d172124`), menu limitado ao
+painel esquerdo (`1a33fe6`) e tradução da tabela/acentos (`fed7ac5`). Preservar
+os limites: UI nativa Multiplayer inativa, sem callbacks novos por hipótese;
+estado econômico/relógio próprio não são estado do motor. A primeira LAN segue
+válida e não precisa ser refeita para esse ajuste de texto.
+
+O proprietário relatou teste inicial positivo da tradução e pediu uma fonte
+menos quadrada. Registrar como observação humana geral, sem marcar toda a G11
+por falta de detalhe/captura dessa rodada. Nenhuma fonte nova havia sido
+instalada nesta árvore Fedora ao retomar; não presumir o mesmo estado do outro
+ambiente. Configuração e arquivos originais ficaram intactos neste bloco.
+
+Entregue `localization::typeface`: carregamento local TrueType/OpenType, cobertura
+ASCII/PT-BR completa exigida, rasterização Rust com alpha suavizado, reforço de
+cobertura determinístico, ajuste vertical conjunto para acentos e descendentes,
+redução horizontal somente quando excede a célula antiga. Conserva avanços,
+kerning e métricas de linha; preserva slots especiais/pixels originais, escreve
+substituições abaixo da imagem e atualiza os shaders das variantes.
+`font::replace` conserva as linhas de métricas/kerning/comentários legados e
+os slots não selecionados. Sem TTF/arquivos comerciais versionados.
+
+`l10n_tools build --typeface ARQUIVO [--font-strength 0..100]` gera a versão
+0.2.0 do mesmo projeto `ptbr-text` (derived_local), com hashes/estatísticas e
+comparações anterior/nova. Fonte local inválida ou face UI não reconstruída
+interrompe sem projeto parcial; somente `default.font` não UI é excluída.
+Modo antigo sem a opção preservado. Prévia corrigida para usar kerning real e
+avanços, sem o pixel artificial extra; limites de texto/escala/alocação.
+
+Preparadas Carlito Regular e Bold; Bold escolhida para o pacote de comparação
+por legibilidade nos tamanhos pequenos. Mantidos cenário/logos/layout do menu,
+catálogo 484/484, codificação de um byte e dublagem separada. Pacote, imagens e
+instruções locais em `target/analysis/l10n-carlito-bold-20261030/`, ignorados.
+Não instalado nem aberto o jogo. A próxima rodada G11 deve conferir a fonte
+nova, acentos/descendentes, dicas pequenas e cortes; não exigir novo par LAN.
+
+Validação final no Fedora: **196 testes Windows x86 sob Proton e 253 nativos**,
+builds release nativo/x86, Clippy da integração/servidor/nativo e rustfmt.
+Os testes da prévia GDI/PT-BR também passaram sob Proton; isso não é o render
+do jogo. O utilitário `l10n_tools.exe` teve build release e Clippy x86 próprios.
+Reconstruiu 13 fontes/56 arquivos e 26 PNGs a partir dos mesmos SCS/TTF locais;
+todo o diretório gerado é byte a byte idêntico ao nativo. Carlito Bold com
+contraste 40, SHA-256 da face registrado no relatório. `mod-verify` aprovou o
+pacote 0.2.0 (3.680.397 bytes, distributable=false), inclusive nova conferência
+após a queda de energia. CLI recusou contraste fora do limite, contraste sem
+fonte e arquivo de fonte inválido sem criar projeto.
+
+Queda de energia interrompeu o primeiro verify na bancada x86. Não contabilizar
+essa execução como concluída; log original preservado. Ao retomar, nenhum jogo,
+verificador ou wineserver estava ativo. Marcador antigo `verify-linux.lock`
+continha PID 13692, ausente em /proc; foi movido para análise antes da nova
+execução. Verify completo retomado passou, sem reutilizar resultado parcial.
+Logs privados em `target/analysis/verify-fedora-20261030-smooth-fonts-resumed.log`,
+`l10n-typeface-x86-{build,clippy}-20261030.log`,
+`l10n-carlito-bold-x86-20261030.log` e
+`l10n-carlito-cross-output-diff-20261030.log` (vazio: saídas iguais).
+`APLICAR-NESTE-PC.txt`, junto ao pacote privado, contém instalação/status/restore
+para esta árvore Fedora, sem executar esses passos. Config original inalterado;
+montagem/filtragem/aspecto no motor continuam pendentes.
+
 ## Tradução PT-BR — etapa T1 da tabela de textos — 30/10/2026
 
 O proprietário pediu a tradução completa, textos e dublagem em etapas separadas.

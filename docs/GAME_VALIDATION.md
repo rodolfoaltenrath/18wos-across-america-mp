@@ -485,18 +485,37 @@ Nova prova LAN só para o fluxo integrado quando houver dois computadores.
 
 ### G11 — Tradução PT-BR da tabela e fontes (T1 entregue offline, 30/10)
 
+Retorno posterior do proprietário em 30/10: até onde testou a tradução, ficou
+boa; solicitou uma fonte menos quadrada. Relato geral, sem lista de telas,
+resolução ou diagnóstico de todos os glifos. Preservar essa evidência humana e
+não repetir toda a tradução só para registrar números. A alternativa Carlito
+Bold já está preparada pelo pipeline `--typeface`, com prévias e pacote
+derived_local 0.2.0; não foi instalada/testada no motor nesta implementação.
+Na próxima rodada local, concentrar nos itens abaixo com a fonte nova.
+
+Bancada após essa alteração: 196 x86 sob Proton/253 nativos e verificações de
+build/Clippy/fmt passaram. `l10n_tools` nativo e Windows x86 geraram projetos
+idênticos: 13 faces, 56 entradas e 26 PNGs. Pacote local conferido por hash após
+a queda de energia; verify interrompido repetido integralmente. Nenhuma dessas
+provas fecha os itens de montagem/aparência/acentos abaixo.
+
 Não precisa do segundo PC. Pacote `ptbr-text` gerado localmente: 484/484 chaves
 de `scripts/local.def` e 21 glifos sintetizados em 13 fontes. Comandos e limites
 em docs/LOCALIZATION.md. Prévia PNG inspecionada fora do jogo; nenhuma
 montagem/abertura feita. Dublagem é etapa própria (T3), fora desta rodada.
 
-- [ ] Com jogo fechado, `ui_tools install --kind ptbr-text` com backup novo.
+- [ ] Com jogo fechado, restaurar a tradução anterior por seu backup se estiver
+  montada, depois `ui_tools install --kind ptbr-text` com pacote/fontes novos e
+  backup novo. Não substituir o SCS por cima nem desmontar o menu p4 sem motivo.
   Abrir pela Steam: confirmar que a montagem p5 é aceita e que menu, opções e
   carregamento aparecem em PT-BR.
 - [ ] Acentos: conferir à, â, ã, ç, ê, õ, maiúsculas acentuadas e ú nas fontes
   pequena (dicas/HUD), média (menus) e grande (títulos/placas). Registrar se
   algum glifo some, sai deslocado ou aparece como outro caractere: isso
   refutaria a hipótese de um byte por caractere (Windows-1252).
+- [ ] Tipografia nova: curvas/contraste de Carlito Bold legíveis nos tamanhos
+  pequeno/médio/grande, sem cortes no topo dos acentos ou em g/p/q/ç, sem alteração
+  inesperada de medidas/linhas. Prévias PNG não comprovam filtragem/render nativo.
 - [ ] Layout: textos mais longos que o inglês em botões, opções de controle,
   Caderno (economia/frota), loja e mensagens de entrega. Anotar cortes.
 - [ ] Chaves com cor (`qh_city_buttonx`, `qh_cargo_listx`) e `<br>` em

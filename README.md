@@ -122,10 +122,21 @@ ui_tools install --kind ptbr-text --game . --package target/analysis/NOVO/packag
 ```
 
 Instalar e restaurar só com o jogo fechado; `ui_tools restore` volta ao
-`init.cfg` original. Ainda não foi testado no jogo (G11 em
-[docs/GAME_VALIDATION.md](docs/GAME_VALIDATION.md)). Textos fora da tabela,
+`init.cfg` original. O proprietário relatou teste inicial positivo da tradução
+em 30/10, com pedido de uma fonte menos quadrada; a matriz detalhada permanece
+em [docs/GAME_VALIDATION.md](docs/GAME_VALIDATION.md). Textos fora da tabela,
 dublagem e R$ estão pendentes; detalhes em
 [docs/LOCALIZATION.md](docs/LOCALIZATION.md).
+
+Para gerar a alternativa suavizada, acrescentar
+`--typeface CAMINHO/Carlito-Bold.ttf` ao comando `l10n_tools build`.
+`--font-strength 40` é o contraste padrão (0..100). A fonte é lida localmente,
+não distribuída; o relatório registra o hash e as métricas preservadas.
+`preview/*-comparison.png` mostra a anterior em cima e a nova embaixo.
+O pacote 0.2.0 mantém as 484 traduções e as medidas dos textos; não altera
+cenário/logos/layout do painel esquerdo. Foi preparado fora do jogo; a aparência
+no motor ainda exige conferência. Se a tradução anterior estiver montada,
+restaurá-la com seu backup antes de instalar este pacote com backup novo.
 
 ## Kit local para o segundo PC Windows
 

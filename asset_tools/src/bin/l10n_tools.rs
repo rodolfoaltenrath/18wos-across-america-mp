@@ -58,6 +58,13 @@ enum Task {
         output: PathBuf,
         #[arg(long)]
         archive: Vec<PathBuf>,
+        /// Local TrueType/OpenType file, rasterized with antialiased edges.
+        /// Replaces Latin glyphs, preserving legacy advances and line metrics.
+        #[arg(long)]
+        typeface: Option<PathBuf>,
+        /// Coverage contrast (0..100), default 40; never thresholds the edges.
+        #[arg(long,requires="typeface",value_parser=clap::value_parser!(u8).range(0..=100))]
+        font_strength: Option<u8>,
     },
 }
 fn mounts(archive: Vec<PathBuf>) -> Result<l10n::Mounts> {
@@ -130,8 +137,21 @@ fn main() -> Result<()> {
             catalog,
             output,
             archive,
+            typeface,
+            font_strength,
         } => {
-            let report = l10n::build(&mounts(archive)?, &load(&catalog)?, &output)?;
+            let face = typeface
+                .as_deref()
+                .map(l10n::typeface::Typeface::load)
+                .transpose()?
+                .map(|f| f.with_strength(font_strength.unwrap_or(40)))
+                .transpose()?;
+            let report = l10n::build_with_typeface(
+                &mounts(archive)?,
+                &load(&catalog)?,
+                &output,
+                face.as_ref(),
+            )?;
             println!(
                 "{} of {} keys translated, {} fonts extended, {} skipped, {} files; not tested in game.",
                 report.catalog.translated,

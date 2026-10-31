@@ -401,25 +401,55 @@ pub fn preview(
     text: &[u8],
     scale: u32,
 ) -> Result<image::RgbaImage> {
+    ensure!(
+        (1..=8).contains(&scale) && text.len() <= 4096,
+        "preview scale/text limit"
+    );
     let f = font::parse(font_bytes)?;
     let height = f.vert_span + 6;
     let mut pen = 2i32;
     let mut placed = vec![];
+    let mut previous = None;
+    let kerning: BTreeMap<_, _> = f
+        .kerning
+        .iter()
+        .map(|k| ((k.left, k.right), k.amount))
+        .collect();
     for b in text {
         let Some(g) = f.glyphs.get(b) else {
             bail!("slot {b} missing in preview")
         };
+        if let Some(prev) = previous {
+            pen += kerning.get(&(prev, *b)).copied().unwrap_or(0);
+        }
         placed.push((pen, Ink::crop(atlas, g)?));
-        pen += g.advance + 1;
+        pen += g.advance;
+        previous = Some(*b);
     }
-    let (w, h) = ((pen + 2) as u32, height as u32);
+    let min_x = placed
+        .iter()
+        .map(|(x, g)| x + g.left)
+        .min()
+        .unwrap_or(0)
+        .min(0);
+    let max_x = placed
+        .iter()
+        .map(|(x, g)| x + g.left + g.w)
+        .max()
+        .unwrap_or(1)
+        .max(pen);
+    let (w, h) = (u32::try_from(max_x - min_x + 2)?, height as u32);
+    ensure!(
+        u64::from(w) * u64::from(h) * u64::from(scale).pow(2) <= 16 * 1024 * 1024,
+        "preview pixel limit"
+    );
     let mut img =
         image::RgbaImage::from_pixel(w * scale, h * scale, image::Rgba([24, 32, 48, 255]));
     for (x0, ink) in placed {
         for y in 0..ink.h {
             for x in 0..ink.w {
                 let a = u32::from(ink.at(x, y));
-                let (px, py) = (x0 + ink.left + x, 3 + ink.top + y);
+                let (px, py) = (x0 + ink.left + x - min_x, 3 + ink.top + y);
                 if a == 0 || px < 0 || py < 0 || px as u32 >= w || py as u32 >= h {
                     continue;
                 }
@@ -523,5 +553,18 @@ mod tests {
         );
         assert!(resize_shader(shd, 128, 256).is_err());
         assert!(resize_shader(b"UI(x.tga,1,2,3)", 1, 4).is_err());
+    }
+    #[test]
+    fn preview_uses_actual_advances_and_kerning_and_bounds_allocation() {
+        let atlas = Atlas {
+            w: 2,
+            h: 2,
+            rgba: vec![[255; 4]; 4],
+        };
+        let bytes = b"vert_span:8\nline_spacing:0\nimage:/fonts/own.shd\n$065,0,0,2,2,0,0,3\nkern:$065,$065,-1\n";
+        let image = preview(bytes, &atlas, b"AA", 1).unwrap();
+        assert_eq!(image.width(), 9); // two advances, one kern, explicit padding.
+        assert!(preview(bytes, &atlas, b"AA", 0).is_err());
+        assert!(preview(bytes, &atlas, &vec![b'A'; 4097], 1).is_err());
     }
 }

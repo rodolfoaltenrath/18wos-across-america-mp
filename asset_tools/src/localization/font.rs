@@ -20,6 +20,13 @@ pub struct Font {
     pub images: Vec<String>,
     pub glyphs: BTreeMap<u8, Glyph>,
     pub kerns: usize,
+    pub kerning: Vec<Kern>,
+}
+#[derive(Serialize)]
+pub struct Kern {
+    pub left: u8,
+    pub right: u8,
+    pub amount: i32,
 }
 fn slot(value: &str) -> Result<u8> {
     let digits = value.trim().strip_prefix('$').context("kern slot")?;
@@ -33,6 +40,7 @@ pub fn parse(bytes: &[u8]) -> Result<Font> {
         images: vec![],
         glyphs: BTreeMap::new(),
         kerns: 0,
+        kerning: vec![],
     };
     for raw in bytes.split(|b| *b == b'\n') {
         let raw = raw.split(|b| *b == b'#').next().unwrap_or_default();
@@ -76,11 +84,16 @@ pub fn parse(bytes: &[u8]) -> Result<Font> {
         } else if let Some(v) = line.strip_prefix("kern:") {
             let parts: Vec<&str> = v.split(',').collect();
             ensure!(parts.len() == 3, "kern field count");
-            slot(parts[0])?;
-            slot(parts[1])?;
+            let left = slot(parts[0])?;
+            let right = slot(parts[1])?;
             let amount: i32 = parts[2].trim().parse().context("kern amount")?;
             ensure!((-64..=64).contains(&amount), "kern bounds");
             result.kerns += 1;
+            result.kerning.push(Kern {
+                left,
+                right,
+                amount,
+            });
             ensure!(result.kerns <= 65536, "kern count");
         } else if let Some(v) = line.strip_prefix("vert_span:") {
             result.vert_span = v.trim().parse()?;
@@ -141,6 +154,61 @@ pub fn append(original: &[u8], added: &BTreeMap<u8, Glyph>) -> Result<Vec<u8>> {
     parse(&out)?;
     Ok(out)
 }
+
+/// Replaces selected glyph records only. Other slots, comments, kerning and
+/// line metrics remain byte-identical; missing slots are appended explicitly.
+pub fn replace(original: &[u8], replacements: &BTreeMap<u8, Glyph>) -> Result<Vec<u8>> {
+    let parsed = parse(original)?;
+    let mut out = Vec::with_capacity(original.len());
+    for line in original.split_inclusive(|b| *b == b'\n') {
+        let trimmed = line
+            .iter()
+            .position(|b| !b" \t".contains(b))
+            .map_or(&[][..], |start| &line[start..]);
+        let key = if trimmed.starts_with(b"$") {
+            let end = trimmed
+                .iter()
+                .position(|b| *b == b',')
+                .context("glyph delimiter")?;
+            Some(
+                std::str::from_utf8(&trimmed[1..end])?
+                    .trim()
+                    .parse::<u8>()?,
+            )
+        } else {
+            None
+        };
+        if let Some((key, g)) = key.and_then(|key| replacements.get(&key).map(|g| (key, g))) {
+            out.extend_from_slice(
+                format!(
+                    "${key:03}, {}, {}, {}, {}, {}, {}, {}",
+                    g.x, g.y, g.w, g.h, g.left, g.top, g.advance
+                )
+                .as_bytes(),
+            );
+            if let Some(comment) = line.iter().position(|b| *b == b'#') {
+                out.push(b' ');
+                out.extend_from_slice(&line[comment..]);
+            } else if line.ends_with(b"\r\n") {
+                out.extend_from_slice(b"\r\n");
+            } else if line.ends_with(b"\n") {
+                out.push(b'\n');
+            }
+        } else {
+            out.extend_from_slice(line);
+        }
+    }
+    let added = replacements
+        .iter()
+        .filter(|(k, _)| !parsed.glyphs.contains_key(k))
+        .map(|(k, v)| (*k, v.clone()))
+        .collect();
+    if !BTreeMap::<u8, Glyph>::is_empty(&added) {
+        out = append(&out, &added)?;
+    }
+    parse(&out)?;
+    Ok(out)
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -170,5 +238,34 @@ mod tests {
         assert!(out.ends_with(b"\r\n"));
         assert_eq!(parse(&out).unwrap().glyphs[&227], g);
         assert!(append(OWN, &BTreeMap::from([(65u8, g)])).is_err());
+    }
+    #[test]
+    fn replacement_preserves_kerning_legacy_comments_and_unselected_slots() {
+        let original = [OWN, b"$066,0,0,1,1,0,1,3\r\n"].concat();
+        let g = Glyph {
+            x: 2,
+            y: 30,
+            w: 4,
+            h: 5,
+            left: -1,
+            top: 2,
+            advance: 5,
+        };
+        let out = replace(
+            &original,
+            &BTreeMap::from([(65, g.clone()), (227, g.clone())]),
+        )
+        .unwrap();
+        let parsed = parse(&out).unwrap();
+        assert_eq!(parsed.glyphs[&65], g);
+        assert_eq!(parsed.glyphs[&227], g);
+        assert_eq!(parsed.glyphs[&66], parse(&original).unwrap().glyphs[&66]);
+        assert!(
+            out.windows(b"kern: $065, $065, -1  # \xff\r\n".len())
+                .any(|v| v == b"kern: $065, $065, -1  # \xff\r\n")
+        );
+        assert!(out.windows(b"# \xff\r\n".len()).any(|v| v == b"# \xff\r\n"));
+        assert_eq!(parsed.kerning[0].amount, -1);
+        assert_eq!(parsed.line_spacing, 2);
     }
 }

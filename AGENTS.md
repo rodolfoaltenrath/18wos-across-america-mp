@@ -1,5 +1,22 @@
 # Orientações para continuar o projeto
 
+Fontes em 30/10, após `fed7ac5`: proprietário relatou teste geral positivo da
+tradução, mas considerou a fonte quadrada. Não afirmar que ninguém testou a
+tradução nem marcar toda G11 sem detalhe. `l10n_tools build --typeface TTF`
+agora gera contornos suavizados, mantendo avanços/kerning/linha antigos;
+`--font-strength` 0..100, padrão 40. Carlito Bold preparada localmente em pacote
+derived_local 0.2.0 com comparações anterior em cima/nova embaixo. Modo antigo
+sem typeface preservado. Fontes/atlas/TTF/pacotes continuam fora do Git.
+Não instalado/aberto jogo por esse incremento. Preservar montagens existentes:
+restaurar tradução anterior por seu backup antes de instalar outra com backup
+novo. Próxima prova G11 só para tipografia/layout, não repetir LAN básica.
+Validação final Fedora deste bloco: 196 x86 sob Proton/253 nativos, releases,
+Clippy/fmt; l10n_tools.exe com build/Clippy próprios e saída idêntica ao nativo
+(56 arquivos/26 PNGs). Pacote 0.2.0 íntegro após queda de energia. Verify
+interrompido preservado e repetido por completo; log final em
+target/analysis/verify-fedora-20261030-smooth-fonts-resumed.log. Não instalado;
+instruções junto ao pacote privado em APLICAR-NESTE-PC.txt. Config intacto.
+
 Tradução PT-BR em 30/10 (decisão do proprietário): textos e dublagem em
 etapas separadas. T1 entregue offline: `l10n_tools check/stamp/build`, catálogo
 `translations/pt-BR/local_def.json` com 484/484 chaves de `local.def` e 21

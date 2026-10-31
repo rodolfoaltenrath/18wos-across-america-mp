@@ -5,7 +5,13 @@ dublagem em etapas separadas**. A primeira versão traduzida deve poder ser
 testada sem esperar pela produção das vozes. Moeda R$ continua requisito
 separado (M7): os valores em `$` foram mantidos na tradução.
 
-## Etapa T1 — tabela `scripts/local.def` (entregue, sem teste no jogo)
+## Etapa T1 — tabela `scripts/local.def` (entregue; retorno inicial positivo)
+
+Em 30/10 o proprietário informou que testou a tradução e, até onde verificou,
+ficou boa. Pediu trocar a fonte por achá-la quadrada. É um relato humano geral:
+não especifica telas, resolução, cobertura de glifos ou restauração; esses itens
+de G11 continuam pendentes. Preservar o teste já feito e concentrar a próxima
+conferência nas fontes novas e em eventuais cortes.
 
 O jogo procura textos por chave (`@@chave@@`) em `scripts/local.def`. O arquivo
 visível é o do `aa/patch_1_10.scs` (prioridade p3), cifrado com o envelope 3nK;
@@ -88,6 +94,66 @@ Primeira geração real, com o catálogo completo:
   `mod-verify`.
 - Artefatos privados em `target/analysis/l10n-ptbr-20261030-01/` (ignorado).
 - Não houve instalação nem abertura do jogo.
+
+### Tipografia suavizada — alternativa TrueType, 30/10
+
+`l10n_tools build --typeface ARQUIVO.ttf` agora substitui os contornos de ASCII
+imprimível e dos acentos PT-BR por glifos reais da fonte fornecida. A leitura e
+rasterização usam Rust (`fontdue`), sem GDI ou dependência de fontes do Windows.
+O arquivo é local, não acompanha o projeto/pacote, e deve conter todos os glifos
+exigidos. Hash SHA-256 e nome da face ficam no relatório, sem o caminho privado.
+
+Preparada nesta máquina a alternativa **Carlito Bold**: curvas mais suaves e
+traço mais legível nos tamanhos pequenos que a Regular. Não é uma mudança da
+fonte da janela de prévia (`mp_ui` já usa Segoe UI); altera os atlas do jogo
+gerados pelo pipeline de tradução. A suavização continua limitada pela resolução
+bitmap dos textos originais; não implementa vetores em tempo real nem aumenta
+as dimensões da UI.
+
+- Conserva avanço das letras, kerning, `vert_span`, `line_spacing` e referências
+  aos shaders. Espaços, números e largura de medição continuam na grade antiga.
+- Os contornos partilham uma escala vertical que cabe na linha, incluindo
+  acentos/descendentes. Só letras mais largas são reduzidas horizontalmente por
+  média de cobertura; não se alargam letras estreitas artificialmente.
+- Alpha suavizado com reforço de cobertura inteiro, determinístico, sem limiar
+  binário. `--font-strength 0..100` controla o contraste; padrão 40. Não muda o
+  peso da face instalada nem procura outra fonte silenciosamente.
+- Os pixels originais e os slots não latinos/especiais ficam preservados. As
+  substituições ocupam uma área nova do atlas, e só seus registros são refeitos.
+- `default.font`, sem shader UI, continua fora. Falha de outra fonte UI interrompe
+  o build antes de criar o projeto, em vez de deixar uma fonte antiga silenciosa.
+- Prévia agora usa avanço e kerning reais; foi removido o pixel extra artificial
+  entre todas as letras. `*-comparison.png`: fonte anterior em cima, nova embaixo.
+
+Exemplo a partir da raiz do jogo (ajustar caminhos para os seus arquivos):
+
+```text
+l10n_tools build --catalog REPO/translations/pt-BR/local_def.json --typeface CAMINHO/Carlito-Bold.ttf --font-strength 40 --output PASTA-EXISTENTE/projeto-NOVO
+asset_tools mod-build PASTA-EXISTENTE/projeto-NOVO/project.json PASTA-EXISTENTE/pacote-NOVO
+asset_tools mod-verify PASTA-EXISTENTE/pacote-NOVO
+```
+
+Sem `--typeface`, o modo anterior de acrescentar acentos continua disponível.
+O projeto tipográfico é `ptbr-text` 0.2.0, ainda **derived_local**, com o mesmo
+tipo de montagem p5 e fluxo de restauração. Restaurar primeiro a tradução
+anterior usando seu backup, depois instalar a nova com outro backup; não copiar
+um SCS por cima de uma montagem existente. Menu experimental p4 deve ficar
+intacto nessa troca. Não há troca automática de arquivos nem abertura do jogo.
+
+Projeto, pacote e prévias desta preparação ficam em
+`target/analysis/l10n-carlito-bold-20261030/`. Os arquivos são privados/ignorados;
+nenhuma fonte, atlas, prosa inglesa ou pacote comercial derivado vai ao Git.
+Nova aparência no motor ainda pendente de G11.
+
+Validação desta alternativa: 196 testes x86 sob Proton/253 nativos, releases,
+Clippy dos escopos padrão e rustfmt; build/Clippy x86 adicionais de asset_tools.
+O executável Windows gerou exatamente os mesmos arquivos que o nativo (56
+entradas, 26 PNGs e metadados). Pacote 0.2.0 com 3.680.397 bytes aprovado por
+`mod-verify`, conferido novamente após interrupção por energia. O primeiro
+verify interrompido foi preservado e repetido integralmente com sucesso.
+Instruções locais em `target/analysis/l10n-carlito-bold-20261030/APLICAR-NESTE-PC.txt`;
+nenhuma instalação/abertura automática. Esses números são bancada/pipeline,
+não provas de acentos/filtragem/layout na partida.
 
 ## Etapa T2 — texto fora da tabela (pendente)
 

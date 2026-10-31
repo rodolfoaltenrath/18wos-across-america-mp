@@ -16,6 +16,7 @@ pub mod codec;
 pub mod def;
 pub mod font;
 pub mod glyphs;
+pub mod typeface;
 
 pub fn read_entry(archive: &Path, name: &str) -> Result<Vec<u8>> {
     crate::safe_relative(name)?;
@@ -124,6 +125,8 @@ pub struct FontReport {
     pub path: String,
     pub added: Vec<String>,
     pub atlas: [usize; 2],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub typography: Option<typeface::Stats>,
 }
 #[derive(Serialize)]
 pub struct BuildReport {
@@ -203,6 +206,14 @@ fn font_texture(
 /// Writes a NEW mod project with the translated table and extended fonts.
 /// Refuses incomplete markup/encoding; untranslated keys stay English.
 pub fn build(mounts: &Mounts, cat: &catalog::Catalog, output: &Path) -> Result<BuildReport> {
+    build_with_typeface(mounts, cat, output, None)
+}
+pub fn build_with_typeface(
+    mounts: &Mounts,
+    cat: &catalog::Catalog,
+    output: &Path,
+    face: Option<&typeface::Typeface>,
+) -> Result<BuildReport> {
     ensure!(!output.exists(), "output must be a NEW directory");
     let table = mounts.read(TABLE)?;
     let source = def::parse(&table)?;
@@ -227,48 +238,94 @@ pub fn build(mounts: &Mounts, cat: &catalog::Catalog, output: &Path) -> Result<B
         // A font that cannot be resolved or extended keeps its original files.
         let extended = (|| -> Result<_> {
             let bytes = mounts.read(&path)?;
-            let (shaders, tga) = font_texture(mounts, &path, &font::parse(&bytes)?)?;
+            let original_font = font::parse(&bytes)?;
+            let (shaders, tga) = font_texture(mounts, &path, &original_font)?;
             let atlas = glyphs::read_tga(&mounts.read(&tga)?)?;
-            let s = glyphs::synthesize(&bytes, &atlas)?;
-            ensure!(
-                !s.added.is_empty() && s.missing_after.is_empty(),
-                "cannot synthesize {}",
-                s.missing_after.iter().collect::<String>()
-            );
-            let font_out = font::append(&bytes, &s.added)?;
+            let (font_out, new_atlas, added, typography) = if let Some(face) = face {
+                let result = typeface::replace(&bytes, &atlas, face)?;
+                let added = result
+                    .glyphs
+                    .keys()
+                    .filter(|k| !original_font.glyphs.contains_key(k))
+                    .map(|k| char::from(*k).to_string())
+                    .collect();
+                (
+                    font::replace(&bytes, &result.glyphs)?,
+                    result.atlas,
+                    added,
+                    Some(result.stats),
+                )
+            } else {
+                let s = glyphs::synthesize(&bytes, &atlas)?;
+                ensure!(
+                    !s.added.is_empty() && s.missing_after.is_empty(),
+                    "cannot synthesize {}",
+                    s.missing_after.iter().collect::<String>()
+                );
+                let added = s.added.keys().map(|k| char::from(*k).to_string()).collect();
+                (font::append(&bytes, &s.added)?, s.atlas, added, None)
+            };
             let resized = shaders
                 .iter()
                 .map(|shd| {
                     Ok((
                         shd.clone(),
-                        glyphs::resize_shader(&mounts.read(shd)?, s.atlas.w, s.atlas.h)?,
+                        glyphs::resize_shader(&mounts.read(shd)?, new_atlas.w, new_atlas.h)?,
                     ))
                 })
                 .collect::<Result<Vec<_>>>()?;
-            let image = glyphs::preview(&font_out, &s.atlas, &sample, 4)?;
-            Ok((font_out, shaders, resized, tga, s, image))
+            let image = glyphs::preview(&font_out, &new_atlas, &sample, 3)?;
+            let comparison = if face.is_some() {
+                glyphs::synthesize(&bytes, &atlas)
+                    .ok()
+                    .filter(|s| s.missing_after.is_empty())
+                    .map(|s| {
+                        glyphs::preview(&font::append(&bytes, &s.added)?, &s.atlas, &sample, 3)
+                    })
+                    .transpose()?
+            } else {
+                None
+            };
+            Ok((
+                font_out, shaders, resized, tga, new_atlas, added, typography, image, comparison,
+            ))
         })();
-        let (font_out, shaders, resized, tga, s, image) = match extended {
-            Ok(v) => v,
-            Err(e) => {
-                skipped.push(format!("{path}: {e:#}"));
-                continue;
-            }
-        };
+        let (font_out, shaders, resized, tga, new_atlas, added, typography, image, comparison) =
+            match extended {
+                Ok(v) => v,
+                Err(e) => {
+                    // default.font has a non-UI shader and is intentionally excluded.
+                    // A requested replacement must not silently keep a broken UI face.
+                    if face.is_some() && !path.ends_with("/default.font") {
+                        return Err(e).with_context(|| format!("replacing {path}"));
+                    }
+                    skipped.push(format!("{path}: {e:#}"));
+                    continue;
+                }
+            };
         for (shd, bytes) in resized {
             outputs.entry(shd).or_insert((bytes, vec![]));
+        }
+        if let Some(before) = comparison {
+            let w = before.width().max(image.width());
+            let h = before.height() + image.height() + 12;
+            let mut combined = image::RgbaImage::from_pixel(w, h, image::Rgba([16, 24, 36, 255]));
+            image::imageops::overlay(&mut combined, &before, 0, 0);
+            image::imageops::overlay(&mut combined, &image, 0, i64::from(before.height() + 12));
+            previews.push((path.replace(".font", "-comparison.font"), combined));
         }
         previews.push((path.clone(), image));
         fonts.push(FontReport {
             path: path.clone(),
-            added: s.added.keys().map(|k| char::from(*k).to_string()).collect(),
-            atlas: [s.atlas.w, s.atlas.h],
+            added,
+            atlas: [new_atlas.w, new_atlas.h],
+            typography,
         });
         ensure!(
             !outputs.contains_key(&tga),
             "{path}: atlas {tga} shared with another font"
         );
-        outputs.insert(tga, (glyphs::write_tga(&s.atlas), vec![]));
+        outputs.insert(tga, (glyphs::write_tga(&new_atlas), vec![]));
         outputs.insert(path, (font_out, shaders));
     }
 
@@ -287,7 +344,7 @@ pub fn build(mounts: &Mounts, cat: &catalog::Catalog, output: &Path) -> Result<B
     let project = Project {
         schema: 1,
         id: "ptbr-text",
-        version: "0.1.0",
+        version: if face.is_some() { "0.2.0" } else { "0.1.0" },
         files,
     };
     create_new(
