@@ -1914,6 +1914,28 @@ Os comandos 6/7 usam o payload JSON da Control v1 existente, sem mudar seus
 uma cópia antiga não implementa esses comandos. Sem novo teste no jogo/Linux/LAN
 neste bloco; fixtures próprias verificam controles e contadores da DLL x86.
 
+### Eventos confiáveis v2: marcadores e estado do jogador
+
+Em sessão v2, a DLL publica o próprio estado (`driving`, `loading` enquanto o
+gate adia/executa um comando de cena, `unavailable` sem amostra) como evento
+confiável, com debounce de 300 ms. Marcadores numerados ajudam a alinhar as
+observações de uma rodada entre computadores:
+
+```text
+mp_launcher --pid PID --dll CAMINHO_DLL session-marker --code 1
+```
+
+O comando devolve o relatório `session_events` (até 511 bytes): contadores do
+canal (`queued/sent/retransmitted/acked/expired/refused/pending`), recibos
+(`relays`, `relay_duplicates`), pings (`pings_sent/pongs/pings_lost`), estado
+local, estados dos outros e os oito marcadores mais recentes `[origem, código,
+idade_ms]`; `truncated` indica listas cortadas para caber. `session-status`
+inclui o mesmo objeto, validado pelo `session_report`/`mp_doctor --recording`.
+Sem sessão v2 o marcador é recusado. Servidor, launcher e DLL precisam ser da
+mesma revisão (contrato em `docs/NETWORK_PROTOCOL.md`). `session_probe
+--marker-every-ms N` gera marcadores com o cliente nativo. O render não muda:
+um remoto `loading` ainda some pela expiração normal da pose.
+
 ### Diagnóstico de RTT e chegada de snapshots v2
 
 `session-status` inclui `network_timing`; também existe a consulta independente:

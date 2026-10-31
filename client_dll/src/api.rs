@@ -17,6 +17,10 @@ pub const NETWORK_TIMING: u32 = 8;
 pub const LIFECYCLE_STATUS: u32 = 9;
 /// Version/source/declaration JSON, without paths, credentials or pose values.
 pub const RUNTIME_INFO: u32 = 10;
+/// Queue a reliable v2 marker: message `{"code":N}`. Refused without a v2 session.
+pub const SESSION_MARKER: u32 = 11;
+/// Reliable-event JSON (counters, local/remote states, recent markers), at most 511 bytes.
+pub const SESSION_EVENTS: u32 = 12;
 pub const SIMULATED: u32 = 1;
 pub const GAME: u32 = 2;
 pub const MEMORY: u32 = 3;

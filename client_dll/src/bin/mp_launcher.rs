@@ -109,6 +109,11 @@ fn main() -> anyhow::Result<()> {
         },
         /// Client, visual, draw and relayed players in one JSON report.
         SessionStatus,
+        /// Queue a reliable v2 marker relayed to the other players (test timelines).
+        SessionMarker {
+            #[arg(long)]
+            code: u32,
+        },
         /// Collect bounded sanitized status/analysis in a NEW folder; does not start/stop a session.
         SessionRecord {
             #[arg(long)]
@@ -531,6 +536,19 @@ fn main() -> anyhow::Result<()> {
             println!("{}", serde_json::to_string_pretty(&report)?);
             return Ok(());
         }
+        Task::SessionMarker { code } => {
+            let mut block = Control::new(api::SESSION_MARKER);
+            api::put(
+                &mut block.message,
+                &serde_json::json!({"code": code}).to_string(),
+            )
+            .map_err(anyhow::Error::msg)?;
+            controller.control(&dll, &mut block)?;
+            let report: serde_json::Value =
+                serde_json::from_str(api::text(&block.message).map_err(anyhow::Error::msg)?)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            return Ok(());
+        }
         Task::SessionPrepareLoad { timeout } => {
             println!(
                 "{}",
@@ -905,6 +923,7 @@ fn main() -> anyhow::Result<()> {
         | Task::SessionBackup { .. }
         | Task::SessionPrepareLoad { .. }
         | Task::SessionStatus
+        | Task::SessionMarker { .. }
         | Task::SessionStop { .. }
         | Task::SessionVerify { .. } => {
             unreachable!("session tasks return early")

@@ -37,6 +37,12 @@ struct Args {
     reconnect_after_ms: Option<u64>,
     #[arg(long)]
     output: Option<PathBuf>,
+    /// Queue a reliable marker (codes 1, 2, ...) at this interval.
+    #[arg(long,value_parser=clap::value_parser!(u64).range(50..=86400000))]
+    marker_every_ms: Option<u64>,
+    /// Lifetime of each queued marker.
+    #[arg(long,default_value_t=wire::EVENT_TTL_MAX_MS,value_parser=clap::value_parser!(u64).range(1..=wire::EVENT_TTL_MAX_MS))]
+    marker_ttl_ms: u64,
 }
 #[derive(Default, Serialize)]
 struct Counts {
@@ -48,6 +54,11 @@ struct Counts {
     generation_changes: u64,
     roster_removals: u64,
     peak_remotes: usize,
+    markers_queued: u64,
+    markers_refused: u64,
+    /// Distinct relayed events received, by origin player.
+    relays_by_origin: BTreeMap<u32, u64>,
+    states: u64,
 }
 #[derive(Serialize)]
 struct Report {
@@ -59,6 +70,7 @@ struct Report {
     timing: multiplayer_server::session_timing::Timing,
     counts: Counts,
     remotes_before_close: Vec<Pose>,
+    reliability: multiplayer_server::session_client::Reliability,
 }
 fn events(events: Vec<Event>, remotes: &mut BTreeMap<u32, Pose>, counts: &mut Counts) {
     for event in events {
@@ -82,6 +94,12 @@ fn events(events: Vec<Event>, remotes: &mut BTreeMap<u32, Pose>, counts: &mut Co
                 remotes.insert(pose.player, pose);
                 counts.poses += 1;
                 counts.peak_remotes = counts.peak_remotes.max(remotes.len());
+            }
+            Event::Relay { origin, body, .. } => {
+                *counts.relays_by_origin.entry(origin).or_default() += 1;
+                if matches!(body, wire::EventBody::State { .. }) {
+                    counts.states += 1;
+                }
             }
         }
     }
@@ -179,12 +197,21 @@ fn main() -> Result<()> {
     let tick = Duration::from_secs_f64(1.0 / f64::from(TICK_HZ));
     let mut next = start;
     let (mut counts, mut remotes, mut reconnected) = (Counts::default(), BTreeMap::new(), false);
+    let mut next_marker = args.marker_every_ms;
     while start.elapsed() < Duration::from_secs(args.seconds) {
         let now = start.elapsed().as_millis() as u64;
         if !reconnected && args.reconnect_after_ms.is_some_and(|at| now >= at) && client.connected()
         {
             events(client.request_reconnect(), &mut remotes, &mut counts);
             reconnected = true;
+        }
+        if let Some(at) = next_marker.filter(|at| now >= *at) {
+            let code = u32::try_from(counts.markers_queued + counts.markers_refused + 1)?;
+            match client.event(wire::EventBody::Marker { code }, args.marker_ttl_ms, now) {
+                Ok(_) => counts.markers_queued += 1,
+                Err(_) => counts.markers_refused += 1,
+            }
+            next_marker = args.marker_every_ms.map(|every| at + every);
         }
         let (frames, new_events) = client.poll(now);
         events(new_events, &mut remotes, &mut counts);
@@ -235,7 +262,7 @@ fn main() -> Result<()> {
         thread::sleep(Duration::from_millis(1));
     }
     let report = Report {
-        schema: 1,
+        schema: 2,
         game_tested: false,
         lan_tested: false,
         status_before_close,
@@ -243,6 +270,7 @@ fn main() -> Result<()> {
         timing: client.timing(),
         counts,
         remotes_before_close,
+        reliability: client.reliability(),
     };
     let bytes = serde_json::to_vec_pretty(&report)?;
     if let Some(file) = &mut file {

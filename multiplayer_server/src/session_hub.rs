@@ -51,10 +51,48 @@ pub struct Metrics {
     pub bytes_sent: u64,
     pub send_errors: u64,
     pub late_ticks: u64,
+    /// Sequence numbers skipped by uplink poses of a connection: loss OR
+    /// reordering (late copies then count as `stale`), never decimation.
+    pub pose_gaps: u64,
+    /// Reliable events admitted for the first time / repeated by the sender.
+    pub events: u64,
+    pub event_duplicates: u64,
+    /// Relay datagrams: first copies, retransmissions, receipts, give-ups.
+    pub relays_sent: u64,
+    pub relays_retransmitted: u64,
+    pub relays_acked: u64,
+    pub relays_expired: u64,
+    /// Oldest pending relay discarded because a recipient queue was full.
+    pub relays_dropped: u64,
 }
+/// Relay queue per recipient, recent ids per sender stream and their bounds.
+pub const RELAY_QUEUE: usize = 64;
+pub const EVENT_STREAMS: usize = 4;
+pub const EVENT_WINDOW: usize = 128;
+/// Relay datagrams per recipient per tick; keeps the full-room batch bounded.
+pub const RELAYS_PER_TICK: usize = 2;
+pub const RELAY_RETRY_MS: u64 = 250;
+pub const RELAY_RETRY_MAX_MS: u64 = 1000;
+/// Lifetime of the state replay sent to a newcomer.
+const STATE_REPLAY_TTL_MS: u64 = 5000;
 struct Member {
     player: u32,
     last_seen: u64,
+    /// Recent event ids per client stream, deduplicating across reconnections.
+    streams: VecDeque<(u64, VecDeque<u64>)>,
+    /// Latest state event (room sequence), replayed to players who join later.
+    state: Option<(u64, wire::PlayerState)>,
+}
+#[derive(Clone, Copy)]
+struct Relay {
+    event: u64,
+    origin: u32,
+    server_ms: u64,
+    body: wire::EventBody,
+    expires: u64,
+    next_at: u64,
+    interval: u64,
+    sent: bool,
 }
 struct Peer {
     identity: String,
@@ -65,6 +103,7 @@ struct Peer {
     ping: Option<u64>,
     pose: Option<Pose>,
     rate: Window,
+    relays: VecDeque<Relay>,
 }
 pub struct Hub {
     pub settings: Settings,
@@ -81,6 +120,7 @@ pub struct Hub {
     roster_dirty: bool,
     roster_at: u64,
     admission: Option<crate::career_entry::Registry>,
+    next_event: u64,
 }
 pub type Datagram = (SocketAddr, ServerFrame);
 impl Hub {
@@ -104,6 +144,7 @@ impl Hub {
             roster_dirty: true,
             roster_at: 0,
             admission: None,
+            next_event: 1,
         })
     }
     pub fn clients(&self) -> usize {
@@ -228,6 +269,8 @@ impl Hub {
         let inherited_rate = active
             .filter(|(_, p)| p.address == address)
             .map(|(_, p)| p.rate.clone());
+        // A resumed connection keeps its undelivered relays.
+        let inherited_relays = active.map(|(_, p)| p.relays.clone());
         if self
             .peers
             .iter()
@@ -265,9 +308,34 @@ impl Hub {
                 Member {
                     player: id,
                     last_seen: self.now,
+                    streams: VecDeque::new(),
+                    state: None,
                 },
             );
             id
+        };
+        let relays = match inherited_relays {
+            Some(relays) => relays,
+            // Newcomer: replay the latest state of every other active player.
+            None => self
+                .peers
+                .iter()
+                .filter(|(other, _)| **other != player)
+                .filter_map(|(other, p)| {
+                    let (event, state) = self.members.get(&p.identity)?.state?;
+                    Some(Relay {
+                        event,
+                        origin: *other,
+                        server_ms: self.now,
+                        body: wire::EventBody::State { state },
+                        expires: self.now.saturating_add(STATE_REPLAY_TTL_MS),
+                        next_at: self.now,
+                        interval: RELAY_RETRY_MS,
+                        sent: false,
+                    })
+                })
+                .take(RELAY_QUEUE)
+                .collect(),
         };
         let credentials = Credentials {
             session: self.session,
@@ -289,6 +357,7 @@ impl Hub {
                     start: self.now,
                     used: 1,
                 }),
+                relays,
             },
         );
         self.changed();
@@ -329,7 +398,9 @@ impl Hub {
         let credentials = match &frame.message {
             C::Pose { credentials, .. }
             | C::Ping { credentials, .. }
-            | C::Leave { credentials } => credentials,
+            | C::Leave { credentials }
+            | C::Event { credentials, .. }
+            | C::RelayAck { credentials, .. } => credentials,
             C::Join { .. } => unreachable!(),
         };
         let player = self
@@ -366,6 +437,13 @@ impl Hub {
                 if peer.pose.is_some_and(|p| sequence <= p.sequence) {
                     self.metrics.stale += 1;
                 } else {
+                    // Bounded per jump: a restarted or hostile sequence cannot
+                    // inflate the estimate arbitrarily.
+                    if let Some(previous) = peer.pose {
+                        let skipped = sequence - previous.sequence - 1;
+                        self.metrics.pose_gaps =
+                            self.metrics.pose_gaps.saturating_add(skipped.min(4096));
+                    }
                     peer.last_seen = self.now;
                     peer.pose = Some(Pose {
                         player,
@@ -419,6 +497,93 @@ impl Hub {
                         connection: credentials.connection,
                     },
                 )])
+            }
+            C::Event {
+                credentials,
+                stream,
+                id,
+                ttl_ms,
+                body,
+            } => {
+                self.peers.get_mut(&player).unwrap().last_seen = self.now;
+                let identity = self.peers[&player].identity.clone();
+                let member = self.members.get_mut(&identity).ok_or("member missing")?;
+                let duplicate = match member.streams.iter_mut().find(|(s, _)| *s == stream) {
+                    Some((_, ids)) if ids.contains(&id) => true,
+                    Some((_, ids)) => {
+                        if ids.len() == EVENT_WINDOW {
+                            ids.pop_front();
+                        }
+                        ids.push_back(id);
+                        false
+                    }
+                    None => {
+                        if member.streams.len() == EVENT_STREAMS {
+                            member.streams.pop_front();
+                        }
+                        member.streams.push_back((stream, VecDeque::from([id])));
+                        false
+                    }
+                };
+                if duplicate {
+                    self.metrics.event_duplicates += 1;
+                } else {
+                    self.metrics.events += 1;
+                    let event = self.next_event;
+                    self.next_event = self
+                        .next_event
+                        .checked_add(1)
+                        .ok_or("event ids exhausted")?;
+                    if let wire::EventBody::State { state } = body {
+                        member.state = Some((event, state));
+                    }
+                    let relay = Relay {
+                        event,
+                        origin: player,
+                        server_ms: self.now,
+                        body,
+                        expires: self.now.saturating_add(ttl_ms),
+                        next_at: self.now,
+                        interval: RELAY_RETRY_MS,
+                        sent: false,
+                    };
+                    let echo = self.settings.echo;
+                    for (recipient, peer) in self.peers.iter_mut() {
+                        let origin = if *recipient != player {
+                            player
+                        } else if echo {
+                            ECHO_BASE + player
+                        } else {
+                            continue;
+                        };
+                        if peer.relays.len() == RELAY_QUEUE {
+                            peer.relays.pop_front();
+                            self.metrics.relays_dropped += 1;
+                        }
+                        peer.relays.push_back(Relay { origin, ..relay });
+                    }
+                }
+                Ok(vec![self.message(
+                    address,
+                    S::EventAck {
+                        session: self.session,
+                        connection: credentials.connection,
+                        stream,
+                        id,
+                    },
+                )])
+            }
+            C::RelayAck { event, .. } => {
+                let peer = self.peers.get_mut(&player).unwrap();
+                peer.last_seen = self.now;
+                let before = peer.relays.len();
+                peer.relays.retain(|r| r.event != event);
+                if peer.relays.len() < before {
+                    self.metrics.relays_acked += 1;
+                } else {
+                    self.metrics.stale += 1;
+                }
+                Ok(Vec::new())
             }
             C::Join { .. } => unreachable!(),
         }
@@ -482,6 +647,37 @@ impl Hub {
         if roster {
             self.roster_at = self.now;
             self.roster_dirty = false;
+        }
+        let (now, session) = (self.now, self.session);
+        for peer in self.peers.values_mut() {
+            let before = peer.relays.len();
+            peer.relays.retain(|r| now < r.expires);
+            self.metrics.relays_expired += (before - peer.relays.len()) as u64;
+            for relay in peer
+                .relays
+                .iter_mut()
+                .filter(|r| r.next_at <= now)
+                .take(RELAYS_PER_TICK)
+            {
+                output.push((
+                    peer.address,
+                    ServerFrame::new(S::Relay {
+                        session,
+                        event: relay.event,
+                        origin: relay.origin,
+                        server_ms: relay.server_ms,
+                        body: relay.body,
+                    }),
+                ));
+                if relay.sent {
+                    self.metrics.relays_retransmitted += 1;
+                } else {
+                    relay.sent = true;
+                    self.metrics.relays_sent += 1;
+                }
+                relay.next_at = now.saturating_add(relay.interval);
+                relay.interval = (relay.interval * 2).min(RELAY_RETRY_MAX_MS);
+            }
         }
         output
     }

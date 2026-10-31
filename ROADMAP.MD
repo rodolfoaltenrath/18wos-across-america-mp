@@ -1,5 +1,70 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Lote offline M3: eventos confiáveis e estimativas de perda — 31/10/2026
+
+Pedido do proprietário: várias implementações sem abrir o jogo, com uma única
+verificação prática agrupada depois. Este bloco fecha o critério de M3 de
+separar eventos confiáveis dos snapshots descartáveis; os passos práticos
+foram acrescentados a G12 em `docs/GAME_VALIDATION.md`.
+
+**Protocolo v2 (aditivo):** `event`/`event_ack` (cliente→sala) e
+`relay`/`relay_ack` (sala→cliente). Corpos tipados, sem texto livre:
+`marker{code}` para alinhar observações entre PCs e `state` com somente
+`driving`/`loading`/`unavailable`. Contrato completo, limites e semântica de
+entrega em `docs/NETWORK_PROTOCOL.md`. Resumo:
+- Remetente: stream aleatório por processo + id crescente, 16 pendentes
+  (recusa explícita acima disso), reenvio 250 ms → 1 s, prazo 1–30 s,
+  sobrevivência a reconexões com as credenciais novas.
+- Sala: deduplicação por identidade + stream (4×128 ids), sequência própria,
+  fila de 64 por destinatário com descarte do mais antigo contado, até dois
+  relays por destinatário por tick, reenvio até recibo ou prazo, fila herdada
+  numa retomada e o último `state` reenviado a quem entra depois.
+- Destinatário: janela de 256 sequências por sessão da sala, entrega única,
+  recibo para toda cópia, estado último-ganha.
+- Entrega só para quem estava conectado na admissão; timeout/remoção, prazo
+  ou fila cheia não são recuperados, apenas contados.
+
+**Estimativas de perda:** `pings_lost` (ping sem pong em 2 s ou removido da
+janela) no cliente, perda de ida e volta que inclui travamentos;
+`pose_gaps` no servidor, sequências puladas nas poses de subida (limite 4096
+por salto), misturando perda e reordenação. Nenhuma mede a descida isolada.
+
+**DLL/launcher (ABIs preservadas):** Control v1/1536 ganhou
+`SESSION_MARKER=11` (`{"code":N}`, recusado sem sessão v2) e
+`SESSION_EVENTS=12` (relatório estrito de até 511 bytes, listas cortadas com
+`truncated`). O worker publica o estado local com debounce de 300 ms, prazo
+10 s e republicação em sessão nova da sala; `loading` vem de
+`engine_load_gate::busy()` no x86. `mp_launcher session-marker --code N`,
+`session-status` com `session_events`, `session_evidence` valida e exporta o
+objeto (logs antigos continuam válidos). `session_probe --marker-every-ms`
+exercita o canal com o cliente nativo. Render não mudou: remoto `loading`
+ainda some pela expiração normal da pose.
+
+**Validação:**
+- Bancada pura (`session_events_workflow`): oito seeds com 25% de perda e 30%
+  de duplicação/jitter entregaram 20 marcadores exatamente uma vez, todos com
+  ACK, sem expiração; reconexão com ACK perdido deduplicada; estado mais
+  recente reenviado uma vez a quem entrou depois; filas/prazos/recusas
+  limitados; eco; lacunas de pose e perda de ping por timeout.
+- Sala cheia com 64 jogadores e três eventos cada: lote do tick ≤ 64×19
+  datagramas, todos ≤1200 bytes.
+- DLL x86 real sob Proton (`session_events_dll_workflow`): marcador pela
+  Control, estado `driving`→`unavailable` relayado, marcador do par no
+  relatório, recusas sem sessão/JSON inválido e descarga limpa.
+- UDP release em loopback: 17/12 marcadores trocados por dois clientes, todos
+  com ACK e entregues uma vez; com `udp_proxy` 20% perda/25% duplicação/jitter
+  no remetente, 29 marcadores entregues uma vez, 10 reenvios deduplicados,
+  `pings_lost` 9/22. Relatórios privados em `target/analysis/events-smoke-*`.
+
+**Verify integral Fedora:** 237 testes x86 sob Proton e 303 nativos, builds
+release, Clippy x86/nativo e rustfmt. Log privado
+`target/analysis/verify-fedora-20261031-reliable-events.log`. Jogo fechado.
+
+**Limites:** nenhum teste no jogo, LAN entre PCs ou par de kits; servidor/
+launcher/DLL precisam ser da mesma revisão (par antigo conta as mensagens
+novas como inválidas). Eventos não autenticam economia nem substituem os
+corpos de contrato de M6. Estimativas não medem FPS nem perda por pacote.
+
 ## Artefato final e conferência após o lote — 31/10/2026
 
 Kit local novo gerado de `bc89aed`, schema2/seis binários x86, em pasta nova
@@ -4659,8 +4724,13 @@ Se algum método exigir alteração de arquivo, documentar e testar restauraçã
   Progresso: rotação opcional (quaternion unitário, tolerância 2%, v1
   compatível) entregue e testada na bancada e no eco real; tick, modelo e velocidade pendentes.
   V2 adiciona tick/instantes da rede; tick da física, modelo e velocidade seguem pendentes.
-- [ ] Separar eventos que exigem confirmação/reenvio de snapshots descartáveis.
+- [x] Separar eventos que exigem confirmação/reenvio de snapshots descartáveis.
   Definir IDs, deduplicação e prazos para eventos confiáveis sobre UDP.
+  Entregue em 31/10 (v2): `event`/`event_ack`/`relay`/`relay_ack`, stream+id
+  por processo, sequência da sala, deduplicação nos dois lados, reenvio com
+  backoff, prazo ≤30 s e filas limitadas; corpos `marker` e `state`. Seeds
+  com perda/duplicação/reordenação, DLL x86 real e UDP release passaram.
+  Corpos econômicos e a prova entre PCs ficam em M6/G12.
 - [ ] Medir RTT, estimar diferença de relógios e ordenar snapshots para interpolação.
   V2 mede RTT/offset diagnóstico e ordena geração/sequência/revisão. Aplicação do
   relógio estimado à interpolação segue pendente. A primeira medição LAN
@@ -4674,9 +4744,11 @@ Se algum método exigir alteração de arquivo, documentar e testar restauraçã
   Sessões longas no motor permanecem em M8.
 - [ ] Adicionar métricas de pacotes, atraso, perda, jitter e tick atrasado.
   V2: contadores, RTT último/mínimo/máximo, variações de RTT/chegada, recusas,
-  limites, bytes e ticks atrasados. Lacunas de tick não estimam perda;
-  estimativa de perda e caracterização controlada de jitter entre computadores
-  continuam pendentes. A primeira LAN já tem snapshots de timing nos dois PCs.
+  limites, bytes e ticks atrasados. Lacunas de tick não estimam perda.
+  Em 31/10: `pings_lost` (perda de ida e volta, inclui travamentos) e
+  `pose_gaps` no servidor (subida; perda+reordenação). Caracterização
+  controlada de jitter/perda entre computadores continua pendente.
+  A primeira LAN já tem snapshots de timing nos dois PCs.
 - [x] Medir custo do broadcast atual, que cresce com pares de clientes; avaliar
   agrupamento, frequência e relevância espacial quando os números justificarem.
   Lote de 31/10: medições release 16/32 participantes reais UDP em loopback;

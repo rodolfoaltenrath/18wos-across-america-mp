@@ -260,6 +260,8 @@ impl Peer {
                     self.counts.poses += 1;
                     self.counts.peak_remotes = self.counts.peak_remotes.max(self.remotes.len());
                 }
+                // The soak driver queues no reliable events.
+                Event::Relay { .. } => {}
             }
         }
     }

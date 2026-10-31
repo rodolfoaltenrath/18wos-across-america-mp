@@ -701,3 +701,28 @@ precisam ser refeitas só para repetir contadores.
 Sem prova nova de modelo, velocidade, tick da física, outros cinco comandos
 de teardown ou sincronização de mundo por esse incremento. As medições próprias
 sem draw/ponteiros inválidos/recriação não fecham as caixas acima.
+
+**Eventos confiáveis (entregue na bancada em 31/10, mesma rodada).** Exige
+servidor, launcher e DLL desta revisão nos PCs usados; par antigo rejeita as
+mensagens novas (contadas como inválidas) sem afetar as poses. Durante a
+coleta, `session-status` já inclui `session_events`. Marcadores substituem a
+anotação manual de horários quando houver dois PCs:
+
+```text
+mp_launcher --pid PID --dll DLL session-marker --code 1   # início do percurso
+mp_launcher --pid PID --dll DLL session-marker --code 2   # antes de carregar
+```
+
+- [ ] Em sessão v2, conferir `session_events.local`: `driving` dirigindo,
+  `unavailable` sem amostra e `loading` enquanto o gate adia/executa `map`.
+  Um único PC com `--echo` mostra o próprio estado de volta como `1000000000+id`.
+- [ ] Com dois PCs: cada marcador aparece uma vez no outro (`markers`, origem =
+  ID do remetente) e os estados do outro mudam ao carregar/perder amostra.
+  Registrar se o caminhão remoto some enquanto o outro está `loading`; o
+  visual ainda depende da expiração da pose (sem regra de render nova).
+- [ ] Guardar `--report` do servidor: `events`, `event_duplicates`, `relays_*`
+  e `pose_gaps`, mais `pings_lost` de cada cliente. São estimativas (ver
+  NETWORK_PROTOCOL.md), não perda medida de cada pacote nem FPS.
+- [ ] `reliability.expired`/`relays_expired`/`relays_dropped` devem ficar em
+  zero numa LAN normal; diferente disso, preservar logs, sem repetir só para
+  zerar contadores.

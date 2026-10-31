@@ -80,6 +80,42 @@ pub enum ClientMessage {
     Leave {
         credentials: Credentials,
     },
+    /// Reliable event: repeated until `event_ack` or until `ttl_ms` expires.
+    /// `stream` is random per client process; (identity, stream, id) dedups.
+    Event {
+        credentials: Credentials,
+        stream: u64,
+        id: u64,
+        ttl_ms: u64,
+        body: EventBody,
+    },
+    /// Receipt of a relayed event; repeated for every duplicate relay.
+    RelayAck {
+        credentials: Credentials,
+        event: u64,
+    },
+}
+/// Longest lifetime of a reliable event, from first admission by the server.
+pub const EVENT_TTL_MAX_MS: u64 = 30_000;
+/// Typed, bounded payloads only: no free text, paths or game pointers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum EventBody {
+    /// Diagnostic mark for aligning observations across computers.
+    Marker { code: u32 },
+    /// Latest-wins local state; receivers order it by the relay sequence.
+    State { state: PlayerState },
+}
+/// Only states the client can actually determine; no menu/pause guesses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PlayerState {
+    /// Coordinates are being captured and sent.
+    Driving,
+    /// The mod is deferring/executing a scene-deleting command.
+    Loading,
+    /// No coordinate sample (menus, loading, chain unreadable, focus...).
+    Unavailable,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -142,6 +178,21 @@ pub enum ServerMessage {
         session: u64,
         connection: u64,
     },
+    /// Sender's event admitted (first time or duplicate); stops retransmission.
+    EventAck {
+        session: u64,
+        connection: u64,
+        stream: u64,
+        id: u64,
+    },
+    /// Room-sequenced copy of an admitted event, repeated until `relay_ack`.
+    Relay {
+        session: u64,
+        event: u64,
+        origin: u32,
+        server_ms: u64,
+        body: EventBody,
+    },
 }
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -203,6 +254,22 @@ impl ClientFrame {
             }
             ClientMessage::Ping { credentials, .. } | ClientMessage::Leave { credentials } => {
                 self.version == VERSION && credentials.valid()
+            }
+            ClientMessage::Event {
+                credentials,
+                stream,
+                id,
+                ttl_ms,
+                ..
+            } => {
+                self.version == VERSION
+                    && credentials.valid()
+                    && *stream != 0
+                    && *id != 0
+                    && (1..=EVENT_TTL_MAX_MS).contains(ttl_ms)
+            }
+            ClientMessage::RelayAck { credentials, event } => {
+                self.version == VERSION && credentials.valid() && *event != 0
             }
         }
     }
@@ -283,6 +350,18 @@ impl ServerFrame {
                         .enumerate()
                         .all(|(i, p)| !poses[..i].iter().any(|old| old.player == p.player))
             }
+            ServerMessage::EventAck {
+                session,
+                connection,
+                stream,
+                id,
+            } => *session != 0 && *connection != 0 && *stream != 0 && *id != 0,
+            ServerMessage::Relay {
+                session,
+                event,
+                origin,
+                ..
+            } => *session != 0 && *event != 0 && *origin > 0 && *origin < ECHO_BASE * 2,
         }
     }
 }
@@ -384,5 +463,94 @@ mod tests {
             token: "c".repeat(32),
         };
         assert!(!format!("{credentials:?}").contains(&credentials.token));
+    }
+}
+#[cfg(test)]
+mod event_tests {
+    use super::*;
+    fn credentials() -> Credentials {
+        Credentials {
+            session: u64::MAX,
+            connection: u64::MAX,
+            token: "f".repeat(32),
+        }
+    }
+    #[test]
+    fn reliable_event_frames_are_bounded_typed_and_reject_free_text_or_bad_lifetimes() {
+        for body in [
+            EventBody::Marker { code: u32::MAX },
+            EventBody::State {
+                state: PlayerState::Unavailable,
+            },
+        ] {
+            let event = ClientFrame::new(ClientMessage::Event {
+                credentials: credentials(),
+                stream: u64::MAX,
+                id: u64::MAX,
+                ttl_ms: EVENT_TTL_MAX_MS,
+                body,
+            });
+            let bytes = encode_client(&event).unwrap();
+            assert!(bytes.len() <= MAX_PACKET);
+            assert!(decode_client(&bytes).is_some());
+            let relay = ServerFrame::new(ServerMessage::Relay {
+                session: u64::MAX,
+                event: u64::MAX,
+                origin: ECHO_BASE * 2 - 1,
+                server_ms: u64::MAX,
+                body,
+            });
+            let bytes = encode_server(&relay).unwrap();
+            assert!(bytes.len() <= MAX_PACKET && decode_server(&bytes).is_some());
+        }
+        for (stream, id, ttl_ms) in [
+            (0, 1, 1),
+            (1, 0, 1),
+            (1, 1, 0),
+            (1, 1, EVENT_TTL_MAX_MS + 1),
+        ] {
+            assert!(
+                encode_client(&ClientFrame::new(ClientMessage::Event {
+                    credentials: credentials(),
+                    stream,
+                    id,
+                    ttl_ms,
+                    body: EventBody::Marker { code: 1 },
+                }))
+                .is_err()
+            );
+        }
+        let bytes = encode_client(&ClientFrame::new(ClientMessage::Event {
+            credentials: credentials(),
+            stream: 1,
+            id: 1,
+            ttl_ms: 1,
+            body: EventBody::Marker { code: 7 },
+        }))
+        .unwrap();
+        let mut json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        json["message"]["body"]["note"] = "free text".into();
+        assert!(decode_client(&serde_json::to_vec(&json).unwrap()).is_none());
+        json["message"]["body"] = serde_json::json!({"kind": "pay", "amount": 1});
+        assert!(decode_client(&serde_json::to_vec(&json).unwrap()).is_none());
+        json["message"]["body"] = serde_json::json!({"kind": "state", "state": "paused"});
+        assert!(decode_client(&serde_json::to_vec(&json).unwrap()).is_none());
+        assert!(
+            encode_server(&ServerFrame::new(ServerMessage::Relay {
+                session: 1,
+                event: 0,
+                origin: 1,
+                server_ms: 0,
+                body: EventBody::Marker { code: 1 },
+            }))
+            .is_err()
+        );
+        assert!(
+            encode_client(&ClientFrame::new(ClientMessage::RelayAck {
+                credentials: credentials(),
+                event: 0,
+            }))
+            .is_err()
+        );
     }
 }

@@ -74,6 +74,7 @@ pub mod release_policy;
 pub mod render_observation;
 pub mod resource_bindings;
 pub mod runtime_info;
+pub mod session_events;
 pub mod session_evidence;
 pub mod transition_analysis;
 pub mod transition_observation;
@@ -94,6 +95,9 @@ static RUNTIME_SELECTION: AtomicU32 = AtomicU32::new(0);
 static MESSAGE: Mutex<String> = Mutex::new(String::new());
 static SESSION: Mutex<Option<multiplayer_server::session_client::Status>> = Mutex::new(None);
 static NETWORK_TIMING: Mutex<Option<multiplayer_server::session_timing::Timing>> = Mutex::new(None);
+/// Reliable events of the current/last v2 session; kept after stop for diagnostics.
+static EVENTS: std::sync::LazyLock<Mutex<session_events::Board>> =
+    std::sync::LazyLock::new(|| Mutex::new(session_events::Board::default()));
 /// Latest relayed state per player. The render thread only uses try_lock.
 pub(crate) static REMOTES: Mutex<BTreeMap<u64, RemoteEntry>> = Mutex::new(BTreeMap::new());
 /// Local pose observed by the draw probe (same coordinates the game draws with).
@@ -283,18 +287,43 @@ fn publish_remote(update: protocol::ServerUpdate, reset_history: bool) -> Result
     }
     Ok(())
 }
+/// Process-wide clock for marker ages, shared by the worker and Control calls.
+static WORKER_EPOCH: std::sync::LazyLock<Instant> = std::sync::LazyLock::new(Instant::now);
+fn epoch_ms() -> u64 {
+    WORKER_EPOCH.elapsed().as_millis() as u64
+}
 fn session_events(events: Vec<multiplayer_server::session_client::Event>) -> Result<(), String> {
     use multiplayer_server::session_client::Event;
     for event in events {
         match event {
-            Event::Reset => REMOTES
-                .lock()
-                .map_err(|_| "remote state mutex poisoned")?
-                .clear(),
-            Event::Roster(ids) => REMOTES
-                .lock()
-                .map_err(|_| "remote state mutex poisoned")?
-                .retain(|id, _| u32::try_from(*id).is_ok_and(|id| ids.contains(&id))),
+            Event::Reset => {
+                REMOTES
+                    .lock()
+                    .map_err(|_| "remote state mutex poisoned")?
+                    .clear();
+                EVENTS.lock().map_err(|_| "event board poisoned")?.reset();
+            }
+            Event::Roster(ids) => {
+                REMOTES
+                    .lock()
+                    .map_err(|_| "remote state mutex poisoned")?
+                    .retain(|id, _| u32::try_from(*id).is_ok_and(|id| ids.contains(&id)));
+                EVENTS
+                    .lock()
+                    .map_err(|_| "event board poisoned")?
+                    .roster(&ids);
+            }
+            Event::Relay {
+                origin,
+                event,
+                body,
+                ..
+            } => EVENTS.lock().map_err(|_| "event board poisoned")?.relay(
+                origin,
+                event,
+                body,
+                epoch_ms(),
+            ),
             Event::Pose {
                 pose,
                 reset_history,
@@ -329,6 +358,55 @@ fn session_snapshot(client: &multiplayer_server::session_client::Client) -> Resu
     *NETWORK_TIMING
         .lock()
         .map_err(|_| "network timing mutex poisoned")? = Some(client.timing());
+    EVENTS
+        .lock()
+        .map_err(|_| "event board poisoned")?
+        .reliability = client.reliability();
+    Ok(())
+}
+/// Queue pending markers and the debounced local state as reliable events.
+fn session_reliable(
+    client: &mut multiplayer_server::session_client::Client,
+    publisher: &mut session_events::Publisher,
+    sample_available: bool,
+    now: u64,
+) -> Result<(), String> {
+    use multiplayer_server::session_protocol::EventBody;
+    #[cfg(all(windows, target_arch = "x86"))]
+    let loading = engine_load_gate::busy();
+    #[cfg(not(all(windows, target_arch = "x86")))]
+    let loading = false;
+    let mut board = EVENTS.lock().map_err(|_| "event board poisoned")?;
+    for code in board.take_markers() {
+        if client
+            .event(
+                EventBody::Marker { code },
+                session_events::MARKER_TTL_MS,
+                now,
+            )
+            .is_err()
+        {
+            board.markers_refused += 1;
+        }
+    }
+    let session = if client.connected() {
+        client.status().session
+    } else {
+        0
+    };
+    let state = session_events::local_state(loading, sample_available);
+    if let Some(state) = publisher.observe(state, now, session)
+        && client
+            .event(
+                EventBody::State { state },
+                session_events::STATE_TTL_MS,
+                now,
+            )
+            .is_err()
+    {
+        publisher.retry();
+    }
+    board.local = publisher.published();
     Ok(())
 }
 fn run(
@@ -348,9 +426,13 @@ fn run(
     let mut next_tick = start;
     let mut sequence = 0u64;
     let mut buffer = [0; MAX_PACKET + 1];
+    let mut publisher = session_events::Publisher::default();
+    let mut sample_available = false;
     while !STOP.load(Ordering::Acquire) {
         if let Some(client) = &mut session {
-            let (frames, events) = client.poll(start.elapsed().as_millis() as u64);
+            let now = start.elapsed().as_millis() as u64;
+            session_reliable(client, &mut publisher, sample_available, now)?;
+            let (frames, events) = client.poll(now);
             session_events(events)?;
             for frame in frames {
                 transmit(&socket, &wire::encode_client(&frame)?)?;
@@ -378,6 +460,7 @@ fn run(
                 return Err(message);
             }
         };
+        sample_available = sample.is_some();
         if let Some((position, rotation)) = sample {
             if !position.is_valid() || !rotation.is_none_or(Rotation::is_valid) {
                 return Err("coordinate sample contains NaN/infinity".into());
@@ -405,9 +488,8 @@ fn run(
             match socket.recv(&mut buffer) {
                 Ok(size) => {
                     if let Some(client) = &mut session {
-                        session_events(
-                            client.ingest(&buffer[..size], start.elapsed().as_millis() as u64),
-                        )?;
+                        let now = start.elapsed().as_millis() as u64;
+                        session_events(client.ingest(&buffer[..size], now))?;
                         continue;
                     }
                     let Some(update) = protocol::decode_server(&buffer[..size]) else {
@@ -594,6 +676,7 @@ fn start_source_session(
     *NETWORK_TIMING
         .lock()
         .map_err(|_| "network timing mutex poisoned")? = None;
+    *EVENTS.lock().map_err(|_| "event board poisoned")? = session_events::Board::default();
     diagnostic("starting client");
     RUNTIME_SELECTION.store(
         source.mode() | (if options.is_some() { 2 } else { 1 } << 8),
@@ -745,6 +828,40 @@ pub unsafe extern "system" fn client_control(block: *mut api::Control) -> u32 {
             api::NETWORK_TIMING => Ok(()),
             api::LIFECYCLE_STATUS => Ok(()),
             api::RUNTIME_INFO => Ok(()),
+            api::SESSION_EVENTS => Ok(()),
+            api::SESSION_MARKER => (|| {
+                #[derive(serde::Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct Marker {
+                    code: u32,
+                }
+                let marker: Marker = serde_json::from_str(api::text(&block.message)?)
+                    .map_err(|_| "invalid marker JSON; expected {\"code\":N}")?;
+                let running = WORKER
+                    .lock()
+                    .map_err(|_| "worker mutex poisoned")?
+                    .as_ref()
+                    .is_some_and(|h| !h.is_finished());
+                let v2 = SESSION
+                    .lock()
+                    .map_err(|_| "session status mutex poisoned")?
+                    .as_ref()
+                    .is_some_and(|s| {
+                        !matches!(
+                            s.phase,
+                            multiplayer_server::session_client::Phase::Rejected
+                                | multiplayer_server::session_client::Phase::Closing
+                                | multiplayer_server::session_client::Phase::Closed
+                        )
+                    });
+                if !running || !v2 {
+                    return Err("markers require a running v2 session".into());
+                }
+                EVENTS
+                    .lock()
+                    .map_err(|_| "event board poisoned")?
+                    .queue_marker(marker.code)
+            })(),
             api::PRESENTATION_SET => serde_json::from_str::<interpolation::Config>(
                 api::text(&block.message).unwrap_or(""),
             )
@@ -801,6 +918,18 @@ pub unsafe extern "system" fn client_control(block: *mut api::Control) -> u32 {
             if serde_json::to_string(&presentation::status())
                 .map_err(|e| e.to_string())
                 .and_then(|json| api::put(&mut block.message, &json))
+                .is_err()
+            {
+                block.result = 1;
+            }
+        } else if block.command == api::SESSION_EVENTS
+            || (block.command == api::SESSION_MARKER && block.result == 0)
+        {
+            let now = epoch_ms();
+            if EVENTS
+                .lock()
+                .map_err(|_| "event board poisoned".to_string())
+                .and_then(|board| api::put(&mut block.message, &board.report(now)))
                 .is_err()
             {
                 block.result = 1;

@@ -295,3 +295,67 @@ fn authenticated_resume_cannot_reset_the_endpoint_rate_window() {
     assert!(h.metrics.rate_limited > 0);
     assert_eq!(h.clients(), 1);
 }
+
+#[test]
+fn full_room_with_reliable_events_keeps_the_tick_batch_bounded() {
+    use crate::protocol::Rotation;
+    for echo in [false, true] {
+        let mut h = hub(64, echo);
+        let mut all = Vec::new();
+        for p in 1..=64u16 {
+            let (_, cred) = credentials(&ingest(&mut h, p, &join(u32::from(p), u64::MAX, None), 0));
+            all.push((p, cred));
+        }
+        for (p, cred) in &all {
+            ingest(
+                &mut h,
+                *p,
+                &ClientFrame::new(C::Pose {
+                    credentials: cred.clone(),
+                    sequence: u64::MAX,
+                    client_ms: 0,
+                    position: Position {
+                        x: f32::MAX,
+                        y: f32::MIN,
+                        z: f32::MAX,
+                    },
+                    rotation: Some(Rotation {
+                        x: 0.,
+                        y: 0.,
+                        z: 0.,
+                        w: 1.,
+                    }),
+                }),
+                1,
+            );
+            for id in 1..=3u64 {
+                let ack = ingest(
+                    &mut h,
+                    *p,
+                    &ClientFrame::new(C::Event {
+                        credentials: cred.clone(),
+                        stream: u64::MAX,
+                        id,
+                        ttl_ms: w::EVENT_TTL_MAX_MS,
+                        body: w::EventBody::State {
+                            state: w::PlayerState::Unavailable,
+                        },
+                    }),
+                    1,
+                );
+                assert!(matches!(ack[0].1.message, S::EventAck { .. }));
+            }
+        }
+        // Every recipient queue is capped; the oldest relays were dropped.
+        assert_eq!(h.metrics.events, 64 * 3);
+        assert!(h.metrics.relays_dropped > 0);
+        let frames = h.tick(100);
+        let limit = 64 * (16 + 1 + RELAYS_PER_TICK);
+        assert!(frames.len() <= limit, "{} > {limit}", frames.len());
+        for (_, frame) in frames {
+            let bytes = w::encode_server(&frame).unwrap();
+            assert!(bytes.len() <= crate::protocol::MAX_PACKET);
+            assert!(w::decode_server(&bytes).is_some());
+        }
+    }
+}

@@ -1155,3 +1155,11 @@ teste LAN. Controle ABI v1 e engine ABI v3/664 preservados; captura/render/gate
 e o sumiço por foco não foram alterados. Consultar a validação deste bloco no
 roadmap antes de instalar outro kit; a revisão do assistente no Windows real
 fica para marco agrupado, não requer nova prova só para o analisador.
+
+Eventos confiáveis v2 em 31/10 (bancada, sem jogo): `event/event_ack/relay/
+relay_ack`, corpos `marker`/`state` (driving/loading/unavailable), stream+id,
+dedup nos dois lados, reenvio/prazo/filas limitadas; `pings_lost` e
+`pose_gaps` como estimativas. Control v1 ganhou SESSION_MARKER=11 e
+SESSION_EVENTS=12 (≤511 bytes); `mp_launcher session-marker`. Exige servidor/
+launcher/DLL da mesma revisão. Verify: 237 x86 Proton/303 nativos. Passos
+práticos em G12. Render não muda por estado remoto.

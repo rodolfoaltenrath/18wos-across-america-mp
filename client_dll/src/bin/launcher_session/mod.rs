@@ -222,6 +222,10 @@ pub fn status(c: &Controller, dll: &Path) -> Result<Value> {
     c.control(dll, &mut timing)?;
     let timing: Value =
         serde_json::from_str(api::text(&timing.message).map_err(anyhow::Error::msg)?)?;
+    let mut events = Control::new(api::SESSION_EVENTS);
+    c.control(dll, &mut events)?;
+    let events: Value =
+        serde_json::from_str(api::text(&events.message).map_err(anyhow::Error::msg)?)?;
     Ok(json!({
         "client": {"status": client.status, "sample_state": client.sample_state, "sent": client.sent,
             "read_failures": client.read_failures,
@@ -229,6 +233,7 @@ pub fn status(c: &Controller, dll: &Path) -> Result<Value> {
         "visual": visual, "draw": draw, "load_gate": gate, "remotes": remotes, "network_session":session,
         "presentation": presentation,
         "network_timing": timing,
+        "session_events": events,
         "lifecycle": c.lifecycle(dll)?,
         "runtime": c.runtime_info(dll)?,
     }))

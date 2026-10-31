@@ -2,7 +2,7 @@
 use crate::{
     protocol::{Position, Rotation},
     session_protocol::{
-        self as wire, ClientFrame, ClientMessage as C, Credentials, Pose, Refusal,
+        self as wire, ClientFrame, ClientMessage as C, Credentials, EventBody, Pose, Refusal,
         ServerMessage as S,
     },
     session_timing::{Recorder, Timing},
@@ -62,7 +62,58 @@ pub struct Status {
 pub enum Event {
     Reset,
     Roster(Vec<u32>),
-    Pose { pose: Pose, reset_history: bool },
+    Pose {
+        pose: Pose,
+        reset_history: bool,
+    },
+    /// A reliable event from `origin`, delivered at most once per room session.
+    Relay {
+        origin: u32,
+        event: u64,
+        server_ms: u64,
+        body: EventBody,
+    },
+}
+/// Outgoing reliable events kept until acknowledged or expired.
+pub const EVENT_QUEUE: usize = 16;
+/// Relay sequences remembered for deduplication within one room session.
+pub const RELAY_WINDOW: usize = 256;
+const EVENT_RETRY_MS: u64 = 250;
+const EVENT_RETRY_MAX_MS: u64 = 1000;
+/// A ping without a pong after this long counts as lost (round trip).
+pub const PING_LOSS_MS: u64 = 2000;
+/// Reliability counters, separate from `Status` to keep that report compact.
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Reliability {
+    pub queued: u64,
+    pub sent: u64,
+    pub retransmitted: u64,
+    pub acked: u64,
+    pub expired: u64,
+    /// Refused because the outgoing queue was full.
+    pub refused: u64,
+    pub pending: u64,
+    pub relays: u64,
+    pub relay_duplicates: u64,
+    pub pings_sent: u64,
+    pub pongs: u64,
+    /// Pings unanswered for PING_LOSS_MS or evicted from the window: a
+    /// round-trip loss estimate that also includes server/scheduling stalls.
+    pub pings_lost: u64,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EventError {
+    Closed,
+    Full,
+    InvalidLifetime,
+}
+struct Outgoing {
+    id: u64,
+    body: EventBody,
+    deadline: u64,
+    next_at: u64,
+    interval: u64,
+    sent: bool,
 }
 pub struct Client {
     options: Options,
@@ -83,6 +134,13 @@ pub struct Client {
     closing_at: u64,
     leave_at: Option<u64>,
     timing: Recorder,
+    stream: u64,
+    next_event: u64,
+    outgoing: VecDeque<Outgoing>,
+    relay_acks: VecDeque<u64>,
+    seen: VecDeque<u64>,
+    seen_session: u64,
+    reliability: Reliability,
 }
 impl Client {
     pub fn new(options: Options, request: u64) -> Result<Self, String> {
@@ -124,6 +182,14 @@ impl Client {
             closing_at: 0,
             leave_at: None,
             timing: Recorder::default(),
+            // The random join nonce also names this process's event stream.
+            stream: request,
+            next_event: 1,
+            outgoing: VecDeque::new(),
+            relay_acks: VecDeque::new(),
+            seen: VecDeque::new(),
+            seen_session: 0,
+            reliability: Reliability::default(),
         })
     }
     pub fn status(&self) -> Status {
@@ -131,6 +197,80 @@ impl Client {
     }
     pub fn timing(&self) -> Timing {
         self.timing.value
+    }
+    pub fn reliability(&self) -> Reliability {
+        Reliability {
+            pending: self.outgoing.len() as u64,
+            ..self.reliability
+        }
+    }
+    /// Queue a reliable event. It survives reconnections (same stream/id, so
+    /// the server deduplicates) until acknowledged or `ttl_ms` elapses.
+    pub fn event(&mut self, body: EventBody, ttl_ms: u64, now: u64) -> Result<u64, EventError> {
+        if !(1..=wire::EVENT_TTL_MAX_MS).contains(&ttl_ms) {
+            return Err(EventError::InvalidLifetime);
+        }
+        if matches!(
+            self.status.phase,
+            Phase::Rejected | Phase::Closing | Phase::Closed
+        ) {
+            return Err(EventError::Closed);
+        }
+        if self.outgoing.len() == EVENT_QUEUE {
+            self.reliability.refused += 1;
+            return Err(EventError::Full);
+        }
+        self.now = self.now.max(now);
+        let id = self.next_event;
+        self.next_event = self.next_event.checked_add(1).ok_or(EventError::Full)?;
+        self.outgoing.push_back(Outgoing {
+            id,
+            body,
+            deadline: self.now.saturating_add(ttl_ms),
+            next_at: self.now,
+            interval: EVENT_RETRY_MS,
+            sent: false,
+        });
+        self.reliability.queued += 1;
+        Ok(id)
+    }
+    fn reliable_frames(&mut self, now: u64, output: &mut Vec<ClientFrame>) {
+        let before = self.outgoing.len();
+        self.outgoing.retain(|e| now < e.deadline);
+        self.reliability.expired += (before - self.outgoing.len()) as u64;
+        while let Some(at) = self.pings.front().map(|(_, at)| *at) {
+            if now.saturating_sub(at) < PING_LOSS_MS {
+                break;
+            }
+            self.pings.pop_front();
+            self.reliability.pings_lost += 1;
+        }
+        let Some(credentials) = self.credentials.clone().filter(|_| self.connected()) else {
+            return;
+        };
+        for event in self.outgoing.iter_mut().filter(|e| e.next_at <= now) {
+            output.push(ClientFrame::new(C::Event {
+                credentials: credentials.clone(),
+                stream: self.stream,
+                id: event.id,
+                ttl_ms: event.deadline - now,
+                body: event.body,
+            }));
+            if event.sent {
+                self.reliability.retransmitted += 1;
+            } else {
+                event.sent = true;
+                self.reliability.sent += 1;
+            }
+            event.next_at = now.saturating_add(event.interval);
+            event.interval = (event.interval * 2).min(EVENT_RETRY_MAX_MS);
+        }
+        for event in self.relay_acks.drain(..) {
+            output.push(ClientFrame::new(C::RelayAck {
+                credentials: credentials.clone(),
+                event,
+            }));
+        }
     }
     pub fn connected(&self) -> bool {
         self.status.phase == Phase::Connected
@@ -193,8 +333,10 @@ impl Client {
                     self.ping_at = Some(now);
                     if self.pings.len() == 8 {
                         self.pings.pop_front();
+                        self.reliability.pings_lost += 1;
                     }
                     self.pings.push_back((self.ping_sequence, now));
+                    self.reliability.pings_sent += 1;
                     output.push(ClientFrame::new(C::Ping {
                         credentials: self.credentials.clone().unwrap(),
                         sequence: self.ping_sequence,
@@ -217,6 +359,7 @@ impl Client {
             }
             Phase::Rejected | Phase::Closed => {}
         }
+        self.reliable_frames(now, &mut output);
         (output, events)
     }
     pub fn pose(
@@ -273,6 +416,12 @@ impl Client {
                 && request == self.request =>
             {
                 self.reset();
+                if credentials.session != self.seen_session {
+                    // A new room session restarts relay sequences.
+                    self.seen.clear();
+                    self.relay_acks.clear();
+                    self.seen_session = credentials.session;
+                }
                 self.credentials = Some(credentials.clone());
                 self.revision = revision;
                 self.pose_sequence = 0;
@@ -338,6 +487,7 @@ impl Client {
                     return Vec::new();
                 };
                 self.pings.remove(index);
+                self.reliability.pongs += 1;
                 self.heard_at = now;
                 self.status.rtt_ms = Some(rtt);
                 self.timing.rtt(rtt);
@@ -408,6 +558,51 @@ impl Client {
                     });
                 }
                 events
+            }
+            S::EventAck {
+                session,
+                connection,
+                stream,
+                id,
+            } if self.connected() && self.current(session, connection) && stream == self.stream => {
+                self.heard_at = now;
+                let before = self.outgoing.len();
+                self.outgoing.retain(|e| e.id != id);
+                if self.outgoing.len() < before {
+                    self.reliability.acked += 1;
+                } else {
+                    self.status.old += 1;
+                }
+                Vec::new()
+            }
+            S::Relay {
+                session,
+                event,
+                origin,
+                server_ms,
+                body,
+            } if self.connected() && session == self.status.session => {
+                self.heard_at = now;
+                // Acknowledge every copy: the first ack may have been lost.
+                if self.relay_acks.len() == RELAY_WINDOW {
+                    self.relay_acks.pop_front();
+                }
+                self.relay_acks.push_back(event);
+                if self.seen.contains(&event) {
+                    self.reliability.relay_duplicates += 1;
+                    return Vec::new();
+                }
+                if self.seen.len() == RELAY_WINDOW {
+                    self.seen.pop_front();
+                }
+                self.seen.push_back(event);
+                self.reliability.relays += 1;
+                vec![Event::Relay {
+                    origin,
+                    event,
+                    server_ms,
+                    body,
+                }]
             }
             S::Closing {
                 session,

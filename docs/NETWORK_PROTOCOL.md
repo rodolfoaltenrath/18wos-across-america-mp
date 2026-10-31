@@ -78,6 +78,10 @@ herdada do v1). Nenhum pacote executa código, informa ponteiros ou chama o moto
 | C→S | `leave` | Saída da conexão identificada pelas credenciais. |
 | S→C | `left` | Confirmação idempotente da saída. |
 | S→C | `closing` | Aviso de encerramento, associado à conexão. Não substitui timeout. |
+| C→S | `event` | Evento confiável: credenciais, `stream`, `id`, `ttl_ms` e corpo tipado. |
+| S→C | `event_ack` | Admissão (primeira ou repetida) do `stream`/`id`; encerra o reenvio. |
+| S→C | `relay` | Cópia sequenciada pela sala (`event`), origem e corpo; repetida até o recibo. |
+| C→S | `relay_ack` | Recibo do `event` da sala; enviado para cada cópia recebida. |
 
 Recusas: versão, sala, perfil, lotação, identidade ativa, endpoint ocupado e
 encerramento. Versão/sala/perfil incompatíveis encerram a tentativa com erro;
@@ -108,8 +112,58 @@ temporários, permitindo repetir a confirmação sem repetir a remoção. O stat
 informa `leave_confirmed`; se a confirmação se perder, o timeout continua sendo
 o mecanismo de limpeza. Um recibo antigo não remove uma conexão nova.
 
-Snapshots e rosters são estado recuperável, não eventos econômicos confiáveis.
-Confirmação/reenvio/deduplicação de contratos ou pagamentos continuam pendentes.
+Snapshots e rosters são estado recuperável e descartável. Fatos que precisam
+chegar uma vez usam o canal de eventos confiáveis abaixo, separado deles.
+
+## Eventos confiáveis — 31/10/2026
+
+Corpo tipado e limitado, sem texto livre, caminho ou ponteiro: `marker`
+(`code` u32, marcação diagnóstica para alinhar observações entre PCs) e
+`state` (`driving`, `loading` ou `unavailable`). Só estados que o cliente
+determina: `loading` vem do gate de comandos; `driving`/`unavailable` vêm da
+amostra de coordenadas. Não há estado de menu/pausa inferido. Contratos e
+pagamentos futuros (M6) devem usar este canal com corpos próprios, sem
+reaproveitar `marker`; o canal não autentica economia nem portadores.
+
+Remetente: `stream` aleatório por processo (o nonce do join) e `id` crescente.
+Até 16 eventos pendentes; acima disso, recusa local (`refused`), nunca descarte
+silencioso. Reenvio em 250 ms com backoff até 1 s, até `event_ack` ou até o
+prazo (`ttl_ms` 1–30000). Pendentes sobrevivem a reconexões e são reenviados
+com as credenciais novas e o mesmo `stream`/`id`.
+
+Servidor: deduplica por identidade + `stream` (quatro streams, 128 ids
+recentes cada), também entre reconexões e enquanto a identidade estiver no
+cache. Cada evento novo recebe sequência da sala e vai para a fila de cada
+jogador conectado NAQUELE instante (com `--echo`, também ao remetente, como
+`1000000000 + id`). Fila de 64 por destinatário, descartando o mais antigo
+(`relays_dropped`); no máximo dois relays por destinatário por tick, com reenvio
+em 250 ms → 1 s até `relay_ack` ou prazo (`relays_expired`). Uma retomada
+herda a fila pendente. O último `state` de cada identidade é reenviado a quem
+entra depois (prazo 5 s). Quem entrar depois não recebe `marker` antigo.
+
+Destinatário: deduplica por sessão da sala + `event` (janela de 256), entrega
+uma vez e confirma toda cópia. Estado é último-ganha pela sequência da sala;
+reinício da sala zera a janela. Entrega não é garantida após timeout/remoção
+da conexão, após o prazo ou com fila cheia: os contadores registram cada caso.
+
+Compatibilidade: as quatro mensagens exigem servidor e clientes desta revisão.
+Um par antigo rejeita-as como inválidas (contadas), sem afetar poses; atualize
+kit/DLL/servidor juntos. A DLL publica `state` em toda sessão v2 (debounce de
+300 ms, prazo 10 s, republicado a cada nova sessão da sala).
+
+Estimativas de perda, sem campos novos nas poses:
+
+- `pings_lost` (cliente): ping sem pong após 2 s ou removido da janela de oito.
+  É perda de ida e volta e inclui travamentos do servidor/agendamento.
+- `pose_gaps` (servidor): números de sequência pulados nas poses de subida de
+  cada conexão, limitados a 4096 por salto. Perda e reordenação misturam-se
+  (cópias tardias entram em `stale`); não mede a descida nem decimação.
+
+Smoke de 31/10, binários release, loopback: dois clientes com marcadores
+trocaram 17 e 12 eventos, todos com ACK e entregues uma vez. Com `udp_proxy`
+de 20% de perda, 25% de duplicação e jitter no caminho do remetente, 29
+marcadores chegaram exatamente uma vez; o servidor deduplicou 10 reenvios e
+`pings_lost` foi 9/22. Nenhum desses números mede LAN entre PCs ou o motor.
 
 ## Tempo, coordenadas e apresentação
 

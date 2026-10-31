@@ -57,6 +57,9 @@ pub struct Snapshot {
     pub lifecycle: Option<crate::lifecycle::State>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub runtime: Option<crate::runtime_info::Info>,
+    /// Reliable-event counters and relayed states/markers (absent in old logs).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_events: Option<crate::session_events::EventsReport>,
 }
 impl Snapshot {
     pub fn validate(&self) -> Result<()> {
@@ -80,6 +83,9 @@ impl Snapshot {
         }
         if let Some(info) = &self.runtime {
             info.validate().map_err(anyhow::Error::msg)?;
+        }
+        if let Some(events) = &self.session_events {
+            events.validate().map_err(anyhow::Error::msg)?;
         }
         Ok(())
     }
@@ -114,6 +120,17 @@ impl Snapshot {
         }
         if self.lifecycle.as_ref().is_some_and(|s| !s.cleanup_complete) {
             out.push("engine_cleanup_incomplete_restart_blocked");
+        }
+        if let Some(events) = &self.session_events {
+            if events.reliability.expired > 0 {
+                out.push("reliable_events_expired_before_ack");
+            }
+            if events.reliability.pings_lost > 0 {
+                out.push("round_trip_ping_loss_estimated_includes_stalls");
+            }
+            if events.truncated {
+                out.push("session_events_report_truncated");
+            }
         }
         out
     }
