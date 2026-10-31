@@ -1,5 +1,16 @@
 # Orientações para continuar o projeto
 
+Lote offline M1 em 31/10: fonte optativa game-pose (modo 5), leitura de
+posição/quaternion em 40 bytes, duas cópias e testemunho de cadeia repetido,
+vtable/cena/física/valores conferidos. Não é atomicidade da física nem prova
+de todos os estados de menu/ABA. Drawn segue padrão; não atualizar kit instalado.
+Selecionar por session-start --capture game-pose, connect --mode game-pose ou
+mp_lan --capture game-pose. Modo 6 só aceita engine_fixture.exe x86 próprio.
+Fixture DLL/UDP continuou sem draw e recuperou corpo inválido/troca de ator.
+121 x86/106 unitários nativos, release x86, Clippy/fmt; logs privados
+target/analysis/offline-batch-capture-*20261031*. Fonte nova ainda exige G12;
+sem jogo aberto, novos callbacks, velocidade/modelo ou tick físico inventados.
+
 Reteste visual acompanhado em 31/10, DLL 07ec04e sem rebuild: proprietário
 confirmou aparecer/sumir/voltar sozinho, textura normal e ausência de travamento
 no eco local após blackout de 30 s. Proxy sem perda/dup/delay/jitter extras,

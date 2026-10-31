@@ -67,6 +67,9 @@ fn main() -> anyhow::Result<()> {
         Unload,
         /// attach, pump, render, draw, connect --mode drawn, load gate and visual-show, in order.
         SessionStart {
+            /// Experimental memory capture independent of camera/focus; default keeps validated draw source.
+            #[arg(long, value_enum, default_value = "drawn")]
+            capture: client_dll::pose_capture::Selection,
             #[arg(long)]
             server: SocketAddr,
             #[arg(long, default_value_t = 100, value_parser = clap::value_parser!(u16).range(0..=200))]
@@ -262,6 +265,8 @@ fn main() -> anyhow::Result<()> {
     #[derive(Clone, Copy, ValueEnum)]
     enum Mode {
         Game,
+        /// Experimental position/quaternion capture independent of the draw callback.
+        GamePose,
         Simulated,
         /// Pose from the draw observer, with rotation; install pump+draw first.
         Drawn,
@@ -407,6 +412,7 @@ fn main() -> anyhow::Result<()> {
             return Ok(());
         }
         Task::SessionStart {
+            capture,
             server,
             interpolation_ms,
             extrapolation_ms,
@@ -453,6 +459,7 @@ fn main() -> anyhow::Result<()> {
                 })
                 .transpose()?;
             let options = launcher_session::Options {
+                capture: *capture,
                 server: *server,
                 presentation: client_dll::interpolation::Config {
                     delay_ms: *interpolation_ms,
@@ -799,7 +806,7 @@ fn main() -> anyhow::Result<()> {
             room,
             identity_file,
         } => {
-            if matches!(mode, Mode::Game) {
+            if matches!(mode, Mode::Game | Mode::GamePose) {
                 ensure!(!args.fixture, "fixture does not load game.dll");
                 let root = executable.parent().context("target has no directory")?;
                 profile::verify_module(&root.join("aa/lib/game.dll"))
@@ -813,6 +820,7 @@ fn main() -> anyhow::Result<()> {
             let mut config = ClientConfig {
                 mode: match mode {
                     Mode::Game => api::GAME,
+                    Mode::GamePose => api::GAME_POSE,
                     Mode::Simulated => api::SIMULATED,
                     Mode::Drawn => api::DRAWN,
                 },

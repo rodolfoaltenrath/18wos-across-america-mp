@@ -56,6 +56,14 @@ Queda provocada no motor, sessões
 longas e as matrizes de M1/M4/M8 continuam pendentes. Evidências e limites em
 G0 do procedimento de validação e no primeiro registro do roadmap.
 
+Para a próxima rodada agrupada existe a fonte experimental
+`mp_launcher ... session-start --capture game-pose` (ou `connect --mode game-pose`),
+também selecionável por `mp_lan --capture game-pose`. Lê posição/quaternion
+sem depender do callback de desenho, com dupla leitura e conferência da cadeia.
+O padrão continua `drawn`. Não houve prova dessa fonte nova no jogo; leituras
+iguais não garantem um tick atômico, nem a disponibilidade durante todo menu/
+carregamento. A lista G12 agrupa foco/câmeras/recarga e limpeza dessa revisão.
+
 ## Telas do mod: prévia local
 
 As bases de nove telas estão em `mod_ui`: principal, Multiplayer, hospedar,

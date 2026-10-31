@@ -19,6 +19,7 @@ use std::{
 };
 
 pub struct Options {
+    pub capture: client_dll::pose_capture::Selection,
     pub server: SocketAddr,
     pub presentation: client_dll::interpolation::Config,
     pub player: u32,
@@ -114,7 +115,24 @@ pub fn start(c: &Controller, dll: &Path, o: &Options) -> Result<Value> {
             api::put(&mut connect.message, &serde_json::to_string(options)?)
                 .map_err(anyhow::Error::msg)?;
         }
-        connect.config.mode = api::DRAWN;
+        connect.config.mode = match o.capture {
+            client_dll::pose_capture::Selection::Drawn => api::DRAWN,
+            client_dll::pose_capture::Selection::GamePose => {
+                if fixture.is_some() {
+                    api::POSE_FIXTURE
+                } else {
+                    api::GAME_POSE
+                }
+            }
+        };
+        if let Some(info) = fixture
+            && connect.config.mode == api::POSE_FIXTURE
+        {
+            for (i, value) in words::<2>(info, "capture_descriptors")?.iter().enumerate() {
+                api::put(&mut connect.config.addresses[i], &format!("{value:x}"))
+                    .map_err(anyhow::Error::msg)?;
+            }
+        }
         api::put(&mut connect.config.server, &o.server.to_string()).map_err(anyhow::Error::msg)?;
         api::put(&mut connect.config.profile, profile::ID).map_err(anyhow::Error::msg)?;
         step("connect-drawn", c.control(dll, &mut connect).map(drop))?;

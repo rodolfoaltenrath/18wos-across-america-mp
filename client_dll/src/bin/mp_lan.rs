@@ -19,6 +19,9 @@ struct Args {
     /// Only option 1 reads it; status/stop/recovery stay available if it is invalid.
     #[arg(long, conflicts_with = "check_saves")]
     career_plan: Option<PathBuf>,
+    /// Experimental pose reading independent of draw; current source remains default.
+    #[arg(long, value_enum, default_value = "drawn")]
+    capture: client_dll::pose_capture::Selection,
 }
 fn main() -> Result<()> {
     let args = Args::parse();
@@ -66,7 +69,7 @@ fn run(args: Args) -> Result<()> {
         return Ok(());
     }
     #[cfg(windows)]
-    return windows::interactive(&kit, &root, args.career_plan.as_deref());
+    return windows::interactive(&kit, &root, args.career_plan.as_deref(), args.capture);
     #[cfg(not(windows))]
     anyhow::bail!("O assistente interativo e Windows x86; no Fedora use proton_host/mp_launcher")
 }
@@ -298,7 +301,12 @@ mod windows {
         }
     }
 
-    pub fn interactive(kit: &Path, root: &Path, career_plan: Option<&Path>) -> Result<()> {
+    pub fn interactive(
+        kit: &Path,
+        root: &Path,
+        career_plan: Option<&Path>,
+        capture: client_dll::pose_capture::Selection,
+    ) -> Result<()> {
         let _ = HELPER_CLOCK.set(Instant::now());
         let bytes = fs::read(kit.join(lan_kit::CONFIG)).context("mp-lan.json ausente")?;
         let defaults: Settings = serde_json::from_slice(&bytes)?;
@@ -411,7 +419,7 @@ mod windows {
                             "inicio cancelado"
                         );
                         // Both paths are prepared before creating run/backup/pending files.
-                        let start_arguments = if let Some(c) = &career {
+                        let mut start_arguments = if let Some(c) = &career {
                             c.start_arguments(&settings)?
                         } else {
                             client_dll::assistant_career::visual_arguments(
@@ -419,6 +427,10 @@ mod windows {
                                 &data.join("identity.json"),
                             )?
                         };
+                        start_arguments.extend([
+                            OsString::from("--capture"),
+                            OsString::from(capture.argument()),
+                        ]);
                         lan_kit::verify(kit)?;
                         let tick = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
                         let run = data.join(format!("run-{tick}"));

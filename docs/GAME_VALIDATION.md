@@ -229,6 +229,10 @@ Pendências delimitadas, sem repetir a prova já obtida:
 
 ## Preparação comum
 
+Incremento offline de 31/10: a fonte optativa `game-pose` está na bancada,
+independente do draw. Usar G12 para a prova acumulada; não abrir o jogo a cada
+incremento nem converter o teste próprio em prova de foco/menus reais.
+
 Revisão offline posterior à primeira LAN (sem novos jogos): `mp_lan` agora
 consulta Documents real, lembra a pasta/endpoint/sala, explica erros de caminho
 e salva status automaticamente no início/antes/depois do stop. Gera subpasta
@@ -629,3 +633,31 @@ montagem/abertura feita. Dublagem é etapa própria (T3), fora desta rodada.
 - [ ] Fechar normalmente, `ui_tools restore` e confirmar config original e
   overlay ausente. Com menu experimental também montado, restaurar na ordem
   inversa da instalação.
+
+### G12 — Rodada agrupada dos incrementos offline de 31/10
+
+Preparar após concluir o lote inteiro. Não reinstalar pump no mesmo processo;
+se for necessário dividir as sub-sessões, usar um processo novo com o mesmo
+backup/procedimento de integridade. Um resultado global positivo não substitui
+evidência de cada campo/comando. M2/G0 e a primeira LAN já comprovadas não
+precisam ser refeitas só para repetir contadores.
+
+- [ ] Fonte experimental: iniciar explicitamente com `--capture game-pose`,
+  save de teste/backup novo, registrar modo e amostra disponível. Confirmar
+  rotação/posição em um percurso curto; comparar com a fonte validada quando
+  necessário, sem presumir que dois reads iguais são um tick atômico.
+- [ ] Alternar câmeras e tirar foco por cerca de 20 s. Um PC comprova os
+  contadores de captura/envio; observar continuidade no outro cliente exige
+  segundo PC ou observador independente. Ausência de draw da janela sem foco
+  continua sendo comportamento do jogo. Não prometer que a física avance
+  quando o jogo está pausado.
+- [ ] Voltar à janela, menu de carregar e recarregar o save de teste pelo gate.
+  Conferir pausa/retomada da fonte, liberação anterior e recriação, sem enviar
+  dados de ator antigo. Cena legível na memória não garante todos os estados
+  de menu; identificar o estado que falhar em vez de marcar a matriz inteira.
+- [ ] Parar com foco no jogo, conferir visual ausente, worker aguardado,
+  callbacks/14 slots restaurados e hashes antes/depois da saída normal.
+
+Sem prova nova de modelo, velocidade, tick da física, outros cinco comandos
+de teardown ou sincronização de mundo por esse incremento. As medições próprias
+sem draw/ponteiros inválidos/recriação não fecham as caixas acima.

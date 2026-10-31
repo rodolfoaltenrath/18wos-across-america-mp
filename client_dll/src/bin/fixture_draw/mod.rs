@@ -34,6 +34,8 @@ const STACK_WORDS: usize = 1 + 16 * 33;
 static DEPTH: AtomicU32 = AtomicU32::new(2);
 static STATE: AtomicU32 = AtomicU32::new(7);
 static CAR: AtomicU32 = AtomicU32::new(0);
+static CAPTURE_ROOT: AtomicU32 = AtomicU32::new(0);
+static DRAW_DISABLED: AtomicBool = AtomicBool::new(false);
 /// Two player entities with the same chain; switching simulates a reload.
 static CARS: [AtomicU32; 2] = [const { AtomicU32::new(0) }; 2];
 static CALLS: AtomicU32 = AtomicU32::new(0);
@@ -195,6 +197,9 @@ impl Fixture {
     pub fn car(&self) -> u32 {
         address(&self.cars[0])
     }
+    pub fn capture_descriptors(&self) -> [u32; 2] {
+        [&CAPTURE_ROOT as *const AtomicU32 as u32, self.page as u32]
+    }
     pub fn frame(&mut self) {
         lifecycle::frame(CAR.load(Ordering::Acquire));
         self.frame += 1;
@@ -211,6 +216,14 @@ impl Fixture {
             );
         }
         self.body[0x30 / 4].store((self.frame as f32).to_bits(), Ordering::Release);
+        CAPTURE_ROOT.store(
+            if PLAYERLESS.load(Ordering::Acquire) {
+                0
+            } else {
+                CAR.load(Ordering::Acquire)
+            },
+            Ordering::Release,
+        );
         self.physics[0x3e4 / 4].store(
             if INVALID.load(Ordering::Acquire) {
                 1
@@ -223,7 +236,7 @@ impl Fixture {
         self.world[0].store(head, Ordering::Release);
         self.world[top(depth) + 12].store((self.frame as f32).to_bits(), Ordering::Release);
         self.camera[14].store((-(self.frame as f32)).to_bits(), Ordering::Release);
-        if !PLAYERLESS.load(Ordering::Acquire) {
+        if !PLAYERLESS.load(Ordering::Acquire) && !DRAW_DISABLED.load(Ordering::Acquire) {
             unsafe { call(CAR.load(Ordering::Acquire)) };
         }
         assert_eq!(self.world[0].load(Ordering::Acquire), head);
@@ -273,6 +286,8 @@ pub fn command(line: &str) -> bool {
     }
     match line {
         "draw-invalid" => INVALID.store(true, Ordering::Release),
+        "draw-suspend" => DRAW_DISABLED.store(true, Ordering::Release),
+        "draw-resume" => DRAW_DISABLED.store(false, Ordering::Release),
         "draw-light-invalid" => LIGHT_INVALID.store(true, Ordering::Release),
         "draw-light-valid" => LIGHT_INVALID.store(false, Ordering::Release),
         "draw-valid" => INVALID.store(false, Ordering::Release),

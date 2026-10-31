@@ -66,6 +66,7 @@ mod network_io;
 pub mod pe_exports;
 #[cfg(any(all(windows, target_arch = "x86"), test))]
 mod phase_queue;
+pub mod pose_capture;
 pub mod presentation;
 pub mod profile;
 pub mod release_policy;
@@ -126,6 +127,13 @@ enum Source {
     Game {
         verified_base: usize,
     },
+    GamePose {
+        verified_base: usize,
+    },
+    PoseFixture {
+        root: u32,
+        vtable: u32,
+    },
     /// Pose published by the actors.car draw observer, including rotation.
     Drawn,
 }
@@ -160,6 +168,12 @@ impl Source {
                 .map(|p| (p, None))
                 .map_err(SampleError::Unavailable),
             Self::Game { verified_base } => memory::game_position(verified_base).map(|p| (p, None)),
+            Self::GamePose { verified_base } => {
+                memory::game_pose(verified_base).map(|p| (p.position, Some(p.rotation)))
+            }
+            Self::PoseFixture { root, vtable } => {
+                memory::fixture_pose(*root, *vtable).map(|p| (p.position, Some(p.rotation)))
+            }
             Self::Drawn => {
                 let pose = *LOCAL_POSE
                     .lock()
@@ -476,6 +490,25 @@ fn explicit_configuration(config: &api::ClientConfig) -> Result<(SocketAddr, Sou
                 return Err("game profile requires Windows x86 DLL".into());
             }
             Source::Game { verified_base: 0 }
+        }
+        api::GAME_POSE => {
+            if api::text(&config.profile)? != profile::ID
+                || !cfg!(all(windows, target_arch = "x86"))
+            {
+                return Err("game-pose requires the profiled Windows x86 DLL".into());
+            }
+            Source::GamePose { verified_base: 0 }
+        }
+        api::POSE_FIXTURE => {
+            memory::require_pose_fixture()?;
+            let number = |i: usize| {
+                u32::from_str_radix(api::text(&config.addresses[i])?, 16)
+                    .map_err(|_| "invalid fixture pose address".to_string())
+            };
+            Source::PoseFixture {
+                root: number(0)?,
+                vtable: number(1)?,
+            }
         }
         api::DRAWN => {
             if !cfg!(all(windows, target_pointer_width = "32")) {

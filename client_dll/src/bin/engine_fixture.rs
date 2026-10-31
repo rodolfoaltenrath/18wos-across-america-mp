@@ -52,6 +52,12 @@ fn main() -> anyhow::Result<()> {
     let (draw_descriptors, draw_car) = drawer
         .as_ref()
         .map_or(([0; 6], 0), |d| (d.descriptors(), d.car()));
+    #[cfg(target_arch = "x86")]
+    let capture_descriptors = drawer
+        .as_ref()
+        .map_or([0; 2], fixture_draw::Fixture::capture_descriptors);
+    #[cfg(not(target_arch = "x86"))]
+    let capture_descriptors = [0u32; 2];
     #[cfg(not(target_arch = "x86"))]
     let (draw_descriptors, draw_car) = ([0u32; 6], 0u32);
     #[cfg(target_arch = "x86")]
@@ -182,7 +188,7 @@ fn main() -> anyhow::Result<()> {
     ensure!(!window.is_null(), "cannot create fixture window");
     println!(
         "{}",
-        serde_json::json!({"pid":unsafe{GetCurrentProcessId()},"window":window as usize,"thread":unsafe{GetCurrentThreadId()}, "peek_slot": peek_slot, "factory": bindings, "item_descriptors": item_descriptors, "model_definitions": model_definitions, "model_setter": model_setter,"info_descriptors":info_descriptors,"instance_descriptors":instance_descriptors,"render_descriptors":render_descriptors,"draw_descriptors":draw_descriptors,"draw_car":draw_car,"visual_descriptors":visual_descriptors,"transition_descriptors":transition_descriptors,"block_descriptors":block_descriptors,"command_descriptors":command_descriptors,"map_descriptors":map_descriptors})
+        serde_json::json!({"pid":unsafe{GetCurrentProcessId()},"window":window as usize,"thread":unsafe{GetCurrentThreadId()}, "peek_slot": peek_slot, "factory": bindings, "item_descriptors": item_descriptors, "model_definitions": model_definitions, "model_setter": model_setter,"info_descriptors":info_descriptors,"instance_descriptors":instance_descriptors,"render_descriptors":render_descriptors,"draw_descriptors":draw_descriptors,"draw_car":draw_car,"capture_descriptors":capture_descriptors,"visual_descriptors":visual_descriptors,"transition_descriptors":transition_descriptors,"block_descriptors":block_descriptors,"command_descriptors":command_descriptors,"map_descriptors":map_descriptors})
     );
     std::io::stdout().flush()?;
     let address = window as usize;

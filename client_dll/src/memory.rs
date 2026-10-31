@@ -82,7 +82,7 @@ pub fn position(_addresses: &[Address; 3]) -> Result<Position, String> {
 }
 
 #[cfg(windows)]
-pub fn game_position(verified_base: &mut usize) -> Result<Position, SampleError> {
+fn game_base(verified_base: &mut usize) -> Result<usize, SampleError> {
     use windows_sys::Win32::System::LibraryLoader::{GetModuleFileNameW, GetModuleHandleW};
     let name: Vec<u16> = "game.dll".encode_utf16().chain(Some(0)).collect();
     // SAFETY: NUL-terminated filename; this only queries an already loaded module.
@@ -106,6 +106,12 @@ pub fn game_position(verified_base: &mut usize) -> Result<Position, SampleError>
         crate::profile::verify_module(&path).map_err(SampleError::Fatal)?;
         *verified_base = module as usize;
     }
+    Ok(module as usize)
+}
+
+#[cfg(windows)]
+pub fn game_position(verified_base: &mut usize) -> Result<Position, SampleError> {
+    game_base(verified_base)?;
     let address: Address = crate::profile::POSITION
         .parse()
         .map_err(SampleError::Fatal)?;
@@ -137,6 +143,63 @@ pub fn game_position(verified_base: &mut usize) -> Result<Position, SampleError>
 pub fn game_position(_verified_base: &mut usize) -> Result<Position, SampleError> {
     Err(SampleError::Fatal(
         "game profile requires Windows x86".into(),
+    ))
+}
+
+#[cfg(windows)]
+pub fn game_pose(verified_base: &mut usize) -> Result<crate::pose_capture::Pose, SampleError> {
+    let base = u32::try_from(game_base(verified_base)?)
+        .map_err(|_| SampleError::Fatal("pose requires x86 address space".into()))?;
+    let root = base
+        .checked_add(0x160df0)
+        .ok_or_else(|| SampleError::Fatal("pose root overflow".into()))?;
+    let vtable = base
+        .checked_add(crate::profile::CAR_VTABLE)
+        .ok_or_else(|| SampleError::Fatal("pose vtable overflow".into()))?;
+    crate::pose_capture::capture(
+        crate::pose_capture::Layout {
+            root,
+            steps: &[0x14c, 0x4610, 8, 8],
+            vtable,
+        },
+        |at, b| read_bytes(at as usize, b).map_err(|_| ()),
+    )
+    .map_err(|e| SampleError::Unavailable(e.to_string()))
+}
+pub fn require_pose_fixture() -> Result<(), String> {
+    if !cfg!(all(windows, target_arch = "x86"))
+        || !std::env::current_exe()
+            .ok()
+            .and_then(|p| {
+                p.file_name()
+                    .map(|s| s.eq_ignore_ascii_case("engine_fixture.exe"))
+            })
+            .unwrap_or(false)
+    {
+        return Err("pose fixture requires our x86 engine_fixture.exe".into());
+    }
+    Ok(())
+}
+#[cfg(windows)]
+pub fn fixture_pose(root: u32, vtable: u32) -> Result<crate::pose_capture::Pose, SampleError> {
+    crate::pose_capture::capture(
+        crate::pose_capture::Layout {
+            root,
+            steps: &[],
+            vtable,
+        },
+        |at, b| read_bytes(at as usize, b).map_err(|_| ()),
+    )
+    .map_err(|e| SampleError::Unavailable(e.to_string()))
+}
+#[cfg(not(windows))]
+pub fn game_pose(_: &mut usize) -> Result<crate::pose_capture::Pose, SampleError> {
+    Err(SampleError::Fatal("game pose requires Windows x86".into()))
+}
+#[cfg(not(windows))]
+pub fn fixture_pose(_: u32, _: u32) -> Result<crate::pose_capture::Pose, SampleError> {
+    Err(SampleError::Fatal(
+        "fixture pose requires Windows x86".into(),
     ))
 }
 

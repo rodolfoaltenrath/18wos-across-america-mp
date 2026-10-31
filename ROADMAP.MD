@@ -1,5 +1,38 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Lote offline M1: pose agrupada independente do draw — 31/10/2026
+
+Varredura das etapas existentes solicitada pelo proprietário, sem abrir o jogo.
+M2 permanece concluída pelas provas anteriores; os próximos incrementos usam
+bancada própria e deixam a rodada prática agrupada no procedimento de validação.
+
+`pose_capture` acrescenta captura limitada de posição/quaternion do perfil já
+investigado: raiz resolvida a cada amostra, ator/vtable/cena/física conferidos,
+dois blocos contíguos de 40 bytes comparados e testemunho de toda a cadeia
+repetido. Troca, ilegibilidade, overflow, NaN/quaternion inválido suspendem
+envios. Não chama callbacks do motor, não escreve no jogo e não deduz modelo,
+velocidade, tick da física ou estado global do menu.
+
+Novo modo explícito `game-pose` (ClientConfig.mode 5), com hash/perfil x86:
+`connect --mode game-pose`, `session-start --capture game-pose` ou
+`mp_lan --capture game-pose`. Drawn continua padrão e o kit instalado não é
+atualizado. A fonte experimental lê memória no worker, sem precisar de novo
+draw. O modo 6 só aceita o executável próprio engine_fixture.exe, para provar
+a integração e UDP com dados próprios; não é opção do launcher para o jogo.
+Control v1/1536 e EngineControl v3/664 permanecem iguais.
+
+Dois reads iguais detectam alterações observadas; não garantem atomicidade da
+física nem detectam ABA entre leituras. Cena legível não prova todos os estados
+de pausa/menu. Nenhuma alegação de foco/câmeras corrigidos no jogo até G12.
+M1 permanece parcial; a prova de captura com movimento sem draw é da fixture.
+
+Validação: 106 testes nativos da biblioteca, 121 testes x86 sob Proton
+(115 unitários, captura real em fixture, controlador e dois fluxos visuais/
+sessão), build release x86 e Clippy nativo/x86/fmt. Artefatos privados
+`target/analysis/offline-batch-capture-*20261031*`. A primeira fixture bloqueava
+o próprio loop de mensagens; o teste foi corrigido para manter o loop ativo
+sem draw e repetido, com a falha inicial preservada. Não houve jogo/LAN.
+
 ## Confirmação humana de sumiço e retorno no eco — 31/10/2026
 
 A pedido do proprietário, repetida somente a sequência visual em novo processo
