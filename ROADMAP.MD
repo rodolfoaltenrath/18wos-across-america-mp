@@ -1,5 +1,20 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Preparo estático do G4b: quais ações emitem cada comando — 31/10/2026
+
+Investigação offline no `game.dll` do perfil e nos `.esc` locais (nada copiado
+para o Git). `[game+0x160ef8]` é `cmd_execute` (GetProcAddress em
+`+0xd2120`, mesma rotina do `cmd_argv` já usado), logo os botões executam os
+comandos de forma síncrona pelo descritor, passando pelo gate. Resultados:
+`map america` (argc 2) é a linha de carga/novo jogo (`+0xba071`, `+0xbc613`);
+`quit` vem do menu principal após confirmação, do fim de jogo, da verificação
+de CD e de falhas, e termina com `process_terminate_all` (`[+0x160988]`);
+`exit` só aparece no botão oculto "Edit Map" do patch com estado de editor;
+`menu`/`edit` são de inicialização e editor; `preview %s` não tem botão de
+jogador identificado. Tabela completa em G4b. Conclusão: o único teardown de
+jogador ainda não exercitado com o visual é Sair→confirmar (`quit`), incluído
+como encerramento opcional do roteiro G12. Nenhum código mudou; sem jogo.
+
 ## Lote offline M0/M9: inventário de licenças e avisos do kit — 31/10/2026
 
 Avança "revisar as licenças das dependências e os avisos que acompanham

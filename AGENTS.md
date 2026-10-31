@@ -1181,3 +1181,7 @@ travado sem dev contra lista permissiva; kit x86 45 crates/0 violações.
 `mp_kit --notices THIRD_PARTY.txt` anexa aviso com hash opcional no manifesto.
 Não é revisão jurídica; política de contribuições segue com o proprietário.
 Verify: 246 x86/315 nativos.
+G4b estático (31/10): `[game+0x160ef8]`=cmd_execute; carga = `map america`;
+`quit` dos menus termina com process_terminate_all; `exit`/`menu`/`edit`/
+`preview` sem caminho normal de jogador. Único teardown de jogador pendente com
+visual: Sair→confirmar, encerramento opcional do roteiro G12.

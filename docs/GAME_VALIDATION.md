@@ -413,6 +413,29 @@ posterior, não somente pelas fixtures.
 
 ### G4b — Outros caminhos de teardown
 
+**Mapeamento estático de 31/10 (game.dll do perfil, sem executar o jogo).**
+Todos os pontos abaixo chamam `[game+0x160ef8]`, que é `cmd_execute`
+(resolvido por GetProcAddress em `game+0xd2120`), portanto passam pelo
+descritor e pelo gate de forma SÍNCRONA. IDs de botões lidos dos `.esc` locais.
+
+| Comando | Onde é emitido | Ação de jogador correspondente |
+| --- | --- | --- |
+| `map america` (argc 2) | `+0xba071`, `+0xbc613` | Carregar jogo / novo jogo; o save é aplicado por outro caminho. Já validado 2× pelo gate. |
+| `quit` | `+0xb9c4a` (menu principal após "@@ui_really_quit@@"), `+0xb4eaf` (fim de jogo, botão 220), `+0x854b0` (verificação de CD, botão 30), `+0xbaa73`, falha de modo gráfico (`+0xfb677/+0xfbda7`) e `+0xdc83` | Sair do jogo pelos menus. O ramo apaga a cena, remove sete registros de comando e chama `process_terminate_all` (`[game+0x160988]`). |
+| `exit` | `+0xb9bde` (botão oculto "Edit Map", id 666 do `mgame.esc` do patch, só com estado 4) | Editor; não é caminho normal de jogador. Dentro do ramo, estado 4 emite `edit <mapa>`, senão `menu` (aninhado). |
+| `menu` | `+0xd33d1` (inicialização sem `-edit`), `+0x854e6` (CD), `+0xd3b8c` (dentro de `exit`) | Boot/menu principal; antes da sessão do mod existir. |
+| `edit` | `+0xd33c1` (`-edit`), `+0xd3b6a` (`edit %s` dentro de `exit`) | Somente editor. |
+| `preview %s` | `+0xdde0` | Pré-visualização de modelo; sem botão de jogador identificado. |
+
+Consequência para a rodada: com o visual ativo, o único caminho de jogador
+ainda não exercitado é **Sair pelo menu do jogo e confirmar** (`quit`). O gate
+deve liberar o visual, reexecutar `quit` uma vez pelo pump e o jogo deve fechar
+normalmente; depois do fechamento, `session-verify`. Rodar SÓ no fim da rodada,
+com coleta encerrada e relatório de status salvo antes, porque o processo deixa
+de existir (sem `session-stop`). `exit`/`menu`/`edit`/`preview` não têm caminho
+normal de jogador e permanecem cobertos só pela bancada.
+
+
 - [ ] Mapear cada ação real de UI ao descritor `exit`/`menu`/`quit` e comprovar
   cobertura; navegar por um menu não prova que o comando `menu` foi chamado.
 - [ ] Preparar `preview`/`edit` em ambiente isolado e revisar possíveis escritas
@@ -686,6 +709,13 @@ Sequência (anotar só o que for visto; marcadores registram o momento):
 6. Encerrar a coleta, `session-stop --verify target/analysis/g12-NOVA/backup`,
    fechar o jogo pelo menu, `session-verify` e parar o servidor (Ctrl+C) para
    gravar `server.json` (`events`, `relays_*`, `pose_gaps`).
+
+Encerramento alternativo (opcional, em vez do passo 6, só no fim): com o eco
+visível, salvar `session-status` em arquivo, encerrar a coleta e usar Sair no
+menu do jogo e confirmar. Esperado: o jogo fecha normalmente (gate libera e
+reexecuta `quit`). Depois: enumeração sem jogo, `session-verify` com o backup e
+parar o servidor. Sem `session-stop` nesse caminho (o processo deixa de existir).
+Ver o mapeamento estático em G4b.
 
 Falha em qualquer passo: preservar a pasta `g12-NOVA` e o status; não repetir
 o mesmo passo só para zerar contadores. `exit`/`menu`/`quit` com o eco ativo
