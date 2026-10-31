@@ -852,3 +852,61 @@ mp_launcher --pid PID --dll DLL session-marker --code 2   # antes de carregar
 - [ ] `reliability.expired`/`relays_expired`/`relays_dropped` devem ficar em
   zero numa LAN normal; diferente disso, preservar logs, sem repetir só para
   zerar contadores.
+
+### G13 — Próxima rodada local: visibilidade automática e diagnóstico
+
+**Preparada offline; ainda não executada no jogo.** G12 local de31/10 continua
+válida; não repetir seu percurso inteiro. Não requer o segundo PC. O objetivo
+novo é observar o remoto anunciado como loading/unavailable enquanto o jogador
+local continua disponível: G12 anterior ficou com state_hidden0.
+
+Preparação do operador, jogo fechado: launcher/DLL novos juntos, nova pasta de
+backup/logs, perfil conferido. Servidor nativo em127.0.0.1:39000, v2 sala desktop,
+SEM `--echo`. No Fedora, cliente/launcher pelo `proton_host` no prefixo da partida;
+servidor e probe nativos. Abrir a partida de teste e iniciar
+`session-start --server 127.0.0.1:39000 --capture game-pose
+--room desktop --identity-file IDENTIDADE --offset 0 0 0 --backup BACKUP-NOVO`.
+Registrar o ID real do cliente em `session-status.network_session.player`.
+Não copiar ID/PID desta documentação nem selecionar o próprio ID do probe.
+
+Iniciar `session-record --seconds 180 --interval-ms 1000 --output PASTA-NOVA`.
+O mesmo status guarda capture/load_gate sanitizados; não precisa consultar cada
+transição manualmente. No mesmo desktop, com a versão nativa nova:
+
+```text
+session_probe --server 127.0.0.1:39000 --room desktop --identity-file ID-PROBE-NOVO \
+  --local-cycle --follow-player ID-DO-JOGO --follow-offset 400 0 0 \
+  --seconds 180 --output RELATORIO-PROBE-NOVO.json
+```
+
+Uma sequência para o proprietário, cerca de3min: câmera externa e janela em
+primeiro plano; acompanhar aparecer → sumir → voltar → sumir → voltar nos
+primeiros75s do ciclo. Depois dirigir por cerca1min, fazendo curvas/parada.
+Se houver rampa próxima, observar inclinação; caso contrário essa prova fica
+pendente. Não requer salvar, abrir menus ou recarregar para testar filtros de
+relatórios. O operador cuida da conexão/coleta e observa o início real do ciclo;
+o relógio começa na primeira pose válida recebida, não no lançamento da ferramenta.
+
+- [ ] Registro de aparência/retorno com textura normal nas cinco fases, sem
+  travamento; anotar se foi possível observar rampa, sem inventar pitch/roll.
+- [ ] Estados loading/unavailable do probe com poses quietas, heartbeat ativo
+  e `presentation.state_hidden` crescendo antes da expiração de1s. Após retomada,
+  poses frescas e desenho voltam. Não confundir stale1s com a regra de150ms.
+- [ ] `capture` válido na DLL real, com accepted crescendo. Skipped é leitura
+  evitada por gate ocupado; discarded é resultado descartado após gate mudar.
+  Changed só informa diferença observada entre leituras/testemunhos, não sua
+  causa física exata. Outros motivos são limitados; não provocar ponteiros
+  inválidos no jogo só para preencher contador (fixtures já cobrem rejeições).
+- [ ] Coleta concluída/verificada sem claims automáticos; correlacionar marcadores
+  1001–1005 com as observações. A ausência de load nesta rodada não testa de novo
+  a recarga; o filtro de gate e a comparação de epoch usam também logs reais
+  históricos reanalisados offline, sem alterar as capturas originais.
+- [ ] Encerrar probe/coleta, `session-stop --verify`, confirmar item ausente,
+  worker aguardado/slots/arquivos, fechar normalmente e conferir pós-saída.
+
+Se o probe perder a fonte, registra unavailable e não inventa coordenadas.
+`local_cycle.complete` descreve a execução do roteiro/fonte, não comprova desenho
+no motor. `game_tested=false`/`lan_tested=false` permanecem no relatório da
+ferramenta; conclusão humana pertence aos itens observados. Não abrir duas
+instâncias do jogo/conta Steam, não instalar assets e não reinstalar pump no
+mesmo processo. Falha preserva a pasta inteira e interrompe as manobras.

@@ -103,7 +103,7 @@ pub fn decide(s: EntryState) -> Entry {
 }
 /// Commands of the shared handler `game+0xd3570` that delete the scene
 /// (`this+0x14c` through `0xcc4a0` and the deleting destructor).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 #[repr(u32)]
 pub enum WorldCommand {

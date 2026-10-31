@@ -7,6 +7,8 @@ use multiplayer_server::{
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+mod gate;
+pub use gate::Gate;
 
 pub const MAX_INPUT_BYTES: usize = 1024 * 1024;
 pub const MAX_INPUTS: usize = 256;
@@ -60,6 +62,10 @@ pub struct Snapshot {
     /// Reliable-event counters and relayed states/markers (absent in old logs).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_events: Option<crate::session_events::EventsReport>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capture: Option<crate::capture_diagnostics::Report>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub load_gate: Option<Gate>,
 }
 impl Snapshot {
     pub fn validate(&self) -> Result<()> {
@@ -86,6 +92,9 @@ impl Snapshot {
         }
         if let Some(events) = &self.session_events {
             events.validate().map_err(anyhow::Error::msg)?;
+        }
+        if let Some(capture) = &self.capture {
+            capture.validate().map_err(anyhow::Error::msg)?;
         }
         Ok(())
     }
@@ -131,6 +140,20 @@ impl Snapshot {
             if events.truncated {
                 out.push("session_events_report_truncated");
             }
+        }
+        if self.capture.as_ref().is_some_and(|c| c.truncated) {
+            out.push("capture_counters_truncated");
+        }
+        if self.load_gate.as_ref().is_some_and(|g| {
+            matches!(
+                g.phase,
+                Some(
+                    crate::deferred_load::Phase::Quarantined
+                        | crate::deferred_load::Phase::Recoverable
+                )
+            )
+        }) {
+            out.push("load_gate_recovery_required");
         }
         out
     }
@@ -267,6 +290,8 @@ pub struct Comparison {
     pub received_delta: Option<u64>,
     pub drawn_delta: Option<u64>,
     pub source_transition: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub world_epoch_change: Option<[u32; 2]>,
 }
 fn compare(before: usize, a: &Snapshot, after: usize, b: &Snapshot) -> Comparison {
     let mut comparison = Comparison {
@@ -277,6 +302,7 @@ fn compare(before: usize, a: &Snapshot, after: usize, b: &Snapshot) -> Compariso
         received_delta: None,
         drawn_delta: None,
         source_transition: None,
+        world_epoch_change: None,
     };
     let (Some(old), Some(new)) = (&a.network_session, &b.network_session) else {
         return comparison;
@@ -288,18 +314,38 @@ fn compare(before: usize, a: &Snapshot, after: usize, b: &Snapshot) -> Compariso
         comparison.state = "connection_epoch_changed";
         return comparison;
     }
-    let (Some(sent), Some(received), Some(drawn)) = (
+    if let (Some(old), Some(new)) = (&a.load_gate, &b.load_gate)
+        && old.epoch != 0
+        && new.epoch != 0
+        && old.epoch != new.epoch
+    {
+        comparison.world_epoch_change = Some([old.epoch, new.epoch]);
+    }
+    let (Some(sent), Some(received)) = (
         b.client.sent.checked_sub(a.client.sent),
         b.client.received.checked_sub(a.client.received),
-        b.visual.drawn.checked_sub(a.visual.drawn),
     ) else {
         comparison.state = "counter_regression_or_wrap";
         return comparison;
     };
-    comparison.state = "same_connection_epoch";
+    let drawn = b.visual.drawn.checked_sub(a.visual.drawn);
+    if comparison.world_epoch_change.is_some() {
+        comparison.state = "same_connection_world_changed";
+    } else if drawn.is_none() {
+        comparison.state = "counter_regression_or_wrap";
+        return comparison;
+    } else {
+        comparison.state = "same_connection_epoch";
+    }
     comparison.sent_delta = Some(sent);
     comparison.received_delta = Some(received);
-    comparison.drawn_delta = Some(u64::from(drawn));
+    // A recreated instance resets its draw counter even if its new value has
+    // already exceeded the old one. Never infer a delta across world epochs.
+    comparison.drawn_delta = if comparison.world_epoch_change.is_some() {
+        None
+    } else {
+        drawn.map(u64::from)
+    };
     comparison.source_transition = match (a.client.sample_state, b.client.sample_state) {
         (1, 2) => Some("source_became_unavailable"),
         (2, 1) => Some("source_recovered"),
@@ -369,6 +415,53 @@ mod tests {
     }
     fn capture(v: &Value) -> Capture {
         parse(&serde_json::to_vec(v).unwrap()).unwrap()
+    }
+    #[test]
+    fn records_a_world_change_without_fabricating_a_draw_delta_or_exporting_gate_text() {
+        let mut a = own_snapshot(1);
+        a["load_gate"] = json!({"installed":true,"phase":"idle","in_flight":false,
+            "epoch":1,"calls":0,"deferred":0,"replays":0,"recreated":0,"dropped":0,
+            "foreign":0,"fallback_releases":0,"arguments_restored":0,"arguments_retained":0,
+            "restore_pending":false,"fallback_pending":false,"last_command":null,
+            "actor":123,"scene":456,"reason":"private world"});
+        let mut b = a.clone();
+        b["load_gate"]["epoch"] = 2.into();
+        b["load_gate"]["replays"] = 1.into();
+        b["client"]["sent"] = 120.into();
+        for drawn in [1, 1000] {
+            b["visual"]["drawn"] = drawn.into();
+            let report = analyze(vec![capture(&a), capture(&b)]).unwrap();
+            let c = &report.comparisons[0];
+            assert_eq!(c.state, "same_connection_world_changed");
+            assert_eq!(c.world_epoch_change, Some([1, 2]));
+            assert_eq!(c.sent_delta, Some(20));
+            assert_eq!(c.drawn_delta, None);
+            let output = serde_json::to_string(&report).unwrap();
+            assert!(
+                !output.contains("private")
+                    && !output.contains("scene")
+                    && !output.contains("actor")
+            );
+        }
+        b["client"]["sent"] = 0.into();
+        assert_eq!(
+            analyze(vec![capture(&a), capture(&b)]).unwrap().comparisons[0].state,
+            "counter_regression_or_wrap"
+        );
+    }
+    #[test]
+    fn capture_reasons_are_optional_for_old_logs_but_strict_when_present() {
+        let mut s = own_snapshot(1);
+        let mut report = crate::capture_diagnostics::Report::default();
+        report.observe(crate::capture_diagnostics::Reason::Changed);
+        s["capture"] = serde_json::to_value(report).unwrap();
+        let exported = sanitize(&serde_json::to_vec(&s).unwrap()).unwrap();
+        assert!(std::str::from_utf8(&exported).unwrap().contains("changed"));
+        s["capture"]["last"] = "private text".into();
+        assert!(parse(&serde_json::to_vec(&s).unwrap()).is_err());
+        s["capture"]["last"] = "changed".into();
+        s["capture"]["accepted"] = 1.into();
+        assert!(parse(&serde_json::to_vec(&s).unwrap()).is_err());
     }
     #[test]
     fn reproduces_connected_source_unavailability_and_recovery_without_claiming_focus_or_loss() {

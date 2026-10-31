@@ -164,7 +164,7 @@ pub fn game_pose(verified_base: &mut usize) -> Result<crate::pose_capture::Pose,
         },
         |at, b| read_bytes(at as usize, b).map_err(|_| ()),
     )
-    .map_err(|e| SampleError::Unavailable(e.to_string()))
+    .map_err(SampleError::PoseUnavailable)
 }
 pub fn require_pose_fixture() -> Result<(), String> {
     if !cfg!(all(windows, target_arch = "x86"))
@@ -190,7 +190,7 @@ pub fn fixture_pose(root: u32, vtable: u32) -> Result<crate::pose_capture::Pose,
         },
         |at, b| read_bytes(at as usize, b).map_err(|_| ()),
     )
-    .map_err(|e| SampleError::Unavailable(e.to_string()))
+    .map_err(SampleError::PoseUnavailable)
 }
 #[cfg(not(windows))]
 pub fn game_pose(_: &mut usize) -> Result<crate::pose_capture::Pose, SampleError> {

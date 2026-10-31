@@ -457,7 +457,7 @@ impl World {
         self.epoch != 0 && self.scene != 0 && self.actor != 0 && self.ready
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Phase {
     Idle,

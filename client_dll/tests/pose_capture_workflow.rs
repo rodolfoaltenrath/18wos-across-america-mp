@@ -24,6 +24,14 @@ fn state(c: &Controller, dll: &std::path::Path) -> Control {
     c.control(dll, &mut b).unwrap();
     b
 }
+fn capture(c: &Controller, dll: &std::path::Path) -> client_dll::capture_diagnostics::Report {
+    let mut counters = Control::new(api::CAPTURE_STATUS);
+    c.control(dll, &mut counters).unwrap();
+    let counters: client_dll::capture_diagnostics::Report =
+        serde_json::from_str(api::text(&counters.message).unwrap()).unwrap();
+    counters.validate().unwrap();
+    counters
+}
 #[test]
 fn pose_worker_continues_without_draw_and_recovers_invalid_body_and_actor_change() {
     let dll = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -101,6 +109,11 @@ fn pose_worker_continues_without_draw_and_recovers_invalid_body_and_actor_change
         std::thread::sleep(Duration::from_millis(10));
     }
     let paused = state(&c, &dll);
+    let counters = capture(&c, &dll);
+    // draw-invalid publishes an unreadable body pointer (1), not a NaN.
+    assert!(counters.accepted > 0 && counters.missing > 0);
+    assert_eq!(counters.invalid, 0);
+    assert_eq!(counters.fatal, 0);
     std::thread::sleep(Duration::from_millis(100));
     assert_eq!(state(&c, &dll).sent, paused.sent);
     send("draw-valid");
@@ -111,6 +124,26 @@ fn pose_worker_continues_without_draw_and_recovers_invalid_body_and_actor_change
         if s.sample_state == 1 && s.sent > paused.sent {
             break;
         }
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    send("pose-invalid-value");
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        let counters = capture(&c, &dll);
+        if counters.invalid > 0 {
+            assert_eq!(counters.fatal, 0);
+            break;
+        }
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let held = state(&c, &dll).sent;
+    std::thread::sleep(Duration::from_millis(100));
+    assert_eq!(state(&c, &dll).sent, held);
+    send("pose-valid-value");
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while state(&c, &dll).sample_state != 1 {
         assert!(Instant::now() < deadline);
         std::thread::sleep(Duration::from_millis(10));
     }

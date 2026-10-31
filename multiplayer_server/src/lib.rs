@@ -10,6 +10,8 @@ pub mod career_world;
 mod event_window;
 pub mod fuzz;
 pub mod identity;
+#[cfg(feature = "server")]
+pub mod local_peer;
 pub mod protocol;
 pub mod session_client;
 pub mod session_hub;

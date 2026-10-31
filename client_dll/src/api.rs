@@ -21,6 +21,8 @@ pub const RUNTIME_INFO: u32 = 10;
 pub const SESSION_MARKER: u32 = 11;
 /// Reliable-event JSON (counters, local/remote states, recent markers), at most 511 bytes.
 pub const SESSION_EVENTS: u32 = 12;
+/// Bounded capture reason counters; no addresses/poses/text. Layout unchanged.
+pub const CAPTURE_STATUS: u32 = 13;
 pub const SIMULATED: u32 = 1;
 pub const GAME: u32 = 2;
 pub const MEMORY: u32 = 3;

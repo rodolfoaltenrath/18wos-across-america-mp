@@ -43,6 +43,7 @@ static PAGE: AtomicUsize = AtomicUsize::new(0);
 static WORLD: AtomicU32 = AtomicU32::new(0);
 static OWNER: AtomicU32 = AtomicU32::new(0);
 static INVALID: AtomicBool = AtomicBool::new(false);
+static POSE_NAN: AtomicBool = AtomicBool::new(false);
 static RETAIN: AtomicBool = AtomicBool::new(false);
 static SHADER_CALLS: AtomicU32 = AtomicU32::new(0);
 static LIGHT_CALLS: AtomicU32 = AtomicU32::new(0);
@@ -215,7 +216,15 @@ impl Fixture {
                 Ordering::Release,
             );
         }
-        self.body[0x30 / 4].store((self.frame as f32).to_bits(), Ordering::Release);
+        self.body[0x30 / 4].store(
+            if POSE_NAN.load(Ordering::Acquire) {
+                f32::NAN
+            } else {
+                self.frame as f32
+            }
+            .to_bits(),
+            Ordering::Release,
+        );
         CAPTURE_ROOT.store(
             if PLAYERLESS.load(Ordering::Acquire) {
                 0
@@ -286,6 +295,8 @@ pub fn command(line: &str) -> bool {
     }
     match line {
         "draw-invalid" => INVALID.store(true, Ordering::Release),
+        "pose-invalid-value" => POSE_NAN.store(true, Ordering::Release),
+        "pose-valid-value" => POSE_NAN.store(false, Ordering::Release),
         "draw-suspend" => DRAW_DISABLED.store(true, Ordering::Release),
         "draw-resume" => DRAW_DISABLED.store(false, Ordering::Release),
         "draw-light-invalid" => LIGHT_INVALID.store(true, Ordering::Release),

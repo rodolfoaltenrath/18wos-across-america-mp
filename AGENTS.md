@@ -1,5 +1,33 @@
 # Orientações para continuar o projeto
 
+Lote desktop31/10: CAPTURE_STATUS13, ABIv1/v3 preservadas, counters tipados sem
+poses/paths/pointers, corte999999999/truncated e JSON<=511. Worker distingue
+gate skip/descarte, Changed/Missing/Type/Overflow/Invalid/DrawnExpired/Other/Fatal.
+Não classificar retroativamente cinco falhas G12 nem prometer tick atômico/ABA.
+Status/coleta guardam capture + gate sanitizado (fase/comando/epoch/counters,
+sem actor/scene/argv/reason/retorno/thread). Comparação não subtrai draw entre
+epochs de mundo, rede só no mesmo epoch de conexão e counters monotônicos.
+Campos opcionais antigos preservados; launcher/DLL novos juntos, jogo fechado.
+Probe local-cycle segue ID explícito por UDP só em loopback, offset limitado,
+fonte<=500ms/quaternion, não segue próprioID/eco. Ciclo75s após primeira pose:
+driving15/loading10quiet/driving15/unavailable10quiet/driving;HB/estado3s/markers
+1001–1005, duração80–600s. Schema3 game_tested/lan_testedfalse; padrão schema2.
+Bancada80s própria passou fases/33ACKs/28states+5markers/0senderrors/0fonte perdida,
+2leaves/0ativos;1late_tick com build concorrente não é CPU/FPS ou causalidade.
+Selfguard recusou com leave confirmado/0ativos. Logs single-desktop-peer-*.
+G13 reúne próxima prova do motor, ainda pendente; G12/M1(4/7) preservados.
+Sem jogo/rebuild em partida/instalação/novo kit nem alteração de originais/saves.
+Verify final268x86Proton/337nativos, releases/Clippy/fmt, log
+verify-fedora-20261031-single-desktop-batch-final.log. Tentativa anterior falhou
+expectativa fixture: ponteiro inválido é Missing, não Invalid. Corrigida e
+fixture NaN nova prova Invalid; rodada final integral passou. Sete G12 reais
+reanalisados detectam epoch1→2 sem delta draw inventado;121amostras da gravação
+histórica continuam verificáveis/hashes e análise intactos. Não repetir jogo
+para provar filtro/contador. Captura nova13 ainda exige G13 no motor.
+Conferência final no prefixo da partida:8iguais, init.cfg dddbacf5…7774 intacto;
+enumeração sem jogo/fixtures/controladores/probe/servidor. Logs single-desktop-
+originals/processes-final-* e builds-*.sha256; nenhuma instalação atualizada.
+
 G12local31/10 acompanhada, DLL2178e7c, umFedora/Proton v2/eco offset400.
 game-pose disponível: reto/curvas/ré/parada/câmeras/AltTab e recarga normais,
 arrival/server iguais segundo proprietário; server_timed6697, arrival restaurado.

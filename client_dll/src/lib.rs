@@ -19,6 +19,7 @@ pub mod addresses;
 pub mod api;
 pub mod assistant_career;
 pub mod assistant_paths;
+pub mod capture_diagnostics;
 pub mod command_registry;
 #[cfg(windows)]
 pub mod controller;
@@ -92,6 +93,8 @@ static SENT: AtomicU64 = AtomicU64::new(0);
 static RECEIVED: AtomicU64 = AtomicU64::new(0);
 static SAMPLE_STATE: AtomicU32 = AtomicU32::new(0);
 static READ_FAILURES: AtomicU64 = AtomicU64::new(0);
+static CAPTURE: std::sync::LazyLock<Mutex<capture_diagnostics::Report>> =
+    std::sync::LazyLock::new(|| Mutex::new(capture_diagnostics::Report::default()));
 // Source and wire are published together. Retained after stop for diagnostics.
 static RUNTIME_SELECTION: AtomicU32 = AtomicU32::new(0);
 static MESSAGE: Mutex<String> = Mutex::new(String::new());
@@ -151,7 +154,17 @@ enum Source {
 #[derive(Debug)]
 enum SampleError {
     Unavailable(String),
+    #[cfg_attr(not(windows), allow(dead_code))]
+    PoseUnavailable(pose_capture::Unavailable),
+    DrawnExpired,
     Fatal(String),
+}
+fn capture_outcome(reason: capture_diagnostics::Reason) -> Result<(), String> {
+    CAPTURE
+        .lock()
+        .map_err(|_| "capture counters poisoned")?
+        .observe(reason);
+    Ok(())
 }
 
 fn diagnostic(message: &str) {
@@ -204,9 +217,7 @@ impl Source {
                     {
                         Ok((position, Some(rotation)))
                     }
-                    _ => Err(SampleError::Unavailable(
-                        "waiting for a drawn exterior pose (game in foreground)".into(),
-                    )),
+                    _ => Err(SampleError::DrawnExpired),
                 }
             }
         }
@@ -469,10 +480,10 @@ fn run(
         }
         // While the command gate defers/replays a scene change the world is being
         // replaced: do not read or send coordinates (counted, not an error).
-        let captured = sampling::guarded(scene_loading, || {
+        let captured = sampling::detailed(scene_loading, || {
             source.sample(start.elapsed().as_secs_f32())
         });
-        let loading = captured.is_none();
+        let loading = !matches!(&captured, sampling::Outcome::Sampled(_));
         if loading {
             let mut board = EVENTS.lock().map_err(|_| "event board poisoned")?;
             board.loading_skipped = board.loading_skipped.saturating_add(1);
@@ -480,21 +491,49 @@ fn run(
             diagnostic("waiting for the scene command gate; sampling suspended");
         }
         let sample = match captured {
-            None => None,
-            Some(sample) => match sample {
+            sampling::Outcome::Suspended => {
+                capture_outcome(capture_diagnostics::Reason::GateBusy)?;
+                None
+            }
+            sampling::Outcome::Discarded => {
+                capture_outcome(capture_diagnostics::Reason::GateChanged)?;
+                None
+            }
+            sampling::Outcome::Sampled(sample) => match sample {
                 Ok(value) => {
+                    if !value.0.is_valid() || !value.1.is_none_or(Rotation::is_valid) {
+                        capture_outcome(capture_diagnostics::Reason::Fatal)?;
+                        return Err("coordinate sample contains NaN/infinity".into());
+                    }
+                    capture_outcome(capture_diagnostics::Reason::Ready)?;
                     if SAMPLE_STATE.swap(1, Ordering::AcqRel) != 1 {
                         diagnostic("coordinate capture available");
                     }
                     Some(value)
                 }
                 Err(SampleError::Unavailable(message)) => {
+                    capture_outcome(capture_diagnostics::Reason::Other)?;
                     READ_FAILURES.fetch_add(1, Ordering::Relaxed);
                     SAMPLE_STATE.store(2, Ordering::Release);
                     diagnostic(&message);
                     None
                 }
+                Err(SampleError::PoseUnavailable(reason)) => {
+                    capture_outcome(reason.into())?;
+                    READ_FAILURES.fetch_add(1, Ordering::Relaxed);
+                    SAMPLE_STATE.store(2, Ordering::Release);
+                    diagnostic(&reason.to_string());
+                    None
+                }
+                Err(SampleError::DrawnExpired) => {
+                    capture_outcome(capture_diagnostics::Reason::DrawnExpired)?;
+                    READ_FAILURES.fetch_add(1, Ordering::Relaxed);
+                    SAMPLE_STATE.store(2, Ordering::Release);
+                    diagnostic("waiting for a drawn exterior pose (game in foreground)");
+                    None
+                }
                 Err(SampleError::Fatal(message)) => {
+                    capture_outcome(capture_diagnostics::Reason::Fatal)?;
                     SAMPLE_STATE.store(3, Ordering::Release);
                     return Err(message);
                 }
@@ -718,6 +757,8 @@ fn start_source_session(
     SENT.store(0, Ordering::Relaxed);
     RECEIVED.store(0, Ordering::Relaxed);
     READ_FAILURES.store(0, Ordering::Relaxed);
+    *CAPTURE.lock().map_err(|_| "capture counters poisoned")? =
+        capture_diagnostics::Report::default();
     SAMPLE_STATE.store(0, Ordering::Release);
     *SESSION
         .lock()
@@ -878,6 +919,7 @@ pub unsafe extern "system" fn client_control(block: *mut api::Control) -> u32 {
             api::LIFECYCLE_STATUS => Ok(()),
             api::RUNTIME_INFO => Ok(()),
             api::SESSION_EVENTS => Ok(()),
+            api::CAPTURE_STATUS => Ok(()),
             api::SESSION_MARKER => (|| {
                 #[derive(serde::Deserialize)]
                 #[serde(deny_unknown_fields)]
@@ -939,7 +981,17 @@ pub unsafe extern "system" fn client_control(block: *mut api::Control) -> u32 {
         block.sent = client_packets_sent();
         block.received = client_packets_received();
         block.read_failures = READ_FAILURES.load(Ordering::Relaxed);
-        if block.command == api::RUNTIME_INFO {
+        if block.command == api::CAPTURE_STATUS {
+            if CAPTURE
+                .lock()
+                .map_err(|_| "capture counters poisoned".to_string())
+                .and_then(|r| serde_json::to_string(&r.bounded()).map_err(|e| e.to_string()))
+                .and_then(|json| api::put(&mut block.message, &json))
+                .is_err()
+            {
+                block.result = 1;
+            }
+        } else if block.command == api::RUNTIME_INFO {
             let selection = RUNTIME_SELECTION.load(Ordering::Acquire);
             let info = runtime_info::Info::selected(selection & 0xff, (selection >> 8) as u8);
             if serde_json::to_string(&info)
@@ -1148,10 +1200,7 @@ mod tests {
     fn drawn_source_requires_a_fresh_published_pose_and_carries_rotation() {
         let mut source = Source::Drawn;
         *LOCAL_POSE.lock().unwrap() = None;
-        assert!(matches!(
-            source.sample(0.0),
-            Err(SampleError::Unavailable(_))
-        ));
+        assert!(matches!(source.sample(0.0), Err(SampleError::DrawnExpired)));
         let position = Position {
             x: 1.0,
             y: 2.0,
@@ -1168,10 +1217,7 @@ mod tests {
         assert_eq!((p, r), (position, Some(rotation)));
         let old = Instant::now().checked_sub(Duration::from_secs(1)).unwrap();
         *LOCAL_POSE.lock().unwrap() = Some((position, rotation, old));
-        assert!(matches!(
-            source.sample(0.0),
-            Err(SampleError::Unavailable(_))
-        ));
+        assert!(matches!(source.sample(0.0), Err(SampleError::DrawnExpired)));
         *LOCAL_POSE.lock().unwrap() = None;
     }
 }

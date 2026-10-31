@@ -77,6 +77,28 @@ ser entregues por saírem da janela e o estado estável é renovado a cada 3 s.
 Estados pendentes obsoletos podem ser substituídos; marcadores são preservados.
 Isso passou na bancada; aparência e retomada entre PCs continuam no roteiro G12.
 
+Próximo lote para um desktop: `session-status` também coleta `capture`, com
+motivos tipados de indisponibilidade e de suspensão/descarte pelo gate. Contadores
+não reinterpretam as cinco falhas antigas: só uma coleta nova identifica seus
+próprios motivos. `CAPTURE_STATUS` (13) preserva o layout da ABI v1; atualizar
+launcher/DLL juntos, com jogo fechado. Relatórios antigos sem `capture` continuam
+legíveis. O coletor passou a conservar de `load_gate` somente fase/comando finitos,
+epoch, flags e contadores; descarta endereços, argv e texto. Uma troca de epoch
+de mundo invalida o delta do contador de desenhos da instância recriada, mesmo
+quando a nova contagem já superou a antiga.
+
+`session_probe --local-cycle --follow-player ID --seconds 180` prepara o próximo
+teste de visibilidade sem outro PC. Exige servidor loopback, sala v2 **sem eco**,
+ID real diferente do próprio probe e uma posição/orientação recebida recentemente.
+Segue esse jogador a 4 m no eixo X do mundo (`--follow-offset 400 0 0`); não lê o
+jogo ou saves e não cria física/HUD. Depois da primeira pose válida, alterna
+driving por 15 s, loading sem poses por 10 s, driving por 15 s, unavailable sem
+poses por 10 s e driving novamente. Continua com heartbeat, estado confiável e
+marcadores 1001–1005. Fonte ausente há mais de 500 ms suspende coordenadas.
+O tempo máximo é explícito (80–600 s); o relatório schema3 não declara jogo/LAN
+testados. O modo sintético anterior segue com schema2. Ver G13 para uma rodada
+curta futura agrupada; nenhum jogo deve ser aberto por este lote offline.
+
 ## Telas do mod: prévia local
 
 As bases de nove telas estão em `mod_ui`: principal, Multiplayer, hospedar,

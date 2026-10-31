@@ -1,5 +1,74 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Lote para um desktop: diagnóstico, coleta e jogador de teste — 31/10
+
+Pedido do proprietário: preparar várias melhorias e reunir a próxima validação
+manual, preservando G12 já comprovada. Nenhum jogo foi aberto neste lote e não
+se alterou o caminho de criação/destruição do motor nem os originais/saves.
+
+`CAPTURE_STATUS` (13) acrescenta contadores por motivo, conservando Control v1
+e EngineControl v3. O worker distingue passes aceitos, leitura evitada pelo gate,
+resultado descartado quando o gate muda, cadeia ausente, mudança observada,
+tipo errado, overflow, valores inválidos, draw expirado, indisponibilidade não
+classificada e falha fatal. Counters saturam, JSON limitado cabe em511bytes e
+truncated sinaliza corte. Sem endereços/poses/texto no campo novo; o contador
+legado read_failures não ganha significado novo e as cinco recusas antigas não
+podem ser classificadas retroativamente. Apenas diferenças observadas são
+detectadas: não é tick físico atômico nem proteção geral contra ABA/teardown.
+
+`session-status` consulta os motivos e o coletor os conserva tipados. Agora
+também conserva fase/comando finitos, epoch, flags e contadores do gate, excluindo
+actor/scene/argv/reason/thread ids/retorno bruto. Depois de mudança do epoch do
+mundo, análise não subtrai o contador de desenhos da instância anterior, mesmo
+que a contagem nova já seja maior. Deltas da rede só continuam se a conexão e
+seus contadores forem compatíveis. Campos novos ausentes não são inventados em
+capturas históricas. Launcher e DLL novos precisam ser usados juntos, jogo fechado.
+
+`session_probe --local-cycle` implementa ciclo local por UDP de produção,
+seguindo só o ID real explicitamente escolhido e poses recentes com quaternion.
+Requer loopback, janela80–600s e offset limitado; recusa o próprio player e IDs
+de eco. Fonte quieta há mais500ms interrompe coordenadas, sem extrapolar valores
+inventados. A sequência após primeira pose válida é driving15s, loading10s sem
+poses, driving15s, unavailable10s sem poses e driving de novo. Heartbeats e
+estado confiável continuam, renovação3s e marcadores1001–1005 registram fases.
+O relatório schema3 distingue ciclo iniciado/completo, fases vistas, poses por
+fase e interrupções da fonte; game_tested/lan_tested continuam false. O modo
+sintético existente mantém schema2 e funcionamento anterior. Não acessa memória,
+save, motor, Steam ou mais uma instância do jogo.
+
+Bancada UDP real com dois clientes próprios: ciclo de80s completou cinco fases,
+poses por fase [900,0,900,0,1798], nenhuma interrupção da fonte;28 estados e cinco
+marcadores recebidos,33 ACKs, nenhuma recusa/expiração/reenvio/erro de envio.
+Dois leaves confirmados e zero ativos. Servidor registrou um tick atrasado;
+a bancada ocorreu enquanto o build rodava, sem atribuir causalidade ou chamar
+isso de medição de CPU/FPS. Cenário separado recusou seguir a si mesmo, retornou
+erro esperado, confirmou leave e deixou zero ativos. Logs privados
+`target/analysis/single-desktop-peer-20261031-01/`. Isso prova ferramenta/UDP,
+não aparência nem a regra de150ms no jogo.
+
+Próxima prova é G13, uma sessão local curta com o ciclo automático e percurso,
+coleta automática e limpeza. Não repetir o percurso inteiro de G12 ou recargas
+apenas para provar filtros de JSON. G13 ainda pendente; checks M1/M5 preservados,
+sem alegar economia/mundo compartilhados ou nova LAN. UI/tradução/kit instalado
+não foram alterados neste lote.
+
+Verificação integral final: **268 x86 sob Proton / 337 nativos**, builds release,
+Clippy nos três escopos e fmt. Log privado
+`target/analysis/verify-fedora-20261031-single-desktop-batch-final.log`.
+A primeira tentativa, preservada sem sobrescrever, falhou na expectativa nova
+da fixture: `draw-invalid` publica ponteiro de corpo ilegível, portanto é Missing,
+não Invalid. Corrigido o teste e acrescentado NaN explícito apenas na fixture;
+DLL x86 comprovou ambas as classificações e a recuperação, sem alterar o jogo.
+Sete relatórios reais de G12 reanalisados pelo binário novo: mudança de mundo
+1→2 identificada e delta de draw omitido. A coleta histórica de121 snapshots
+continuou verificável com seus hashes/análise originais intactos. Logs privados
+`single-desktop-g12-reanalysis-*` e `single-desktop-old-recording-check-*`.
+Conferência final no prefixo da partida: oito arquivos iguais ao backup G12,
+init.cfg dddbacf5…7774 intacto, enumeração sem jogo/fixtures/controladores/probe/
+servidor. Logs privados `single-desktop-originals-final-20261031.log`,
+`single-desktop-processes-final-20261031.log` e hashes dos builds em
+`single-desktop-builds-20261031.sha256`. Nenhuma instalação atualizada.
+
 ## G12 local acompanhada: captura, movimento e recarga — 31/10
 
 Proprietário acompanhou uma sessão Fedora/Proton com o build de `2178e7c`,
