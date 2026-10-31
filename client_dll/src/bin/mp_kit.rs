@@ -19,6 +19,9 @@ struct Args {
     server: SocketAddr,
     #[arg(long, default_value = "lan")]
     room: String,
+    /// Third-party notice from `license_audit --notice` (added as THIRD_PARTY.txt).
+    #[arg(long)]
+    notices: Option<PathBuf>,
 }
 fn main() -> Result<()> {
     let args = Args::parse();
@@ -30,6 +33,7 @@ fn main() -> Result<()> {
             server: args.server,
             room: args.room,
         },
+        args.notices.as_deref(),
     )?;
     println!("{}", serde_json::to_string_pretty(&manifest)?);
     Ok(())

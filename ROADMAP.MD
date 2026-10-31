@@ -1,5 +1,36 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Lote offline M0/M9: inventário de licenças e avisos do kit — 31/10/2026
+
+Avança "revisar as licenças das dependências e os avisos que acompanham
+releases" (M0) e prepara o kit para distribuição local com avisos (M9).
+
+**Entregue:** `asset_tools::licenses` e `license_audit`. Avaliador SPDX próprio
+(`OR`, `AND`, `WITH`, parênteses, forma antiga `/`, profundidade e tamanho
+limitados) contra lista permissiva explícita; em `OR` prefere MIT e depois
+Apache-2.0. O grafo vem de `cargo metadata --locked --offline
+--filter-platform` por alvo e segue só arestas que não são de dev, a partir das
+raízes que geram binários; crates do workspace são percorridos e não listados.
+Licença ausente, ilegível ou fora da lista é violação e falha o comando. O aviso
+`THIRD_PARTY.txt` traz nome, versão, licença declarada/usada, repositório e os
+textos de LICENSE/COPYING/NOTICE do registry local (texto idêntico aparece uma
+vez). `mp_kit --notices` anexa o arquivo e grava seu hash em `notices` no
+manifesto (opcional: kits sem o campo continuam válidos; verificadores antigos o
+ignoram); notice binário ou maior que 4 MiB é recusado antes de criar a pasta.
+
+**Resultado:** kit x86 (`client_dll` + `multiplayer_server`): 45 crates de
+terceiros, zero violações, todos com texto de licença (aviso de 135 KB).
+Workspace nativo (+`asset_tools`): 79 crates, zero violações, um sem arquivo de
+licença no pacote (registrado em `missing_texts`; vale o texto padrão).
+Artefatos privados em `target/analysis/licenses-20261031-01/`.
+
+**Verify integral Fedora:** 246 testes x86 sob Proton e 315 nativos, releases,
+Clippy x86/nativo e rustfmt. Log `target/analysis/verify-fedora-20261031-licenses.log`.
+
+**Limites:** usa a licença declarada no Cargo.toml de cada crate, não auditoria
+de arquivos/código vendorizado; `legal_review=false`. Política de contribuições
+e escolha de licença de release continuam com o proprietário.
+
 ## Lote offline M8: robustez determinística dos parsers — 31/10/2026
 
 Avança o critério de M8 "auditar parsers". Mutador próprio sem dependências
@@ -4713,6 +4744,10 @@ Não houve alteração/extração aplicada aos arquivos do jogo.
 - [x] Adotar Apache-2.0, conforme a licença criada pelo proprietário no remoto.
 - [ ] Definir política para contribuições e revisar as licenças das dependências
   e os avisos que acompanham releases.
+  Progresso 31/10: `license_audit` revisa as licenças declaradas pelo grafo
+  travado (sem dev): kit x86 45 crates e workspace nativo 79, todos na lista
+  permissiva; gera `THIRD_PARTY.txt` anexável ao kit com hash. Política de
+  contribuições depende de decisão do proprietário; não é revisão jurídica.
 
 **Concluído quando:** um clone limpo em outro Windows compilar as ferramentas e
 a DLL x86 usando apenas instruções/arquivos versionados, sem copiar o jogo do

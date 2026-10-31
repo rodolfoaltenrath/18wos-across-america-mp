@@ -202,6 +202,22 @@ usar o IPv4 real do host LAN):
 cargo run --release -p client_dll --bin mp_kit -- --build-dir target/i686-pc-windows-gnu/release --output /PASTA/EXISTENTE/kit-NOVO --revision COMMIT --server 192.0.2.1:39000 --room lan
 ```
 
+Para incluir os avisos de terceiros, gere-os antes (arquivos novos) e passe ao
+kit; o manifesto registra o hash de `THIRD_PARTY.txt` como entrada opcional:
+
+```text
+cargo run --release -p asset_tools --bin license_audit -- --json NOVO.json --notice NOVO-THIRD_PARTY.txt
+cargo run --release -p client_dll --bin mp_kit -- ... --notices NOVO-THIRD_PARTY.txt
+```
+
+`license_audit` lê o `cargo metadata --locked --offline` por alvo (padrão
+`i686-pc-windows-gnu`, raízes `client_dll` e `multiplayer_server`), segue só
+dependências que entram nos binários e falha com licença ausente, ilegível ou
+fora da lista permissiva (MIT, Apache-2.0, BSD-2/3, ISC, Zlib, 0BSD, Unlicense,
+BSL-1.0, CC0-1.0, Unicode, Apache-2.0 WITH LLVM-exception). Em `OR`, escolhe
+MIT/Apache-2.0 primeiro. Usa a licença DECLARADA por cada crate e os textos do
+registry local; não é revisão jurídica nem varredura de arquivos.
+
 Copiar **todo o conteúdo** da pasta gerada para a raiz da outra instalação,
 ao lado de `prism3d.exe`. Abrir o jogo pela Steam, carregar um save de teste e
 executar `mp_lan.exe`. O assistente confere os hashes do kit/perfil do jogo,

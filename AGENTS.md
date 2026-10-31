@@ -1176,3 +1176,8 @@ Robustez de parsers em 31/10: `parser_fuzz` (client_dll, nove famílias) e
 teste de oito parsers de assets com o mutador `multiplayer_server::fuzz`; 18
 milhões de entradas sem panic. Corrigido: `session_evidence::parse` agora
 recusa chave JSON duplicada como o `sanitize`. Verify: 245 x86/312 nativos.
+Licenças em 31/10: `license_audit` (asset_tools) avalia SPDX declarado do grafo
+travado sem dev contra lista permissiva; kit x86 45 crates/0 violações.
+`mp_kit --notices THIRD_PARTY.txt` anexa aviso com hash opcional no manifesto.
+Não é revisão jurídica; política de contribuições segue com o proprietário.
+Verify: 246 x86/315 nativos.

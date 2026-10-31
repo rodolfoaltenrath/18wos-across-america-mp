@@ -21,6 +21,7 @@ pub const PAYLOAD: [&str; 6] = [
 ];
 pub const CONFIG: &str = "mp-lan.json";
 pub const MANIFEST: &str = "mp-kit-manifest.json";
+pub const NOTICES: &str = "THIRD_PARTY.txt";
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -57,6 +58,10 @@ pub struct Manifest {
     pub game_profile: String,
     pub lan_tested: bool,
     pub files: Vec<Entry>,
+    /// Optional third-party notice (`THIRD_PARTY.txt`), hashed like binaries.
+    /// Absent in older kits; older verifiers ignore the field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notices: Option<Entry>,
 }
 
 fn binary(path: &Path) -> Result<Vec<u8>> {
@@ -122,14 +127,25 @@ pub fn verify(root: &Path) -> Result<Manifest> {
             "kit file differs: {name}; recopy the entire kit"
         );
     }
+    if let Some(expected) = &manifest.notices {
+        ensure!(expected.name == NOTICES, "unexpected notice file name");
+        let bytes = fs::read(root.join(NOTICES)).context("third-party notice missing")?;
+        let actual = entry(NOTICES, &bytes);
+        ensure!(
+            expected.bytes == actual.bytes && expected.sha256 == actual.sha256,
+            "third-party notice differs; recopy the entire kit"
+        );
+    }
     Ok(manifest)
 }
 
+/// `notices`: optional text produced by `license_audit --notice` (NEW file).
 pub fn create(
     build: &Path,
     output: &Path,
     revision: &str,
     settings: &Settings,
+    notices: Option<&Path>,
 ) -> Result<Manifest> {
     settings.validate()?;
     ensure!(
@@ -141,6 +157,16 @@ pub fn create(
         .iter()
         .map(|name| Ok((*name, binary(&build.join(name))?)))
         .collect::<Result<Vec<_>>>()?;
+    let notice = notices
+        .map(|path| -> Result<Vec<u8>> {
+            let bytes = fs::read(path).context("third-party notice")?;
+            ensure!(
+                bytes.len() <= 4 * 1024 * 1024 && std::str::from_utf8(&bytes).is_ok(),
+                "notice must be UTF-8 text up to 4 MiB"
+            );
+            Ok(bytes)
+        })
+        .transpose()?;
     let manifest = Manifest {
         schema: 2,
         source_revision: revision.into(),
@@ -151,6 +177,7 @@ pub fn create(
             .iter()
             .map(|(name, bytes)| entry(name, bytes))
             .collect(),
+        notices: notice.as_deref().map(|b| entry(NOTICES, b)),
     };
     fs::create_dir(output).context("kit output must be a NEW directory with an existing parent")?;
     for (name, bytes) in binaries {
@@ -161,6 +188,9 @@ pub fn create(
     fs::write(output.join("LICENSE.txt"), include_str!("../../LICENSE"))?;
     fs::write(output.join("LEIA-ME.txt"), instructions(settings))?;
     fs::write(output.join("CARREIRA.txt"), career_instructions())?;
+    if let Some(bytes) = &notice {
+        fs::write(output.join(NOTICES), bytes)?;
+    }
     verify(output)
 }
 
@@ -276,7 +306,7 @@ mod tests {
         let t = tempfile::tempdir().unwrap();
         fixtures(t.path());
         let out = t.path().join("kit");
-        let mut m = create(t.path(), &out, "own revision", &settings()).unwrap();
+        let mut m = create(t.path(), &out, "own revision", &settings(), None).unwrap();
         assert_eq!(m.schema, 2);
         assert!(m.files.iter().any(|e| e.name == "mp_career.exe"));
         assert!(
@@ -294,37 +324,65 @@ mod tests {
         assert!(verify(&out).is_err());
         fs::remove_file(t.path().join("mp_career.exe")).unwrap();
         let absent = t.path().join("incomplete-new-kit");
-        assert!(create(t.path(), &absent, "own", &settings()).is_err());
+        assert!(create(t.path(), &absent, "own", &settings(), None).is_err());
         assert!(!absent.exists());
     }
     #[test]
     fn rejects_incomplete_wrong_architecture_and_existing_destination() {
         let temp = tempfile::tempdir().unwrap();
         let out = temp.path().join("kit");
-        assert!(create(temp.path(), &out, "test", &settings()).is_err());
+        assert!(create(temp.path(), &out, "test", &settings(), None).is_err());
         assert!(!out.exists());
         fixtures(temp.path());
         let bad = temp.path().join("mp_lan.exe");
         let mut bytes = fs::read(&bad).unwrap();
         bytes[68] = 0x64;
         fs::write(&bad, bytes).unwrap();
-        assert!(create(temp.path(), &out, "test", &settings()).is_err());
+        assert!(create(temp.path(), &out, "test", &settings(), None).is_err());
         assert!(!out.exists());
         fixtures(temp.path());
-        create(temp.path(), &out, "test", &settings()).unwrap();
+        create(temp.path(), &out, "test", &settings(), None).unwrap();
         fs::write(out.join("preserve.txt"), "owned by user").unwrap();
-        assert!(create(temp.path(), &out, "test", &settings()).is_err());
+        assert!(create(temp.path(), &out, "test", &settings(), None).is_err());
         assert_eq!(
             fs::read_to_string(out.join("preserve.txt")).unwrap(),
             "owned by user"
         );
     }
     #[test]
+    fn optional_third_party_notice_is_hashed_verified_and_absent_in_older_kits() {
+        let temp = tempfile::tempdir().unwrap();
+        fixtures(temp.path());
+        let notice = temp.path().join("notice.txt");
+        fs::write(&notice, "AVISOS DE TERCEIROS\r\n== crate 1.0 ==\r\n").unwrap();
+        let out = temp.path().join("kit");
+        let m = create(temp.path(), &out, "test", &settings(), Some(&notice)).unwrap();
+        assert_eq!(m.notices.as_ref().unwrap().name, NOTICES);
+        assert!(verify(&out).is_ok());
+        fs::write(out.join(NOTICES), "edited").unwrap();
+        assert!(verify(&out).is_err());
+        fs::remove_file(out.join(NOTICES)).unwrap();
+        assert!(verify(&out).is_err());
+        // Kits without the field stay valid; binary notices are refused.
+        let plain = temp.path().join("plain");
+        let m = create(temp.path(), &plain, "test", &settings(), None).unwrap();
+        assert!(m.notices.is_none() && !plain.join(NOTICES).exists());
+        assert!(
+            !fs::read_to_string(plain.join(MANIFEST))
+                .unwrap()
+                .contains("notices")
+        );
+        fs::write(&notice, [0xffu8, 0xfe]).unwrap();
+        let refused = temp.path().join("refused");
+        assert!(create(temp.path(), &refused, "test", &settings(), Some(&notice)).is_err());
+        assert!(!refused.exists());
+    }
+    #[test]
     fn detects_tampering_duplicate_and_traversal_entries() {
         let temp = tempfile::tempdir().unwrap();
         fixtures(temp.path());
         let out = temp.path().join("kit");
-        let mut manifest = create(temp.path(), &out, "test", &settings()).unwrap();
+        let mut manifest = create(temp.path(), &out, "test", &settings(), None).unwrap();
         let original = fs::read(out.join("mp_lan.exe")).unwrap();
         let mut modified = original.clone();
         modified[150] = 1;
