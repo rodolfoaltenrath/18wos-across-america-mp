@@ -1185,3 +1185,5 @@ G4b estático (31/10): `[game+0x160ef8]`=cmd_execute; carga = `map america`;
 `quit` dos menus termina com process_terminate_all; `exit`/`menu`/`edit`/
 `preview` sem caminho normal de jogador. Único teardown de jogador pendente com
 visual: Sair→confirmar, encerramento opcional do roteiro G12.
+Kit final do lote em ~/Downloads/18WOS-Multiplayer-LAN-Windows-2026-10-31-final
+(revisão 18b3bb4, com THIRD_PARTY.txt); substitui o kit "eventos" para a rodada.

@@ -662,13 +662,13 @@ montagem/abertura feita. Dublagem é etapa própria (T3), fora desta rodada.
   overlay ausente. Com menu experimental também montado, restaurar na ordem
   inversa da instalação.
 
-### G12 — Roteiro único da rodada agrupada (revisão `ff8622e`, 31/10)
+### G12 — Roteiro único da rodada agrupada (revisão `18b3bb4`, 31/10)
 
 Uma abertura do jogo no Fedora cobre os incrementos offline de 31/10. O
 segundo PC é opcional: só os passos marcados "(2 PCs)" precisam dele. Usar
 SEMPRE binários desta revisão nos dois lados; o kit novo está em
-`~/Downloads/18WOS-Multiplayer-LAN-Windows-2026-10-31-eventos` (pasta nova;
-kits anteriores intactos). Copiar todo o conteúdo para a raiz da instalação
+`~/Downloads/18WOS-Multiplayer-LAN-Windows-2026-10-31-final` (pasta nova,
+com `THIRD_PARTY.txt`; kits anteriores intactos). Copiar todo o conteúdo para a raiz da instalação
 Windows antes de abrir o jogo lá.
 
 Preparo (jogo fechado), no repositório do Fedora:
