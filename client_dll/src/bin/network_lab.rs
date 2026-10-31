@@ -3,7 +3,7 @@
 use anyhow::{Result, ensure};
 use clap::{Parser, ValueEnum};
 use client_dll::{
-    interpolation::{Config, History, Mode, Sample},
+    interpolation::{Config, History, Mode, Sample, Timebase, server_sample_time},
     network_conditions::{Conditions, Counters, Link},
 };
 use multiplayer_server::protocol::{self, Position, Rotation, ServerUpdate, TICK_HZ, VERSION};
@@ -24,12 +24,24 @@ struct Parameters {
     extrapolation_ms: u16,
     #[arg(long, value_enum, default_value = "linear")]
     trajectory: Trajectory,
+    /// Stamp samples at local arrival or at the (synthetic) server send time.
+    #[arg(long, value_enum, default_value = "arrival")]
+    timebase: TimebaseArg,
+    /// Error of the simulated server-minus-local offset estimate (server timebase).
+    #[arg(long, default_value_t = 0, allow_hyphen_values = true, value_parser = clap::value_parser!(i16).range(-200..=200))]
+    offset_error_ms: i16,
     /// A new report file; its parent directory must already exist.
     #[arg(long)]
     #[serde(skip)]
     output: Option<PathBuf>,
 }
 
+#[derive(Clone, Copy, Debug, ValueEnum, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum TimebaseArg {
+    Arrival,
+    Server,
+}
 #[derive(Clone, Copy, Debug, ValueEnum, Serialize)]
 #[serde(rename_all = "snake_case")]
 enum Trajectory {
@@ -87,6 +99,9 @@ struct Scenario {
     /// Error against the selected synthetic path, not real game physics.
     mean_error_milli_cm: u64,
     max_error_milli_cm: u64,
+    /// Mean |error(frame) - error(previous frame)|: wobble independent of a
+    /// constant presentation lag. Synthetic path only.
+    mean_error_step_milli_cm: u64,
 }
 
 #[derive(Default, Debug, PartialEq, Eq, Serialize)]
@@ -145,13 +160,19 @@ fn simulate(name: &'static str, parameters: &Parameters, blackout: bool) -> Resu
         max_prediction_ms: 0,
         mean_error_milli_cm: 0,
         max_error_milli_cm: 0,
+        mean_error_step_milli_cm: 0,
     };
     let config = Config {
         delay_ms: parameters.interpolation_ms,
         extrapolation_ms: parameters.extrapolation_ms,
+        timebase: match parameters.timebase {
+            TimebaseArg::Arrival => Timebase::Arrival,
+            TimebaseArg::Server => Timebase::Server,
+        },
     };
     config.validate().map_err(anyhow::Error::msg)?;
     let mut total_error = 0u64;
+    let (mut previous_error, mut total_step, mut steps) = (None::<u64>, 0u64, 0u64);
     let mut history = History::default();
     let mut seen = None;
     let mut sequence = 0;
@@ -192,8 +213,21 @@ fn simulate(name: &'static str, parameters: &Parameters, blackout: bool) -> Resu
                 report.duplicates_or_old += 1;
                 continue;
             }
-            history.push(Sample {
-                at: now as f64 / 1000.0,
+            // Production stamping: the lab server sends at generation time on the
+            // same virtual clock, so the true offset is zero plus the configured error.
+            let arrival = now as f64 / 1000.0;
+            let at = match config.timebase {
+                Timebase::Arrival => arrival,
+                Timebase::Server => server_sample_time(
+                    arrival,
+                    now,
+                    update.sequence * 1000 / u64::from(TICK_HZ),
+                    i64::from(parameters.offset_error_ms),
+                )
+                .unwrap_or(arrival),
+            };
+            history.push_monotonic(Sample {
+                at,
                 position: [update.position.x, update.position.y, update.position.z],
                 rotation: [0.0, 0.0, 0.0, 1.0],
             });
@@ -235,6 +269,11 @@ fn simulate(name: &'static str, parameters: &Parameters, blackout: bool) -> Resu
                     * 1000.0)
                     .round() as u64;
                 total_error += error;
+                if let Some(previous) = previous_error {
+                    total_step += error.abs_diff(previous);
+                    steps += 1;
+                }
+                previous_error = Some(error);
                 report.max_error_milli_cm = report.max_error_milli_cm.max(error);
                 report.rendered_frames += 1;
             }
@@ -242,6 +281,7 @@ fn simulate(name: &'static str, parameters: &Parameters, blackout: bool) -> Resu
     }
     report.network = link.counters();
     report.mean_error_milli_cm = total_error.checked_div(report.rendered_frames).unwrap_or(0);
+    report.mean_error_step_milli_cm = total_step.checked_div(steps).unwrap_or(0);
     ensure!(
         report.modes.total() == report.rendered_frames,
         "presentation mode accounting mismatch"
@@ -287,7 +327,7 @@ fn report(parameters: &Parameters) -> Result<Report<'_>> {
     clean.conditions.delay_ms = 0;
     clean.conditions.jitter_ms = 0;
     Ok(Report {
-        schema: 2,
+        schema: 3,
         virtual_clock: true,
         game_tested: false,
         lan_tested: false,
@@ -410,5 +450,50 @@ mod tests {
         assert!(result.impaired.modes.predicted > 0 && result.impaired.modes.capped > 0);
         assert!(result.impaired.finite_poses && result.impaired.max_error_milli_cm > 0);
         assert!(result.impaired.max_prediction_ms <= 50);
+    }
+}
+#[cfg(test)]
+mod timebase_tests {
+    use super::*;
+    fn run(timebase: TimebaseArg, offset_error_ms: i16) -> Report<'static> {
+        let mut p = Parameters::try_parse_from(["network_lab", "--packets", "1200"]).unwrap();
+        p.timebase = timebase;
+        p.offset_error_ms = offset_error_ms;
+        let p = Box::leak(Box::new(p));
+        report(p).unwrap()
+    }
+    #[test]
+    fn server_timebase_removes_jitter_wobble_and_offset_error_only_shifts_lag() {
+        let arrival = run(TimebaseArg::Arrival, 0);
+        let server = run(TimebaseArg::Server, 0);
+        assert_eq!(
+            arrival.clean.mean_error_milli_cm,
+            server.clean.mean_error_milli_cm
+        );
+        // Arrival stamps carry the link jitter into every frame; server stamps do not.
+        assert!(
+            arrival.impaired.mean_error_step_milli_cm
+                > 10 * server.impaired.mean_error_step_milli_cm
+        );
+        assert!(
+            server.impaired.mean_error_step_milli_cm
+                <= 2 * server.clean.mean_error_step_milli_cm + 50
+        );
+        assert!(server.impaired.max_error_milli_cm < arrival.impaired.max_error_milli_cm);
+        for error in [-100, 100] {
+            let shifted = run(TimebaseArg::Server, error);
+            assert!(shifted.impaired.finite_poses);
+            assert!(
+                shifted.impaired.mean_error_step_milli_cm
+                    < arrival.impaired.mean_error_step_milli_cm / 5
+            );
+            // Positive error renders closer to now (more prediction), negative adds lag.
+            if error > 0 {
+                assert!(shifted.impaired.modes.predicted > server.impaired.modes.predicted);
+            } else {
+                assert!(shifted.impaired.mean_error_milli_cm > server.impaired.mean_error_milli_cm);
+            }
+        }
+        assert!(Parameters::try_parse_from(["network_lab", "--offset-error-ms", "201"]).is_err());
     }
 }

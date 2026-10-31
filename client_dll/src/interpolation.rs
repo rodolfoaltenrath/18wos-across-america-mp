@@ -22,17 +22,32 @@ pub const TELEPORT_SPEED: f32 = 20_000.0;
 /// A receive burst cannot measure velocity faster than the nominal source tick.
 pub const MIN_SAMPLE_INTERVAL: f64 = 1.0 / multiplayer_server::protocol::TICK_HZ as f64;
 
+/// Clock that stamps each received sample.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Timebase {
+    /// Local arrival time (v1 and v2): includes downlink jitter and tick waits.
+    #[default]
+    Arrival,
+    /// v2 server receipt time mapped by the clock-offset estimate; falls back
+    /// to arrival per sample while no usable estimate exists.
+    Server,
+}
 /// Explicit local presentation budget, unrelated to server/game physics time.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     pub delay_ms: u16,
     pub extrapolation_ms: u16,
+    /// Absent in older JSON: arrival.
+    #[serde(default)]
+    pub timebase: Timebase,
 }
 impl Config {
     pub const DEFAULT: Self = Self {
         delay_ms: 100,
         extrapolation_ms: 200,
+        timebase: Timebase::Arrival,
     };
     pub fn validate(self) -> Result<(), String> {
         if self.delay_ms > 200 || self.extrapolation_ms > 200 {
@@ -102,6 +117,28 @@ impl Sample {
     }
 }
 
+/// Presentation time of a sample the server stamped at `received_ms` (server
+/// clock). `offset_ms` estimates server minus local; `local_now_ms` is the local
+/// clock read at `arrival` (presentation seconds). A small negative age (offset
+/// error) keeps a stamp up to 250 ms ahead; an implausible one returns None so
+/// the caller keeps the arrival time. Uplink jitter remains; downlink jitter
+/// and tick waits go.
+pub fn server_sample_time(
+    arrival: f64,
+    local_now_ms: u64,
+    received_ms: u64,
+    offset_ms: i64,
+) -> Option<f64> {
+    let local_received = i128::from(received_ms) - i128::from(offset_ms);
+    let age_ms = i128::from(local_now_ms) - local_received;
+    if !(-250..=1000).contains(&age_ms) {
+        return None;
+    }
+    // Slightly future stamps are kept: mixing in arrival times would bring
+    // the jitter back, and rendering already runs `delay` behind.
+    let at = arrival - age_ms as f64 / 1000.0;
+    (at.is_finite() && at >= 0.0).then_some(at)
+}
 #[derive(Clone, Debug, Default)]
 pub struct History(VecDeque<Sample>);
 
@@ -121,6 +158,14 @@ impl History {
             self.0.pop_front();
         }
         self.0.push_back(sample);
+    }
+    /// Like `push`, but a sample older than the newest (a clock estimate that
+    /// moved backwards) is re-stamped to the newest time instead of dropped.
+    pub fn push_monotonic(&mut self, mut sample: Sample) {
+        if let Some(last) = self.0.back() {
+            sample.at = sample.at.max(last.at);
+        }
+        self.push(sample);
     }
     pub fn len(&self) -> usize {
         self.0.len()
@@ -304,5 +349,51 @@ mod tests {
         let x = h.pose(newest).unwrap().0[0];
         // DELAY = 6 ticks behind the newest sample.
         assert!((x - 330.0).abs() < 1e-2, "{x}");
+    }
+}
+#[cfg(test)]
+mod timebase_tests {
+    use super::*;
+    #[test]
+    fn server_time_removes_arrival_delay_and_rejects_implausible_estimates() {
+        // Server stamped 1000; offset +200 means local 800; read at local 860.
+        let at = server_sample_time(10.0, 860, 1000, 200).unwrap();
+        assert!((at - 9.94).abs() < 1e-9);
+        // Estimate slightly ahead (age -100 ms): kept consistently on the server clock.
+        assert!((server_sample_time(10.0, 700, 1000, 200).unwrap() - 10.1).abs() < 1e-9);
+        assert_eq!(server_sample_time(10.0, 500, 1000, 200), None);
+        assert_eq!(server_sample_time(10.0, 3000, 1000, 200), None);
+        assert_eq!(server_sample_time(0.5, 860, 0, -100), None, "before epoch");
+        assert_eq!(server_sample_time(10.0, u64::MAX, u64::MAX, i64::MIN), None);
+    }
+    #[test]
+    fn monotonic_push_restamps_a_backwards_estimate_instead_of_dropping_it() {
+        let sample = |at: f64, x: f32| Sample {
+            at,
+            position: [x, 0.0, 0.0],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+        };
+        let mut h = History::default();
+        h.push_monotonic(sample(1.0, 1.0));
+        h.push_monotonic(sample(0.9, 2.0));
+        assert_eq!(h.len(), 1);
+        assert_eq!(h.newest().unwrap().position[0], 2.0);
+        h.push_monotonic(sample(1.1, 3.0));
+        assert_eq!(h.len(), 2);
+    }
+    #[test]
+    fn older_presentation_json_defaults_to_arrival() {
+        let old: Config = serde_json::from_str(r#"{"delay_ms":50,"extrapolation_ms":0}"#).unwrap();
+        assert_eq!(old.timebase, Timebase::Arrival);
+        let new: Config =
+            serde_json::from_str(r#"{"delay_ms":50,"extrapolation_ms":0,"timebase":"server"}"#)
+                .unwrap();
+        assert_eq!(new.timebase, Timebase::Server);
+        assert!(
+            serde_json::from_str::<Config>(
+                r#"{"delay_ms":1,"extrapolation_ms":0,"timebase":"physics"}"#
+            )
+            .is_err()
+        );
     }
 }

@@ -244,7 +244,12 @@ fn configuration() -> Result<(SocketAddr, Source), String> {
     Ok((server, source))
 }
 
-fn publish_remote(update: protocol::ServerUpdate, reset_history: bool) -> Result<(), String> {
+/// `server_time`: (local worker ms now, server receipt ms, offset estimate) for v2.
+fn publish_remote(
+    update: protocol::ServerUpdate,
+    reset_history: bool,
+    server_time: Option<(u64, u64, i64)>,
+) -> Result<(), String> {
     let mut remotes = REMOTES.lock().map_err(|_| "remote state mutex poisoned")?;
     let is_new = reset_history
         || remotes
@@ -263,8 +268,16 @@ fn publish_remote(update: protocol::ServerUpdate, reset_history: bool) -> Result
             z: 0.0,
             w: 1.0,
         });
-        history.push(interpolation::Sample {
-            at: interpolation::now(),
+        let arrival = interpolation::now();
+        let stamped = (presentation::config().timebase == interpolation::Timebase::Server)
+            .then_some(server_time)
+            .flatten()
+            .and_then(|(now, received, offset)| {
+                interpolation::server_sample_time(arrival, now, received, offset)
+            });
+        presentation::timed(stamped.is_some());
+        history.push_monotonic(interpolation::Sample {
+            at: stamped.unwrap_or(arrival),
             position: [update.position.x, update.position.y, update.position.z],
             rotation: [r.x, r.y, r.z, r.w],
         });
@@ -292,7 +305,11 @@ static WORKER_EPOCH: std::sync::LazyLock<Instant> = std::sync::LazyLock::new(Ins
 fn epoch_ms() -> u64 {
     WORKER_EPOCH.elapsed().as_millis() as u64
 }
-fn session_events(events: Vec<multiplayer_server::session_client::Event>) -> Result<(), String> {
+/// `clock`: local worker ms and the current offset estimate, when known.
+fn session_events(
+    events: Vec<multiplayer_server::session_client::Event>,
+    clock: Option<(u64, i64)>,
+) -> Result<(), String> {
     use multiplayer_server::session_client::Event;
     for event in events {
         match event {
@@ -336,6 +353,7 @@ fn session_events(events: Vec<multiplayer_server::session_client::Event>) -> Res
                     rotation: pose.rotation,
                 },
                 reset_history,
+                clock.map(|(now, offset)| (now, pose.received_ms, offset)),
             )?,
         }
     }
@@ -433,7 +451,7 @@ fn run(
             let now = start.elapsed().as_millis() as u64;
             session_reliable(client, &mut publisher, sample_available, now)?;
             let (frames, events) = client.poll(now);
-            session_events(events)?;
+            session_events(events, client.status().clock_offset_ms.map(|o| (now, o)))?;
             for frame in frames {
                 transmit(&socket, &wire::encode_client(&frame)?)?;
             }
@@ -489,13 +507,14 @@ fn run(
                 Ok(size) => {
                     if let Some(client) = &mut session {
                         let now = start.elapsed().as_millis() as u64;
-                        session_events(client.ingest(&buffer[..size], now))?;
+                        let events = client.ingest(&buffer[..size], now);
+                        session_events(events, client.status().clock_offset_ms.map(|o| (now, o)))?;
                         continue;
                     }
                     let Some(update) = protocol::decode_server(&buffer[..size]) else {
                         continue;
                     };
-                    publish_remote(update, false)?;
+                    publish_remote(update, false, None)?;
                 }
                 Err(error) if network_io::oversized(&error) => continue,
                 Err(error) if network_io::transient(&error) => break,

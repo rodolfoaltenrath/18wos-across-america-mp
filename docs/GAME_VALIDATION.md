@@ -367,6 +367,11 @@ posterior, não somente pelas fixtures.
   repetindo percurso curto com paradas e curvas. Registrar percepção e FPS.
 - [ ] Repetir com 50/100 e 0/50 usando `presentation --delay-ms N
   --extrapolation-ms N`, sem concluir que menor atraso sempre é melhor.
+- [ ] Na v2, comparar `--timebase arrival` e `--timebase server` com o mesmo
+  percurso/orçamento (padrão 100/200): percepção de tremor nas retas, curvas e
+  paradas; `presentation.server_timed` deve crescer só no modo server. A
+  bancada (`network_lab` schema 3) não substitui essa observação. Restaurar
+  `arrival` ao final se a comparação não aprovar a troca do padrão.
 - [ ] Conferir configuração/revisão e modos em `presentation`; `network-timing`
   contém métricas v2 e retorna null em v1. Restaurar 100/200 no fim da comparação.
 - [ ] Comparar `draw_cost_*`/intervalo de frame e timing com mesma câmera/foco.

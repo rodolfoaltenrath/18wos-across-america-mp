@@ -24,6 +24,7 @@ fn explicit_delay_and_prediction_budgets_have_distinct_bounded_results() {
             Config {
                 delay_ms: 0,
                 extrapolation_ms: 200,
+                ..Config::DEFAULT
             },
             150.0,
             Mode::Predicted,
@@ -33,6 +34,7 @@ fn explicit_delay_and_prediction_budgets_have_distinct_bounded_results() {
             Config {
                 delay_ms: 0,
                 extrapolation_ms: 20,
+                ..Config::DEFAULT
             },
             120.0,
             Mode::Capped,
@@ -42,6 +44,7 @@ fn explicit_delay_and_prediction_budgets_have_distinct_bounded_results() {
             Config {
                 delay_ms: 0,
                 extrapolation_ms: 0,
+                ..Config::DEFAULT
             },
             100.0,
             Mode::Held,
@@ -51,6 +54,7 @@ fn explicit_delay_and_prediction_budgets_have_distinct_bounded_results() {
             Config {
                 delay_ms: 200,
                 extrapolation_ms: 200,
+                ..Config::DEFAULT
             },
             0.0,
             Mode::Buffering,
@@ -71,7 +75,8 @@ fn explicit_delay_and_prediction_budgets_have_distinct_bounded_results() {
             1.15,
             Config {
                 delay_ms: 201,
-                extrapolation_ms: 200
+                extrapolation_ms: 200,
+                ..Config::DEFAULT
             }
         )
         .is_none()
@@ -90,6 +95,7 @@ fn lower_delay_does_not_remove_teleport_burst_or_finite_guards() {
     let config = Config {
         delay_ms: 0,
         extrapolation_ms: 200,
+        ..Config::DEFAULT
     };
     assert!(h.evaluate(1.200001, config).unwrap().position[0] <= 1300.01);
     h.push(Sample {
@@ -100,6 +106,8 @@ fn lower_delay_does_not_remove_teleport_burst_or_finite_guards() {
     assert_eq!(h.evaluate(1.2, config).unwrap().mode, Mode::Snapped);
     assert!(h.evaluate(f64::NAN, config).is_none());
 }
+/// The presentation config is process-global: serialize the tests that change it.
+static CONFIG_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 fn call(command: u32, json: Option<&str>) -> (u32, Control) {
     let mut block = Control::new(command);
     if let Some(json) = json {
@@ -116,10 +124,12 @@ fn query() -> Status {
 }
 #[test]
 fn control_configuration_is_atomic_and_bad_payload_cannot_change_it() {
+    let _guard = CONFIG_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let before = query();
     let config = Config {
         delay_ms: 25,
         extrapolation_ms: 50,
+        ..Config::DEFAULT
     };
     assert_eq!(
         call(
@@ -150,7 +160,10 @@ fn control_configuration_is_atomic_and_bad_payload_cannot_change_it() {
 #[test]
 fn maximum_diagnostic_values_fit_the_existing_control_message() {
     let status = Status {
-        config: Config::DEFAULT,
+        config: Config {
+            timebase: client_dll::interpolation::Timebase::Server,
+            ..Config::DEFAULT
+        },
         revision: u32::MAX,
         buffering: u64::MAX,
         interpolated: u64::MAX,
@@ -161,6 +174,8 @@ fn maximum_diagnostic_values_fit_the_existing_control_message() {
         stale: u64::MAX,
         empty_queries: u64::MAX,
         lock_misses: u64::MAX,
+        server_timed: u64::MAX,
+        arrival_timed: u64::MAX,
     };
     let mut b = Control::new(api::PRESENTATION_STATUS);
     let json = serde_json::to_string(&status).unwrap();
@@ -191,4 +206,46 @@ fn timing_diagnostics_fit_control_and_are_null_before_a_v2_connection() {
     let (result, b) = call(api::NETWORK_TIMING, None);
     assert_eq!(result, 0);
     assert_eq!(api::text(&b.message).unwrap(), "null");
+}
+
+#[test]
+fn server_timebase_is_set_atomically_with_the_budgets_and_old_json_resets_it() {
+    let _guard = CONFIG_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    use client_dll::interpolation::Timebase;
+    let server = Config {
+        delay_ms: 80,
+        extrapolation_ms: 120,
+        timebase: Timebase::Server,
+    };
+    assert_eq!(
+        call(
+            api::PRESENTATION_SET,
+            Some(&serde_json::to_string(&server).unwrap())
+        )
+        .0,
+        0
+    );
+    assert_eq!(query().config, server);
+    // A client without the field (older launcher) selects the validated default.
+    assert_eq!(
+        call(
+            api::PRESENTATION_SET,
+            Some(r#"{"delay_ms":80,"extrapolation_ms":120}"#)
+        )
+        .0,
+        0
+    );
+    assert_eq!(query().config.timebase, Timebase::Arrival);
+    assert_ne!(
+        call(
+            api::PRESENTATION_SET,
+            Some(r#"{"delay_ms":80,"extrapolation_ms":120,"timebase":"tick"}"#)
+        )
+        .0,
+        0
+    );
+    call(
+        api::PRESENTATION_SET,
+        Some(&serde_json::to_string(&Config::DEFAULT).unwrap()),
+    );
 }

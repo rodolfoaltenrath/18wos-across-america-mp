@@ -176,8 +176,10 @@ não ao relógio da física ou a uma captura atômica do jogo.
 RTT só é medido para um ping pendente que corresponda à conexão, sequência e
 instante. Há até oito pings pendentes. Estimativa de offset: instante do servidor
 menos o ponto médio local, usando a amostra com menor RTT da conexão. É um
-diagnóstico sujeito a assimetria de rede. Ainda não alimenta o relógio do render:
-a interpolação segue usando os instantes locais de recebimento já existentes.
+diagnóstico sujeito a assimetria de rede. Por padrão não alimenta o render (base
+`arrival`). Desde 31/10, `timebase server` (opcional, local) data amostras por
+`received_ms` menos esse offset; erro do offset desloca o atraso efetivo, sem
+reintroduzir tremor. Ver README "Base de tempo das amostras remotas".
 
 O diagnóstico local `network_timing` acrescenta RTT máximo, número de amostras
 e EMA da variação absoluta entre RTTs consecutivos, em microssegundos. Também

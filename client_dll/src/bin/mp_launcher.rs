@@ -60,6 +60,9 @@ fn main() -> anyhow::Result<()> {
             delay_ms: Option<u16>,
             #[arg(long, value_parser = clap::value_parser!(u16).range(0..=200))]
             extrapolation_ms: Option<u16>,
+            /// Sample clock: arrival (default) or server receipt time (v2 only).
+            #[arg(long, value_enum)]
+            timebase: Option<TimebaseArg>,
         },
         Watch {
             #[arg(long, default_value_t=30, value_parser=clap::value_parser!(u64).range(1..=600))]
@@ -78,6 +81,9 @@ fn main() -> anyhow::Result<()> {
             interpolation_ms: u16,
             #[arg(long, default_value_t = 200, value_parser = clap::value_parser!(u16).range(0..=200))]
             extrapolation_ms: u16,
+            /// Sample clock for remote poses: arrival (validated) or server (v2, experimental).
+            #[arg(long, value_enum, default_value = "arrival")]
+            timebase: TimebaseArg,
             #[arg(long, default_value = "all", value_parser = parse_player)]
             player: u32,
             #[arg(long, num_args = 3, allow_hyphen_values = true, default_values_t = [0.0f32, 0.0, 0.0])]
@@ -274,6 +280,19 @@ fn main() -> anyhow::Result<()> {
         Status,
     }
     #[derive(Clone, Copy, ValueEnum)]
+    enum TimebaseArg {
+        Arrival,
+        Server,
+    }
+    impl From<TimebaseArg> for client_dll::interpolation::Timebase {
+        fn from(value: TimebaseArg) -> Self {
+            match value {
+                TimebaseArg::Arrival => Self::Arrival,
+                TimebaseArg::Server => Self::Server,
+            }
+        }
+    }
+    #[derive(Clone, Copy, ValueEnum)]
     enum ItemKind {
         Car,
         Pmd,
@@ -426,12 +445,16 @@ fn main() -> anyhow::Result<()> {
         Task::Presentation {
             delay_ms,
             extrapolation_ms,
+            timebase,
         } => {
             let mut current = Control::new(api::PRESENTATION_STATUS);
             controller.control(&dll, &mut current)?;
             let mut status: client_dll::presentation::Status =
                 serde_json::from_str(api::text(&current.message).map_err(anyhow::Error::msg)?)?;
-            if delay_ms.is_some() || extrapolation_ms.is_some() {
+            if delay_ms.is_some() || extrapolation_ms.is_some() || timebase.is_some() {
+                if let Some(value) = timebase {
+                    status.config.timebase = (*value).into();
+                }
                 if let Some(value) = delay_ms {
                     status.config.delay_ms = *value;
                 }
@@ -464,6 +487,7 @@ fn main() -> anyhow::Result<()> {
             server,
             interpolation_ms,
             extrapolation_ms,
+            timebase,
             player,
             offset,
             fixture_info,
@@ -512,6 +536,7 @@ fn main() -> anyhow::Result<()> {
                 presentation: client_dll::interpolation::Config {
                     delay_ms: *interpolation_ms,
                     extrapolation_ms: *extrapolation_ms,
+                    timebase: (*timebase).into(),
                 },
                 player: *player,
                 offset: [offset[0], offset[1], offset[2]],

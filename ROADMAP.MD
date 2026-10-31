@@ -1,5 +1,38 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Lote offline M3/M5: base de tempo do servidor na interpolação — 31/10/2026
+
+Fecha o critério de M3 "estimar diferença de relógios e ordenar snapshots
+para interpolação", como opção local sem mudar o padrão validado.
+
+**Entregue:** `interpolation::Timebase` (`arrival` padrão, `server`) dentro de
+`Config`, com campo opcional no JSON (ausente = `arrival`) e bit 31 da palavra
+atômica de `presentation`. `server_sample_time` converte `received_ms` (recepção
+da pose no servidor) para o relógio de apresentação com o offset do menor RTT;
+idade fora de −250..1000 ms ou sem estimativa usa a chegada; carimbos à frente
+dentro do limite são mantidos para não reintroduzir tremor. `push_monotonic`
+iguala um carimbo que recuaria por melhora do offset. A DLL conta
+`server_timed`/`arrival_timed`; `presentation --timebase` e
+`session-start --timebase` no launcher. Wire, Control v1/1536 e EngineControl
+v3/664 inalterados; v1 sempre usa a chegada.
+
+**Bancada:** `network_lab` schema 3 com `--timebase`/`--offset-error-ms` e a
+métrica `mean_error_step_milli_cm` (tremor entre quadros). Com jitter 80 ms o
+tremor caiu 3,86→0,11 cm (linear) e 4,20→1,15 cm (paradas/curvas, limpo 1,27);
+com 150 ms, 2,35→0,11 cm. Erro máximo linear 130→102 cm, mas nas curvas
+462→477 cm (mais previsão). Erro de offset ±100 ms manteve tremor ≤0,18 cm e só
+deslocou o atraso efetivo. A primeira versão limitava carimbos "futuros" à
+chegada e o tremor voltava com offset −50 ms (3,59 cm); corrigido antes do
+commit. Testes: unitários de conversão/monotonicidade/JSON antigo, lab, Control
+atômica com o campo e DLL x86 real em sessão v2 com `server_timed > 0`.
+
+**Verify integral Fedora:** 242 testes x86 sob Proton e 308 nativos, releases,
+Clippy x86/nativo e rustfmt. Log `target/analysis/verify-fedora-20261031-server-timebase.log`.
+
+**Limites:** trajetória artificial sem física; tremor da subida e assimetria
+de rota permanecem; não mede FPS nem percepção. Padrão continua `arrival`;
+G2 recebeu a comparação na partida. Nenhum jogo ou LAN neste bloco.
+
 ## Lote offline M3: eventos confiáveis e estimativas de perda — 31/10/2026
 
 Pedido do proprietário: várias implementações sem abrir o jogo, com uma única
@@ -4731,9 +4764,12 @@ Se algum método exigir alteração de arquivo, documentar e testar restauraçã
   backoff, prazo ≤30 s e filas limitadas; corpos `marker` e `state`. Seeds
   com perda/duplicação/reordenação, DLL x86 real e UDP release passaram.
   Corpos econômicos e a prova entre PCs ficam em M6/G12.
-- [ ] Medir RTT, estimar diferença de relógios e ordenar snapshots para interpolação.
-  V2 mede RTT/offset diagnóstico e ordena geração/sequência/revisão. Aplicação do
-  relógio estimado à interpolação segue pendente. A primeira medição LAN
+- [x] Medir RTT, estimar diferença de relógios e ordenar snapshots para interpolação.
+  V2 mede RTT/offset diagnóstico e ordena geração/sequência/revisão. Em 31/10,
+  `timebase server` (opcional) aplica o offset à interpolação, datando amostras
+  pela recepção no servidor; `network_lab` mostrou o tremor por jitter 80 ms
+  cair de 3,86 para 0,11 cm, e a DLL x86 real carimbou amostras assim. Padrão
+  segue `arrival` até a comparação G2 na partida. A primeira medição LAN
   Windows (RTT 16–34 ms) está preservada; caracterização controlada pendente.
 - [x] Manter tamanho de datagrama controlado, evitar fragmentação e limitar filas,
   clientes, taxa de pacotes e alocação por origem.

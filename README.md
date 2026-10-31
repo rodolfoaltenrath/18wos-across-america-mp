@@ -1897,6 +1897,38 @@ São diagnósticos aproximados, cumulativos desde a carga da DLL, por consulta/
 remoto; não representam frames de tela nem comprovam desaparecimento percebido.
 Não são zerados ao trocar configuração ou reconectar.
 
+### Base de tempo das amostras remotas (experimental, v2)
+
+Por padrão cada pose remota é datada pela chegada local (`timebase` `arrival`),
+o que carrega para a tela o jitter da descida e a espera até o próximo tick do
+servidor. Em sessões v2, `--timebase server` data cada amostra pelo instante em
+que o SERVIDOR recebeu a pose do remetente (`received_ms`), convertido para o
+relógio local pela estimativa de offset do menor RTT:
+
+```text
+mp_launcher --pid PID --dll CAMINHO_DLL presentation --timebase server
+mp_launcher --pid PID --dll CAMINHO_DLL presentation --timebase arrival
+mp_launcher ... session-start ... --timebase server
+```
+
+Sem estimativa (antes do primeiro pong), em v1 ou com idade implausível (fora
+de −250..1000 ms), a amostra usa a chegada. Um carimbo que recuaria por
+melhora do offset é igualado ao mais recente (`push_monotonic`), sem descartar
+a pose. O tremor da subida (remetente→servidor) continua. `presentation` conta
+`server_timed`/`arrival_timed`. JSON antigo sem o campo seleciona `arrival`.
+
+`network_lab` (schema 3) aceita `--timebase` e `--offset-error-ms` (−200..200,
+erro simulado da estimativa) e mede `mean_error_step_milli_cm`, a variação
+do erro entre quadros (tremor), independente do atraso constante. Lote de
+31/10 (36.000 poses, perda 5%/duplicação 10%/atraso 40 ms): com jitter 80 ms, o tremor
+caiu de 3,86 para 0,11 cm na trajetória linear e de 4,20 para 1,15 cm na de
+paradas/curvas (limpo: 0,26/1,27); erro máximo linear 130→102 cm, porém
+maior nas curvas (462→477 cm) por usar mais previsão. Com jitter 150 ms,
+tremor 2,35→0,11 cm. Erro de offset ±100 ms manteve tremor ≤0,18 cm e só
+deslocou o atraso efetivo (positivo: mais previsão; negativo: mais atraso).
+Trajetória artificial, sem física real: o padrão continua `arrival` até a
+comparação na partida (G2).
+
 `network_lab` aceita os mesmos orçamentos por `--interpolation-ms` e
 `--extrapolation-ms`. Seu relatório **schema 2** acrescenta modos de avaliação,
 maior previsão e erro médio/máximo contra a trajetória artificial selecionada,

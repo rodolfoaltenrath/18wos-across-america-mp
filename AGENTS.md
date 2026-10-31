@@ -1163,3 +1163,8 @@ dedup nos dois lados, reenvio/prazo/filas limitadas; `pings_lost` e
 SESSION_EVENTS=12 (≤511 bytes); `mp_launcher session-marker`. Exige servidor/
 launcher/DLL da mesma revisão. Verify: 237 x86 Proton/303 nativos. Passos
 práticos em G12. Render não muda por estado remoto.
+Base de tempo opcional em 31/10: `presentation --timebase server` (v2) data
+amostras por `received_ms` menos o offset do menor RTT; padrão segue `arrival`
+até a comparação G2 na partida. `network_lab` schema 3 mede tremor
+(`mean_error_step_milli_cm`): 3,86→0,11 cm com jitter 80 ms. Verify: 242 x86
+Proton/308 nativos. ABIs e wire inalterados.

@@ -202,6 +202,13 @@ fn dll_relays_markers_and_debounced_states_and_reports_peer_events() {
     let info: serde_json::Value = serde_json::from_str(&line).unwrap();
     let c = Controller::open(fixture.0.id()).unwrap();
     c.load(&dll).unwrap();
+    // Experimental server timebase: v2 samples are stamped by server receipt time
+    // once a pong gives an offset estimate (counted by presentation status).
+    let server_clock = r#"{"delay_ms":100,"extrapolation_ms":200,"timebase":"server"}"#;
+    assert_eq!(
+        control(&c, &dll, api::PRESENTATION_SET, Some(server_clock)).result,
+        0
+    );
     // Without a session the marker is refused and nothing is queued.
     let refused = control(&c, &dll, api::SESSION_MARKER, Some(r#"{"code":1}"#));
     assert_eq!(refused.result, 1);
@@ -293,7 +300,21 @@ fn dll_relays_markers_and_debounced_states_and_reports_peer_events() {
             .count(),
         1
     );
+    let presentation: client_dll::presentation::Status = serde_json::from_str(
+        api::text(&control(&c, &dll, api::PRESENTATION_STATUS, None).message).unwrap(),
+    )
+    .unwrap();
+    assert!(presentation.server_timed > 0, "{presentation:?}");
+    assert_eq!(
+        presentation.config.timebase,
+        client_dll::interpolation::Timebase::Server
+    );
     assert_eq!(control(&c, &dll, api::STOP, None).status, 2);
+    let default = serde_json::to_string(&client_dll::interpolation::Config::DEFAULT).unwrap();
+    assert_eq!(
+        control(&c, &dll, api::PRESENTATION_SET, Some(&default)).result,
+        0
+    );
     // After stop the report remains readable and markers are refused again.
     assert_eq!(events(&c, &dll).local, Some(PlayerState::Unavailable));
     assert_eq!(
