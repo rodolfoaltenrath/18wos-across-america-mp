@@ -36,6 +36,26 @@ impl Content {
 }
 #[derive(Subcommand)]
 enum Command {
+    /// Write a NEW private assistant plan from an existing ticket, offline.
+    PlanLaunch {
+        #[arg(long)]
+        launch: PathBuf,
+        #[arg(long)]
+        import: PathBuf,
+        #[arg(long)]
+        identity_file: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+        #[command(flatten)]
+        content: Content,
+    },
+    /// Read-only local plan check; never contacts the server or opens the game.
+    CheckPlan {
+        #[arg(long)]
+        plan: PathBuf,
+        #[arg(long,default_value=session_protocol::PROFILE)]
+        profile: String,
+    },
     /// Read-only launcher checks without opening a process or creating identity files.
     CheckLaunch {
         #[arg(long)]
@@ -80,6 +100,9 @@ enum Command {
         /// New private JSON file; never copy to another player's machine.
         #[arg(long)]
         output: PathBuf,
+        /// Optional NEW local plan for mp_lan --career-plan. Never share it.
+        #[arg(long)]
+        assistant_plan: Option<PathBuf>,
         #[command(flatten)]
         content: Content,
     },
@@ -167,6 +190,21 @@ enum Command {
 #[tokio::main]
 async fn main() -> Result<()> {
     match Cli::parse().command {
+        Command::PlanLaunch {
+            launch,
+            import,
+            identity_file,
+            output,
+            content,
+        } => {
+            let check = write_assistant_plan(&output, launch, import, identity_file, &content)?;
+            println!("{}", serde_json::to_string_pretty(&check)?);
+        }
+        Command::CheckPlan { plan, profile } => {
+            let prepared =
+                career_entry::assistant::load(&plan, &profile).map_err(anyhow::Error::msg)?;
+            println!("{}", serde_json::to_string_pretty(&prepared.check)?);
+        }
         Command::CheckLaunch {
             launch,
             import,
@@ -222,9 +260,20 @@ async fn main() -> Result<()> {
             import,
             identity_file,
             output,
+            assistant_plan,
             content,
         } => {
-            ensure!(!output.try_exists()?, "launch destination already exists");
+            let output =
+                career_entry::assistant::new_destination(&output).map_err(anyhow::Error::msg)?;
+            let plan_output = assistant_plan
+                .as_deref()
+                .map(career_entry::assistant::new_destination)
+                .transpose()
+                .map_err(anyhow::Error::msg)?;
+            ensure!(
+                plan_output.as_ref() != Some(&output),
+                "launch and assistant plan must be different new files"
+            );
             let local = content.resolve()?;
             career_net::inspect_import(&import)?;
             let invite: Invite = store::read_json(&invite).map_err(anyhow::Error::msg)?;
@@ -240,9 +289,13 @@ async fn main() -> Result<()> {
                 career_net::prepare_launch(server, &invite, local, &import, &identity).await?;
             store::write_new(&output, &store::json(&launch).map_err(anyhow::Error::msg)?)
                 .map_err(anyhow::Error::msg)?;
+            if let Some(path) = &plan_output {
+                write_assistant_plan(path,output.clone(),import,identity_file,&content)
+                    .map_err(|e|anyhow::anyhow!("launch saved; assistant plan not published: {e:#}; recover with plan-launch"))?;
+            }
             println!(
                 "{}",
-                serde_json::json!({"prepared":true,"valid_for_secs":launch.valid_for_secs,"engine_loaded":false,"world_synchronized":false})
+                serde_json::json!({"prepared":true,"assistant_plan_written":plan_output.is_some(),"valid_for_secs":launch.valid_for_secs,"engine_loaded":false,"world_synchronized":false})
             );
         }
         Command::Create {
@@ -343,9 +396,71 @@ async fn main() -> Result<()> {
     }
     Ok(())
 }
+fn write_assistant_plan(
+    output: &std::path::Path,
+    launch: PathBuf,
+    import: PathBuf,
+    identity_file: PathBuf,
+    content: &Content,
+) -> Result<career_entry::assistant::Check> {
+    let plan = career_entry::assistant::Plan {
+        schema: 1,
+        launch,
+        import,
+        identity_file,
+        map: content.map.clone(),
+        mods: content.mods.clone(),
+    }
+    .resolve_paths(&std::env::current_dir()?)
+    .map_err(anyhow::Error::msg)?;
+    career_entry::assistant::write(output, &plan, &content.profile).map_err(anyhow::Error::msg)
+}
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn assistant_plan_commands_require_local_inputs_and_keep_offline_check_separate() {
+        assert!(Cli::try_parse_from(["career", "check-plan", "--plan", "own.json"]).is_ok());
+        assert!(Cli::try_parse_from(["career", "plan-launch", "--launch", "own.json"]).is_err());
+        assert!(
+            Cli::try_parse_from([
+                "career",
+                "plan-launch",
+                "--launch",
+                "ticket.json",
+                "--import",
+                "own-import",
+                "--identity-file",
+                "own-id.json",
+                "--map",
+                "own.scs",
+                "--output",
+                "new-plan.json"
+            ])
+            .is_ok()
+        );
+        assert!(
+            Cli::try_parse_from([
+                "career",
+                "prepare-launch",
+                "--server",
+                "127.0.0.1:39001",
+                "--invite",
+                "own.json",
+                "--import",
+                "own-import",
+                "--identity-file",
+                "own-id.json",
+                "--map",
+                "own.scs",
+                "--output",
+                "ticket.json",
+                "--assistant-plan",
+                "new-plan.json"
+            ])
+            .is_ok()
+        );
+    }
     #[test]
     fn explicit_goal_and_new_bootstrap_flow() {
         assert!(

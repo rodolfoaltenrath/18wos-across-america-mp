@@ -1,4 +1,5 @@
 //! Career admission and launcher preflight. Files remain private; no engine access.
+pub mod assistant;
 use crate::{
     career::{self, Compatibility, Manifest},
     career_store as store, identity, session_protocol as wire,

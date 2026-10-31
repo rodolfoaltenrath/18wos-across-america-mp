@@ -17,6 +17,7 @@ use std::{
 
 pub mod addresses;
 pub mod api;
+pub mod assistant_career;
 pub mod assistant_paths;
 pub mod command_registry;
 #[cfg(windows)]

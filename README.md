@@ -160,11 +160,14 @@ resultados e limites estão em docs/LOCALIZATION.md.
 
 ## Kit local para o segundo PC Windows
 
-`mp_kit` gera uma pasta nova com cinco binários Windows x86 próprios,
+`mp_kit` gera uma pasta nova com seis binários Windows x86 próprios,
 configuração de endpoint/sala, licença, instruções PT-BR e manifesto SHA-256.
 Alvo do kit: Windows 10/11 com a instalação Steam do perfil suportado.
 Não inclui jogo, saves, identidade, prefixo Proton ou servidor: neste fluxo o
 servidor nativo permanece no Fedora. O destinatário não precisa de Rust.
+Schema 2 acrescenta `mp_career.exe` e `CARREIRA.txt` para preparar a entrada de
+carreira; os kits schema 1 antigos continuam verificáveis com seus cinco
+arquivos. Gerar/instalar o kit novo é uma ação separada de compilar o repo.
 Depois do build/verificação x86, execute o gerador nativo (endereço de exemplo;
 usar o IPv4 real do host LAN):
 
@@ -396,8 +399,9 @@ mp_launcher.exe --pid PID-ATUAL --dll CAMINHO/client_dll.dll session-start --ser
 
 Repetir `--career-mod` no launcher para cada mod. O procedimento normal de
 `session-stop --verify BACKUP-NOVO` continua obrigatório antes de fechar o jogo.
-O assistente `mp_lan` e o kit instalado anteriormente ainda não oferecem esse
-fluxo: usar os binários desta revisão juntos, sem substituir um kit em uso.
+O assistente desta revisão já aceita um arquivo de carreira, conforme abaixo;
+o kit instalado anteriormente não foi atualizado automaticamente. Usar o kit
+novo completo, sem substituir arquivos enquanto o mod estiver em uso.
 O comando acima é referência para a próxima validação agrupada, não prova nova
 de execução dentro do jogo.
 
@@ -413,6 +417,47 @@ diagnósticos ou arquivos de Git. Quem tem o convite pode declarar identidades;
 isso não autentica uma pessoa nem é defesa contra clientes modificados. O
 servidor recebe uma declaração de importação, não prova de arquivo carregado.
 O save permanece em staging: não é instalado nem carregado automaticamente.
+
+### Carreira no assistente LAN — 31/10/2026
+
+O arquivo local reúne os caminhos do ticket, importação, identidade existente,
+mapa e mods. Não incorpora save/convite/ticket e não deve ser copiado para outro
+PC. Os caminhos publicados são absolutos, evitando depender da pasta de onde
+o assistente foi aberto. Cada jogador prepara seu próprio arquivo:
+
+```text
+mp_career prepare-launch --server IP-DO-HOST:39001 --invite CONVITE.json --import IMPORTACAO-NOVA --map MAPA.scs --identity-file IDENTIDADE.json --output LANCAMENTO-NOVO.json --assistant-plan PLANO-NOVO.json
+mp_career check-plan --plan PLANO-NOVO.json
+mp_lan.exe --career-plan PLANO-NOVO.json --check-only
+mp_lan.exe --career-plan PLANO-NOVO.json
+```
+
+Na opção 1, servidor/sala/identidade vêm do plano. Importação, conteúdo e
+vínculos são conferidos antes de criar o run/backup/parada pendente; o launcher
+revalida antes de abrir o processo. Argumentos são separados, inclusive paths
+com espaços/acentos; nenhum segredo de ticket é colocado na linha de comando.
+Sem a opção, mantém o fluxo visual existente. Preferências visuais não são
+substituídas pela sala da carreira. Opções de status/parada/verificação não
+dependem de reler um plano que tenha se tornado inválido.
+
+`check-plan` é somente local: não consulta expiração no host nem comprova qual
+save está carregado. O save-base continua com cópia/carregamento manuais,
+preservando os saves existentes. Relógio, trânsito, física e saldo do jogo
+continuam locais. A entrada real do assistente com ticket fica para G9.
+
+Se o ticket foi gravado mas houve falha/queda de energia antes de publicar o
+plano, há recuperação offline com arquivo novo:
+
+```text
+mp_career plan-launch --launch LANCAMENTO-NOVO.json --import IMPORTACAO-NOVA --map MAPA.scs --identity-file IDENTIDADE.json --output PLANO-RECUPERADO.json
+```
+
+Repetir `--mod` para cada mod. Destinos existentes/iguais são recusados sem
+sobrescrita. Essa recuperação não renova ticket; expiração/reinício exigem
+outro `prepare-launch` e nova sessão. Arquivos privados ficam fora do kit/Git.
+`mp_career lab` schema 2 agora exercita também plano local, recusas de plano,
+admissão UDP e leave confirmado com fixtures próprias e servidor real em
+loopback; não é teste no jogo ou em dois PCs.
 `engine_loaded=false`/`world_synchronized=false`; relógio, vitória, saldo e
 física do jogo continuam locais. Esses adaptadores e a interface do assistente
 permanecem pendentes.

@@ -1,6 +1,6 @@
 # Rodada acumulada de validação na partida
 
-Atualizado em 30/10/2026. O proprietário pediu blocos maiores e validação prática
+Atualizado em 31/10/2026. O proprietário pediu blocos maiores e validação prática
 agrupada. A primeira rodada LAN entre Windows e Fedora/Proton foi realizada e
 está registrada abaixo. A matriz restante continua sendo roteiro de pendências;
 não marcar itens amplos a partir de uma prova parcial.
@@ -411,7 +411,7 @@ mp_launcher --pid 0 --dll DLL session-verify --backup BACKUP
   `falhou`, `não exercitado` ou `bloqueado`), observação humana e arquivo de
   evidência. Contadores, screenshots e hashes não são provas intercambiáveis.
 
-### G9 — Entrada de carreira (nova implementação offline, 30/10)
+### G9 — Entrada de carreira (implementações offline de 30–31/10)
 
 Preparação já disponível sem abrir jogo: `mp_career host`, `join`,
 `prepare-launch`, `check-launch` e preflight do launcher. TCP/UDP de produção
@@ -420,14 +420,27 @@ Verify completo Windows em 30/10: 192 testes x86 e 227 nativos, builds release,
 Clippy e fmt passaram. Inclui CLI real do launcher recusando divergências antes
 da DLL/processo/backup e dois clientes TCP+UDP; nenhuma partida foi aberta.
 Não reunir os dois PCs apenas para repetir a presença visual já comprovada.
+O assistente agora aceita `--career-plan`: valida arquivos locais, usa sala/
+servidor/identidade do ticket e conserva a limpeza independente do plano.
+O kit schema 2 contém também `mp_career.exe`; não foi instalado nos dois PCs.
+`plan-launch` recupera o plano local sem renovar ticket, e `check-plan` não
+consulta a validade no host. Lab schema 2 testa bootstrap/plano/UDP/leave em
+loopback com dados próprios, sem motor. Não confundir essa prova com o save
+carregado ou a execução interativa do assistente.
 Executar quando seleção pelo assistente e leitura do motor formarem um marco
 concreto; até lá, estas pendências permanecem abertas.
 
 - [ ] Repetir nativo Linux/Windows e x86/Proton o fluxo de preparo com dados
   próprios; testar mensagem de ticket recusado no launcher/DLL desta revisão.
+  Parcial em 31/10: lab schema 2 passou 20 ciclos nativo Linux e x86/Proton,
+  incluindo plano/controle/UDP/leave. CLI própria e check-only do kit com plano
+  passaram; nativo Windows e execução do assistente no jogo continuam pendentes.
 - [ ] Confirmar carreira/manifesto/identidade/sala/endpoint, mapa/mods iguais e
   backup antes da injeção. Divergência deve recusar antes de abrir o processo.
   Não modificar originais para testar rejeição; usar cópias próprias.
+  Conferir no assistente a opção 1 com `--career-plan`, sala/servidor vinculados,
+  identidade já existente e recusa local antes do backup. Reabrir com plano
+  inválido e verificar que 2/3/4 continuam disponíveis para a sessão pendente.
 - [ ] Demonstrar qual save/cenário o motor realmente carrega; verificação de
   arquivo em staging não é essa prova. O fluxo atual não instala o save.
 - [ ] Em sessão agrupada, confirmar poses/visual e limpeza com ticket, sem

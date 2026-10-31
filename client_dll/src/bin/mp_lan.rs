@@ -15,6 +15,10 @@ struct Args {
     /// Resolve a saves folder only (supports %USERPROFILE%); never injects.
     #[arg(long)]
     check_saves: Option<String>,
+    /// PRIVATE local plan from mp_career prepare-launch/plan-launch.
+    /// Only option 1 reads it; status/stop/recovery stay available if it is invalid.
+    #[arg(long, conflicts_with = "check_saves")]
+    career_plan: Option<PathBuf>,
 }
 fn main() -> Result<()> {
     let args = Args::parse();
@@ -26,7 +30,6 @@ fn main() -> Result<()> {
     }
     result
 }
-
 fn run(args: Args) -> Result<()> {
     if let Some(input) = args.check_saves {
         let path = client_dll::assistant_paths::directory(&input)?;
@@ -56,10 +59,14 @@ fn run(args: Args) -> Result<()> {
         manifest.source_revision
     );
     if args.check_only {
+        if let Some(path) = &args.career_plan {
+            let career = client_dll::assistant_career::Career::load(path)?;
+            println!("{}", serde_json::to_string_pretty(career.check())?);
+        }
         return Ok(());
     }
     #[cfg(windows)]
-    return windows::interactive(&kit, &root);
+    return windows::interactive(&kit, &root, args.career_plan.as_deref());
     #[cfg(not(windows))]
     anyhow::bail!("O assistente interativo e Windows x86; no Fedora use proton_host/mp_launcher")
 }
@@ -291,7 +298,7 @@ mod windows {
         }
     }
 
-    pub fn interactive(kit: &Path, root: &Path) -> Result<()> {
+    pub fn interactive(kit: &Path, root: &Path, career_plan: Option<&Path>) -> Result<()> {
         let _ = HELPER_CLOCK.set(Instant::now());
         let bytes = fs::read(kit.join(lan_kit::CONFIG)).context("mp-lan.json ausente")?;
         let defaults: Settings = serde_json::from_slice(&bytes)?;
@@ -340,26 +347,45 @@ mod windows {
                             !pending.exists(),
                             "ja existe uma sessao pendente; use 2/3 ou, se o jogo encerrou, 4"
                         );
+                        let career = career_plan
+                            .map(client_dll::assistant_career::Career::load)
+                            .transpose()?;
                         let identity = game(root)?;
-                        let settings = Settings {
-                            server: prompt(
-                                "Servidor IP:porta",
-                                &preferences
-                                    .as_ref()
-                                    .map(|p| p.server)
-                                    .unwrap_or(defaults.server)
-                                    .to_string(),
-                            )?
-                            .parse()?,
-                            room: prompt(
-                                "Sala",
-                                preferences
-                                    .as_ref()
-                                    .map(|p| p.room.as_str())
-                                    .unwrap_or(&defaults.room),
-                            )?,
+                        let settings = if let Some(c) = &career {
+                            println!(
+                                "Arquivos da carreira conferidos. Servidor e sala vem do arquivo de carreira."
+                            );
+                            println!(
+                                "Carregue o save manualmente; horario, transito e economia do jogo ainda sao locais."
+                            );
+                            c.settings()
+                        } else {
+                            Settings {
+                                server: prompt(
+                                    "Servidor IP:porta",
+                                    &preferences
+                                        .as_ref()
+                                        .map(|p| p.server)
+                                        .unwrap_or(defaults.server)
+                                        .to_string(),
+                                )?
+                                .parse()?,
+                                room: prompt(
+                                    "Sala",
+                                    preferences
+                                        .as_ref()
+                                        .map(|p| p.room.as_str())
+                                        .unwrap_or(&defaults.room),
+                                )?,
+                            }
                         };
                         settings.validate()?;
+                        if career.is_some() {
+                            println!(
+                                "Carreira LAN: servidor {}, sala {}.",
+                                settings.server, settings.room
+                            );
+                        }
                         let profile =
                             PathBuf::from(std::env::var_os("USERPROFILE").context("USERPROFILE")?);
                         let documents = assistant_paths::documents().map_err(|e| eprintln!("Documents do Windows indisponivel: {e}; confirme o caminho manualmente.")).ok();
@@ -384,6 +410,15 @@ mod windows {
                                 .eq_ignore_ascii_case("sim"),
                             "inicio cancelado"
                         );
+                        // Both paths are prepared before creating run/backup/pending files.
+                        let start_arguments = if let Some(c) = &career {
+                            c.start_arguments(&settings)?
+                        } else {
+                            client_dll::assistant_career::visual_arguments(
+                                &settings,
+                                &data.join("identity.json"),
+                            )?
+                        };
                         lan_kit::verify(kit)?;
                         let tick = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
                         let run = data.join(format!("run-{tick}"));
@@ -407,35 +442,22 @@ mod windows {
                             false,
                             true,
                         )?;
-                        let next_preferences = Preferences {
-                            server: settings.server,
-                            room: settings.room.clone(),
-                            saves,
-                        };
-                        if let Err(e) = fs::write(
-                            &preferences_path,
-                            serde_json::to_vec_pretty(&next_preferences)?,
-                        ) {
-                            eprintln!("Nao foi possivel lembrar estas preferencias: {e}");
+                        if career.is_none() {
+                            let next_preferences = Preferences {
+                                server: settings.server,
+                                room: settings.room.clone(),
+                                saves,
+                            };
+                            if let Err(e) = fs::write(
+                                &preferences_path,
+                                serde_json::to_vec_pretty(&next_preferences)?,
+                            ) {
+                                eprintln!("Nao foi possivel lembrar estas preferencias: {e}");
+                            }
+                            preferences = Some(next_preferences);
                         }
-                        preferences = Some(next_preferences);
                         save_new(&pending, &session)?;
-                        let identity_file = data.join("identity.json");
-                        command(
-                            kit,
-                            &session,
-                            &args(&[
-                                OsStr::new("session-start"),
-                                OsStr::new("--server"),
-                                OsStr::new(&settings.server.to_string()),
-                                OsStr::new("--room"),
-                                OsStr::new(&settings.room),
-                                OsStr::new("--identity-file"),
-                                identity_file.as_os_str(),
-                            ]),
-                            true,
-                            true,
-                        )?;
+                        command(kit, &session, &start_arguments, true, true)?;
                         capture_status(kit, &session);
                         println!(
                             "Multiplayer iniciado. Volte ao jogo; use 3 aqui antes de fechar o jogo."
@@ -525,5 +547,26 @@ mod windows {
                 Err(error) => eprintln!("\n{error:#}\n"),
             }
         }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn career_plan_check_is_optional_and_cannot_be_silently_ignored_by_check_saves() {
+        assert!(Args::try_parse_from(["mp_lan"]).is_ok());
+        assert!(
+            Args::try_parse_from(["mp_lan", "--career-plan", "own.json", "--check-only"]).is_ok()
+        );
+        assert!(
+            Args::try_parse_from([
+                "mp_lan",
+                "--career-plan",
+                "own.json",
+                "--check-saves",
+                "own-dir"
+            ])
+            .is_err()
+        );
     }
 }

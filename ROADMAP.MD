@@ -1,5 +1,62 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Carreira no assistente, recuperação local e kit schema 2 — 31/10/2026
+
+Após `fbdfb24`, entregue contrato `career_entry::assistant::Plan` compartilhado,
+sem dependência de processos/UI no servidor. Referencia arquivos privados de
+ticket/importação/identidade/mapa/mods; não incorpora segredo/save. Schema
+estrito e leitura limitada; resolução relativa à pasta do plano, caminhos
+absolutos publicados, origem/importação/regras/conteúdo/identidade revalidados.
+`check-plan` nunca cria identidade, consulta o host ou acessa jogo. Relatório
+tipado conserva server_lease_checked/engine_loaded/world_synchronized=false.
+
+`mp_career prepare-launch --assistant-plan NOVO.json` publica plano após o
+ticket. Destinos existentes/iguais são recusados antes da emissão. Falha após
+gravar o ticket preserva esse arquivo e indica recuperação offline por
+`mp_career plan-launch`; recuperação não renova lease e exige saída nova.
+Não há transação atômica entre os dois arquivos nem renovação implícita.
+
+`mp_lan --career-plan ARQUIVO` liga a opção 1 aos argumentos já existentes do
+launcher, com endpoint/sala/identidade vinculados. Valida antes de criar run/
+backup/pending, não põe ticket em argv e preserva paths com espaços/acentos.
+Launcher revalida antes do processo. Modo sem plano preservado; preferências
+visuais não são trocadas pela carreira. Opções 2/3/4 não dependem do plano;
+`--check-only` confere sem jogo/injeção/dados privados novos. A prova de execução
+interativa/limpeza dessa modalidade na partida continua em G9.
+
+Kit schema 2 acrescenta `mp_career.exe`: seis binários próprios, manifesto,
+config/licença e instruções de carreira. Schema 1/cinco binários permanece
+verificável; nenhum kit antigo instalado foi atualizado. Templates explicitam
+importar por jogador, cópia/carregamento manuais e privacidade; não distribuem
+save, convite, ticket, plano ou identidade. Nenhuma publicação de release.
+
+`mp_career lab` schema 2 agora inclui controle TCP com admissão, publicação/
+checagem de plano, duas recusas locais, entrada UDP e leave confirmado. Lotes
+de 20 iterações nativo Fedora e Windows x86/Proton passaram com relatórios
+iguais: 140 operações persistidas, 60 recuperações, 20 bootstraps/planos/joins/
+leaves, 40 recusas de plano em cada alvo. São sockets/arquivos reais e dados
+próprios; não gameplay, LAN entre PCs ou autoridade econômica no motor.
+
+CLI release nativa também passou create/host/join/prepare com plano/check/
+recuperação; colisão foi recusada sem criar identidade, mapa/save preservados,
+host encerrou normalmente. Check após saída do host continuou local e não
+afirmou validade do lease. CLI x86 publicou/checou plano dos mesmos dados com
+paths Windows/Unicode; kit gerado passou check-only com plano e perfil real.
+Artefatos privados `career-cli-smoke-20261031/`, `career-plan-lab-{native,x86}-
+20261031*`, `career-kit-check-20261031/` e seus logs em target/analysis.
+
+Verify completo: **204 x86 sob Proton/275 nativos**, releases, Clippy padrão e
+fmt. Mais nove testes assets x86 (PML/montagem) e build/Clippy adicionais de
+l10n_tools/ui_tools passaram. PML nativo/x86 e relatórios do lab/check-plan
+idênticos. Log `verify-fedora-20261031-offline-batch.log`. Sem jogo aberto,
+originais/config/hash do pacote PT-BR preservados, nenhuma DLL residente.
+
+Uma checagem extra do pacote nativo no x86 encontrou dois limites separados:
+Z: é recusado pelo guard de links do Wine, preservado; cópia privada em C:
+avançou e revelou canonicalização ZIP dependente do host. Essa falha não foi
+contada como preflight aprovado e será tratada no bloco seguinte. Hooks, wire,
+ABI, captura por draw/foco, visual e vitória do motor não foram alterados.
+
 ## Preflight de overlays sem instalação — 31/10/2026
 
 Após `e89b27a`, extraída a preparação compartilhada de `ui_tools install` e

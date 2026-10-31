@@ -238,7 +238,7 @@ Raiz relativa `..` agora é aceita após conferir cada diretório percorrido,
 sem deixar `link/..` ocultar links/junctions. O preflight real em 31/10 aprovou
 o pacote 0.3.0/263 entradas desta instalação, sem escrita; seis fixtures de
 montagem e a proteção Unix de link também passaram. Ramo de junction Windows
-continua sujeito à execução/plivilégios desse ambiente.
+continua sujeito à execução/privilégios desse ambiente.
 
 ### Restante de T2
 

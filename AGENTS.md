@@ -1,5 +1,22 @@
 # Orientações para continuar o projeto
 
+Carreira/kit em 31/10 após `fbdfb24`: plano privado de paths com schema estrito,
+`mp_career prepare-launch --assistant-plan`, `plan-launch` de recuperação e
+`check-plan` local. `mp_lan --career-plan` usa sala/servidor/identidade do plano,
+confere antes de run/backup/pending, preserva limpeza 2/3/4 e modo visual.
+Sem ticket em argv, sem criar identidade no check, sem salvar preferências de
+carreira sobre as visuais. Sem instalação/carregamento automático ou mundo/
+economia/horário compartilhados. Kit schema 2 tem seis binários (mp_career);
+schema 1/cinco continua verificável. Não atualizar kit instalado automaticamente.
+Verify: 204 x86 Proton/275 nativos, releases/Clippy/fmt; mais nove assets x86.
+Lab schema 2 com 20 iterações por alvo: planos/TCP/UDP/leave passaram e relatórios
+iguais. CLI real própria e kit check-only x86 passaram. G9 interativo/motor
+pendente. Originais/saves intocados, nenhum jogo aberto. Logs privados em
+target/analysis/verify-fedora-20261031-offline-batch.log e career-*20261031*.
+Investigação extra: guard recusou Z: (link Wine); cópia privada em C: revelou
+ZIP canônico dependente do host. Corrigir envelope sem afrouxar guard/validar
+pacote adulterado, preservando pacotes Windows antigos; ver novo roadmap.
+
 Preflight em 31/10 após `e89b27a`: `ui_tools preflight` compartilha preparação
 com install, sem backup/montagem/escrita; checks estáticos não são prova do
 motor nem garantem instalação futura. Pacote real 0.3.0/263 entradas passou,

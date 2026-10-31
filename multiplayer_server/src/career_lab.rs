@@ -24,6 +24,10 @@ pub struct Report {
     pub tcp_bootstraps: u64,
     pub tcp_world_snapshots: u64,
     pub tcp_refusals: u64,
+    pub local_launch_plans: u64,
+    pub refused_launch_plans: u64,
+    pub udp_admissions: u64,
+    pub confirmed_leaves: u64,
     pub original_fixture_preserved: bool,
     pub game_tested: bool,
     pub two_pc_lan_tested: bool,
@@ -48,7 +52,7 @@ pub async fn run(output: &Path, iterations: u32) -> Result<Report> {
     );
     fs::create_dir(output)?;
     let mut report = Report {
-        schema: 1,
+        schema: 2,
         iterations,
         durable_operations: 0,
         duplicate_receipts: 0,
@@ -57,6 +61,10 @@ pub async fn run(output: &Path, iterations: u32) -> Result<Report> {
         tcp_bootstraps: 0,
         tcp_world_snapshots: 0,
         tcp_refusals: 0,
+        local_launch_plans: 0,
+        refused_launch_plans: 0,
+        udp_admissions: 0,
+        confirmed_leaves: 0,
         original_fixture_preserved: true,
         game_tested: false,
         two_pc_lan_tested: false,
@@ -67,6 +75,8 @@ pub async fn run(output: &Path, iterations: u32) -> Result<Report> {
         let source = case.join("own-fixture.sav");
         let bytes = vec![42; 16384];
         store::write_new(&source, &bytes).map_err(anyhow::Error::msg)?;
+        let map = case.join("own-map.scs");
+        store::write_new(&map, b"own map fixture").map_err(anyhow::Error::msg)?;
         let compatibility = Compatibility {
             profile: session_protocol::PROFILE.into(),
             map_sha256: career::hash(b"own map fixture"),
@@ -225,10 +235,19 @@ pub async fn run(output: &Path, iterations: u32) -> Result<Report> {
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
         let endpoint = listener.local_addr()?;
+        let socket = tokio::net::UdpSocket::bind("127.0.0.1:0").await?;
+        let relay = socket.local_addr()?;
+        let settings = crate::session_hub::Settings {
+            room: "career".into(),
+            profile: session_protocol::PROFILE.into(),
+            max_clients: 16,
+            timeout_ms: 5000,
+            echo: false,
+        };
         let server_data = data.clone();
         let (stop, stopped) = tokio::sync::oneshot::channel();
         let server = tokio::spawn(async move {
-            career_net::serve(listener, &server_data, async {
+            career_net::serve_room(listener, socket, &server_data, settings, relay, async {
                 let _ = stopped.await;
             })
             .await
@@ -256,6 +275,108 @@ pub async fn run(output: &Path, iterations: u32) -> Result<Report> {
             "bad bootstrap claim"
         );
         career_net::inspect_import(&import)?;
+        // Real control admission, immutable local plan and guarded UDP, without
+        // any commercial save, engine, DLL or user identity.
+        let identity_file = case.join("identity.json");
+        let own_id = identity::load_or_create(&identity_file).map_err(anyhow::Error::msg)?;
+        let launch =
+            career_net::prepare_launch(endpoint, &invite, compatibility.clone(), &import, &own_id)
+                .await?;
+        let launch_file = case.join("launch.json");
+        store::write_new(
+            &launch_file,
+            &store::json(&launch).map_err(anyhow::Error::msg)?,
+        )
+        .map_err(anyhow::Error::msg)?;
+        let plan = crate::career_entry::assistant::Plan {
+            schema: 1,
+            launch: launch_file,
+            import: import.clone(),
+            identity_file,
+            map: map.clone(),
+            mods: vec![],
+        }
+        .resolve_paths(&std::env::current_dir()?)
+        .map_err(anyhow::Error::msg)?;
+        let plan_file = case.join("plan.json");
+        crate::career_entry::assistant::write(&plan_file, &plan, session_protocol::PROFILE)
+            .map_err(anyhow::Error::msg)?;
+        let prepared = crate::career_entry::assistant::load(&plan_file, session_protocol::PROFILE)
+            .map_err(anyhow::Error::msg)?;
+        ensure!(
+            prepared.check.local_preflight_passed
+                && !prepared.check.server_lease_checked
+                && !prepared.check.engine_loaded,
+            "bad local plan claim"
+        );
+        report.local_launch_plans += 1;
+        let mut bad = plan.clone();
+        bad.identity_file = case.join("absent-identity.json");
+        ensure!(
+            crate::career_entry::assistant::write(
+                &case.join("bad-plan.json"),
+                &bad,
+                session_protocol::PROFILE
+            )
+            .is_err(),
+            "missing identity accepted"
+        );
+        bad = plan.clone();
+        bad.schema = 2;
+        ensure!(
+            crate::career_entry::assistant::write(
+                &case.join("bad-plan.json"),
+                &bad,
+                session_protocol::PROFILE
+            )
+            .is_err(),
+            "unknown schema accepted"
+        );
+        ensure!(
+            !case.join("bad-plan.json").exists() && !case.join("absent-identity.json").exists(),
+            "refusal wrote private files"
+        );
+        report.refused_launch_plans += 2;
+        let peer = tokio::net::UdpSocket::bind("127.0.0.1:0").await?;
+        peer.connect(prepared.relay).await?;
+        let mut client = crate::session_client::Client::new(
+            crate::session_client::Options {
+                room: prepared.room,
+                identity: own_id,
+                profile: session_protocol::PROFILE.into(),
+                admission: Some(launch.proof),
+            },
+            1,
+        )
+        .map_err(anyhow::Error::msg)?;
+        for frame in client.poll(0).0 {
+            peer.send(&session_protocol::encode_client(&frame).map_err(anyhow::Error::msg)?)
+                .await?;
+        }
+        let mut received = [0; crate::protocol::MAX_PACKET + 1];
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            while !client.connected() {
+                let n = peer.recv(&mut received).await?;
+                client.ingest(&received[..n], 0);
+            }
+            Ok::<_, anyhow::Error>(())
+        })
+        .await??;
+        report.udp_admissions += 1;
+        client.close(1);
+        for frame in client.poll(1).0 {
+            peer.send(&session_protocol::encode_client(&frame).map_err(anyhow::Error::msg)?)
+                .await?;
+        }
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            while !client.status().leave_confirmed {
+                let n = peer.recv(&mut received).await?;
+                client.ingest(&received[..n], 2);
+            }
+            Ok::<_, anyhow::Error>(())
+        })
+        .await??;
+        report.confirmed_leaves += 1;
         ensure!(
             WorldStore::open(&data).is_err(),
             "server allowed another writer"
@@ -289,7 +410,9 @@ pub async fn run(output: &Path, iterations: u32) -> Result<Report> {
             .map_err(|_| anyhow::anyhow!("server stopped unexpectedly"))?;
         let server_report = server.await??;
         ensure!(
-            server_report.connections == 5 && server_report.busy == 0,
+            server_report.control.connections == 6
+                && server_report.control.busy == 0
+                && server_report.relay.active_on_shutdown == 0,
             "unexpected control connections"
         );
         report.tcp_bootstraps += 1;
@@ -334,6 +457,10 @@ mod tests {
         assert_eq!(report.duplicate_receipts, 4);
         assert_eq!(report.tcp_world_snapshots, 4);
         assert_eq!(report.restart_recoveries, 6);
+        assert_eq!(report.local_launch_plans, 2);
+        assert_eq!(report.refused_launch_plans, 4);
+        assert_eq!(report.udp_admissions, 2);
+        assert_eq!(report.confirmed_leaves, 2);
         assert!(!report.game_tested && !report.two_pc_lan_tested);
         assert!(run(&dir.0.join("lab"), 1).await.is_err());
     }

@@ -4,12 +4,20 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{fs, net::SocketAddr, path::Path};
 
-pub const PAYLOAD: [&str; 5] = [
+const LEGACY_PAYLOAD: [&str; 5] = [
     "client_dll.dll",
     "mp_launcher.exe",
     "mp_lan.exe",
     "mp_doctor.exe",
     "memory_tool.exe",
+];
+pub const PAYLOAD: [&str; 6] = [
+    "client_dll.dll",
+    "mp_launcher.exe",
+    "mp_lan.exe",
+    "mp_doctor.exe",
+    "memory_tool.exe",
+    "mp_career.exe",
 ];
 pub const CONFIG: &str = "mp-lan.json";
 pub const MANIFEST: &str = "mp-kit-manifest.json";
@@ -91,16 +99,21 @@ fn entry(name: &str, bytes: &[u8]) -> Entry {
 pub fn verify(root: &Path) -> Result<Manifest> {
     let manifest: Manifest = serde_json::from_slice(&fs::read(root.join(MANIFEST))?)?;
     ensure!(
-        manifest.schema == 1
+        matches!(manifest.schema, 1 | 2)
             && manifest.target == "i686-pc-windows-gnu"
             && manifest.game_profile == crate::profile::ID,
         "unsupported kit manifest"
     );
+    let payload: &[&str] = if manifest.schema == 1 {
+        &LEGACY_PAYLOAD
+    } else {
+        &PAYLOAD
+    };
     ensure!(
-        manifest.files.len() == PAYLOAD.len(),
+        manifest.files.len() == payload.len(),
         "incomplete kit manifest"
     );
-    for name in PAYLOAD {
+    for &name in payload {
         let matches: Vec<_> = manifest.files.iter().filter(|e| e.name == name).collect();
         ensure!(matches.len() == 1, "missing/duplicate kit file: {name}");
         let actual = entry(name, &binary(&root.join(name))?);
@@ -129,7 +142,7 @@ pub fn create(
         .map(|name| Ok((*name, binary(&build.join(name))?)))
         .collect::<Result<Vec<_>>>()?;
     let manifest = Manifest {
-        schema: 1,
+        schema: 2,
         source_revision: revision.into(),
         target: "i686-pc-windows-gnu".into(),
         game_profile: crate::profile::ID.into(),
@@ -147,6 +160,7 @@ pub fn create(
     fs::write(output.join(MANIFEST), serde_json::to_vec_pretty(&manifest)?)?;
     fs::write(output.join("LICENSE.txt"), include_str!("../../LICENSE"))?;
     fs::write(output.join("LEIA-ME.txt"), instructions(settings))?;
+    fs::write(output.join("CARREIRA.txt"), career_instructions())?;
     verify(output)
 }
 
@@ -177,18 +191,49 @@ Saves padrao: %USERPROFILE%\\Documents\\18 WoS Across America\\saves\r\n\
 Se estiverem no OneDrive/outra pasta, informe o caminho real no assistente.\r\n\
 Nao compartilhe a pasta de dados: ela contem identidade e copias de saves.\r\n\r\n\
 O visual remoto ainda nao tem colisao, rodas/reboque ou economia sincronizada.\r\n\
-A LAN entre dois PCs sera validada neste teste; hashes e bancada nao sao\r\n\
-essa prova. A janela sem foco pode pausar render/envio de posicoes.\r\n\
+A LAN entre dois PCs passou numa revisao anterior; este kit atualizado ainda\r\n\
+aguarda a rodada agrupada. A janela sem foco pode pausar render/envio.\r\n\
 Comecem na mesma cidade/local proximo; o kit nao sincroniza saves/teleporta.\r\n\r\n\
 Diagnostico manual (terminal na raiz do jogo):\r\n\
   .\\mp_doctor.exe --game . --client-dir .\r\n\
   .\\memory_tool.exe processes\r\n\
-O manifesto mp-kit-manifest.json identifica os cinco binarios por SHA-256.\r\n\
+O manifesto schema 2 identifica seis binarios por SHA-256, inclusive mp_career.\r\n\
+Para o modo de carreira por arquivo, leia CARREIRA.txt.\r\n\
 Ele verifica integridade local, nao e assinatura de publicacao.\r\n",
         settings.server,
         settings.room,
         settings.server.port()
     )
+}
+fn career_instructions() -> &'static str {
+    "CARREIRA LAN POR ARQUIVO - OPCIONAL\r\n\r\n\
+Este modo verifica a copia congelada do save-base, identidade, mapa/mods e\r\n\
+ticket de admissao. Ainda NAO carrega/instala o save no jogo nem compartilha\r\n\
+horario, transito, fisica, saldo ou vitoria do motor. O visual e o ja existente.\r\n\r\n\
+O host deve preparar a carreira e usar mp_career host (TCP e relay UDP juntos).\r\n\
+Cada jogador recebe o convite PRIVADO por fora do kit, importa em pasta NOVA e\r\n\
+cria sua PROPRIA identidade/ticket. Inclusive o host como jogador faz import.\r\n\
+Nao copie identidade, launch.json, plan.json ou a pasta de dados entre PCs.\r\n\
+MAPA significa o mesmo arquivo escolhido pelo host; informe tambem --mod por\r\n\
+cada mod adicional declarado. Crie a pasta PRIVADO antes dos comandos abaixo.\r\n\r\n\
+Exemplos de terminal (substitua IP e caminhos):\r\n\
+mp_career.exe join --server IP:39001 --invite CONVITE.json --output IMPORTACAO-NOVA --map MAPA\r\n\
+mp_career.exe prepare-launch --server IP:39001 --invite CONVITE.json --import IMPORTACAO-NOVA --identity-file PRIVADO/identity.json --output PRIVADO/launch.json --assistant-plan PRIVADO/plan.json --map MAPA\r\n\
+mp_career.exe check-plan --plan PRIVADO/plan.json\r\n\
+mp_lan.exe --career-plan PRIVADO/plan.json --check-only\r\n\r\n\
+O ticket dura ate uma hora para novas entradas, e reiniciar o host o invalida.\r\n\
+Renovar exige novos arquivos de ticket/plano, nao sobrescrever os antigos.\r\n\
+Se o ticket foi salvo mas a gravacao do plano falhou, recupere sem rede com:\r\n\
+mp_career.exe plan-launch --launch PRIVADO/launch.json --import IMPORTACAO-NOVA --identity-file PRIVADO/identity.json --map MAPA --output PRIVADO/plan-NOVO.json\r\n\r\n\
+Confira a importacao e copie manualmente bootstrap.sav para um slot de teste\r\n\
+NOVO na pasta real dos saves, com o jogo fechado e sem substituir seus saves.\r\n\
+Carregue esse save pela Steam. Abra entao:\r\n\
+mp_lan.exe --career-plan PRIVADO/plan.json\r\n\
+Escolha 1; servidor/sala/identidade sao os vinculados ao arquivo. Confirme a\r\n\
+pasta dos saves. Use 3 antes de fechar o jogo e aguarde a limpeza, como no modo\r\n\
+visual. Opcoes 2/3/4 continuam disponiveis mesmo se o plano/ticket ficar invalido.\r\n\
+Os checks locais nao consultam validade no servidor nem comprovam qual save\r\n\
+esta carregado. Admissao efetiva e feita pelo launcher/relay no inicio.\r\n"
 }
 
 #[cfg(test)]
@@ -213,6 +258,32 @@ mod tests {
             server: "192.0.2.1:39000".parse().unwrap(),
             room: "lan".into(),
         }
+    }
+    #[test]
+    fn new_kit_includes_career_tool_and_legacy_schema_remains_verifiable() {
+        let t = tempfile::tempdir().unwrap();
+        fixtures(t.path());
+        let out = t.path().join("kit");
+        let mut m = create(t.path(), &out, "own revision", &settings()).unwrap();
+        assert_eq!(m.schema, 2);
+        assert!(m.files.iter().any(|e| e.name == "mp_career.exe"));
+        assert!(
+            fs::read_to_string(out.join("CARREIRA.txt"))
+                .unwrap()
+                .contains("--career-plan")
+        );
+        m.schema = 1;
+        m.files.retain(|e| e.name != "mp_career.exe");
+        fs::remove_file(out.join("mp_career.exe")).unwrap();
+        fs::write(out.join(MANIFEST), serde_json::to_vec(&m).unwrap()).unwrap();
+        assert!(verify(&out).is_ok());
+        m.schema = 2;
+        fs::write(out.join(MANIFEST), serde_json::to_vec(&m).unwrap()).unwrap();
+        assert!(verify(&out).is_err());
+        fs::remove_file(t.path().join("mp_career.exe")).unwrap();
+        let absent = t.path().join("incomplete-new-kit");
+        assert!(create(t.path(), &absent, "own", &settings()).is_err());
+        assert!(!absent.exists());
     }
     #[test]
     fn rejects_incomplete_wrong_architecture_and_existing_destination() {
