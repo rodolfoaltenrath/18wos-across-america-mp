@@ -21,6 +21,7 @@ fontdue = { version = "0.9", default-features = false }
 
 [dev-dependencies]
 tempfile = "3"
+multiplayer_server = { path = "../multiplayer_server", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Diagnostics_ToolHelp"] }

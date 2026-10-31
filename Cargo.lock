@@ -74,6 +74,7 @@ dependencies = [
  "iced-x86",
  "image",
  "mod_ui",
+ "multiplayer_server",
  "serde",
  "serde_json",
  "sha2",

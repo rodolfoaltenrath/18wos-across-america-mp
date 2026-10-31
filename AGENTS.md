@@ -1172,3 +1172,7 @@ Kit novo da revisão ff8622e em ~/Downloads/18WOS-Multiplayer-LAN-Windows-2026-1
 (servidor 192.168.18.103:39000, sala lan); anteriores intactos. Roteiro único
 da próxima rodada no topo de G12 (docs/GAME_VALIDATION.md); nada foi testado
 no jogo nesta sequência.
+Robustez de parsers em 31/10: `parser_fuzz` (client_dll, nove famílias) e
+teste de oito parsers de assets com o mutador `multiplayer_server::fuzz`; 18
+milhões de entradas sem panic. Corrigido: `session_evidence::parse` agora
+recusa chave JSON duplicada como o `sanitize`. Verify: 245 x86/312 nativos.

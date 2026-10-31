@@ -193,7 +193,9 @@ pub fn parse(bytes: &[u8]) -> Result<Capture> {
         .context("report must be complete JSON; pass the command's stdout report")?;
     let input_sha256 = format!("{:x}", Sha256::digest(bytes));
     if value.get("client").is_some() {
-        let snapshot: Snapshot = serde_json::from_value(value)?;
+        // Typed decoding straight from the bytes: duplicate keys are ambiguous
+        // (a Value keeps the last one) and must be refused, as in `sanitize`.
+        let snapshot: Snapshot = serde_json::from_slice(bytes)?;
         snapshot.validate()?;
         let findings = snapshot.findings();
         Ok(Capture::Snapshot {
@@ -202,7 +204,7 @@ pub fn parse(bytes: &[u8]) -> Result<Capture> {
             findings,
         })
     } else {
-        let stop: Stop = serde_json::from_value(value).context("expected session-status/session-stop; identity, backups and unrelated files are not reports")?;
+        let stop: Stop = serde_json::from_slice(bytes).context("expected session-status/session-stop; identity, backups and unrelated files are not reports")?;
         ensure!(stop.client_status <= 3, "invalid stopped client state");
         ensure!(stop.slots.len() <= 64, "too many slots");
         if let Some(s) = &stop.lifecycle {
@@ -516,5 +518,16 @@ mod tests {
         v["client"]["sample_state"] = 99.into();
         assert!(parse(&serde_json::to_vec(&v).unwrap()).is_err());
         assert!(analyze(vec![]).is_err());
+    }
+}
+#[cfg(test)]
+mod duplicate_key_tests {
+    #[test]
+    fn duplicate_keys_are_refused_like_sanitize_instead_of_last_one_wins() {
+        let stop = br#"{"client_status":2,"released":true,"files":{"unchanged":8},"files":{"unchanged":9},"slots":[],"preflight_checks":1,"release_attempts":1}"#;
+        assert!(super::parse(stop).is_err());
+        assert!(super::sanitize(stop).is_err());
+        let fine = br#"{"client_status":2,"released":true,"files":{"unchanged":8},"slots":[],"preflight_checks":1,"release_attempts":1}"#;
+        assert!(super::parse(fine).is_ok() && super::sanitize(fine).is_ok());
     }
 }

@@ -63,6 +63,7 @@ pub mod load_gate;
 mod memory;
 pub mod network_conditions;
 mod network_io;
+pub mod parser_fuzz;
 pub mod pe_exports;
 #[cfg(any(all(windows, target_arch = "x86"), test))]
 mod phase_queue;

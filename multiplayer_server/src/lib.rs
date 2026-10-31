@@ -7,6 +7,7 @@ pub mod career_lab;
 pub mod career_net;
 pub mod career_store;
 pub mod career_world;
+pub mod fuzz;
 pub mod identity;
 pub mod protocol;
 pub mod session_client;

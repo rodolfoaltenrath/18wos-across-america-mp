@@ -1,5 +1,40 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Lote offline M8: robustez determinística dos parsers — 31/10/2026
+
+Avança o critério de M8 "auditar parsers". Mutador próprio sem dependências
+(`multiplayer_server::fuzz`, xorshift + troca/remoção/duplicação de bytes,
+tokens JSON de borda e words extremos), compartilhado por:
+
+- `client_dll::parser_fuzz` e o binário `parser_fuzz --seed --iterations
+  [--output NOVO]`: decodificadores v1/v2 de cliente e servidor (aceito ⇒
+  reencodado e redecodificado igual), máquina de estados do cliente após um
+  aceite (bytes arbitrários sem panic e sem expor o próprio jogador como
+  remoto), `session_evidence` (parse + sanitize + analyze),
+  `transition_analysis`, todos os decodificadores da EngineControl v3 (blocos
+  arbitrários, ida e volta do status do gate) e captura de argv com limites.
+- `asset_tools/tests/parser_fuzz.rs`: `.font`, `.def`, codec 3nK, TGA, PML,
+  catálogo, literais e PE32, com sementes iguais às fixtures próprias.
+
+**Defeito real encontrado:** `session_evidence::parse` decodificava via
+`serde_json::Value`, onde uma chave duplicada vale pela última ocorrência, e
+aceitava relatórios que `sanitize` recusava. Agora os tipos são lidos direto dos
+bytes e chaves duplicadas são recusadas nos dois caminhos (teste próprio).
+
+**Resultados:** teste padrão com três seeds × 4000 entradas por alvo; rodada
+release de 1.000.000 de entradas por alvo nas seeds 11 e 12 (18 milhões no
+total): zero panics e zero falhas de propriedade, máximo de 112 µs por entrada.
+Relatórios privados em `target/analysis/parser-fuzz-20261031-01/`.
+
+**Verify integral Fedora:** 245 testes x86 sob Proton e 312 nativos, releases,
+Clippy x86/nativo e rustfmt (a primeira rodada parou no Clippy x86 pelo nome
+`next` do gerador; renomeado para `next_u64`). Log
+`target/analysis/verify-fedora-20261031-parser-fuzz.log`.
+
+**Limites:** mutação a partir de sementes, sem cobertura guiada; não prova
+ausência de defeitos. Leitura de arquivos/extração de SCS, frames TCP da
+carreira e o loader do jogo não entraram. Nenhum jogo aberto.
+
 ## Lote offline M3/M5: base de tempo do servidor na interpolação — 31/10/2026
 
 Fecha o critério de M3 "estimar diferença de relógios e ordenar snapshots
@@ -5011,6 +5046,11 @@ verificada e removida em outra instalação original sem distribuir o jogo.
   Resultado no GitHub não verificado neste bloco, sem publicação de release.
 - [ ] Auditar parsers e caminhos de arquivo/extração; limitar origem de pacotes,
   filas e mensagens. Downloads/executáveis recebidos da rede não fazem parte do protocolo.
+  Progresso 31/10: `parser_fuzz` (nove famílias: v1/v2, máquina do cliente,
+  relatórios, transição, decodificadores da ABI, captura de argv) e teste com
+  oito parsers de assets; 18 milhões de entradas sem panic/falha. Achou e
+  corrigiu chave JSON duplicada aceita por `session_evidence::parse`. Caminhos
+  de arquivo/extração e parser TCP da carreira ainda sem fuzz dedicado.
 - [ ] Criar uma matriz de compatibilidade: Windows, toolchain, hash do jogo,
   renderizador, configurações e resultado do teste com duas máquinas.
 
