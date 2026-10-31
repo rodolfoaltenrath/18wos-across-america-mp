@@ -1,5 +1,13 @@
 # Orientações para continuar o projeto
 
+Artefato retomada31/10: kit NOVO de2178e7c em Downloads com sufixo retomada,
+schema2/seis binários e THIRD_PARTY com hash. Inventário45crates/0violações/
+0sem arquivo de licença; não equivale a aprovação de publicação. Builder e
+mp_lan --check-only x86 Proton passaram. Não substituiu instalação/kit anterior;
+lan_tested=false e G12 pendente. Session-verify no prefixo DA PARTIDA conferiu
+oito iguais; init.cfg dddbacf5…7774 intacto. Enumeração final sem jogo;
+verify encerrou runtime da bancada. Logs privados retomada-*20261031*.
+
 ContinuaçãoM8 31/10: career_net receive/send usa AsyncRead/Write para testar
 decoder real; wire256KiB/u32BE/deadline30s preservados. Três requests/quatro
 respostas próprias, 12k mutações, fragmentação/EOF/duplicatas/limites/cancelamento.

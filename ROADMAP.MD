@@ -1,5 +1,24 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Artefato da retomada e fechamento offline — 31/10
+
+Blocos concluídos e commitados: `0728ccc` (pendência de estados/captura),
+`50b2bc3` (ordenação/deduplicação/recuperação) e `2178e7c` (framing/arquivos/
+diagnósticos). Kit novo em
+`~/Downloads/18WOS-Multiplayer-LAN-Windows-2026-10-31-retomada`, fonte
+`2178e7cd8b08d595c8ca985745ebba4668974616`, schema2/seis binários e
+`THIRD_PARTY.txt` incluído com hash. Inventário do alvo x86: 45 crates externos,
+zero violações e zero sem arquivo de licença; inventário não aprova publicação.
+Builder e `mp_lan --check-only` x86 sob Proton passaram; `lan_tested=false`.
+Logs privados `retomada-kit-*20261031*` e `retomada-license-audit-20261031.log`.
+
+Nenhum kit anterior/instalação foi substituído e nenhum jogo foi aberto.
+`session-verify` no prefixo da partida confirmou oito arquivos iguais ao backup;
+`aa/init.cfg` conserva SHA dddbacf5…7774. Enumeração final sem jogo; runtime da
+bancada encerrado pelo verify. Logs `retomada-originals-correct-prefix-20261031.log`
+e `retomada-processes-final-20261031.log`. G12 reúne a validação prática futura
+do comportamento novo; não reabrir LAN básica só por esses checks offline.
+
 ## Continuação M8: frames TCP, paths e diagnósticos de falha — 31/10
 
 Decoder real do controle de carreira agora aceita `AsyncRead`/`AsyncWrite`
