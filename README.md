@@ -49,8 +49,10 @@ agora cobre falhas de preparo, interrupção UDP e saída do host próprio com o
 worker ativo. A rodada G0 passou depois no jogo original sob Proton: **M2 9/9**,
 com ciclo real de carga/parada/recarga, falhas de preparo, recuperação após
 30 s sem comunicação, liberação do visual e oito arquivos iguais após a saída.
-O proprietário confirmou que o jogo continuou funcional, mas não acompanhou
-o desaparecimento/reaparecimento do remoto. Queda provocada no motor, sessões
+Na primeira rodada o proprietário confirmou estabilidade; no reteste
+acompanhado de 31/10 confirmou também que o caminhão apareceu, sumiu durante
+a interrupção e voltou sozinho com textura normal, sem travamento, no eco local.
+Queda provocada no motor, sessões
 longas e as matrizes de M1/M4/M8 continuam pendentes. Evidências e limites em
 G0 do procedimento de validação e no primeiro registro do roadmap.
 

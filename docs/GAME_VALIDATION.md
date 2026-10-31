@@ -6,8 +6,10 @@ está registrada abaixo. A matriz restante continua sendo roteiro de pendências
 não marcar itens amplos a partir de uma prova parcial.
 
 As provas antigas permanecem no ROADMAP.MD: eco/textura e duas cargas `map`
-passaram no Windows/v2; o usuário percebeu atraso leve. Houve reconexão real,
-mas ele não percebeu o desaparecimento do remoto durante a interrupção. Outros
+passaram no Windows/v2; o usuário percebeu atraso leve. Na prova antiga não
+percebeu o desaparecimento durante a interrupção; no reteste acompanhado de
+31/10 confirmou sumiço e retorno com textura normal, sem travamento, no eco
+local após 30 s sem comunicação. Não é nova LAN. Outros
 comandos de teardown, suavização na LAN, vários jogadores e sessão longa
 continuam pendentes. Testes em fixture/sockets locais não fecham essas lacunas.
 
@@ -275,7 +277,7 @@ e o fallback estão no README; não usar PIDs ou endereços históricos.
 | G0 | Fechamento prático de M2: falhas e ciclo de vida | Passou em 31/10 no jogo original sob Proton; M2 9/9, limites abaixo |
 | G1 | Visual/pose/skin e funcionamento básico | Regressão; passou em sessão anterior |
 | G2 | Ajustes de interpolação/extrapolação e métricas novas | Bancada; nova prova na partida pendente |
-| G3 | Interrupção/reconexão e desaparecimento percebido | Recuperação anterior passou; visibilidade pendente |
+| G3 | Interrupção/reconexão e desaparecimento percebido | Sumiço/retorno com textura confirmados no eco em 31/10; ampliar servidor/LAN |
 | G4 | Menus e recargas pelo gate/fallback | `map` anterior passou; ampliar matriz |
 | G4b | `exit`/`menu`/`quit`/`preview`/`edit` | Bancada; exige preparar cada caminho real |
 | G5 | LAN com dois PCs, vários remotos e plataformas | Visual mútuo Windows↔Fedora passou; ampliar conforme registro acima |
@@ -370,6 +372,12 @@ posterior, não somente pelas fixtures.
 
 ### G3 — Rede e reconexão
 
+- [x] Eco local v2 sob Proton, 31/10: interromper a comunicação por 30 s e
+  confirmar visualmente sumiço e retorno com textura normal, sem travamento.
+  Proprietário acompanhou e confirmou. Capturas conexão 1→2/remotos 1→0→1;
+  proxy sem perda/dup/atraso/jitter adicionais. Servidor não foi reiniciado,
+  portanto os casos específicos seguintes continuam pendentes. Logs/análise em
+  `target/analysis/m2-visual-confirm-20261031-01/`, fechamento/integridade passaram.
 - [ ] Interromper o servidor por tempo maior que o timeout e observar de fato
   se o remoto deixa de ser desenhado. Status remoto zero sozinho não comprova
   o que apareceu na tela. Registrar separadamente observação e contadores.

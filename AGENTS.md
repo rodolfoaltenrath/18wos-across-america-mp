@@ -1,5 +1,17 @@
 # Orientações para continuar o projeto
 
+Reteste visual acompanhado em 31/10, DLL 07ec04e sem rebuild: proprietário
+confirmou aparecer/sumir/voltar sozinho, textura normal e ausência de travamento
+no eco local após blackout de 30 s. Proxy sem perda/dup/delay/jitter extras,
+blackout +20 s desde primeiro cliente. Capturas: conexão 1→2, remotos 1→0→1,
+worker ativo, fonte disponível e fault zero. Isso supre a confirmação humana
+ausente na primeira G0, sem nova LAN nem medida de suavidade/FPS/latência.
+Parada: um check/release, 14 slots, oito hashes, worker aguardado/item ausente/
+filas zero. Proprietário fechou; enumeração sem jogo e oito hashes pós-saída,
+init.cfg intacto. Servidor final: dois aceites/uma expiração/um leave/zero ativos.
+Logs privados target/analysis/m2-visual-confirm-20261031-01/; ver registro novo
+do roadmap. M2 segue 9/9; não refazer a mesma prova nem fechar toda G1/G3/M8.
+
 G0 real em 31/10 com DLL 07ec04e: M2 agora 9/9. Fedora/Proton, um PC,
 perfil Steam, backup antes da carga. Endpoint inválido recusado sem worker;
 três conexões básicas reais com stop/restart e duas descargas/recarga da DLL.

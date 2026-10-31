@@ -1,5 +1,56 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Confirmação humana de sumiço e retorno no eco — 31/10/2026
+
+A pedido do proprietário, repetida somente a sequência visual em novo processo
+do jogo Steam no Fedora/Proton, com a mesma DLL validada de `07ec04e`, sem build
+ou mudança de código. Backup criado antes da carga. O proprietário carregou o
+save de teste, usou câmera externa e se dispôs a acompanhar a tela. Não é nova
+LAN nem substitui a matriz de movimento/câmeras/menus.
+
+Eco v2 com offset 4 m, servidor timeout 5 s. Proxy sem perda/duplicação/atraso/
+jitter adicionais; interrupção programada em +20 s por 30 s desde o primeiro
+cliente, prazo total de 240 s. Capturas salvas:
+
+| Instante | Cliente | Conexão/aceites | Remotos | Desenhos do visual | Recebidos |
+| --- | --- | --- | ---: | ---: | ---: |
+| Antes | ativo/conectado | 1/1 | 1 | 828 | 449 |
+| Durante | ativo/reconectando | 1/1 | 0 | 2.412 | 1.198 |
+| Depois | ativo/conectado | 2/2 | 1 | 4.122 | 2.085 |
+
+Proxy terminou normalmente em 240.000 ms; primeiro cliente em 2.788 ms.
+Descartes no blackout: 360 uplink/64 downlink; random_loss, duplicação,
+reordenação, overflow, erros e filas pendentes finais zerados. Picos de duas
+entradas por direção. O prazo cobriu toda a interrupção e a recuperação.
+
+Fonte disponível nos três snapshots; uma reconexão, fault do visual zerado,
+três partes com shader. O proprietário respondeu **“Sim, tudo aconteceu
+normalmente”** à pergunta conjunta sobre aparecer, sumir durante a interrupção,
+voltar sozinho, textura normal e ausência de travamento. Essa é a confirmação
+humana que faltava na primeira rodada G0. Não inferir avaliação de suavidade
+em movimento, FPS, latência visual, todos os cenários de luz ou dois PCs.
+
+Parada: uma consulta/uma liberação, worker aguardado, item ausente, zero tarefas,
+dispatcher removido, 14 slots restaurados e oito hashes iguais. Pin conservado
+até a saída prevista; proprietário fechou normalmente. Enumeração confirmou
+ausência do jogo e verificação pós-saída conferiu os oito arquivos. init.cfg
+continuou com SHA-256 dddbacf5…7774.
+
+Servidor final: dois aceites sucessivos da mesma identidade, uma expiração e
+um leave, zero ativos no shutdown, 4.166 datagramas recebidos/4.026 poses;
+invalid/oversized/rate_limited/stale/unauthenticated/send_errors/late_ticks
+zerados. Status final do cliente: phase closed/leave_confirmed=true, 4.526
+envios/4.025 recebimentos, old 60, sem invalid. Não equiparar contadores de
+cliente/servidor nem interpretar old como perda. M2 continua 9/9; queda
+provocada, endurance e restante de G1–G6 continuam com seus limites próprios.
+
+Logs privados em `target/analysis/m2-visual-confirm-20261031-01/`: doctor,
+backup, start, before/during/after, stop/stopped, proxy/servidor, enumeração,
+verificação pós-saída e `analysis.json`. Análise tipada gerada pela ferramenta
+existente; sem deltas inventados entre conexões. Não versionar esses arquivos,
+identidade ou saves. Nenhuma instalação de assets/tradução nesta rodada.
+Servidor/proxy encerrados normalmente, sem jogo ou helpers restantes.
+
 ## M2 concluída: G0 no jogo original sob Proton — 31/10/2026
 
 Validada a DLL de `07ec04e` na instalação Steam perfilada, Fedora/Proton
