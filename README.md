@@ -1981,8 +1981,16 @@ idade_ms]`; `truncated` indica listas cortadas para caber. `session-status`
 inclui o mesmo objeto, validado pelo `session_report`/`mp_doctor --recording`.
 Sem sessão v2 o marcador é recusado. Servidor, launcher e DLL precisam ser da
 mesma revisão (contrato em `docs/NETWORK_PROTOCOL.md`). `session_probe
---marker-every-ms N` gera marcadores com o cliente nativo. O render não muda:
-um remoto `loading` ainda some pela expiração normal da pose.
+--marker-every-ms N` gera marcadores com o cliente nativo.
+
+Desde o bloco seguinte, o render usa o estado: um remoto anunciado como
+`loading` ou `unavailable` cujas poses pararam há 150 ms deixa de ser desenhado
+na hora, em vez de ficar congelado até a expiração de 1 s; enquanto as poses
+chegam, ele continua visível qualquer que seja o estado (o estado tem debounce).
+`presentation.state_hidden` conta essas consultas. Localmente, enquanto o gate
+de comandos adia ou executa uma troca de cena, o worker não lê nem envia
+coordenadas (`session_events.loading_skipped`). Contadores do relatório são
+saturados em 999.999.999.999 para caber nos 511 bytes.
 
 ### Diagnóstico de RTT e chegada de snapshots v2
 

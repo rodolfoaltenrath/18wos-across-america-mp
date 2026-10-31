@@ -1,5 +1,45 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Lote offline M1/M5: estado do jogador aplicado ao render e à amostragem — 31/10/2026
+
+Liga os eventos `state` ao comportamento. **Remoto:** `session_events::hide_remote`
+oculta um remoto anunciado como `loading` ou `unavailable` quando suas poses
+estão paradas há 150 ms; com poses chegando, nunca oculta (o estado tem debounce
+e pode atrasar). O render consulta o quadro de eventos só com `try_lock` e, se
+contido, mantém a regra antiga de expiração de 1 s. Contador
+`presentation.state_hidden`. **Local:** com o gate de comandos ocupado, o worker
+não chama a fonte de coordenadas (o mundo está sendo trocado) e conta
+`loading_skipped` no relatório de eventos.
+
+Conclusão da implementação pendente: o guard confere o gate antes e depois
+da leitura; se uma transição começar durante a captura, descarta o resultado.
+Diagnóstico passa a amostra indisponível durante essa suspensão, sem incrementar
+falhas de leitura. O estado publicado usa o mesmo resultado do guard. Isso não
+é exclusão mútua com a física nem cobertura dos teardowns não perfilados.
+Quadro de estados limitado a 128 origens (incluindo eco); redução dos contadores
+para caber no relatório sinaliza `truncated`, sem saturação silenciosa.
+
+Validação: regra pura testada; `remote_state_workflow` com DLL x86 real,
+fixture de draw/render e autoridade v2 própria: remoto desenhado, ao anunciar
+`loading` e parar some antes de 900 ms (a expiração levaria 1 s) com
+`state_hidden > 0`, volta ao retomar, e com poses frescas nunca é ocultado;
+O teste de valores extremos expôs um estouro
+aritmético real nos contadores do quadro (`+= 1`): agora saturam, e o relatório
+satura cada contador em 999.999.999.999 para nunca passar de 511 bytes.
+
+Limites: sem jogo/LAN; o tempo real depende do debounce do outro PC (300 ms)
+e da rede. Não oculta remotos sem estado (v1 ou par antigo) além da regra de
+1 s. Passos práticos em G12 (dois PCs).
+
+O teste do gate real na fixture também verifica crescimento de `loading_skipped`
+enquanto o visual está referenciado e a carga adiada. Guard puro cobre leitura
+proibida e transição durante a captura. Não marcar toda M1/M5 por essa bancada.
+
+Verify desta conclusão: **249 x86 Proton / 317 nativos**, releases atualizados,
+Clippy dos três escopos e fmt. Log privado
+`target/analysis/verify-fedora-20261031-claude-state-complete.log`. Sem jogo ou
+instalação; primeiro preservar esse bloco em commit antes dos próximos avanços.
+
 ## Preparo estático do G4b: quais ações emitem cada comando — 31/10/2026
 
 Investigação offline no `game.dll` do perfil e nos `.esc` locais (nada copiado
@@ -4780,6 +4820,9 @@ da execução no jogo; não considerar um build cruzado prova de integração fu
 - [x] Resolver a base do módulo no processo alvo e cada cadeia por sessão.
 - [ ] Identificar estados em que veículo/módulos ainda não existem. Suspender
   amostragem durante menus, carregamento e troca de veículo sem matar o jogo.
+  Progresso 31/10: o worker não amostra nem envia enquanto o gate de comandos
+  adia/executa uma troca de cena (`loading_skipped`); menus/troca de veículo
+  continuam dependendo da cadeia conferida e da matriz no jogo.
 - [ ] Ler posição/orientação como um estado consistente: agrupar leituras quando
   contíguas e investigar captura no tick do jogo ou verificação de consistência.
   Uma cópia contígua sozinha não garante atomicidade frente à física.
@@ -4966,6 +5009,9 @@ correto e ele aparece/desaparece com a sessão sem duplicatas ou referências in
 - [ ] Sincronizar modelo/cabine, reboque e sinais visuais conforme descoberta:
   direção, rodas, freio, faróis e setas, sem exigir todos para o primeiro teste.
 - [ ] Tratar visibilidade, LOD, nomes e estados de desconexão sem poluir a interface.
+  Progresso 31/10 (bancada): remoto anunciado `loading`/`unavailable` com
+  poses paradas há 150 ms some na hora em vez de congelar até 1 s; voltou ao
+  retomar (DLL x86 real com fixture de draw, 3/3 execuções). LOD/nomes pendentes.
 - [ ] Medir uso de CPU, memória, rede e efeito no FPS com dois e mais jogadores.
 
 **Concluído quando:** dirigir e observar curvas/frenagens na LAN é coerente e

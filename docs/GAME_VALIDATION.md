@@ -702,7 +702,9 @@ Sequência (anotar só o que for visto; marcadores registram o momento):
    `unavailable` se a amostra cair; anotar o que o eco fez.
 4. `session-marker --code 3`; menu → carregar `test_mp` (gate). Esperado:
    eco some e volta com textura, `load_gate.replays` +1, `local` passou por
-   `loading` (visível no `session-record`).
+   `loading` se durar pelo menos o debounce de 300 ms. `loading_skipped` deve
+   crescer e a amostra fica indisponível durante a suspensão; uma coleta a cada
+   5 s pode não capturar o estado breve. Ausência desse snapshot não prova falha.
 5. (2 PCs) Repetir 1 e 4 com o outro PC na mesma sala sem `--echo`: cada
    marcador aparece uma vez no outro (`session_events.markers`) e o estado do
    outro muda para `loading` durante a carga dele.
@@ -718,8 +720,8 @@ parar o servidor. Sem `session-stop` nesse caminho (o processo deixa de existir)
 Ver o mapeamento estático em G4b.
 
 Falha em qualquer passo: preservar a pasta `g12-NOVA` e o status; não repetir
-o mesmo passo só para zerar contadores. `exit`/`menu`/`quit` com o eco ativo
-continuam fora desta rodada (G4b).
+o mesmo passo só para zerar contadores. `exit`/`menu` com o eco ativo continuam
+fora desta rodada; `quit` só no encerramento alternativo explícito acima (G4b).
 
 ### G12 — Rodada agrupada dos incrementos offline de 31/10
 
@@ -805,8 +807,10 @@ mp_launcher --pid PID --dll DLL session-marker --code 2   # antes de carregar
   Um único PC com `--echo` mostra o próprio estado de volta como `1000000000+id`.
 - [ ] Com dois PCs: cada marcador aparece uma vez no outro (`markers`, origem =
   ID do remetente) e os estados do outro mudam ao carregar/perder amostra.
-  Registrar se o caminhão remoto some enquanto o outro está `loading`; o
-  visual ainda depende da expiração da pose (sem regra de render nova).
+  Esperado desde a regra nova: o caminhão do outro some logo que ele começa a
+  carregar (poses paradas há 150 ms e estado `loading`), sem ficar congelado
+  até 1 s, e volta quando ele dirige; `presentation.state_hidden` cresce. Ao
+  tirar o foco, o mesmo vale para `unavailable`.
 - [ ] Guardar `--report` do servidor: `events`, `event_duplicates`, `relays_*`
   e `pose_gaps`, mais `pings_lost` de cada cliente. São estimativas (ver
   NETWORK_PROTOCOL.md), não perda medida de cada pacote nem FPS.

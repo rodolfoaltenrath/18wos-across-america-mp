@@ -1,5 +1,15 @@
 # Orientações para continuar o projeto
 
+Retomada após Claude31/10: bloco pendente liga state ao render (quieto150ms,
+loading/unavailable, try_lock com fallback antigo1s) e suspende amostras no gate.
+Conclusão acrescenta guard antes/depois da leitura, descarta transição observada
+e sample_state2 sem contar read_failure; publisher usa mesmo resultado. Não é
+tick atômico nem cobertura de outros teardowns. Board limitado128 (eco incluído),
+contadores saturados reportam truncated. Fixtures próprias de remoto/guard/gate,
+sem jogo. G12 corrige estado loading breve não capturado em intervalo5s e quit
+apenas opcional explícito; não marcar a matriz inteira por testes de bancada.
+Verify249x86Proton/317nativos, releases/Clippy/fmt; log claude-state-complete.
+
 Artefato final31/10: kit novo de bc89aed, schema2/seis binários, em Downloads
 com sufixo roadmap. Builder/hashes e mp_lan --check-only x86 Proton passaram;
 sem instalação/atualização do kit anterior ou novo jogo. G12/LAN desse build

@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 static CONFIG: AtomicU32 = AtomicU32::new(100 | (200 << 16));
 static REVISION: AtomicU32 = AtomicU32::new(0);
-static COUNTS: [AtomicU64; 11] = [const { AtomicU64::new(0) }; 11];
+static COUNTS: [AtomicU64; 12] = [const { AtomicU64::new(0) }; 12];
 /// Bit 31 of CONFIG selects the server timebase; delay/extrapolation below it.
 const SERVER_TIMEBASE: u32 = 1 << 31;
 
@@ -31,6 +31,9 @@ pub struct Status {
     pub server_timed: u64,
     #[serde(default)]
     pub arrival_timed: u64,
+    /// Render queries that skipped a quiet remote announced as loading/unavailable.
+    #[serde(default)]
+    pub state_hidden: u64,
 }
 
 pub fn config() -> Config {
@@ -61,7 +64,7 @@ pub fn configure(value: Config) -> Result<(), String> {
     Ok(())
 }
 pub fn status() -> Status {
-    let counts: [u64; 11] = std::array::from_fn(|i| COUNTS[i].load(Ordering::Relaxed));
+    let counts: [u64; 12] = std::array::from_fn(|i| COUNTS[i].load(Ordering::Relaxed));
     Status {
         config: config(),
         revision: REVISION.load(Ordering::Relaxed),
@@ -76,6 +79,7 @@ pub fn status() -> Status {
         lock_misses: counts[8],
         server_timed: counts[9],
         arrival_timed: counts[10],
+        state_hidden: counts[11],
     }
 }
 #[cfg(all(windows, target_arch = "x86"))]
@@ -105,4 +109,8 @@ pub(crate) fn lock_miss() {
 /// Receive path: count which clock stamped a sample (worker thread).
 pub(crate) fn timed(server: bool) {
     COUNTS[if server { 9 } else { 10 }].fetch_add(1, Ordering::Relaxed);
+}
+#[cfg(all(windows, target_arch = "x86"))]
+pub(crate) fn state_hidden() {
+    COUNTS[11].fetch_add(1, Ordering::Relaxed);
 }

@@ -124,6 +124,7 @@ fn remote_poses(target: u32, out: &mut [([f32; 4], [f32; 3]); MAX_REMOTE_DRAWS])
         crate::presentation::lock_miss();
         return None;
     };
+    let states = crate::EVENTS.try_lock().ok();
     let now = crate::interpolation::now();
     let config = crate::presentation::config();
     let mut count = 0;
@@ -136,6 +137,18 @@ fn remote_poses(target: u32, out: &mut [([f32; 4], [f32; 3]); MAX_REMOTE_DRAWS])
         }
         if entry.seen.elapsed() >= REMOTE_FRESH {
             crate::presentation::stale();
+            continue;
+        }
+        // A remote announced as loading/unavailable whose poses went quiet is
+        // hidden now instead of freezing until REMOTE_FRESH. Never blocks:
+        // a contended board keeps the normal expiry rule for this frame.
+        let announced = states.as_ref().and_then(|b| {
+            u32::try_from(*id)
+                .ok()
+                .and_then(|player| b.state_of(player))
+        });
+        if crate::session_events::hide_remote(announced, entry.seen.elapsed()) {
+            crate::presentation::state_hidden();
             continue;
         }
         if let Some(pose) = entry.history.evaluate(now, config) {

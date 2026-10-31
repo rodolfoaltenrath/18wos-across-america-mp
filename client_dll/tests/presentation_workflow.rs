@@ -176,6 +176,7 @@ fn maximum_diagnostic_values_fit_the_existing_control_message() {
         lock_misses: u64::MAX,
         server_timed: u64::MAX,
         arrival_timed: u64::MAX,
+        state_hidden: u64::MAX,
     };
     let mut b = Control::new(api::PRESENTATION_STATUS);
     let json = serde_json::to_string(&status).unwrap();

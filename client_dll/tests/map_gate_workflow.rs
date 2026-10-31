@@ -256,6 +256,9 @@ fn deferred_map_releases_before_load_replays_once_and_recreates() {
     assert_eq!(b.stats()["loads"], loads);
 
     // 8. Draws never flushed: deadline expires BEFORE any load or free.
+    let skipped_before = b.status()["session_events"]["loading_skipped"]
+        .as_u64()
+        .unwrap();
     show(&b);
     assert_eq!(b.send("visual-retain"), "armed");
     std::thread::sleep(Duration::from_millis(60));
@@ -263,6 +266,7 @@ fn deferred_map_releases_before_load_replays_once_and_recreates() {
     let s = b.until("deadline", |s| s["load_gate"]["phase"] == "recoverable");
     assert_eq!(s["load_gate"]["reason"], "deadline_expired");
     assert_eq!(s["load_gate"]["execute_started"], false);
+    assert!(s["session_events"]["loading_skipped"].as_u64().unwrap() > skipped_before);
     assert_eq!(
         (s["visual"]["state"].clone(), s["visual"]["shown"].clone()),
         (1.into(), 0.into())

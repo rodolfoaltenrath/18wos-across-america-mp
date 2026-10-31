@@ -17,6 +17,35 @@ pub const MARKER_QUEUE: usize = 16;
 const RECENT_MARKERS: usize = 8;
 /// Control v1 message buffer minus the terminator.
 pub const REPORT_BYTES: usize = 511;
+/// Counters are saturated here in the report so the JSON always fits.
+pub const REPORT_MAX: u64 = 999_999_999_999;
+fn saturated(r: Reliability) -> Reliability {
+    let c = |v: u64| v.min(REPORT_MAX);
+    Reliability {
+        queued: c(r.queued),
+        sent: c(r.sent),
+        retransmitted: c(r.retransmitted),
+        acked: c(r.acked),
+        expired: c(r.expired),
+        refused: c(r.refused),
+        pending: c(r.pending),
+        relays: c(r.relays),
+        relay_duplicates: c(r.relay_duplicates),
+        pings_sent: c(r.pings_sent),
+        pongs: c(r.pongs),
+        pings_lost: c(r.pings_lost),
+    }
+}
+/// A remote that announced `loading`/`unavailable` is hidden once its poses
+/// have been quiet this long, instead of freezing until the 1 s expiry.
+pub const QUIET_MS: u64 = 150;
+
+/// Render rule. Poses still arriving keep the truck visible whatever the state
+/// (the state is debounced and may lag the stream by a few hundred ms).
+pub fn hide_remote(state: Option<PlayerState>, since_pose: std::time::Duration) -> bool {
+    matches!(state, Some(PlayerState::Loading | PlayerState::Unavailable))
+        && since_pose >= std::time::Duration::from_millis(QUIET_MS)
+}
 
 /// Local state as far as the client can actually tell. Loading wins over the
 /// sample: the gate hides the visual before the scene is replaced.
@@ -76,6 +105,10 @@ pub struct EventsReport {
     /// [origin, code, age_ms], newest last.
     pub markers: Vec<(u32, u32, u64)>,
     pub truncated: bool,
+    /// Worker passes without sampling while the command gate was busy (absent in
+    /// older reports).
+    #[serde(default)]
+    pub loading_skipped: u64,
 }
 impl EventsReport {
     pub fn validate(&self) -> Result<(), String> {
@@ -109,11 +142,17 @@ pub struct Board {
     markers: VecDeque<Marker>,
     pending: VecDeque<u32>,
     pub markers_refused: u64,
+    pub loading_skipped: u64,
 }
 impl Board {
     pub fn relay(&mut self, origin: u32, event: u64, body: EventBody, now: u64) {
         match body {
             EventBody::State { state } => {
+                if !self.states.contains_key(&origin)
+                    && self.states.len() >= multiplayer_server::session_protocol::MAX_PLAYERS * 2
+                {
+                    return;
+                }
                 if self
                     .states
                     .get(&origin)
@@ -148,7 +187,7 @@ impl Board {
     }
     pub fn queue_marker(&mut self, code: u32) -> Result<(), String> {
         if self.pending.len() == MARKER_QUEUE {
-            self.markers_refused += 1;
+            self.markers_refused = self.markers_refused.saturating_add(1);
             return Err("marker queue full".into());
         }
         self.pending.push_back(code);
@@ -161,16 +200,19 @@ impl Board {
     pub fn report(&self, now: u64) -> String {
         let mut report = EventsReport {
             local: self.local,
-            reliability: self.reliability,
+            reliability: saturated(self.reliability),
             pending_markers: self.pending.len(),
-            markers_refused: self.markers_refused,
+            markers_refused: self.markers_refused.min(REPORT_MAX),
             states: self.states.iter().map(|(id, (_, s))| (*id, *s)).collect(),
             markers: self
                 .markers
                 .iter()
                 .map(|m| (m.origin, m.code, now.saturating_sub(m.received_ms)))
                 .collect(),
-            truncated: false,
+            truncated: saturated(self.reliability) != self.reliability
+                || self.markers_refused > REPORT_MAX
+                || self.loading_skipped > REPORT_MAX,
+            loading_skipped: self.loading_skipped.min(REPORT_MAX),
         };
         loop {
             let json = serde_json::to_string(&report).unwrap_or_default();
@@ -287,11 +329,13 @@ mod tests {
             pings_lost: u64::MAX,
         };
         b.local = Some(PlayerState::Unavailable);
+        b.loading_skipped = u64::MAX;
+        b.markers_refused = u64::MAX;
         let report = b.report(u64::MAX);
         assert!(report.len() <= REPORT_BYTES, "{}", report.len());
         let value: serde_json::Value = serde_json::from_str(&report).unwrap();
         assert_eq!(value["truncated"], true);
-        assert_eq!(value["reliability"]["pings_lost"], u64::MAX);
+        assert_eq!(value["reliability"]["pings_lost"], REPORT_MAX);
         let small = Board::default().report(0);
         assert!(small.contains("\"truncated\":false"));
         for code in 0..MARKER_QUEUE as u32 {
@@ -302,5 +346,31 @@ mod tests {
         assert!(b.take_markers().is_empty());
         b.reset();
         assert!(b.report(0).contains("\"states\":[]"));
+    }
+}
+#[cfg(test)]
+mod render_rule_tests {
+    use super::*;
+    use std::time::Duration;
+    #[test]
+    fn only_quiet_loading_or_unavailable_remotes_are_hidden() {
+        let quiet = Duration::from_millis(QUIET_MS);
+        let fresh = Duration::from_millis(QUIET_MS - 1);
+        assert!(hide_remote(Some(PlayerState::Loading), quiet));
+        assert!(hide_remote(Some(PlayerState::Unavailable), quiet * 3));
+        assert!(
+            !hide_remote(Some(PlayerState::Loading), fresh),
+            "poses still flowing"
+        );
+        assert!(!hide_remote(Some(PlayerState::Driving), quiet * 10));
+        assert!(
+            !hide_remote(None, quiet * 10),
+            "no state: keep the normal expiry"
+        );
+        let old: EventsReport = serde_json::from_str(
+            r#"{"local":null,"reliability":{"queued":0,"sent":0,"retransmitted":0,"acked":0,"expired":0,"refused":0,"pending":0,"relays":0,"relay_duplicates":0,"pings_sent":0,"pongs":0,"pings_lost":0},"pending_markers":0,"markers_refused":0,"states":[],"markers":[],"truncated":false}"#,
+        )
+        .unwrap();
+        assert_eq!(old.loading_skipped, 0);
     }
 }

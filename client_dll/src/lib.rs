@@ -75,6 +75,7 @@ pub mod release_policy;
 pub mod render_observation;
 pub mod resource_bindings;
 pub mod runtime_info;
+pub mod sampling;
 pub mod session_events;
 pub mod session_evidence;
 pub mod transition_analysis;
@@ -97,7 +98,7 @@ static MESSAGE: Mutex<String> = Mutex::new(String::new());
 static SESSION: Mutex<Option<multiplayer_server::session_client::Status>> = Mutex::new(None);
 static NETWORK_TIMING: Mutex<Option<multiplayer_server::session_timing::Timing>> = Mutex::new(None);
 /// Reliable events of the current/last v2 session; kept after stop for diagnostics.
-static EVENTS: std::sync::LazyLock<Mutex<session_events::Board>> =
+pub(crate) static EVENTS: std::sync::LazyLock<Mutex<session_events::Board>> =
     std::sync::LazyLock::new(|| Mutex::new(session_events::Board::default()));
 /// Latest relayed state per player. The render thread only uses try_lock.
 pub(crate) static REMOTES: Mutex<BTreeMap<u64, RemoteEntry>> = Mutex::new(BTreeMap::new());
@@ -388,13 +389,10 @@ fn session_reliable(
     client: &mut multiplayer_server::session_client::Client,
     publisher: &mut session_events::Publisher,
     sample_available: bool,
+    loading: bool,
     now: u64,
 ) -> Result<(), String> {
     use multiplayer_server::session_protocol::EventBody;
-    #[cfg(all(windows, target_arch = "x86"))]
-    let loading = engine_load_gate::busy();
-    #[cfg(not(all(windows, target_arch = "x86")))]
-    let loading = false;
     let mut board = EVENTS.lock().map_err(|_| "event board poisoned")?;
     for code in board.take_markers() {
         if client
@@ -405,7 +403,7 @@ fn session_reliable(
             )
             .is_err()
         {
-            board.markers_refused += 1;
+            board.markers_refused = board.markers_refused.saturating_add(1);
         }
     }
     let session = if client.connected() {
@@ -428,6 +426,16 @@ fn session_reliable(
     board.local = publisher.published();
     Ok(())
 }
+fn scene_loading() -> bool {
+    #[cfg(all(windows, target_arch = "x86"))]
+    {
+        engine_load_gate::busy()
+    }
+    #[cfg(not(all(windows, target_arch = "x86")))]
+    {
+        false
+    }
+}
 fn run(
     socket: UdpSocket,
     mut source: Source,
@@ -446,11 +454,9 @@ fn run(
     let mut sequence = 0u64;
     let mut buffer = [0; MAX_PACKET + 1];
     let mut publisher = session_events::Publisher::default();
-    let mut sample_available = false;
     while !STOP.load(Ordering::Acquire) {
         if let Some(client) = &mut session {
             let now = start.elapsed().as_millis() as u64;
-            session_reliable(client, &mut publisher, sample_available, now)?;
             let (frames, events) = client.poll(now);
             session_events(events, client.status().clock_offset_ms.map(|o| (now, o)))?;
             for frame in frames {
@@ -461,25 +467,48 @@ fn run(
                 return Err(format!("session rejected: {:?}", client.status().refusal));
             }
         }
-        let sample = match source.sample(start.elapsed().as_secs_f32()) {
-            Ok(value) => {
-                if SAMPLE_STATE.swap(1, Ordering::AcqRel) != 1 {
-                    diagnostic("coordinate capture available");
+        // While the command gate defers/replays a scene change the world is being
+        // replaced: do not read or send coordinates (counted, not an error).
+        let captured = sampling::guarded(scene_loading, || {
+            source.sample(start.elapsed().as_secs_f32())
+        });
+        let loading = captured.is_none();
+        if loading {
+            let mut board = EVENTS.lock().map_err(|_| "event board poisoned")?;
+            board.loading_skipped = board.loading_skipped.saturating_add(1);
+            SAMPLE_STATE.store(2, Ordering::Release);
+            diagnostic("waiting for the scene command gate; sampling suspended");
+        }
+        let sample = match captured {
+            None => None,
+            Some(sample) => match sample {
+                Ok(value) => {
+                    if SAMPLE_STATE.swap(1, Ordering::AcqRel) != 1 {
+                        diagnostic("coordinate capture available");
+                    }
+                    Some(value)
                 }
-                Some(value)
-            }
-            Err(SampleError::Unavailable(message)) => {
-                READ_FAILURES.fetch_add(1, Ordering::Relaxed);
-                SAMPLE_STATE.store(2, Ordering::Release);
-                diagnostic(&message);
-                None
-            }
-            Err(SampleError::Fatal(message)) => {
-                SAMPLE_STATE.store(3, Ordering::Release);
-                return Err(message);
-            }
+                Err(SampleError::Unavailable(message)) => {
+                    READ_FAILURES.fetch_add(1, Ordering::Relaxed);
+                    SAMPLE_STATE.store(2, Ordering::Release);
+                    diagnostic(&message);
+                    None
+                }
+                Err(SampleError::Fatal(message)) => {
+                    SAMPLE_STATE.store(3, Ordering::Release);
+                    return Err(message);
+                }
+            },
         };
-        sample_available = sample.is_some();
+        if let Some(client) = &mut session {
+            session_reliable(
+                client,
+                &mut publisher,
+                sample.is_some(),
+                loading,
+                start.elapsed().as_millis() as u64,
+            )?;
+        }
         if let Some((position, rotation)) = sample {
             if !position.is_valid() || !rotation.is_none_or(Rotation::is_valid) {
                 return Err("coordinate sample contains NaN/infinity".into());
