@@ -639,6 +639,58 @@ montagem/abertura feita. Dublagem é etapa própria (T3), fora desta rodada.
   overlay ausente. Com menu experimental também montado, restaurar na ordem
   inversa da instalação.
 
+### G12 — Roteiro único da rodada agrupada (revisão `ff8622e`, 31/10)
+
+Uma abertura do jogo no Fedora cobre os incrementos offline de 31/10. O
+segundo PC é opcional: só os passos marcados "(2 PCs)" precisam dele. Usar
+SEMPRE binários desta revisão nos dois lados; o kit novo está em
+`~/Downloads/18WOS-Multiplayer-LAN-Windows-2026-10-31-eventos` (pasta nova;
+kits anteriores intactos). Copiar todo o conteúdo para a raiz da instalação
+Windows antes de abrir o jogo lá.
+
+Preparo (jogo fechado), no repositório do Fedora:
+
+```sh
+target/release/multiplayer_server --bind 0.0.0.0:39000 --room lan --echo \
+  --report target/analysis/g12-NOVA/server.json   # sem --echo se houver 2 PCs
+```
+
+Abrir o jogo pela Steam, carregar `test_mp`, janela em primeiro plano. Com o
+PID Windows atual (`memory_tool processes` via `proton_host`), executar pelo
+mesmo wrapper:
+
+```text
+mp_launcher --pid PID --dll DLL session-start --server 127.0.0.1:39000 \
+  --room lan --identity-file target/analysis/g12-NOVA/fedora.id \
+  --capture game-pose --offset 400 0 0 --backup target/analysis/g12-NOVA/backup
+mp_launcher --pid PID --dll DLL session-record --output target/analysis/g12-NOVA/rec \
+  --seconds 900 --interval-ms 5000          # em outro terminal
+```
+
+Sequência (anotar só o que for visto; marcadores registram o momento):
+
+1. `session-marker --code 1`; dirigir reto, curvas e parar ~2 min. Esperado:
+   eco com textura acompanhando (captura `game-pose`), `session_events.local`
+   = `driving`.
+2. `presentation --timebase server`; repetir o mesmo trecho; anotar se o
+   tremor nas retas mudou. `presentation.server_timed` deve crescer. Voltar
+   com `presentation --timebase arrival`. `session-marker --code 2`.
+3. Alternar câmeras e tirar o foco ~20 s; voltar. `local` deve passar por
+   `unavailable` se a amostra cair; anotar o que o eco fez.
+4. `session-marker --code 3`; menu → carregar `test_mp` (gate). Esperado:
+   eco some e volta com textura, `load_gate.replays` +1, `local` passou por
+   `loading` (visível no `session-record`).
+5. (2 PCs) Repetir 1 e 4 com o outro PC na mesma sala sem `--echo`: cada
+   marcador aparece uma vez no outro (`session_events.markers`) e o estado do
+   outro muda para `loading` durante a carga dele.
+6. Encerrar a coleta, `session-stop --verify target/analysis/g12-NOVA/backup`,
+   fechar o jogo pelo menu, `session-verify` e parar o servidor (Ctrl+C) para
+   gravar `server.json` (`events`, `relays_*`, `pose_gaps`).
+
+Falha em qualquer passo: preservar a pasta `g12-NOVA` e o status; não repetir
+o mesmo passo só para zerar contadores. `exit`/`menu`/`quit` com o eco ativo
+continuam fora desta rodada (G4b).
+
 ### G12 — Rodada agrupada dos incrementos offline de 31/10
 
 Filtros finais de relatórios/versão foram reforçados e testados com fixtures;

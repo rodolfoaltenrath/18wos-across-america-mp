@@ -1168,3 +1168,7 @@ amostras por `received_ms` menos o offset do menor RTT; padrão segue `arrival`
 até a comparação G2 na partida. `network_lab` schema 3 mede tremor
 (`mean_error_step_milli_cm`): 3,86→0,11 cm com jitter 80 ms. Verify: 242 x86
 Proton/308 nativos. ABIs e wire inalterados.
+Kit novo da revisão ff8622e em ~/Downloads/18WOS-Multiplayer-LAN-Windows-2026-10-31-eventos
+(servidor 192.168.18.103:39000, sala lan); anteriores intactos. Roteiro único
+da próxima rodada no topo de G12 (docs/GAME_VALIDATION.md); nada foi testado
+no jogo nesta sequência.
