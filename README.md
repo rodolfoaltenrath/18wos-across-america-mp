@@ -91,6 +91,10 @@ ui_tools restore --game . --backup target/analysis/ui-backup
 ```
 
 `ui_tools` e `asset_tools` ficam em `target/x86_64-pc-windows-gnu/release/`.
+`ui_tools preflight --game RAIZ --package PACOTE [--kind ptbr-text]` executa
+as mesmas checagens de preparação sem criar backup, montar ou alterar arquivos.
+O relatório distingue checagens estáticas, jogo fechado e instalação efetuada.
+Instalar revalida tudo; um relatório anterior não autoriza ignorar conflitos.
 O instalador confere o perfil, salva o config original antes de montar o overlay
 próprio e recusa alterações desconhecidas. Não abre o jogo. Aparência, prioridade
 de montagem e ações antigas ainda exigem a rodada local G10; restaure com o

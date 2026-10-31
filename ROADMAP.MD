@@ -1,5 +1,30 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Preflight de overlays sem instalação — 31/10/2026
+
+Após `e89b27a`, extraída a preparação compartilhada de `ui_tools install` e
+adicionado `ui_tools preflight --game RAIZ --package PACOTE [--kind ptbr-text]`.
+Confere perfil, integridade/tipo/origem do pacote, configuração e colisões,
+incluindo os spans das definições T2 contra os SCS locais. Nenhuma criação de
+backup, overlay ou temporário. Relatório separa checks estáticos/jogo fechado/
+instalação/render; uma consulta anterior não substitui a revalidação do install.
+Jogo aberto ou enumeração indisponível não vira autorização de instalação.
+
+A checagem real revelou que a raiz `..` das instruções locais antigas era
+recusada pelo verificador de paths antes de consultar o pacote. Corrigido só
+o resolvedor da raiz: verifica cada componente antes de subir, rejeita diretório
+ausente/arquivo e mantém recusa de symlink/junction inclusive em `link/..`.
+Pacote e backup continuam com seus guards anteriores. Não suavizar esses guards
+por canonicalização cega. Instalar/restaurar continuam exigindo jogo fechado.
+
+CLI real aprovou `ptbr-text` 0.3.0, 263 entradas, SHA-256 inalterado, sem backup
+ou instalação. Config original inalterado e overlay ausente. Sete fixtures
+nativas do módulo de montagem passaram (duas novas: preflight sem escrita e
+link Unix), incluindo regras T2 adulteradas e conflito após consulta; Clippy
+assets/fmt passaram. Logs `ui-preflight-{tests,real,clippy}-final-20261031.*`
+privados. Sem nova prova Windows/junction, render, jogo ou LAN por esse commit.
+G11 atualizado para aproveitar essa checagem antes da rodada visual agrupada.
+
 ## Auditoria PML e cobertura de referências — 31/10/2026
 
 Continuado de `28b8fda`, árvore limpa, sem jogo. `localization::pml` e

@@ -1,5 +1,13 @@
 # Orientações para continuar o projeto
 
+Preflight em 31/10 após `e89b27a`: `ui_tools preflight` compartilha preparação
+com install, sem backup/montagem/escrita; checks estáticos não são prova do
+motor nem garantem instalação futura. Pacote real 0.3.0/263 entradas passou,
+config/hash intactos e overlay ausente. Raiz `..` corrigida verificando cada
+componente antes de subir; `link/..` não burla recusa de symlink/junction.
+Sete fixtures nativas de montagem/Clippy assets/fmt passaram. Sem jogo/LAN
+ou prova nova de junction Windows. Preservar restauração/backup antes do install.
+
 PML em 31/10 após `28b8fda`: `l10n_tools pml-audit` exporta só metadados,
 sem reescrita. 498 campos no escopo final, 166 chaves já traduzidas, três
 seletores/quatro variantes cada, seis campos literais para revisão. Cor é

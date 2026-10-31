@@ -513,6 +513,9 @@ montagem/abertura feita. Dublagem é etapa própria (T3), fora desta rodada.
   backup novo. Não substituir o SCS por cima nem desmontar o menu p4 sem motivo.
   Abrir pela Steam: confirmar que a montagem p5 é aceita e que menu, opções e
   carregamento aparecem em PT-BR.
+  Opcionalmente, usar `ui_tools preflight --kind ptbr-text` antes da instalação:
+  o pacote real 0.3.0 passou nessa checagem em 31/10, sem montagem/escrita. Esse
+  resultado não fecha o item de aceitação/render da montagem no jogo.
 - [ ] Acentos: conferir à, â, ã, ç, ê, õ, maiúsculas acentuadas e ú nas fontes
   pequena (dicas/HUD), média (menus) e grande (títulos/placas). Registrar se
   algum glifo some, sai deslocado ou aparece como outro caractere: isso

@@ -111,6 +111,57 @@ pub struct Status {
     pub overlay_present: bool,
     pub preview_only: bool,
 }
+#[derive(Serialize)]
+pub struct Preflight {
+    pub schema: u32,
+    pub kind: &'static str,
+    pub package_id: String,
+    pub version: String,
+    pub files: usize,
+    pub payload_sha256: String,
+    pub static_checks_passed: bool,
+    pub game_closed: bool,
+    pub process_check_error: Option<String>,
+    pub backup_created: bool,
+    pub installation_performed: bool,
+    pub engine_validated: bool,
+}
+struct Prepared {
+    root: PathBuf,
+    original: Vec<u8>,
+    after: Vec<u8>,
+    payload: Vec<u8>,
+    manifest: crate::mod_package::Manifest,
+}
+/// Runs the same preparation as install, without creating backup/overlay/temp.
+/// A live game is reported; readiness is only a snapshot and install rechecks.
+pub fn preflight(root: &Path, package: &Path, overlay: Overlay) -> Result<Preflight> {
+    preflight_guarded(root, package, GAME_SHA, overlay, ensure_game_closed)
+}
+fn preflight_guarded(
+    root: &Path,
+    package: &Path,
+    expected_game: &str,
+    overlay: Overlay,
+    guard: impl Fn() -> Result<()>,
+) -> Result<Preflight> {
+    let p = prepare(root, package, expected_game, overlay)?;
+    let process_check_error = guard().err().map(|e| format!("{e:#}"));
+    Ok(Preflight {
+        schema: 1,
+        kind: overlay.kind(),
+        package_id: p.manifest.id,
+        version: p.manifest.version,
+        files: p.manifest.files.len(),
+        payload_sha256: p.manifest.payload_sha256,
+        static_checks_passed: true,
+        game_closed: process_check_error.is_none(),
+        process_check_error,
+        backup_created: false,
+        installation_performed: false,
+        engine_validated: false,
+    })
+}
 pub fn ensure_game_closed() -> Result<()> {
     #[cfg(windows)]
     {
@@ -190,9 +241,28 @@ pub fn ensure_game_closed() -> Result<()> {
     Ok(())
 }
 fn checked_root(root: &Path) -> Result<PathBuf> {
-    crate::mod_package::checked(root)?
-        .canonicalize()
-        .map_err(Into::into)
+    use std::path::Component;
+    let absolute = if root.is_absolute() {
+        root.to_owned()
+    } else {
+        std::env::current_dir()?.join(root)
+    };
+    let mut current = PathBuf::new();
+    for part in absolute.components() {
+        if part == Component::ParentDir {
+            // Check before popping: link/.. must not hide a traversed link.
+            crate::mod_package::checked(&current)?;
+            ensure!(current.is_dir(), "parent requires an existing directory");
+            ensure!(current.pop(), "game root escapes filesystem root");
+        } else {
+            current.push(part);
+            if !matches!(part, Component::Prefix(_)) {
+                crate::mod_package::checked(&current)?;
+            }
+        }
+    }
+    ensure!(current.is_dir(), "game root must be a directory");
+    current.canonicalize().map_err(Into::into)
 }
 /// The backup's plan names which overlay it belongs to.
 fn load(root: &Path, backup: &Path) -> Result<(PathBuf, Plan, Vec<u8>, Overlay)> {
@@ -296,9 +366,38 @@ fn install_guarded(
     overlay: Overlay,
 ) -> Result<Status> {
     guard()?;
+    let backup = crate::mod_package::checked(backup)?;
+    let Prepared {
+        root,
+        original,
+        after,
+        payload,
+        manifest: m,
+    } = prepare(root, package, expected_game, overlay)?;
+    let p = Plan {
+        schema: 1,
+        kind: overlay.kind().into(),
+        root: root.clone(),
+        before: hash(&original),
+        after: hash(&after),
+        payload: m.payload_sha256,
+    };
+    fs::create_dir(&backup).context("backup must be a NEW directory")?;
+    write_new(&backup.join("init.cfg.original"), &original)?;
+    write_new(&backup.join("plan.json"), &serde_json::to_vec_pretty(&p)?)?;
+    // Backup is durable before any installation write. No originals/assets replaced.
+    guard()?;
+    ensure!(
+        matches_file(&root.join(CFG), &p.before, 1024 * 1024)?,
+        "configuration changed before install"
+    );
+    write_new(&root.join(overlay.file()), &payload)?;
+    replace_cfg(&root, &after, &p.before, overlay)?;
+    status(&root, &backup)
+}
+fn prepare(root: &Path, package: &Path, expected_game: &str, overlay: Overlay) -> Result<Prepared> {
     let root = checked_root(root)?;
     let package = crate::mod_package::checked(package)?;
-    let backup = crate::mod_package::checked(backup)?;
     ensure!(
         hash(&read(&root.join("aa/lib/game.dll"), 16 * 1024 * 1024)?) == expected_game,
         "unsupported game profile"
@@ -330,26 +429,13 @@ fn install_guarded(
     }
     let mut after = original.clone();
     after.extend_from_slice(overlay.line().as_bytes());
-    let p = Plan {
-        schema: 1,
-        kind: overlay.kind().into(),
-        root: root.clone(),
-        before: hash(&original),
-        after: hash(&after),
-        payload: m.payload_sha256,
-    };
-    fs::create_dir(&backup).context("backup must be a NEW directory")?;
-    write_new(&backup.join("init.cfg.original"), &original)?;
-    write_new(&backup.join("plan.json"), &serde_json::to_vec_pretty(&p)?)?;
-    // Backup is durable before any installation write. No originals/assets replaced.
-    guard()?;
-    ensure!(
-        matches_file(&root.join(CFG), &p.before, 1024 * 1024)?,
-        "configuration changed before install"
-    );
-    write_new(&root.join(overlay.file()), &payload)?;
-    replace_cfg(&root, &after, &p.before, overlay)?;
-    status(&root, &backup)
+    Ok(Prepared {
+        root,
+        original,
+        after,
+        payload,
+        manifest: m,
+    })
 }
 /// T2 files must only change the allowed display spans in this installation.
 /// Validate before creating a backup or changing any installation file.
@@ -606,6 +692,56 @@ mod tests {
         crate::mod_package::build(&project.join("project.json"), &pkg, true).unwrap();
         (root, pkg)
     }
+    #[test]
+    fn preflight_reports_live_game_and_refusals_without_installation_writes() {
+        let t = tempfile::tempdir().unwrap();
+        let (root, pkg) = fixture(t.path());
+        let original = fs::read(root.join(CFG)).unwrap();
+        let game = hash(b"own module fixture");
+        assert_eq!(
+            checked_root(&root.join("aa").join("..")).unwrap(),
+            root.canonicalize().unwrap()
+        );
+        assert!(checked_root(&root.join("missing").join("..")).is_err());
+        let checked = preflight_guarded(&root, &pkg, &game, Overlay::UiPreview, || Ok(())).unwrap();
+        assert!(checked.static_checks_passed && checked.game_closed);
+        assert_eq!(checked.files, 10);
+        assert!(
+            !checked.backup_created && !checked.installation_performed && !checked.engine_validated
+        );
+        let busy = preflight_guarded(&root, &pkg, &game, Overlay::UiPreview, || {
+            anyhow::bail!("own fixture game running")
+        })
+        .unwrap();
+        assert!(busy.static_checks_passed && !busy.game_closed);
+        assert!(busy.process_check_error.unwrap().contains("running"));
+        assert!(
+            preflight_guarded(
+                &root,
+                &pkg,
+                &hash(b"other module"),
+                Overlay::UiPreview,
+                || Ok(())
+            )
+            .is_err()
+        );
+        assert_eq!(fs::read(root.join(CFG)).unwrap(), original);
+        assert!(!root.join(UI).exists() && !root.join(Overlay::UiPreview.temp()).exists());
+        fs::write(root.join(UI), b"own foreign overlay").unwrap();
+        assert!(preflight_guarded(&root, &pkg, &game, Overlay::UiPreview, || Ok(())).is_err());
+        assert_eq!(fs::read(root.join(UI)).unwrap(), b"own foreign overlay");
+        assert_eq!(fs::read(root.join(CFG)).unwrap(), original);
+        assert!(!root.join(Overlay::UiPreview.temp()).exists());
+    }
+    #[cfg(unix)]
+    #[test]
+    fn game_root_parent_cannot_hide_a_traversed_symlink() {
+        let t = tempfile::tempdir().unwrap();
+        let (root, _) = fixture(t.path());
+        std::os::unix::fs::symlink(root.join("aa"), root.join("alias")).unwrap();
+        assert!(checked_root(&root.join("alias").join("..")).is_err());
+        assert!(checked_root(&root.join("alias")).is_err());
+    }
     fn literal_package(t: &Path, path: &str, translated: &[u8]) -> PathBuf {
         fs::create_dir_all(t).unwrap();
         ptbr_package(t, "ptbr-text");
@@ -661,6 +797,12 @@ mod tests {
         let good = literal_package(&t.path().join("good"), path, translated);
         let backup = t.path().join("backup");
         let game = hash(b"own module fixture");
+        assert!(preflight_guarded(&root, &bad, &game, Overlay::PtBrText, || Ok(())).is_err());
+        assert!(
+            preflight_guarded(&root, &good, &game, Overlay::PtBrText, || Ok(()))
+                .unwrap()
+                .static_checks_passed
+        );
         assert!(
             install_guarded(&root, &bad, &backup, &game, || Ok(()), Overlay::PtBrText).is_err()
         );

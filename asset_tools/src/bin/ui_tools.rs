@@ -21,6 +21,15 @@ struct Args {
 }
 #[derive(Subcommand)]
 enum Task {
+    /// Read-only package/profile/config/DEF checks; never creates a backup or installs.
+    Preflight {
+        #[arg(long)]
+        game: PathBuf,
+        #[arg(long)]
+        package: PathBuf,
+        #[arg(long, value_enum, default_value = "ui-preview")]
+        kind: Kind,
+    },
     Project {
         #[arg(long)]
         output: PathBuf,
@@ -66,6 +75,20 @@ enum Task {
 fn main() -> Result<()> {
     use asset_tools::ui_tools as ui;
     match Args::parse().command {
+        Task::Preflight {
+            game,
+            package,
+            kind,
+        } => {
+            let overlay = match kind {
+                Kind::UiPreview => ui::mount::Overlay::UiPreview,
+                Kind::PtbrText => ui::mount::Overlay::PtBrText,
+            };
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&ui::mount::preflight(&game, &package, overlay)?)?
+            );
+        }
         Task::Project {
             output,
             main_menu_preview,

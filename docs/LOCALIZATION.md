@@ -224,6 +224,22 @@ Restaurar a tradução anterior pelo backup antes de instalar 0.3.0 com backup
 novo. Manter o menu experimental p4. Agrupar a prova dos novos rótulos com
 tipografia/layout em G11; não precisa repetir LAN nem usar outro computador.
 
+Antes de instalar, a checagem somente de leitura está disponível:
+
+```text
+ui_tools preflight --kind ptbr-text --game RAIZ-DO-JOGO --package PACOTE
+```
+
+Usa a mesma preparação do instalador: pacote/perfil/configuração, colisões e
+comparação estrutural das definições. Não cria backup/temporário/overlay e
+reporta o jogo aberto sem injetar. `static_checks_passed` não comprova render,
+backup futuro ou ausência de mudanças posteriores; instalar sempre revalida.
+Raiz relativa `..` agora é aceita após conferir cada diretório percorrido,
+sem deixar `link/..` ocultar links/junctions. O preflight real em 31/10 aprovou
+o pacote 0.3.0/263 entradas desta instalação, sem escrita; seis fixtures de
+montagem e a proteção Unix de link também passaram. Ramo de junction Windows
+continua sujeito à execução/plivilégios desse ambiente.
+
 ### Restante de T2
 
 Auditoria PML entregue em 31/10, somente de leitura:
