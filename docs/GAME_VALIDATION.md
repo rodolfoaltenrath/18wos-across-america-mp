@@ -662,7 +662,11 @@ montagem/abertura feita. Dublagem é etapa própria (T3), fora desta rodada.
   overlay ausente. Com menu experimental também montado, restaurar na ordem
   inversa da instalação.
 
-### G12 — Roteiro único da rodada agrupada (revisão `18b3bb4`, 31/10)
+### G12 — Roteiro único da rodada agrupada (retomada de 31/10)
+
+Frames TCP, nomes de arquivo e hooks de diagnóstico receberam testes próprios;
+não exigem repetir percurso ou abrir uma segunda partida. Fonte game-pose,
+estados remotos, suavidade/timebase e matriz do motor continuam pendentes.
 
 Revisão posterior dos estados: em 2 PCs, após carga/retomada observar se o
 remoto volta e permanece coerente. `superseded`/`relays_superseded` contam
@@ -674,7 +678,7 @@ contadores como economia sincronizada. Não repetir LAN básica só para contá-
 Uma abertura do jogo no Fedora cobre os incrementos offline de 31/10. O
 segundo PC é opcional: só os passos marcados "(2 PCs)" precisam dele. Usar
 SEMPRE binários desta revisão nos dois lados; o kit novo está em
-`~/Downloads/18WOS-Multiplayer-LAN-Windows-2026-10-31-final` (pasta nova,
+`~/Downloads/18WOS-Multiplayer-LAN-Windows-2026-10-31-retomada` (pasta nova,
 com `THIRD_PARTY.txt`; kits anteriores intactos). Copiar todo o conteúdo para a raiz da instalação
 Windows antes de abrir o jogo lá.
 
@@ -697,6 +701,12 @@ mp_launcher --pid PID --dll DLL session-record --output target/analysis/g12-NOVA
   --seconds 900 --interval-ms 5000          # em outro terminal
 ```
 
+O offset400 é só para o eco num PC. Com dois PCs usar `--offset 0 0 0` nos
+dois e servidor sem eco; fonte/timebase devem ser registradas por cliente.
+Usar a revisão `source_revision` do manifesto do kit, não presumir compatibilidade
+somente porque a versão Cargo ainda é 0.1.0. Nenhum kit instalado foi substituído
+automaticamente nesta retomada.
+
 Sequência (anotar só o que for visto; marcadores registram o momento):
 
 1. `session-marker --code 1`; dirigir reto, curvas e parar ~2 min. Esperado:
@@ -714,7 +724,8 @@ Sequência (anotar só o que for visto; marcadores registram o momento):
    5 s pode não capturar o estado breve. Ausência desse snapshot não prova falha.
 5. (2 PCs) Repetir 1 e 4 com o outro PC na mesma sala sem `--echo`: cada
    marcador aparece uma vez no outro (`session_events.markers`) e o estado do
-   outro muda para `loading` durante a carga dele.
+   outro pode passar por `loading` durante a carga dele, respeitando o mesmo
+   debounce e os limites da coleta descritos no passo 4.
 6. Encerrar a coleta, `session-stop --verify target/analysis/g12-NOVA/backup`,
    fechar o jogo pelo menu, `session-verify` e parar o servidor (Ctrl+C) para
    gravar `server.json` (`events`, `relays_*`, `pose_gaps`).

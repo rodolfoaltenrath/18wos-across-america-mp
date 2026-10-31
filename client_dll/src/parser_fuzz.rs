@@ -448,8 +448,6 @@ pub fn targets() -> Vec<Target> {
 
 /// Runs every target `iterations` times (seeds included, then mutations).
 pub fn run(seed: u64, iterations: u64) -> Report {
-    let previous = panic::take_hook();
-    panic::set_hook(Box::new(|_| {}));
     let mut rng = Rng::new(seed);
     let mut reports = Vec::new();
     for target in targets() {
@@ -503,7 +501,6 @@ pub fn run(seed: u64, iterations: u64) -> Report {
         }
         reports.push(r);
     }
-    panic::set_hook(previous);
     let passed = reports
         .iter()
         .all(|r| r.panics == 0 && r.property_failures == 0 && r.accepted > 0);

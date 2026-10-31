@@ -1,5 +1,19 @@
 # Orientações para continuar o projeto
 
+ContinuaçãoM8 31/10: career_net receive/send usa AsyncRead/Write para testar
+decoder real; wire256KiB/u32BE/deadline30s preservados. Três requests/quatro
+respostas próprias, 12k mutações, fragmentação/EOF/duplicatas/limites/cancelamento.
+Guard nomesCOM/LPT¹²³ agora recusa ZIP antes de saída; fonte oficial no roadmap.
+Fuzz não troca mais panic hook global (ocultava falhas paralelas). test_host
+--filter/--skip só suplementar; verify padrão continua integral. Assets x86:
+85passaram/6filtrados por GitWindows ausente; tentativa inicial/diagnóstico
+preservados em device-path-*. Os6Git ficam no nativo, não chamar todos assets
+Windows validados. G12 segue único roteiro, eco offset400/2PCs offset0. Sem jogo.
+Verify final258x86Proton/327nativos, releases/Clippy/fmt, sem exclusões no verify;
+log verify-fedora-20261031-claude-resume-final.log. Cinco capturas históricas
+aceitas: só defaults timebase/3contadores adicionados; projeção dos campos antigos
+idêntica, não byte a byte do formato novo nem medição retroativa dos contadores.
+
 ContinuaçãoM3/M5 31/10: event_window fixa horizonte128/256; antigos abaixo dele
 recebem ACK sem readmissão, inclusive após resume; cache4streams continua limite.
 Hub ordena state por id do remetente no stream, não chegada; stale_states conta

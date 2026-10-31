@@ -1,5 +1,48 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Continuação M8: frames TCP, paths e diagnósticos de falha — 31/10
+
+Decoder real do controle de carreira agora aceita `AsyncRead`/`AsyncWrite`
+genéricos para a bancada, mantendo TcpStream em produção, envelope u32 big-endian,
+teto256KiB, deadline30s e uma solicitação por conexão. Sem mudança do contrato
+de save-base, sem transferência/carregamento automático de saves no motor.
+Testes usam os três requests (bootstrap/status/admit) e quatro respostas,
+dados/segredos inteiramente próprios, 12.000 entradas mutadas em três seeds
+alterando prefixo e JSON separadamente. Aceito deve reserializar e decodificar
+com o mesmo significado. Duplicatas, EOF/header truncado, comprimento0/acima
+do limite, fragmentação byte a byte e cancelamento com liberação do stream
+foram exercitados. Autorização/recibos e semântica de manifesto continuam nos
+testes próprios existentes; framing não comprova a integração econômica no jogo.
+
+Corrigida lacuna no guard de nomes: COM/LPT com ¹/²/³ também são reservados
+no Windows, inclusive com extensão e diretórios, conforme
+[Microsoft Learn](https://learn.microsoft.com/windows/win32/fileio/naming-a-file).
+Seis ZIPs próprios com esses nomes são recusados ANTES de criar saída, sem
+afrouxar guard de links ou canonicidade. COM10/texto¹ e nomes comuns seguem aceitos.
+
+Fuzz de assets/cliente deixou de trocar o panic hook global, que ocultava
+diagnósticos de falhas em outros testes paralelos. Continua capturando panics
+para o relatório, preservando o hook do processo. `test_host --filter/--skip`
+permite bancada suplementar explícita no mesmo runtime; padrão roda tudo.
+Suplemento assets x86: **85 passaram, seis filtrados** por falta de Git Windows.
+A primeira tentativa integral falhou nesses seis; diagnóstico isolado confirmou
+`starting Git ... program not found`. Os seis seguem rodando no verify nativo;
+não transformar exclusão em alegação de bancada completa Windows dos assets.
+Logs privados `device-path-*20261031*` e `career-framing-native-20261031.log`.
+
+Verificação integral final: **258 x86 sob Proton / 327 nativos**, releases,
+Clippy nos três escopos e fmt, sem exclusões no verify. Log privado
+`target/analysis/verify-fedora-20261031-claude-resume-final.log`. As cinco
+capturas reais anteriores continuam aceitas; a saída acrescenta somente
+defaults de timebase e três contadores de apresentação. Removidos esses novos
+campos, o JSON histórico é idêntico; não é igualdade byte a byte do formato novo
+nem evidência de que esses contadores foram medidos na captura antiga.
+Reanálise privada `retomada-historical-analysis-20261031.json`.
+
+Sem novo jogo, instalação ou teste LAN. Aleatorização completa de archives e
+paths de extração, interpretação no motor e G12 continuam pendentes. Os casos
+de framing/guard não acrescentam manobras à rodada humana agrupada.
+
 ## Continuação M3/M5: ordenação, deduplicação e recuperação de estado — 31/10
 
 Revisão dos incrementos recentes encontrou dois defeitos: a fila de ids recebidos
@@ -5177,7 +5220,10 @@ verificada e removida em outra instalação original sem distribuir o jogo.
   relatórios, transição, decodificadores da ABI, captura de argv) e teste com
   oito parsers de assets; 18 milhões de entradas sem panic/falha. Achou e
   corrigiu chave JSON duplicada aceita por `session_evidence::parse`. Caminhos
-  de arquivo/extração e parser TCP da carreira ainda sem fuzz dedicado.
+  de arquivo/extração aleatórios continuam sem fuzz dedicado. Decoder TCP da
+  carreira ganhou 12.000 mutações próprias e fragmentação/cancelamento em 31/10;
+  aliases Windows em ZIP recusados antes de escrita. Ver registro mais recente;
+  isso não encerra a auditoria de todos os parsers/caminhos.
 - [ ] Criar uma matriz de compatibilidade: Windows, toolchain, hash do jogo,
   renderizador, configurações e resultado do teste com duas máquinas.
 

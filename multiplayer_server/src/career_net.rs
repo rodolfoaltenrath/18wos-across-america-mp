@@ -113,20 +113,28 @@ enum Response {
     },
 }
 
-async fn send<T: Serialize>(stream: &mut TcpStream, value: &T) -> Result<()> {
+async fn send<T: Serialize>(
+    stream: &mut (impl tokio::io::AsyncWrite + Unpin),
+    value: &T,
+) -> Result<()> {
     let bytes = serde_json::to_vec(value)?;
     ensure!(bytes.len() <= MAX_FRAME, "control frame exceeds limit");
     stream.write_u32(bytes.len() as u32).await?;
     stream.write_all(&bytes).await?;
     Ok(())
 }
-async fn receive<T: DeserializeOwned>(stream: &mut TcpStream) -> Result<T> {
+async fn receive<T: DeserializeOwned>(
+    stream: &mut (impl tokio::io::AsyncRead + Unpin),
+) -> Result<T> {
     let len = stream.read_u32().await? as usize;
     ensure!(len > 0 && len <= MAX_FRAME, "invalid control frame size");
     let mut bytes = vec![0; len];
     stream.read_exact(&mut bytes).await?;
     serde_json::from_slice(&bytes).map_err(|_| anyhow::anyhow!("invalid control frame"))
 }
+
+#[cfg(test)]
+mod frame_tests;
 fn secret_matches(left: &str, right: &str) -> bool {
     // Fixed-size valid hex secrets. Avoid early byte mismatch returns.
     if left.len() != 32 || right.len() != 32 {

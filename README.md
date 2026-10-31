@@ -2807,6 +2807,14 @@ teste foram encerrados ao final; o processo do jogo permaneceu aberto.
 
 ## Verificação
 
+`test_host.exe MANIFESTO.json` mantém a bancada inteira no mesmo runtime.
+Para verificação suplementar, aceita `--filter MODULO_OU_TESTE` e `--skip MODULO`
+(repetível, exclusões explícitas). O `dev_env verify` padrão não exclui testes.
+Os testes extras de assets sob Proton podem usar `--skip source_audit::` quando
+o prefixo não tem Git para Windows; os seis testes de Git devem continuar no
+verify nativo, e o resultado suplementar deve declarar as exclusões.
+Fuzz preserva o panic hook do processo para não esconder falhas paralelas.
+
 O workflow [.github/workflows/ci.yml](.github/workflows/ci.yml) configura dois
 jobs sem jogo/assets: Linux (fmt, Clippy, testes próprios, release e auditoria
 do commit) e compilação GNU Windows x86 de cliente/servidor (Clippy, release,

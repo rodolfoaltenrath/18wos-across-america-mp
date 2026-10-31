@@ -92,8 +92,6 @@ fn targets() -> Vec<(&'static str, Vec<Vec<u8>>, Parser)> {
 }
 #[test]
 fn asset_parsers_never_panic_or_stall_on_mutated_inputs() {
-    let previous = panic::take_hook();
-    panic::set_hook(Box::new(|_| {}));
     let mut failures = Vec::new();
     let mut never_accepted = Vec::new();
     for (seed_value, iterations) in [(21u64, 3000), (22, 3000)] {
@@ -124,7 +122,6 @@ fn asset_parsers_never_panic_or_stall_on_mutated_inputs() {
             }
         }
     }
-    panic::set_hook(previous);
     assert!(failures.is_empty(), "panics: {failures:?}");
     assert!(
         never_accepted.is_empty(),

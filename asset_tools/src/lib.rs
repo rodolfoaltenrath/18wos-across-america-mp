@@ -153,9 +153,17 @@ fn safe_relative(name: &str) -> Result<PathBuf> {
             "invalid filename: {name:?}"
         );
         let stem = part.split('.').next().unwrap_or("").to_ascii_uppercase();
-        let numbered_device = stem.len() == 4
-            && (stem.starts_with("COM") || stem.starts_with("LPT"))
-            && matches!(stem.as_bytes()[3], b'1'..=b'9');
+        // Win32 also recognizes the ISO-8859-1 superscript digits in device
+        // names, even with extensions and in nested directories. See:
+        // https://learn.microsoft.com/windows/win32/fileio/naming-a-file
+        let numbered_device = stem
+            .strip_prefix("COM")
+            .or_else(|| stem.strip_prefix("LPT"))
+            .is_some_and(|suffix| {
+                let mut digits = suffix.chars();
+                matches!(digits.next(), Some('1'..='9' | '¹' | '²' | '³'))
+                    && digits.next().is_none()
+            });
         ensure!(
             !matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL") && !numbered_device,
             "reserved Windows name: {name:?}"
@@ -400,6 +408,39 @@ mod tests {
             b"own test content"
         );
         assert!(extract(&archive, &dest, 1024).is_err());
+    }
+
+    #[test]
+    fn windows_superscript_devices_are_rejected_before_any_archive_output() {
+        let temp = tempfile::tempdir().unwrap();
+        for (i, name) in [
+            "COM¹.txt",
+            "dir/lpt².dat",
+            "LPT³/child",
+            "com²",
+            "COM³",
+            "dir/LPT¹.txt",
+        ]
+        .iter()
+        .enumerate()
+        {
+            let archive = temp.path().join(format!("own-{i}.scs"));
+            let mut writer = ZipWriter::new(File::create(&archive).unwrap());
+            writer
+                .start_file(*name, SimpleFileOptions::default())
+                .unwrap();
+            writer.write_all(b"own fixture").unwrap();
+            writer.finish().unwrap();
+            let output = temp.path().join(format!("output-{i}"));
+            assert!(extract(&archive, &output, 1024).is_err(), "accepted {name}");
+            assert!(!output.exists(), "validation must precede writes");
+        }
+        for name in ["own/COM10.txt", "own/COM1-extra.txt", "own/texto¹.txt"] {
+            assert!(
+                safe_relative(name).is_ok(),
+                "ordinary filename refused: {name}"
+            );
+        }
     }
 
     #[test]
