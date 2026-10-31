@@ -354,12 +354,14 @@ posterior, não somente pelas fixtures.
 
 ### G1 — Visual básico
 
-- [ ] Textura/cores/iluminação corretas no primeiro desenho e sem travamento.
+- [x] Textura/cores/iluminação corretas no primeiro desenho e sem travamento.
+  Confirmado pelo proprietário em G12 local31/10, fonte game-pose/eco; fault0.
 - [ ] Frente/ré, curva para ambos os lados, parada, rampa e câmeras disponíveis;
   observar posição, orientação, teleporte inesperado, sumiço e artefatos.
 - [ ] Conferir que o visual não controla/empurra o jogador nem cria HUD/física.
   Colisão, rodas/reboque/sinais próprios e modelo por jogador não foram entregues.
-- [ ] Capturar `session-status` antes/depois: remotos, visual, contadores e custo.
+- [x] Capturar `session-status` antes/depois: remotos, visual, contadores e custo.
+  G12 local31/10 guardou baseline/percurso/câmeras/recarga/stop/pós-stop.
 
 ### G2 — Suavização e métricas
 
@@ -367,11 +369,13 @@ posterior, não somente pelas fixtures.
   repetindo percurso curto com paradas e curvas. Registrar percepção e FPS.
 - [ ] Repetir com 50/100 e 0/50 usando `presentation --delay-ms N
   --extrapolation-ms N`, sem concluir que menor atraso sempre é melhor.
-- [ ] Na v2, comparar `--timebase arrival` e `--timebase server` com o mesmo
+- [x] Na v2, comparar `--timebase arrival` e `--timebase server` com o mesmo
   percurso/orçamento (padrão 100/200): percepção de tremor nas retas, curvas e
   paradas; `presentation.server_timed` deve crescer só no modo server. A
   bancada (`network_lab` schema 3) não substitui essa observação. Restaurar
   `arrival` ao final se a comparação não aprovar a troca do padrão.
+  G12 local31/10: percepção igual/funcional, server_timed6697 e arrival restaurado.
+  Eco em loopback; comparação de qualidade na LAN entre PCs continua pendente.
 - [ ] Conferir configuração/revisão e modos em `presentation`; `network-timing`
   contém métricas v2 e retorna null em v1. Restaurar 100/200 no fim da comparação.
 - [ ] Comparar `draw_cost_*`/intervalo de frame e timing com mesma câmera/foco.
@@ -664,9 +668,21 @@ montagem/abertura feita. Dublagem é etapa própria (T3), fora desta rodada.
 
 ### G12 — Roteiro único da rodada agrupada (retomada de 31/10)
 
+**Rodada local concluída em31/10**, build2178e7c, umFedora/Proton com eco.
+Proprietário confirmou todos os percursos/câmeras/retorno/recarga solicitados;
+arrival/server pareceram iguais. Coleta600s/121snapshots verificada, loading_skipped447,
+driving/loading capturados e fonte recuperada após map com epoch novo. Limpeza e
+saída completas:14slots/oito hashes, item ausente/worker aguardado/filas0, sem jogo
+na enumeração final. Registro no topo do roadmap; logs privados
+`target/analysis/g12-game-20261031-01/`. Cinco falhas transitórias de leitura,
+fault0; state_hidden0. Não comprova unavailable/ocultação por estado/2PCs nem
+pitch/roll/FPS/toda matriz. Este roteiro fica como referência; não repetir a
+rodada local para revalidar os mesmos critérios. Passos2PCs permanecem futuros.
+
 Frames TCP, nomes de arquivo e hooks de diagnóstico receberam testes próprios;
-não exigem repetir percurso ou abrir uma segunda partida. Fonte game-pose,
-estados remotos, suavidade/timebase e matriz do motor continuam pendentes.
+não exigem repetir percurso ou abrir uma segunda partida. A fonte game-pose e
+a comparação de timebase passaram no escopo local descrito acima; estados
+remotos/qualidade entre PCs e o restante da matriz continuam pendentes.
 
 Revisão posterior dos estados: em 2 PCs, após carga/retomada observar se o
 remoto volta e permanece coerente. `superseded`/`relays_superseded` contam
@@ -773,9 +789,10 @@ parar para capturar manualmente cada status. Eventos menores que o intervalo
 podem não aparecer; não preencher lacunas como resultados positivos. Encerrar
 a coleta antes da limpeza, preservando também o relatório de stop/pós-saída.
 
-- [ ] G12/coleta: no jogo real, completar a janela, conferir hashes/análise
+- [x] G12/coleta: no jogo real, completar a janela, conferir hashes/análise
   offline e relacionar as observações aos tempos locais. `validation_claimed`
   deve permanecer false: a conclusão pertence a cada critério observado.
+  G12 local31/10: duration_reached,600164ms/121snapshots, verificador offline passou.
 
 M3 recebeu limites de ingresso/envio v1 e medição de broadcast v1/v2. Limites
 da sala cheia e carga UDP 16/32 passaram offline (roadmap); não precisam ser
@@ -789,20 +806,20 @@ backup/procedimento de integridade. Um resultado global positivo não substitui
 evidência de cada campo/comando. M2/G0 e a primeira LAN já comprovadas não
 precisam ser refeitas só para repetir contadores.
 
-- [ ] Fonte experimental: iniciar explicitamente com `--capture game-pose`,
+- [x] Fonte experimental: iniciar explicitamente com `--capture game-pose`,
   save de teste/backup novo, registrar modo e amostra disponível. Confirmar
   rotação/posição em um percurso curto; comparar com a fonte validada quando
   necessário, sem presumir que dois reads iguais são um tick atômico.
-- [ ] Alternar câmeras e tirar foco por cerca de 20 s. Um PC comprova os
+- [x] Alternar câmeras e tirar foco por cerca de 20 s. Um PC comprova os
   contadores de captura/envio; observar continuidade no outro cliente exige
   segundo PC ou observador independente. Ausência de draw da janela sem foco
   continua sendo comportamento do jogo. Não prometer que a física avance
   quando o jogo está pausado.
-- [ ] Voltar à janela, menu de carregar e recarregar o save de teste pelo gate.
+- [x] Voltar à janela, menu de carregar e recarregar o save de teste pelo gate.
   Conferir pausa/retomada da fonte, liberação anterior e recriação, sem enviar
   dados de ator antigo. Cena legível na memória não garante todos os estados
   de menu; identificar o estado que falhar em vez de marcar a matriz inteira.
-- [ ] Parar com foco no jogo, conferir visual ausente, worker aguardado,
+- [x] Parar com foco no jogo, conferir visual ausente, worker aguardado,
   callbacks/14 slots restaurados e hashes antes/depois da saída normal.
 
 Sem prova nova de modelo, velocidade, tick da física, outros cinco comandos

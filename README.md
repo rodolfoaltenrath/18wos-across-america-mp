@@ -28,7 +28,8 @@ bancada; a prova desses cinco comandos no jogo continua pendente.
 Em 29/10/2026, a primeira LAN Windows↔Fedora/Proton passou: o proprietário
 confirmou caminhões visíveis nos dois PCs e recuperação após devolver o foco;
 poses/rotações reais e paradas foram preservadas nos logs de ambos os lados.
-Ao tirar o foco, o remoto desaparece: a fonte ainda depende do draw. O registro
+Naquela LAN, ao tirar o foco o remoto desapareceu: a fonte `drawn` dependia do
+desenho. O registro
 completo de métricas, limitações e evidências está em
 [docs/GAME_VALIDATION.md](docs/GAME_VALIDATION.md).
 Mais de dois jogadores, suavidade medida, reconexão e sessões longas na LAN
@@ -56,13 +57,19 @@ Queda provocada no motor, sessões
 longas e as matrizes de M1/M4/M8 continuam pendentes. Evidências e limites em
 G0 do procedimento de validação e no primeiro registro do roadmap.
 
-Para a próxima rodada agrupada existe a fonte experimental
+A fonte optativa de captura experimental é
 `mp_launcher ... session-start --capture game-pose` (ou `connect --mode game-pose`),
 também selecionável por `mp_lan --capture game-pose`. Lê posição/quaternion
 sem depender do callback de desenho, com dupla leitura e conferência da cadeia.
-O padrão continua `drawn`. Não houve prova dessa fonte nova no jogo; leituras
-iguais não garantem um tick atômico, nem a disponibilidade durante todo menu/
-carregamento. A lista G12 agrupa foco/câmeras/recarga e limpeza dessa revisão.
+O padrão continua `drawn`. G12 local acompanhada em 31/10 validou a fonte nova
+com percurso, câmeras, Alt+Tab e recarga protegida: posição/rotação e textura
+normais, suspensão de 447 amostragens durante a carga e retomada depois. Leituras
+iguais não garantem um tick atômico nem disponibilidade em toda a matriz.
+Comparação arrival/server pareceu igual ao proprietário; arrival restaurado.
+O coletor completou 10 minutos/121 snapshots e passou na conferência offline;
+limpeza, saída e oito hashes passaram. **M1 agora 4/7**, pela leitura agrupada
+com verificadores. Ver G12 e o registro atual do roadmap para evidências e
+limites: um PC com eco não valida suavidade entre hosts nem toda a matriz.
 
 A revisão dos estados remotos também protege a recuperação: avisos atrasados
 não devem substituir estados mais recentes, repetições antigas não voltam a

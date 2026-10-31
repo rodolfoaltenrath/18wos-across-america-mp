@@ -1,5 +1,24 @@
 # Orientações para continuar o projeto
 
+G12local31/10 acompanhada, DLL2178e7c, umFedora/Proton v2/eco offset400.
+game-pose disponível: reto/curvas/ré/parada/câmeras/AltTab e recarga normais,
+arrival/server iguais segundo proprietário; server_timed6697, arrival restaurado.
+Uma map adiada/reexecutada/recriada, argv restaurado, epoch1→2; loading_skipped447,
+driving/loading e sample_state1/2 capturados. Cinco falhas transitórias de leitura
+com recuperação, fault0; não prometer tick atômico/ABA. state_hidden0, portanto
+ocultar remoto por estado150ms/unavailable/2PCs não provados. M1leitura com
+verificadores agora check:4/7, total51/104(49%), semM10 50/97(52%); matriz ampla
+continua pendente. G1/G2/G12 checks apenas observados. Coleta600164ms/121amostras
+verificada (window_complete=true, validation_claimed=false); três markers únicos.
+Servidor216eventos/relays ACK, zero expirados/drops/invalid/send_errors/late_ticks,
+1aceite/1leave/0ativos. Não é LAN/perda medida/FPS; stale/superseded/retry0 não
+validam falhas novas no motor. Limpeza1check/1release/14slots/oito hashes;
+worker aguardado/item ausente/filas0/sondas removidas. Proprietário fechou;
+enumeração sem jogo/controladores/servidor, oito hashes pós-saída e init.cfg
+dddbacf5…7774 intacto. Sem rebuild/instalação/novo kit. Logs privados
+target/analysis/g12-game-20261031-01/. Kits continuam lan_tested=false. Não repetir
+essa rodada local; próximos critérios exigem 2PCs/estados ainda não exercitados.
+
 Artefato retomada31/10: kit NOVO de2178e7c em Downloads com sufixo retomada,
 schema2/seis binários e THIRD_PARTY com hash. Inventário45crates/0violações/
 0sem arquivo de licença; não equivale a aprovação de publicação. Builder e

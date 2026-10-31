@@ -1,5 +1,54 @@
 # Roadmap — Across America multiplayer em Rust
 
+## G12 local acompanhada: captura, movimento e recarga — 31/10
+
+Proprietário acompanhou uma sessão Fedora/Proton com o build de `2178e7c`,
+perfil Steam conferido, v2/eco em loopback e offset400. Backup novo antes da
+carga da DLL: cinco originais e três saves. Fonte optativa `game-pose` disponível
+com posição/orientação; não mudou o padrão `drawn`. Confirmou percurso reto,
+curvas para os dois lados, pequena ré/parada e textura/movimento normais.
+Comparação arrival/server com 100/200: relatou **igual, tudo funcional**; sem
+ganho perceptível declarado. `server_timed` cresceu 6697, padrão arrival restaurado
+(revisões 1→2→3). Câmera interna/externas e Alt+Tab por cerca de 20 s também normais;
+não confundir física pausada com continuidade observada em outro computador.
+
+Uma recarga pelo menu: gate `map`, uma chamada adiada/reexecutada, uma recriação,
+argv restaurado, zero drops/fallbacks, epoch 1→2 e ator/cena novos. Suspendeu 447
+amostragens (`loading_skipped`), estados driving/loading e sample_state1/2
+capturados, depois retomou driving. Houve cinco falhas transitórias de leitura
+ao longo da sessão; a fonte recuperou, fault do visual permaneceu 0 e o usuário
+não relatou travamento. Não atribuir causa exata a cada falha nem prometer tick
+físico atômico/ausência de ABA. `state_hidden=0`: esta recarga com eco não
+comprova a regra de esconder o caminhão do OUTRO PC por estado/quietude de 150 ms.
+
+Coletor completou 600164 ms, 121 snapshots a cada 5 s, hashes/análise verificados
+por `mp_doctor --recording`, requested_window_complete=true e
+validation_claimed=false. Três marcadores distintos recebidos uma vez cada no
+eco; estado publicado/renovado confirmado. No fechamento, servidor: 216 eventos/
+216 relays confirmados, zero inválidos/perdas estimadas de ping/relays expirados
+ou descartados/erros de envio/ticks atrasados; um aceite/um leave/zero ativos.
+São contadores deste loopback, não prova de perda de cada pacote, CPU/FPS ou
+latência visual. Stale/superseded/reenvios ficaram0; falhas/reordenação novas
+continuam comprovadas pela bancada, não provocadas nesta partida.
+
+Limpeza: um check/uma liberação, nenhuma recusa, item ausente, worker aguardado,
+filas zeradas, dispatcher/sondas removidos e14slots conferidos. Oito hashes iguais
+antes e depois da saída normal confirmada pelo proprietário; enumeração sem
+jogo/controladores/servidor, init.cfg dddbacf5…7774 intacto. Não houve rebuild na
+partida, nova instalação de assets/UI/tradução ou substituição de kit. Artefatos
+privados `target/analysis/g12-game-20261031-01/`, incluindo observações humanas,
+coleta, análise, stop, servidor e pós-saída; não versionar logs/saves/identidade.
+
+**Check adicional M1:** leitura agrupada com verificadores de consistência
+comprovada na partida, incluindo recuperação após recarga. Não encerra matriz
+de menus/troca de veículo nem os demais campos da física. M1 agora4/7; total
+**51/104 critérios (49%)**, ou50/97 (52%) sem M10, contagem sem ponderação de
+esforço. G1/G2/G12 recebem checks do escopo observado. M2 segue9/9; M3 9/11,
+M4 12/18, M5 2/7, demais contagens preservadas. LAN entre dois PCs, unavailable,
+ocultação por estado, outras cargas/teardowns, pitch/roll e suavidade/custo LAN
+seguem pendentes. Não repetir esta rodada local para validar filtros offline.
+O kit mantém lan_tested=false; eco local não certifica esse build entre hosts.
+
 ## Artefato da retomada e fechamento offline — 31/10
 
 Blocos concluídos e commitados: `0728ccc` (pendência de estados/captura),
@@ -4916,9 +4965,13 @@ da execução no jogo; não considerar um build cruzado prova de integração fu
   Progresso 31/10: o worker não amostra nem envia enquanto o gate de comandos
   adia/executa uma troca de cena (`loading_skipped`); menus/troca de veículo
   continuam dependendo da cadeia conferida e da matriz no jogo.
-- [ ] Ler posição/orientação como um estado consistente: agrupar leituras quando
+- [x] Ler posição/orientação como um estado consistente: agrupar leituras quando
   contíguas e investigar captura no tick do jogo ou verificação de consistência.
   Uma cópia contígua sozinha não garante atomicidade frente à física.
+  `game-pose`: duas cópias de40bytes e testemunho repetido de cadeia/tipo/cena/
+  física rejeitam mudanças observadas. Fixtures e G12 real31/10 passaram com
+  movimento, câmeras/foco e recarga; fonte retomou após447 passes suspensos.
+  Não é captura no tick físico nem garantia de atomicidade/ABA.
 - [ ] Confirmar ordem dos eixos, escala, quaternion, velocidade linear/angular,
   direção de marcha e identificador do modelo. Adicionar só campos comprovados.
 - [ ] Testar câmera diferente, pausa, troca de caminhão, reboque, nova partida,
@@ -5228,7 +5281,9 @@ verificada e removida em outra instalação original sem distribuir o jogo.
   Progresso: `session-status` (cliente, visual, draw, remotos) e métricas de
   custo do desenho/intervalo de frame, versão/ABIs/fonte/perfil declarado em
   `runtime` e coleta finita `session-record` com análise/verificador offline.
-  Bancada x86 passou; uso agrupado na partida continua em G12.
+  Bancada x86 e G12 local31/10 passaram: coletor completou600s/121 snapshots,
+  análise e hashes verificados,
+  sem declarar validação automática. Compatibilidade em outros hosts pendente.
 - [x] Configurar CI de formatação, Clippy, testes e build x86. Builds de integração
   com o jogo continuam locais; CI não deve baixar assets comerciais.
   Workflow de 31/10 configurado; comandos equivalentes e auditoria locais.
