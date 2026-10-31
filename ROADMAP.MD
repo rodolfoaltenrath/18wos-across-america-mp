@@ -1,5 +1,31 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Fechamento do lote: filtros dos relatórios — 31/10/2026
+
+Revisão adicional encontrou um desvio concreto em `session_evidence`: quando
+um slot vinha com `restored=false`, o curto-circuito pulava a validação dos
+campos `actual/expected`. A exportação tipada podia conservar texto arbitrário
+nesses campos de string. Agora ambos exigem endereço hexadecimal limitado,
+independentemente da flag; estado do cliente no stop também é limitado.
+Isso não altera slots do jogo nem uma parada real: só recusa relatórios malformados.
+Resumo do coletor também confere a versão numérica limitada antes de exportar,
+alinhada ao contrato runtime, sem aceitar texto/caminhos em seu lugar.
+
+Dois testes novos passaram, incluindo falha marcada, endereço excessivo,
+estado impossível e resumo adulterado; unitários nativos agora 113. Logs
+válidos históricos permanecem compatíveis; corpus real reanalisado anteriormente
+foi idêntico. Instruções geradas no kit incluem coleta/checagem/captura optativa,
+sem ativá-las nem substituir kit instalado. Sem novo teste manual necessário
+para os filtros; a fonte nova/coletor no jogo continuam em G12. Verificação
+integral definitiva passou: **226 x86 sob Proton / 293 nativos**, releases,
+Clippy nos três escopos e fmt. Log privado
+`target/analysis/verify-fedora-20261031-offline-roadmap-guards-final.log`.
+As cinco capturas reais foram reanalisadas novamente após a correção, com
+saída idêntica byte a byte. Nenhum processo do jogo foi aberto neste lote.
+O kit atualizado deve ser gerado em destino novo, com a revisão do commit e
+hashes dos seis binários, conservando os instalados/anteriores. A coleta e a
+fonte optativa não passam a ser prova do jogo por estarem empacotadas.
+
 ## Varredura do roadmap e integração contínua — 31/10/2026
 
 Pedido do proprietário: concluir blocos existentes sem abrir jogo a cada passo,

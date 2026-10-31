@@ -226,6 +226,7 @@ pub fn verify(directory: &Path) -> Result<Summary> {
     summary.plan.validate()?;
     ensure!(
         summary.schema == 1
+            && crate::runtime_info::valid_version(&summary.software_version)
             && !summary.validation_claimed
             && summary.samples.len() <= session_evidence::MAX_INPUTS,
         "invalid recording summary"
@@ -331,6 +332,28 @@ mod tests {
             .validate()
             .is_err()
         );
+    }
+    #[test]
+    fn offline_summary_does_not_accept_arbitrary_version_text() {
+        let parent = tempfile::tempdir().unwrap();
+        let directory = parent.path().join("empty");
+        let recorder = Recorder::create(&directory, plan()).unwrap();
+        let mut summary = recorder.finish(End::Interrupted, 0).unwrap();
+        for version in [
+            "private text",
+            "/home/private",
+            "1.2.3/private",
+            "1.2",
+            "1.2.3.4",
+        ] {
+            summary.software_version = version.into();
+            fs::write(
+                directory.join("summary.json"),
+                serde_json::to_vec(&summary).unwrap(),
+            )
+            .unwrap();
+            assert!(verify(&directory).is_err());
+        }
     }
     #[test]
     fn abort_or_collision_cannot_be_reported_as_complete_or_overwrite_existing_files() {

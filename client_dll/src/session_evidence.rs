@@ -186,6 +186,7 @@ pub fn parse(bytes: &[u8]) -> Result<Capture> {
         })
     } else {
         let stop: Stop = serde_json::from_value(value).context("expected session-status/session-stop; identity, backups and unrelated files are not reports")?;
+        ensure!(stop.client_status <= 3, "invalid stopped client state");
         ensure!(stop.slots.len() <= 64, "too many slots");
         if let Some(s) = &stop.lifecycle {
             ensure!(s.schema == 1, "unsupported lifecycle schema");
@@ -199,7 +200,11 @@ pub fn parse(bytes: &[u8]) -> Result<Capture> {
                     16,
                 )?)
             };
-            if s.restored && address(&s.actual)? == address(&s.expected)? {
+            // Validate even on a failed restoration: typed string fields must
+            // never become a channel for arbitrary diagnostic/private text.
+            let actual = address(&s.actual)?;
+            let expected = address(&s.expected)?;
+            if s.restored && actual == expected {
                 matching_slots += 1;
             }
         }
@@ -397,6 +402,24 @@ mod tests {
             analyze(vec![capture(&a), capture(&b)]).unwrap().comparisons[0].state,
             "epoch_unavailable"
         );
+    }
+    #[test]
+    fn failed_restoration_cannot_bypass_slot_field_sanitization() {
+        let mut v = json!({"client_status":2,"released":false,"preflight_checks":1,
+            "release_attempts":0,"slots":[{"actual":"0x10","expected":"0x10","restored":false}]});
+        let Capture::Stop { summary, .. } = capture(&v) else {
+            panic!()
+        };
+        assert_eq!(summary.matching_slots, 0);
+        for field in ["actual", "expected"] {
+            let mut bad = v.clone();
+            bad["slots"][0][field] = "private text".into();
+            assert!(sanitize(&serde_json::to_vec(&bad).unwrap()).is_err());
+            bad["slots"][0][field] = format!("0x{}", "1".repeat(17)).into();
+            assert!(sanitize(&serde_json::to_vec(&bad).unwrap()).is_err());
+        }
+        v["client_status"] = 99.into();
+        assert!(sanitize(&serde_json::to_vec(&v).unwrap()).is_err());
     }
     #[test]
     fn checks_stop_slot_values_instead_of_trusting_restored_flag() {

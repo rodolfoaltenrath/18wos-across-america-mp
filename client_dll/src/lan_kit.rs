@@ -198,8 +198,20 @@ Diagnostico manual (terminal na raiz do jogo):\r\n\
   .\\mp_doctor.exe --game . --client-dir .\r\n\
   .\\memory_tool.exe processes\r\n\
 O manifesto schema 2 identifica seis binarios por SHA-256, inclusive mp_career.\r\n\
+Ele verifica integridade local, nao e assinatura de publicacao.\r\n\
 Para o modo de carreira por arquivo, leia CARREIRA.txt.\r\n\
-Ele verifica integridade local, nao e assinatura de publicacao.\r\n",
+\r\nColeta opcional para a rodada agrupada (sessao ja iniciada):\r\n\
+  .\\mp_launcher.exe --pid PID --dll .\\client_dll.dll runtime-info\r\n\
+  .\\mp_launcher.exe --pid PID --dll .\\client_dll.dll session-record --output PASTA-NOVA --seconds 600 --interval-ms 5000\r\n\
+  .\\mp_doctor.exe --recording PASTA-NOVA\r\n\
+Substitua PID pelo processo atual. O coletor nao inicia nem para a sessao.\r\n\
+Ele salva estados filtrados, analise e hashes; nao precisa pedir status a\r\n\
+cada movimento. Ctrl+C finaliza apos a chamada em andamento. Fechar a janela\r\n\
+pode deixar .INCOMPLETE; preserve os arquivos e use pasta nova. No fim, use\r\n\
+3 no assistente para limpar antes de fechar o jogo, como acima. Coleta\r\n\
+completa nao equivale a validacao visual nem substitui os hashes de parada.\r\n\
+Captura experimental sem draw: inicie mp_lan.exe --capture game-pose em\r\n\
+terminal, antes da opcao 1; ainda exige a rodada pratica de cameras/foco/load.\r\n",
         settings.server,
         settings.room,
         settings.server.port()

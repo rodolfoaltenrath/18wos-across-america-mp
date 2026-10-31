@@ -636,6 +636,10 @@ montagem/abertura feita. Dublagem é etapa própria (T3), fora desta rodada.
 
 ### G12 — Rodada agrupada dos incrementos offline de 31/10
 
+Filtros finais de relatórios/versão foram reforçados e testados com fixtures;
+não acrescentam uma ação humana a esta rodada. Kit gerado explica os comandos
+de coleta/checagem; nenhum kit instalado foi substituído automaticamente.
+
 Sequência de uma abertura local, preparada somente quando o proprietário for
 testar: jogo fechado, ferramentas novas juntas, backup/preflight; opcionalmente
 montar fontes/menus locais de G10/G11 antes da abertura. Iniciar a partida e a

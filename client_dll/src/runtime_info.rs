@@ -32,6 +32,25 @@ pub struct Info {
     pub wire_protocol: Option<u8>,
     pub physics_tick_atomic: bool,
 }
+pub(crate) fn valid_version(version: &str) -> bool {
+    if version.is_empty()
+        || version.len() > 48
+        || !version
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b".-+".contains(&b))
+    {
+        return false;
+    }
+    let mut core = version
+        .split(['-', '+'])
+        .next()
+        .unwrap_or_default()
+        .split('.');
+    (0..3).all(|_| {
+        core.next()
+            .is_some_and(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
+    }) && core.next().is_none()
+}
 impl Info {
     pub fn selected(mode: u32, protocol: u8) -> Self {
         use crate::api;
@@ -60,15 +79,8 @@ impl Info {
         }
     }
     pub fn validate(&self) -> Result<(), &'static str> {
-        let valid_version = !self.software_version.is_empty()
-            && self.software_version.len() <= 48
-            && self.software_version.as_bytes()[0].is_ascii_digit()
-            && self
-                .software_version
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b".-+".contains(&b));
         if self.schema != 1
-            || !valid_version
+            || !valid_version(&self.software_version)
             || self.control_abi != 1
             || self.engine_abi != 3
             || self.physics_tick_atomic

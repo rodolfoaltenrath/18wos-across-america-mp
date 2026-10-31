@@ -1,5 +1,15 @@
 # Orientações para continuar o projeto
 
+Fechamento31/10: session_evidence valida actual/expected mesmo restored=false;
+curto-circuito anterior podia exportar texto arbitrário nesses campos. Estado
+de stop limitado; resumo do recorder valida versão limitada, sem caminhos/texto.
+Dois testes novos/113 unitários nativos. Verify final226x86Proton/293nativos,
+releases/Clippy/fmt em verify-fedora-20261031-offline-roadmap-guards-final.log.
+Cinco capturas reais reanalisadas novamente, byte a byte iguais. Sem jogo.
+Sem mudança de slots/motor. Kit gerado
+passa a explicar coleta e captura optativa, sem iniciá-las/atualizar instalado.
+Não repetir percurso para provar filtro de JSON; G12 permanece para motor.
+
 Varredura31/10: README/roadmap reconciliados; M2já9/9, M3agora7/11, M8agora3/7.
 M7instalador restrito p4/p5 reconhecido (4/10) pelas entregas/provas históricas
 de arquivos, não por novo jogo ou ativador genérico. T1 tem relato humano
