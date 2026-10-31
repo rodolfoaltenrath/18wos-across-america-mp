@@ -17,6 +17,7 @@ pub mod def;
 pub mod font;
 pub mod glyphs;
 pub mod literals;
+pub mod pml;
 pub mod typeface;
 
 pub fn read_entry(archive: &Path, name: &str) -> Result<Vec<u8>> {

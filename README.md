@@ -148,6 +148,12 @@ potência, referências a peças e regras do jogo são preservados. Nenhum pacot
 deste incremento foi instalado nem testado no motor. ESC/PML e arquivos
 originais com sintaxe incompleta ficam para outro bloco.
 
+`l10n_tools pml-audit --catalog translations/pt-BR/local_def.json --output ARQUIVO-NOVO.json --strict`
+audita referências e formatação nos SCS locais sem alterar arquivos. Exporta
+somente metadados; não copia prosa nem comprova o render do jogo. O levantamento
+encontrou 166 chaves de texto já traduzidas e três famílias de fontes; os
+resultados e limites estão em docs/LOCALIZATION.md.
+
 ## Kit local para o segundo PC Windows
 
 `mp_kit` gera uma pasta nova com cinco binários Windows x86 próprios,

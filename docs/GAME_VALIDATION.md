@@ -520,6 +520,9 @@ montagem/abertura feita. Dublagem é etapa própria (T3), fora desta rodada.
 - [ ] Tipografia nova: curvas/contraste de Carlito Bold legíveis nos tamanhos
   pequeno/médio/grande, sem cortes no topo dos acentos ou em g/p/q/ç, sem alteração
   inesperada de medidas/linhas. Prévias PNG não comprovam filtragem/render nativo.
+  A auditoria PML de 31/10 localizou três seletores com quatro variantes cada;
+  existência das variantes não comprova qual o motor seleciona. Conferir textos
+  formatados/desabilitados junto com as fontes, sem refazer LAN por esse motivo.
 - [ ] Layout: textos mais longos que o inglês em botões, opções de controle,
   Caderno (economia/frota), loja e mensagens de entrega. Anotar cortes.
 - [ ] Chaves com cor (`qh_city_buttonx`, `qh_cargo_listx`) e `<br>` em

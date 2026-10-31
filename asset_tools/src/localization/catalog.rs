@@ -77,7 +77,7 @@ pub struct Report {
     pub errors: Vec<String>,
     pub complete: bool,
 }
-fn translatable(key: &str) -> bool {
+pub(super) fn translatable(key: &str) -> bool {
     !key.starts_with("__")
 }
 pub fn check(catalog: &Catalog, source: &[Source]) -> Report {

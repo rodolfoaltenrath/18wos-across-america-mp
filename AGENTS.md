@@ -1,5 +1,14 @@
 # Orientações para continuar o projeto
 
+PML em 31/10 após `28b8fda`: `l10n_tools pml-audit` exporta só metadados,
+sem reescrita. 498 campos no escopo final, 166 chaves já traduzidas, três
+seletores/quatro variantes cada, seis campos literais para revisão. Cor é
+diretiva, p2p_pml é booleano, editor excluído. Strict final passou; relatório
+exploratório inicial preservado, não são defeitos confirmados do jogo.
+Seleção dinâmica de fonte/PML continua em G11, sem tradução adicional ou
+nova LAN neste bloco. Três fixtures nativas/CLI real/Clippy assets passaram;
+nenhuma prova do render. Ver docs/LOCALIZATION.md e registro novo do roadmap.
+
 T2 em 30/10 após `025d9f9`: `localization::literals` e `l10n_tools literal-scan/
 compose/check`, build opcional `--literals`. Catálogo próprio
 `translations/pt-BR/literal_def.json`: 208 textos/207 definições (148 componentes

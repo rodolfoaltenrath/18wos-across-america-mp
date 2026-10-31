@@ -1,5 +1,29 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Auditoria PML e cobertura de referências — 31/10/2026
+
+Continuado de `28b8fda`, árvore limpa, sem jogo. `localization::pml` e
+`l10n_tools pml-audit --catalog ... --output NOVO.json [--strict]` acrescentam
+leitura limitada de tags, referências, cores e parâmetros; relatório sem prosa,
+atributos ou paths privados. Recusam expansão/nesting/diagnósticos excessivos;
+catalogo stale e chave ausente não passam em strict. Não modificam PML/ESC,
+fontes, catálogo ou motor. Lexer compartilhado conserva seus spans privados.
+
+Consulta real final: 498 campos, 166 chaves de texto já traduzidas, três
+seletores de fonte com quatro variantes presentes cada e seis campos literais
+para revisão. Zero problemas estruturais/referências de texto ausentes no
+escopo. `<color>` é estado, `p2p_pml` é flag booleana, editor excluído; relatório
+exploratório inicial preservado e não contabilizado como prova de defeitos.
+Famílias de fonte não são confirmação da seleção dinâmica. Créditos/showroom/
+console não foram traduzidos por hipótese; T2 e G11 continuam parciais.
+
+Validação proporcional: três fixtures novas de sintaxe, privacidade, limites,
+catálogo/precedência de referência e drift; teste nativo focado, CLI real com
+strict e Clippy dos all-targets de assets passaram. Artefatos privados:
+`pml-{tests,audit}-final-20261031.*` em target/analysis. Sem instalação, jogo,
+LAN nova ou prova x86 por esse commit. Próximos blocos agrupados: preflight de
+instalação sem escrita e arquivo de carreira no assistente, sem hooks novos.
+
 ## Textos fora da tabela: definições de exibição — 30/10/2026
 
 Continuado de `025d9f9`, sem abrir jogos ou requerer o segundo PC. Entregue o

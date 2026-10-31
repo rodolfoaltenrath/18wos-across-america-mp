@@ -226,6 +226,29 @@ tipografia/layout em G11; não precisa repetir LAN nem usar outro computador.
 
 ### Restante de T2
 
+Auditoria PML entregue em 31/10, somente de leitura:
+
+```text
+l10n_tools pml-audit --catalog REPO/translations/pt-BR/local_def.json --output PASTA-EXISTENTE/pml-NOVO.json --strict
+```
+
+Consulta os recursos visíveis de `defs/ui` e `ui` (sem editor), marcadores
+`@@chave@@`, parâmetros `%N`, cores e tags do dialeto observado. `<color>` é
+diretiva de estado; `font`/`align` são acompanhados como contêineres. O atributo
+booleano `p2p_pml` não é tratado como prosa. Desconhecidos, limites e problemas
+produzem diagnóstico sem reescrever os originais. O relatório contém chaves,
+hashes, contagens e offsets; nunca prosa ou atributos comerciais.
+
+Nesta instalação: 498 campos, 166 chaves de texto já cobertas pelo catálogo T1,
+três seletores de fonte com quatro variantes existentes cada, seis campos com
+letras literais para revisão (créditos, showroom e versão do console). Nenhuma
+referência de texto ausente, catálogo desatualizado ou problema estrutural no
+escopo final. Não são 498 novas traduções. Seletores de fonte são famílias
+candidatas; resolução/render no motor permanece não comprovada. `--strict`
+confere estrutura/referências estáticas, não fecha T2 nem G11. O primeiro
+relatório de investigação foi preservado antes de separar editor/booleanos e
+reconhecer a diretiva de cor; não confundir suas hipóteses com defeitos do jogo.
+
 Levantamento por contagem, sem copiar prosa, de atributos literais com frases
 em inglês fora de `local.def`. Fora do editor (`seg_server`, `prefabs`), os
 principais grupos são:

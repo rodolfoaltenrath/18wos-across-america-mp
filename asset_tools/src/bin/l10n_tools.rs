@@ -10,6 +10,18 @@ struct Args {
 }
 #[derive(Subcommand)]
 enum Task {
+    /// Read-only PML/reference audit: metadata only, no original prose or rewrites.
+    PmlAudit {
+        #[arg(long)]
+        catalog: PathBuf,
+        #[arg(long)]
+        archive: Vec<PathBuf>,
+        #[arg(long)]
+        output: PathBuf,
+        /// Fail on catalog/reference/syntax issues after preserving the report.
+        #[arg(long)]
+        strict: bool,
+    },
     /// Inventory literal fields. Original prose is OMITTED unless --include-source.
     LiteralScan {
         #[arg(long)]
@@ -122,6 +134,26 @@ fn write_new(path: &Path, bytes: &[u8]) -> Result<()> {
 }
 fn main() -> Result<()> {
     match Args::parse().task {
+        Task::PmlAudit {
+            catalog,
+            archive,
+            output,
+            strict,
+        } => {
+            let r = l10n::pml::audit(&mounts(archive)?, &load(&catalog)?)?;
+            write_new(&output, &serde_json::to_vec_pretty(&r)?)?;
+            println!(
+                "{} fields; {} translated keys, {} configuration keys, {} fields with literal text. Engine not tested.",
+                r.fields.len(),
+                r.translated_keys,
+                r.preserved_config_keys,
+                r.fields_with_literal_text
+            );
+            ensure!(
+                !strict || r.checks_passed(),
+                "PML/reference audit has issues; inspect the saved metadata report"
+            );
+        }
         Task::LiteralScan {
             output,
             archive,

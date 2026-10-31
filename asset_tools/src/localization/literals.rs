@@ -34,6 +34,12 @@ pub struct Literal {
     #[serde(skip)]
     end: usize,
 }
+impl Literal {
+    /// Only used with the same buffer returned by the bounded lexer.
+    pub(super) fn value<'a>(&self, source: &'a [u8]) -> &'a [u8] {
+        &source[self.start..self.end]
+    }
+}
 #[derive(Serialize)]
 pub struct Resource {
     pub path: String,
