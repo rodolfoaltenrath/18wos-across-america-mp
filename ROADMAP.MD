@@ -1,5 +1,55 @@
 # Roadmap — Across America multiplayer em Rust
 
+## G13 acompanhada: jogador automático e motivos da captura — 31/10
+
+Build `c908255`, um Fedora/Proton, servidor v2 loopback sem eco, perfil Steam e
+backup novo de oito arquivos antes da DLL. Probe nativo seguiu o ID atual do
+jogo com offset400; fonte game-pose do jogador permaneceu disponível. O
+proprietário confirmou o ciclo aparecer/sumir/voltar/sumir/voltar e o percurso
+solicitado: “sim, atesto que aconteceu tudo como previsto”. Nenhum problema
+visual/travamento relatado. Rampa não foi confirmada explicitamente; pitch/roll
+permanecem pendentes, sem solicitar outra manobra nesta rodada.
+
+Probe completou cinco fases em170s, posições transmitidas por fase
+[900,0,900,0,7198], nenhuma interrupção da fonte, cinco marcadores distintos
+recebidos uma vez cada. Estados remotos driving/loading/unavailable presentes,
+owner driving e sample_state1 nos snapshots. Visual fault0, textura retomada e
+desenhos voltaram após as pausas. `state_hidden` cresceu0→93 no trecho unavailable,
+cujo caminho rejeita o desenho com idade da pose entre150ms e1s. Isso comprova
+a regra de estado nesse trecho, não mede latência visual ponta a ponta. No
+primeiro loading ficou0: o sumiço foi confirmado, mas a antecipação de150ms não
+foi isolada do fallback stale1s. Causa dessa diferença não determinada; não
+inventar foco/frames/rede nem marcar ambos os limiares como comprovados.
+
+CAPTURE_STATUS13 foi consultado/coletado no motor real: accepted cresceu;
+último snapshot tem13841passes =13840accepted +1changed. Demais motivos0 e
+truncated=false. A fonte recuperou e o usuário não relatou problema. Changed
+é diferença observada nas cópias/testemunhos, sem atribuir causa exata à física
+ou a um ponteiro específico. Não reinterpreta as cinco recusas de G12. Gate
+sanitizado permaneceu idle/epoch1/calls0; não houve nova recarga e não se provocou
+invalidade de memória no jogo para exercitar contadores já cobertos por fixtures.
+
+Coleta completou180174ms/181 snapshots a cada1s; hashes/análise conferidos por
+mp_doctor, requested_window_complete=true e validation_claimed=false. Probe170s
+iniciou após a coleta para dar tempo de devolver foco; seu relatório permanece
+game_tested=false/lan_tested=false, separado da conclusão humana acima.
+Servidor: dois aceites/dois leaves/zero ativos,158eventos e120relays confirmados,
+zero inválidos/expirados/reenvios/drops/erros de envio/ticks atrasados/pose_gaps.
+Pings estimados perdidos0; não é medição de perda de todo pacote ou de FPS/CPU.
+Diferença entre eventos e relays inclui trechos com apenas um membro; cache2
+não é dois membros ativos nem outra máquina.
+
+Limpeza: um check/uma liberação, nenhuma recusa, item ausente, worker aguardado,
+filas0/sondas removidas e14slots restaurados. Oito hashes iguais antes/depois do
+fechamento normal confirmado pelo proprietário; enumeração final sem jogo,
+probe/controladores/servidor e init.cfg dddbacf5…7774 intacto. Nenhum rebuild na
+partida, instalação de assets/UI/tradução ou atualização de kits. Logs privados
+`target/analysis/g13-game-20261031-01/` guardam observações, coleta, análise,
+probe, servidor, parada e pós-saída. Não repetir o ciclo completo por filtros/
+counter/JSON. Próximas lacunas são o limiar do primeiro loading e estados ainda
+não exercitados; LAN entre computadores não foi repetida. Check de M5 completo
+continua dependendo também de LOD/nomes; M1 4/7, M5 2/7 e total51/104 preservados.
+
 ## Lote para um desktop: diagnóstico, coleta e jogador de teste — 31/10
 
 Pedido do proprietário: preparar várias melhorias e reunir a próxima validação

@@ -853,12 +853,18 @@ mp_launcher --pid PID --dll DLL session-marker --code 2   # antes de carregar
   zero numa LAN normal; diferente disso, preservar logs, sem repetir só para
   zerar contadores.
 
-### G13 — Próxima rodada local: visibilidade automática e diagnóstico
+### G13 — Rodada local: visibilidade automática e diagnóstico
 
-**Preparada offline; ainda não executada no jogo.** G12 local de31/10 continua
-válida; não repetir seu percurso inteiro. Não requer o segundo PC. O objetivo
-novo é observar o remoto anunciado como loading/unavailable enquanto o jogador
-local continua disponível: G12 anterior ficou com state_hidden0.
+**Executada e acompanhada em31/10**, buildc908255, umFedora/Proton sem eco.
+Humano confirmou cinco fases e percurso; rampa não explícita. CAPTURE13 mostrou
+um Changed recuperado;181snapshots/180174ms verificados, cinco marcadores únicos,
+fault0 e limpeza/saída/14slots/oito hashes passaram. state_hidden0→93 apenas na
+fase unavailable comprova esse ramo antes de stale1s. No primeiro loading ficou0:
+sumiço confirmado, mas limiar150ms não isolado; causa desconhecida. Não atribuir
+prova de ambos os limiares nem latência visual medida. Registro no topo do
+roadmap e logs privados `target/analysis/g13-game-20261031-01/`. Não repetir a
+rodada completa para filtros/counters. Procedimento abaixo fica como referência.
+G12 anterior continua válida; não requer segundo PC nem comprova nova LAN.
 
 Preparação do operador, jogo fechado: launcher/DLL novos juntos, nova pasta de
 backup/logs, perfil conferido. Servidor nativo em127.0.0.1:39000, v2 sala desktop,
@@ -887,21 +893,25 @@ pendente. Não requer salvar, abrir menus ou recarregar para testar filtros de
 relatórios. O operador cuida da conexão/coleta e observa o início real do ciclo;
 o relógio começa na primeira pose válida recebida, não no lançamento da ferramenta.
 
-- [ ] Registro de aparência/retorno com textura normal nas cinco fases, sem
+- [x] Registro de aparência/retorno com textura normal nas cinco fases, sem
   travamento; anotar se foi possível observar rampa, sem inventar pitch/roll.
-- [ ] Estados loading/unavailable do probe com poses quietas, heartbeat ativo
-  e `presentation.state_hidden` crescendo antes da expiração de1s. Após retomada,
-  poses frescas e desenho voltam. Não confundir stale1s com a regra de150ms.
-- [ ] `capture` válido na DLL real, com accepted crescendo. Skipped é leitura
+  Rampa não confirmada explicitamente, segue pendente.
+- [x] Estados loading/unavailable do probe com poses quietas, heartbeat ativo;
+  após retomada, poses frescas e desenho voltam.
+- [x] Em unavailable, `presentation.state_hidden` cresceu0→93 no caminho entre
+  150ms e1s; não confundir com stale1s ou cronômetro de latência visual E2E.
+- [ ] Isolar a antecipação por loading do fallback stale1s: contador ficou0
+  nesse primeiro trecho, embora o proprietário tenha confirmado o sumiço.
+- [x] `capture` válido na DLL real, com accepted crescendo. Skipped é leitura
   evitada por gate ocupado; discarded é resultado descartado após gate mudar.
   Changed só informa diferença observada entre leituras/testemunhos, não sua
   causa física exata. Outros motivos são limitados; não provocar ponteiros
   inválidos no jogo só para preencher contador (fixtures já cobrem rejeições).
-- [ ] Coleta concluída/verificada sem claims automáticos; correlacionar marcadores
+- [x] Coleta concluída/verificada sem claims automáticos; correlacionar marcadores
   1001–1005 com as observações. A ausência de load nesta rodada não testa de novo
   a recarga; o filtro de gate e a comparação de epoch usam também logs reais
   históricos reanalisados offline, sem alterar as capturas originais.
-- [ ] Encerrar probe/coleta, `session-stop --verify`, confirmar item ausente,
+- [x] Encerrar probe/coleta, `session-stop --verify`, confirmar item ausente,
   worker aguardado/slots/arquivos, fechar normalmente e conferir pós-saída.
 
 Se o probe perder a fonte, registra unavailable e não inventa coordenadas.

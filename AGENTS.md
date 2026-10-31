@@ -1,5 +1,25 @@
 # Orientações para continuar o projeto
 
+G13real31/10 acompanhada, buildc908255, umFedora/Proton v2/loopback SEMeco,
+game-pose/offset0 no jogo, probe offset400. Humano confirmou ciclo cinco fases
+e percurso conforme pedido; rampa não explícita, pitch/roll pendentes. Probe170s
+completo [900,0,900,0,7198] poses/0interrupções/cinco markers únicos. Estados
+driving/loading/unavailable; owner driving/sample_state1/fault0. state_hidden0→93
+somente em unavailable comprova esse ramo150ms..1s, não latência E2E. Primeiro
+loading ficou0; sumiço humano confirmado mas antecipação150ms não isolada do
+stale1s. Causa desconhecida, não inventar foco/frames/rede nem fechar dois limiares.
+CAPTURE13 real: último snapshot13841passes=13840accepted+1changed, resto0,
+truncatedfalse/recuperou. Não atribuir causa exata nem reclassificar falhas G12.
+Coleta180174ms/181snapshots verificada; gateidle/epoch1/calls0 sem nova carga;
+window_complete=true/validation_claimedfalse. Flags probe game/LANfalse intactas.
+Servidor2aceites/2leaves/0ativos,158events/120relaysACK, zero expirados/reenvios/
+drops/invalid/send_errors/late_ticks/pose_gaps; sem prova perda total/FPS/CPU.
+Limpeza1check/1release/14slots/8hashes, worker aguardado/itemausente/filas0/sondas
+removidas. Humano fechou, enumeração sem jogo/probe/controladores/servidor,
+8hashes pós-saída/init.cfg dddbacf5…7774 intacto. Logs privados
+target/analysis/g13-game-20261031-01/. Sem rebuild/jogo extra/instalação/kit.
+Não repetir ciclo inteiro por filtros/counters. M1 4/7/M5 2/7/total51/104 preservados.
+
 Lote desktop31/10: CAPTURE_STATUS13, ABIv1/v3 preservadas, counters tipados sem
 poses/paths/pointers, corte999999999/truncated e JSON<=511. Worker distingue
 gate skip/descarte, Changed/Missing/Type/Overflow/Invalid/DrawnExpired/Other/Fatal.

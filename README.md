@@ -77,7 +77,7 @@ ser entregues por saírem da janela e o estado estável é renovado a cada 3 s.
 Estados pendentes obsoletos podem ser substituídos; marcadores são preservados.
 Isso passou na bancada; aparência e retomada entre PCs continuam no roteiro G12.
 
-Próximo lote para um desktop: `session-status` também coleta `capture`, com
+Diagnóstico para um desktop: `session-status` também coleta `capture`, com
 motivos tipados de indisponibilidade e de suspensão/descarte pelo gate. Contadores
 não reinterpretam as cinco falhas antigas: só uma coleta nova identifica seus
 próprios motivos. `CAPTURE_STATUS` (13) preserva o layout da ABI v1; atualizar
@@ -87,7 +87,7 @@ epoch, flags e contadores; descarta endereços, argv e texto. Uma troca de epoch
 de mundo invalida o delta do contador de desenhos da instância recriada, mesmo
 quando a nova contagem já superou a antiga.
 
-`session_probe --local-cycle --follow-player ID --seconds 180` prepara o próximo
+`session_probe --local-cycle --follow-player ID --seconds 180` executa um
 teste de visibilidade sem outro PC. Exige servidor loopback, sala v2 **sem eco**,
 ID real diferente do próprio probe e uma posição/orientação recebida recentemente.
 Segue esse jogador a 4 m no eixo X do mundo (`--follow-offset 400 0 0`); não lê o
@@ -96,8 +96,12 @@ driving por 15 s, loading sem poses por 10 s, driving por 15 s, unavailable sem
 poses por 10 s e driving novamente. Continua com heartbeat, estado confiável e
 marcadores 1001–1005. Fonte ausente há mais de 500 ms suspende coordenadas.
 O tempo máximo é explícito (80–600 s); o relatório schema3 não declara jogo/LAN
-testados. O modo sintético anterior segue com schema2. Ver G13 para uma rodada
-curta futura agrupada; nenhum jogo deve ser aberto por este lote offline.
+testados. O modo sintético anterior segue com schema2. G13 acompanhada em31/10
+confirmou o ciclo e retorno com textura no jogo; coleta3min/181 snapshots e
+limpeza/saída/oito hashes passaram. CAPTURE13 identificou um Changed com
+recuperação. state_hidden93 comprovou ocultação por unavailable; a antecipação
+do primeiro loading e rampa não ficaram isoladas. Ver G13 para escopo e logs;
+não repetir a rodada inteira para validar os mesmos filtros/contadores.
 
 ## Telas do mod: prévia local
 
