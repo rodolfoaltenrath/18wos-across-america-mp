@@ -10,6 +10,40 @@ struct Peer {
     id: u64,
     last_seen: Instant,
     latest: ClientUpdate,
+    rate: crate::traffic::Window,
+}
+
+#[derive(Debug, Default, serde::Serialize)]
+pub struct Metrics {
+    pub received: u64,
+    pub invalid: u64,
+    pub oversized: u64,
+    pub rate_limited: u64,
+    pub accepted: u64,
+    pub stale: u64,
+    pub expired: u64,
+    pub sent: u64,
+    pub bytes_sent: u64,
+    pub send_errors: u64,
+    pub late_ticks: u64,
+}
+#[derive(Debug, serde::Serialize)]
+pub struct Report {
+    pub software_version: &'static str,
+    pub protocol: u8,
+    pub max_clients: usize,
+    pub active_on_shutdown: usize,
+    pub metrics: Metrics,
+    pub broadcast: crate::traffic::Broadcast,
+}
+fn send(socket: &UdpSocket, bytes: &[u8], address: &SocketAddr, metrics: &mut Metrics) {
+    match socket.try_send_to(bytes, *address) {
+        Ok(n) => {
+            metrics.sent += 1;
+            metrics.bytes_sent += n as u64;
+        }
+        Err(_) => metrics.send_errors += 1,
+    }
 }
 
 /// Player ids at or above this value are echoes of the receiving client itself.
@@ -33,6 +67,17 @@ pub async fn run_with_echo(
     echo: bool,
     shutdown: impl Future<Output = ()>,
 ) -> Result<()> {
+    run_with_report(socket, max_clients, timeout, echo, shutdown)
+        .await
+        .map(drop)
+}
+pub async fn run_with_report(
+    socket: UdpSocket,
+    max_clients: usize,
+    timeout: Duration,
+    echo: bool,
+    shutdown: impl Future<Output = ()>,
+) -> Result<Report> {
     ensure!(
         (1..=64).contains(&max_clients),
         "max_clients must be 1..=64"
@@ -40,6 +85,11 @@ pub async fn run_with_echo(
     ensure!(!timeout.is_zero(), "timeout must be positive");
     let mut peers: HashMap<SocketAddr, Peer> = HashMap::new();
     let mut next_id = 1u64;
+    let start = Instant::now();
+    let mut last_tick = start;
+    let mut unknown = crate::traffic::Window::default();
+    let mut metrics = Metrics::default();
+    let mut broadcast = crate::traffic::Broadcast::default();
     let mut interval = time::interval(Duration::from_secs_f64(1.0 / f64::from(TICK_HZ)));
     interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let mut buffer = [0u8; MAX_PACKET + 1];
@@ -47,32 +97,43 @@ pub async fn run_with_echo(
 
     loop {
         tokio::select! {
-            _ = &mut shutdown => return Ok(()),
+            _ = &mut shutdown => return Ok(Report {software_version:env!("CARGO_PKG_VERSION"),protocol:VERSION,max_clients,active_on_shutdown:peers.len(),metrics,broadcast}),
             received = socket.recv_from(&mut buffer) => {
                 let (len, addr) = match received {
                     Ok(value) => value,
                     // Oversized UDP datagrams on Windows may return WSAEMSGSIZE.
-                    Err(error) if matches!(error.raw_os_error(), Some(10040 | 10054)) => continue,
+                    Err(error) if error.raw_os_error()==Some(10040) => {metrics.received+=1;metrics.oversized+=1;continue;},
+                    Err(error) if error.raw_os_error()==Some(10054)||error.kind()==std::io::ErrorKind::ConnectionRefused=>continue,
                     Err(error) => return Err(error.into()),
                 };
-                let Some(update) = protocol::decode_client(&buffer[..len]) else { continue };
+                metrics.received+=1;
+                if len>MAX_PACKET {metrics.oversized+=1;continue;}
+                let now=start.elapsed().as_millis() as u64;
+                let allowed=if let Some(p)=peers.get_mut(&addr) {p.rate.admit(now,240)}else{unknown.admit(now,1024)};
+                if !allowed {metrics.rate_limited+=1;continue;}
+                let Some(update) = protocol::decode_client(&buffer[..len]) else {metrics.invalid+=1;continue;};
                 if let Some(peer) = peers.get_mut(&addr) {
                     if update.sequence > peer.latest.sequence {
                         peer.latest = update;
                         peer.last_seen = Instant::now();
-                    }
+                    } else {metrics.stale+=1;}
                 } else if peers.len() < max_clients {
                     println!("Client {next_id}: {addr}");
-                    peers.insert(addr, Peer { id: next_id, last_seen: Instant::now(), latest: update });
+                    peers.insert(addr, Peer { id: next_id, last_seen: Instant::now(), latest: update,rate:crate::traffic::Window{start:now,used:1} });
+                    metrics.accepted+=1;
                     next_id = next_id.checked_add(1).ok_or_else(|| anyhow::anyhow!("player ID exhausted"))?;
                 }
             }
             _ = interval.tick() => {
+                let tick_start=Instant::now();
+                if tick_start.duration_since(last_tick)>Duration::from_secs_f64(2.0/f64::from(TICK_HZ)) {metrics.late_ticks+=1;}
+                last_tick=tick_start;
                 peers.retain(|addr, peer| {
                     let keep = peer.last_seen.elapsed() < timeout;
-                    if !keep { println!("Client {} expired: {addr}", peer.id); }
+                    if !keep {metrics.expired+=1; println!("Client {} expired: {addr}", peer.id); }
                     keep
                 });
+                let mut packets=0;let mut encoded=0;let mut max=0;
                 for (source, peer) in &peers {
                     let update = ServerUpdate {
                         version: VERSION,
@@ -84,14 +145,17 @@ pub async fn run_with_echo(
                     let bytes = protocol::encode(&update).map_err(anyhow::Error::msg)?;
                     for destination in peers.keys().filter(|addr| *addr != source) {
                         // A failed recipient must not stop relaying to other clients.
-                        let _ = socket.send_to(&bytes, destination).await;
+                        send(&socket,&bytes,destination,&mut metrics);
+                        packets+=1;encoded+=bytes.len() as u64;max=max.max(bytes.len());
                     }
                     if echo {
                         let mirrored = ServerUpdate { player_id: ECHO_ID_BASE + peer.id, ..update };
                         let bytes = protocol::encode(&mirrored).map_err(anyhow::Error::msg)?;
-                        let _ = socket.send_to(&bytes, source).await;
+                        send(&socket,&bytes,source,&mut metrics);
+                        packets+=1;encoded+=bytes.len() as u64;max=max.max(bytes.len());
                     }
                 }
+                broadcast.record(packets,encoded,max,u64::try_from(tick_start.elapsed().as_nanos()).unwrap_or(u64::MAX));
             }
         }
     }
@@ -102,6 +166,64 @@ mod tests {
     use super::*;
     use crate::protocol::{Position, Rotation};
     use tokio::sync::oneshot;
+
+    #[tokio::test]
+    async fn legacy_flood_is_limited_and_does_not_block_other_peers_ticks_or_shutdown() {
+        let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let address = socket.local_addr().unwrap();
+        let (stop, stopped) = oneshot::channel();
+        let task = tokio::spawn(run_with_report(
+            socket,
+            2,
+            Duration::from_millis(200),
+            true,
+            async {
+                let _ = stopped.await;
+            },
+        ));
+        let a = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let b = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let valid = protocol::encode(&ClientUpdate {
+            version: VERSION,
+            sequence: 1,
+            position: Position {
+                x: 1.,
+                y: 2.,
+                z: 3.,
+            },
+            rotation: None,
+        })
+        .unwrap();
+        a.send_to(&valid, address).await.unwrap();
+        time::sleep(Duration::from_millis(10)).await;
+        for i in 0..500 {
+            a.send_to(b"bad", address).await.unwrap();
+            if i % 32 == 0 {
+                tokio::task::yield_now().await;
+            }
+        }
+        b.send_to(&valid, address).await.unwrap();
+        let mut buf = [0; MAX_PACKET];
+        let (n, _) = time::timeout(Duration::from_secs(3), b.recv_from(&mut buf))
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(protocol::decode_server(&buf[..n]).is_some());
+        time::sleep(Duration::from_millis(250)).await;
+        stop.send(()).unwrap();
+        let r = time::timeout(Duration::from_secs(1), task)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert_eq!(r.metrics.accepted, 2);
+        assert!(r.metrics.rate_limited > 0);
+        assert!(r.metrics.invalid > 0);
+        assert_eq!(r.active_on_shutdown, 0);
+        assert_eq!(r.metrics.expired, 2);
+        assert!(r.broadcast.attempted_datagrams > 0 && r.broadcast.max_datagrams_per_batch <= 4);
+        assert!(r.broadcast.max_datagram_bytes <= MAX_PACKET);
+    }
 
     #[tokio::test]
     async fn relays_between_two_clients_without_echo_and_ignores_stale_updates() {

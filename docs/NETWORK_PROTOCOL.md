@@ -144,6 +144,22 @@ render e liberação continuam na integração do motor e em sua thread/fase.
 
 ## Limites e observabilidade
 
+O legado v1 também aplica o teto de 1200 bytes, 64 clientes, 240 ingressos/s
+por origem conhecida e 1024/s compartilhados por desconhecidas, antes do JSON.
+Não aloca uma tabela de origens desconhecidas. Broadcast usa envio não bloqueante
+e tem no máximo 4096 tentativas por tick com eco. No v2, a fixture de 64 clientes
+limita conservadoramente o lote a 1088 datagramas (presença + snapshots).
+Ambos descartam envios que não cabem imediatamente no socket e contam erros;
+nenhuma fila assíncrona cresce por destinatário. Limite de payload é precaução
+contra fragmentação, sem promessa de MTU para toda rede.
+
+O relatório final de cada servidor tem versão e `broadcast` com total/pico de
+bytes e datagramas tentados e tempo de parede gasto no tick, incluindo
+preparação/serialização/envio e eventual escalonamento. Respostas de controle
+ficam só nos contadores gerais. Esse tempo não mede CPU isolada, motor ou FPS;
+um send bem-sucedido não confirma recepção. Endurance/medição entre PCs seguem
+na rodada prática acumulada.
+
 ### Extensão optativa de admissão de carreira — 30/10/2026
 
 `Join` pode conter `admission: {"ticket":"32 dígitos hex minúsculos"}`.

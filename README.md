@@ -1591,6 +1591,16 @@ rodando `session-stop` antes de fechar o jogo. `automatic_load_supported` contin
 
 ### Sessão v2 sem jogo: servidor e dois clientes nativos
 
+Os relatórios do servidor v1/v2 incluem `software_version` e `broadcast`:
+datagramas/bytes tentados, picos por lote/datagrama e tempo de parede de
+preparação/serialização/envio. `processing_ns / batches` dá a média; o máximo
+inclui escalonamento. Não são FPS nem CPU isolada. `metrics.sent/bytes_sent`
+incluem controle e só contam envios aceitos pelo socket, sem confirmar entrega.
+`--report NOVO_ARQUIVO` também funciona no v1, sem `--room`. Ambos limitam
+origens antes do parsing e descartam envios que bloqueariam o loop; nenhum
+destinatário cria uma fila de espera ilimitada. Resultados 16/32 clientes e
+limites estão no registro M3 de 31/10 do roadmap.
+
 Depois de `dev_env verify`, abra três terminais no Windows. `target/analysis`
 precisa existir; os arquivos de saída precisam ser novos. Os arquivos de
 identidade são criados no primeiro uso e reaproveitados; não os versione nem

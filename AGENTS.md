@@ -1,5 +1,16 @@
 # Orientações para continuar o projeto
 
+Lote M3 em 31/10: v1 aplica orçamento antes de JSON (240/s conhecido, 1024/s
+compartilhado desconhecido), 1200 bytes, send não bloqueante e relatório novo.
+V1/v2 reportam versão/custo de broadcast, tentativas/picos/tempo de parede;
+não chamar CPU isolada nem FPS. Sala v2 cheia64 limitada por fixture, v1 flood
+real não bloqueou segundo peer/parada. 54 nativos/54 x86 Proton, release/Clippy.
+Soaks release 16/32 por30s: zero erros/ticks atrasados, leaves/zero ativos;
+0,495/1,527ms médios, 2,62/10,83MB/s somados. Manter batches4/60Hz na LAN
+pequena; otimização espacial exige escala/qualidade medida. M3 limites/custo
+marcados, motor/G6/duração LAN pendentes. Logs privados offline-batch-network-*.
+Sem jogo, instalação ou mudança de originais/kit; preservar M2 já9/9.
+
 Lote offline M1 em 31/10: fonte optativa game-pose (modo 5), leitura de
 posição/quaternion em 40 bytes, duas cópias e testemunho de cadeia repetido,
 vtable/cena/física/valores conferidos. Não é atomicidade da física nem prova

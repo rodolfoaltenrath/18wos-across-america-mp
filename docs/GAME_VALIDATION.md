@@ -636,6 +636,12 @@ montagem/abertura feita. Dublagem é etapa própria (T3), fora desta rodada.
 
 ### G12 — Rodada agrupada dos incrementos offline de 31/10
 
+M3 recebeu limites de ingresso/envio v1 e medição de broadcast v1/v2. Limites
+da sala cheia e carga UDP 16/32 passaram offline (roadmap); não precisam ser
+repetidos manualmente. Na próxima sessão, guardar o `--report` do servidor
+para relacionar bytes/custo/ticks ao teste observado. Ainda não é prova de FPS,
+latência visual ou desempenho entre computadores, nem encerra G6.
+
 Preparar após concluir o lote inteiro. Não reinstalar pump no mesmo processo;
 se for necessário dividir as sub-sessões, usar um processo novo com o mesmo
 backup/procedimento de integridade. Um resultado global positivo não substitui

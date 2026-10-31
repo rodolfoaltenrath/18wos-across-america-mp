@@ -23,8 +23,8 @@ struct Args {
     room: Option<String>,
     #[arg(long, default_value = session_protocol::PROFILE, requires="room")]
     profile: String,
-    /// NEW JSON report file, written on Ctrl+C (v2 only).
-    #[arg(long, requires = "room")]
+    /// NEW JSON report file, written on normal shutdown (v1 or v2).
+    #[arg(long)]
     report: Option<PathBuf>,
     /// Optional finite run for automated tests; otherwise stop with Ctrl+C.
     #[arg(long, value_parser=clap::value_parser!(u64).range(1..=86400))]
@@ -43,6 +43,11 @@ async fn main() -> Result<()> {
         }
     };
     let socket = UdpSocket::bind(args.bind).await?;
+    let mut report_file = args
+        .report
+        .as_ref()
+        .map(std::fs::File::create_new)
+        .transpose()?;
     if let Some(room) = args.room {
         let settings = Settings {
             room,
@@ -55,11 +60,6 @@ async fn main() -> Result<()> {
             echo: args.echo,
         };
         settings.validate().map_err(anyhow::Error::msg)?;
-        let mut report_file = args
-            .report
-            .as_ref()
-            .map(std::fs::File::create_new)
-            .transpose()?;
         println!(
             "UDP {} | wire v2 | room {} | 60 Hz | Ctrl+C to stop",
             socket.local_addr()?,
@@ -80,14 +80,21 @@ async fn main() -> Result<()> {
         args.max_clients,
         args.echo
     );
-    server::run_with_echo(
+    let report = server::run_with_report(
         socket,
         usize::from(args.max_clients),
         Duration::from_secs(args.timeout_secs),
         args.echo,
         shutdown,
     )
-    .await
+    .await?;
+    let bytes = serde_json::to_vec_pretty(&report)?;
+    if let Some(file) = &mut report_file {
+        file.write_all(&bytes)?;
+        file.flush()?;
+    }
+    println!("{}", String::from_utf8(bytes)?);
+    Ok(())
 }
 
 #[cfg(test)]
@@ -108,6 +115,6 @@ mod tests {
                 .as_deref(),
             Some("lan")
         );
-        assert!(Args::try_parse_from(["server", "--report", "unused.json"]).is_err());
+        assert!(Args::try_parse_from(["server", "--report", "unused.json"]).is_ok());
     }
 }

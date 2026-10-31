@@ -16,16 +16,27 @@ use tokio::{
 
 #[derive(Debug, Serialize)]
 pub struct Report {
+    pub software_version: &'static str,
     pub protocol: u8,
     pub session: u64,
     pub settings: Settings,
     pub metrics: Metrics,
     pub active_on_shutdown: usize,
     pub cached_members: usize,
+    pub broadcast: crate::traffic::Broadcast,
 }
-fn send(socket: &UdpSocket, hub: &mut Hub, datagrams: Vec<Datagram>) -> Result<()> {
+fn send(
+    socket: &UdpSocket,
+    hub: &mut Hub,
+    datagrams: Vec<Datagram>,
+) -> Result<(usize, u64, usize)> {
+    let packets = datagrams.len();
+    let mut encoded = 0;
+    let mut max = 0;
     for (address, frame) in datagrams {
         let bytes = wire::encode_server(&frame).map_err(anyhow::Error::msg)?;
+        encoded += bytes.len() as u64;
+        max = max.max(bytes.len());
         match socket.try_send_to(&bytes, address) {
             Ok(size) => {
                 hub.metrics.sent += 1;
@@ -34,7 +45,7 @@ fn send(socket: &UdpSocket, hub: &mut Hub, datagrams: Vec<Datagram>) -> Result<(
             Err(_) => hub.metrics.send_errors += 1,
         }
     }
-    Ok(())
+    Ok((packets, encoded, max))
 }
 pub async fn run(
     socket: UdpSocket,
@@ -60,15 +71,16 @@ pub async fn run_with_admission(
     let mut interval = time::interval(tick);
     interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let mut last_tick = start;
+    let mut broadcast = crate::traffic::Broadcast::default();
     let mut buffer = [0; MAX_PACKET + 1];
     tokio::pin!(shutdown);
     loop {
         tokio::select! {
             _ = &mut shutdown => {
                 let closing = hub.closing(); send(&socket, &mut hub, closing)?;
-                return Ok(Report { protocol: wire::VERSION, session: hub.session,
+                return Ok(Report { software_version:env!("CARGO_PKG_VERSION"),protocol: wire::VERSION, session: hub.session,
                     active_on_shutdown: hub.clients(), cached_members: hub.members(),
-                    settings: hub.settings, metrics: hub.metrics });
+                    settings: hub.settings, metrics: hub.metrics,broadcast });
             }
             received = socket.recv_from(&mut buffer) => {
                 let (len, address) = match received {
@@ -88,7 +100,8 @@ pub async fn run_with_admission(
                 if now.duration_since(last_tick) > tick * 2 { hub.metrics.late_ticks += 1; }
                 last_tick = now;
                 let output = hub.tick(start.elapsed().as_millis() as u64);
-                send(&socket, &mut hub, output)?;
+                let (packets,bytes,max)=send(&socket, &mut hub, output)?;
+                broadcast.record(packets,bytes,max,u64::try_from(now.elapsed().as_nanos()).unwrap_or(u64::MAX));
             }
         }
     }

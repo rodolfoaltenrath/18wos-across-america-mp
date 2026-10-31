@@ -1,5 +1,44 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Lote offline M3: limites e custo do relay — 31/10/2026
+
+O protocolo legado v1 agora limita ingressos antes do parsing: 240 datagramas/s
+por endpoint conhecido e orçamento compartilhado de 1024/s para desconhecidos,
+sem tabela adicional por origem. Datagramas acima de 1200 bytes são recusados;
+sequência velha não renova a presença. Envios do broadcast são não bloqueantes,
+com contadores de falha, bytes, expiração e ticks atrasados. `--report` também
+funciona sem `--room`, preservando o protocolo e os wrappers existentes.
+
+V1/v2 registram versão e custo do lote: tentativas/bytes, maior datagrama,
+maior lote e tempo total/máximo de preparação, serialização e envio. Tempo é de
+parede, inclui escalonamento; não é CPU isolada nem custo do motor. Respostas
+de controle não entram nesse custo, mas continuam nos contadores gerais.
+Sala cheia de 64 participantes, com/sem eco e valores numéricos extremos,
+passou no limite conservador de 1088 datagramas/lote v2 e 1200 bytes/datagrama.
+V1 permanece limitado a 4096 envios/lote com eco; não há fila infinita de envio.
+
+Medição nativa release, UDP real em loopback, 30 s, sem eco/churn/reinício:
+
+| Clientes | Malha completa | Custo médio/máximo do lote | Pico datagrama/lote | Bytes de broadcast / duração |
+| --- | --- | --- | --- | --- |
+| 16 | 51 ms | 0,495 / 0,872 ms | 747 bytes / 80 datagramas | 80.283.056 / 30,603 s |
+| 32 | 68 ms | 1,527 / 2,891 ms | 748 bytes / 288 datagramas | 331.571.472 / 30,602 s |
+
+Ambas: zero send_errors/late_ticks, todos os leaves e zero ativos finais. CPU
+do processo completo (clientes + servidor + driver): 2,08/6,19 s; pico RSS
+amostrado 4.526.080/4.710.400 bytes. Não atribuir CPU/RSS só ao relay. A soma
+dos destinatários cresce aproximadamente quadraticamente (2,62/10,83 MB/s);
+manter batches de quatro e 60 Hz para a pequena LAN atual. Relevância espacial
+ou reduzir frequência exigem medição de qualidade e escala alvo, não entrarão
+por hipótese. 1200 bytes limita payload, sem garantir MTU de qualquer caminho.
+
+Validação: 54 testes nativos e 54 x86 sob Proton (51 biblioteca + três CLI),
+release nativo, Clippy nativo/x86 e fmt; fixture UDP v1 comprovou rate limit,
+serviço ao segundo peer, expiração e parada durante flood. Artefatos privados
+em `target/analysis/offline-batch-network-*20261031*`. Sem jogo, nova LAN ou
+originais alterados. Critérios de limites/custo de M3 concluídos no escopo do
+relay; física/modelos, jitter controlado entre PCs e motor continuam pendentes.
+
 ## Lote offline M1: pose agrupada independente do draw — 31/10/2026
 
 Varredura das etapas existentes solicitada pelo proprietário, sem abrir o jogo.
@@ -4490,17 +4529,23 @@ Se algum método exigir alteração de arquivo, documentar e testar restauraçã
   V2 mede RTT/offset diagnóstico e ordena geração/sequência/revisão. Aplicação do
   relógio estimado à interpolação segue pendente. A primeira medição LAN
   Windows (RTT 16–34 ms) está preservada; caracterização controlada pendente.
-- [ ] Manter tamanho de datagrama controlado, evitar fragmentação e limitar filas,
+- [x] Manter tamanho de datagrama controlado, evitar fragmentação e limitar filas,
   clientes, taxa de pacotes e alocação por origem.
   V2: 1200 bytes, quatro poses por batch, limites de peers/cache/recibos,
-  orçamento antes do parsing e envio não bloqueante. Sessões longas pendentes.
+  orçamento antes do parsing e envio não bloqueante. V1 recebeu orçamento e
+  envio não bloqueante em 31/10; fixture da sala cheia confere limites v2.
+  Payload de 1200 bytes é uma precaução, não garantia de MTU do caminho.
+  Sessões longas no motor permanecem em M8.
 - [ ] Adicionar métricas de pacotes, atraso, perda, jitter e tick atrasado.
   V2: contadores, RTT último/mínimo/máximo, variações de RTT/chegada, recusas,
   limites, bytes e ticks atrasados. Lacunas de tick não estimam perda;
   estimativa de perda e caracterização controlada de jitter entre computadores
   continuam pendentes. A primeira LAN já tem snapshots de timing nos dois PCs.
-- [ ] Medir custo do broadcast atual, que cresce com pares de clientes; avaliar
+- [x] Medir custo do broadcast atual, que cresce com pares de clientes; avaliar
   agrupamento, frequência e relevância espacial quando os números justificarem.
+  Lote de 31/10: medições release 16/32 participantes reais UDP em loopback;
+  média 0,495/1,527 ms, tráfego somado 2,62/10,83 MB/s. Manter quatro poses/batch
+  e 60 Hz na LAN pequena; números não medem motor nem substituem G6.
 - [x] Testar duas máquinas reais; configurar bind LAN, IP e porta. Primeira
   sessão Windows↔Fedora, v2 sem eco, com visual mútuo e limpeza registrada.
 

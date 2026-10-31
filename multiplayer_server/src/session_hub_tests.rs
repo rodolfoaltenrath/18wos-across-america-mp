@@ -51,6 +51,45 @@ fn credentials(output: &[Datagram]) -> (u32, Credentials) {
     };
     (*player, credentials.clone())
 }
+
+#[test]
+fn full_room_has_bounded_batches_and_every_encoded_datagram_fits() {
+    use crate::protocol::Rotation;
+    for echo in [false, true] {
+        let mut h = hub(64, echo);
+        for p in 1..=64u16 {
+            let (_, cred) = credentials(&ingest(&mut h, p, &join(u32::from(p), u64::MAX, None), 0));
+            let frame = ClientFrame::new(C::Pose {
+                credentials: cred,
+                sequence: u64::MAX,
+                client_ms: u64::MAX,
+                position: Position {
+                    x: f32::MAX,
+                    y: f32::MIN,
+                    z: f32::MAX,
+                },
+                rotation: Some(Rotation {
+                    x: 0.,
+                    y: 0.,
+                    z: 0.,
+                    w: 1.,
+                }),
+            });
+            ingest(&mut h, p, &frame, 1);
+        }
+        let frames = h.tick(100);
+        assert!(frames.len() <= 64 * (16 + 1), "{} frames", frames.len());
+        let mut total = 0;
+        for (_, frame) in frames {
+            let bytes = w::encode_server(&frame).unwrap();
+            assert!(bytes.len() <= crate::protocol::MAX_PACKET);
+            assert!(w::decode_server(&bytes).is_some());
+            total += bytes.len();
+        }
+        assert!(total <= 64 * 17 * crate::protocol::MAX_PACKET);
+        assert_eq!(h.clients(), 64);
+    }
+}
 fn pose(credentials: Credentials, sequence: u64, x: f32) -> ClientFrame {
     ClientFrame::new(C::Pose {
         credentials,

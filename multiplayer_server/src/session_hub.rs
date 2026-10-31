@@ -4,6 +4,7 @@ use crate::session_protocol::{
     self as wire, BATCH, ClientFrame, ClientMessage as C, Credentials, ECHO_BASE, MAX_PLAYERS,
     Pose, Refusal, ServerFrame, ServerMessage as S,
 };
+use crate::traffic::Window;
 use serde::Serialize;
 use std::{
     collections::{BTreeMap, VecDeque},
@@ -50,24 +51,6 @@ pub struct Metrics {
     pub bytes_sent: u64,
     pub send_errors: u64,
     pub late_ticks: u64,
-}
-#[derive(Default, Clone)]
-struct Window {
-    start: u64,
-    used: u32,
-}
-impl Window {
-    fn admit(&mut self, now: u64, limit: u32) -> bool {
-        if now.saturating_sub(self.start) >= 1000 {
-            self.start = now;
-            self.used = 0;
-        }
-        if self.used >= limit {
-            return false;
-        }
-        self.used += 1;
-        true
-    }
 }
 struct Member {
     player: u32,

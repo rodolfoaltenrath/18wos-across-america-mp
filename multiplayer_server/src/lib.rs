@@ -15,6 +15,7 @@ pub mod session_hub;
 mod session_hub_tests;
 pub mod session_protocol;
 pub mod session_timing;
+pub mod traffic;
 
 #[cfg(feature = "server")]
 pub mod resources;
