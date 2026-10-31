@@ -20,6 +20,7 @@
 !/translations/
 !/translations/pt-BR/
 !/translations/pt-BR/local_def.json
+!/translations/pt-BR/literal_def.json
 
 !/mod_ui/
 !/mod_ui/Cargo.toml

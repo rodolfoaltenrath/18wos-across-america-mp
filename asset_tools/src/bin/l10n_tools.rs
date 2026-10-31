@@ -1,6 +1,6 @@
 //! Local language/font tooling. No game process or original file is modified.
 use anyhow::{Result, ensure};
-use asset_tools::localization::{self as l10n, catalog, def};
+use asset_tools::localization::{self as l10n, catalog, def, literals};
 use clap::{Parser, Subcommand};
 use std::path::{Path, PathBuf};
 #[derive(Parser)]
@@ -10,6 +10,32 @@ struct Args {
 }
 #[derive(Subcommand)]
 enum Task {
+    /// Inventory literal fields. Original prose is OMITTED unless --include-source.
+    LiteralScan {
+        #[arg(long)]
+        output: PathBuf,
+        #[arg(long)]
+        archive: Vec<PathBuf>,
+        /// PRIVATE original prose for authoring; never version this inventory.
+        #[arg(long)]
+        include_source: bool,
+    },
+    /// Bind authored PT-BR choices (source-value SHA256 -> text) to local resources.
+    LiteralCompose {
+        #[arg(long)]
+        choices: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+        #[arg(long)]
+        archive: Vec<PathBuf>,
+    },
+    /// Validate literal catalog hashes, protected fields, encoding and placeholders.
+    LiteralCheck {
+        #[arg(long)]
+        catalog: PathBuf,
+        #[arg(long)]
+        archive: Vec<PathBuf>,
+    },
     /// Decoded single-byte ORIGINAL text to private stdout; never send it to Git.
     Read {
         #[arg(long)]
@@ -65,6 +91,9 @@ enum Task {
         /// Coverage contrast (0..100), default 40; never thresholds the edges.
         #[arg(long,requires="typeface",value_parser=clap::value_parser!(u8).range(0..=100))]
         font_strength: Option<u8>,
+        /// Authored plain DEF translations outside local.def, checked before writes.
+        #[arg(long)]
+        literals: Option<PathBuf>,
     },
 }
 fn mounts(archive: Vec<PathBuf>) -> Result<l10n::Mounts> {
@@ -78,10 +107,57 @@ fn mounts(archive: Vec<PathBuf>) -> Result<l10n::Mounts> {
     l10n::Mounts::open(&list)
 }
 fn load(path: &Path) -> Result<catalog::Catalog> {
-    catalog::load(&std::fs::read(path)?)
+    catalog::load(&l10n::read_catalog_file(path)?)
+}
+fn write_new(path: &Path, bytes: &[u8]) -> Result<()> {
+    use std::io::Write;
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)?;
+    file.write_all(bytes)?;
+    file.write_all(b"\n")?;
+    file.sync_all()?;
+    Ok(())
 }
 fn main() -> Result<()> {
     match Args::parse().task {
+        Task::LiteralScan {
+            output,
+            archive,
+            include_source,
+        } => {
+            let report = literals::inventory(&mounts(archive)?, include_source)?;
+            write_new(&output, &serde_json::to_vec_pretty(&report)?)?;
+            println!(
+                "{} editable literal fields; {} protected/deferred. Original prose exported: {}.",
+                report.eligible, report.protected, include_source
+            );
+            println!(
+                "{} malformed resources left untouched; see unreadable_resources in the report.",
+                report.unreadable_resources.len()
+            );
+        }
+        Task::LiteralCompose {
+            choices,
+            output,
+            archive,
+        } => {
+            let bytes = asset_tools::localization::read_catalog_file(&choices)?;
+            let choices = serde_json::from_slice(&bytes)?;
+            let catalog = literals::compose(&mounts(archive)?, &choices)?;
+            write_new(&output, &serde_json::to_vec_pretty(&catalog)?)?;
+            println!(
+                "{} resource entries authored; no original prose in catalog.",
+                catalog.files.len()
+            );
+        }
+        Task::LiteralCheck { catalog, archive } => {
+            let cat = literals::load(&l10n::read_catalog_file(&catalog)?)?;
+            let result = literals::compile(&mounts(archive)?, &cat)?;
+            println!("{}", serde_json::to_string_pretty(&result.report)?);
+            ensure!(result.report.errors.is_empty(), "literal catalog rejected");
+        }
         Task::Read { archive, entry } => {
             let b = l10n::codec::decode(&l10n::read_entry(&archive, &entry)?)?;
             println!("{}", def::decode(&b));
@@ -139,6 +215,7 @@ fn main() -> Result<()> {
             archive,
             typeface,
             font_strength,
+            literals,
         } => {
             let face = typeface
                 .as_deref()
@@ -146,11 +223,16 @@ fn main() -> Result<()> {
                 .transpose()?
                 .map(|f| f.with_strength(font_strength.unwrap_or(40)))
                 .transpose()?;
-            let report = l10n::build_with_typeface(
+            let extra = literals
+                .as_deref()
+                .map(|p| literals::load(&l10n::read_catalog_file(p)?))
+                .transpose()?;
+            let report = l10n::build_with_literals(
                 &mounts(archive)?,
                 &load(&catalog)?,
                 &output,
                 face.as_ref(),
+                extra.as_ref(),
             )?;
             println!(
                 "{} of {} keys translated, {} fonts extended, {} skipped, {} files; not tested in game.",

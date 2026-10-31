@@ -1,0 +1,1874 @@
+{
+  "schema": 1,
+  "language": "pt-BR",
+  "source": "literal-def-v1",
+  "files": {
+    "defs/scenarios/become_millionaire.def": {
+      "src": "1b6c2c27fa4b01c03555cfa74d112b83baa80086fbc5670f001d30170657cb97",
+      "entries": {
+        "instructions#0": {
+          "src": "b1fb2879ca3522ac73ada1c366923975eda5e2a545930ebbd640ac7b75942d35",
+          "text": "Quite o empréstimo e acumule $ 1.000.000 antes dos outros jogadores!"
+        },
+        "name#0": {
+          "src": "bb56d82894febb1dacc10139879d0a623ab3b5914bc20b7299ace82698c21ee1",
+          "text": "Torne-se milionário"
+        }
+      }
+    },
+    "makes/trailer/trailer1/acc/base/!desc.def": {
+      "src": "b0dc1dc5923db759092a0f15898f1a60c14ed994ba053a94af0578987793821e",
+      "entries": {
+        "name#0": {
+          "src": "a7c93c042efb290d127a791b3acc15e04c02b9b1f5650701ff642522d09e17ab",
+          "text": "Reboque 1: base"
+        }
+      }
+    },
+    "makes/trailer/trailer1/acc/blights/!desc.def": {
+      "src": "f446ec74734850d3dcb437f7b36f824ee3698ed3fd5c198ff9b998043a681e82",
+      "entries": {
+        "name#0": {
+          "src": "3d98535a46def6019aa06f8a6f6f85a3b0dce65b2a15c11f19714a5cb468b68b",
+          "text": "Reboque 1: luzes de freio"
+        }
+      }
+    },
+    "makes/trailer/trailer1/acc/flares/!desc.def": {
+      "src": "668517633269d8c3389b4acab83fc83ce36a9c5a5ad42ad85c673ec269760971",
+      "entries": {
+        "name#0": {
+          "src": "9039368df4d9a17d55836c7695b14770d0de969190772aea9baaf380be9f6f15",
+          "text": "Reboque 1: sinalizadores"
+        }
+      }
+    },
+    "makes/trailer/trailer1/acc/lblinker/!desc.def": {
+      "src": "069d59ab2c4b4327d7baf1bcd7061a242cffda479433aa707e020e912466ceed",
+      "entries": {
+        "name#0": {
+          "src": "de6f8f812833ea7f752893f5d0340be02eee475576f2b288d3133435d9a37065",
+          "text": "Reboque 1: seta esquerda"
+        }
+      }
+    },
+    "makes/trailer/trailer1/acc/rblinker/!desc.def": {
+      "src": "d04934d51cf87e6e7dac351703b902094b279fdcf290645dfa04143bdcd06da3",
+      "entries": {
+        "name#0": {
+          "src": "11ba289aaa5d41314831cda203cd73639e69e2f21839db7a8b6938a7525349ce",
+          "text": "Reboque 1: seta direita"
+        }
+      }
+    },
+    "makes/trailer/trailer1/acc/rearl/!desc.def": {
+      "src": "db673cf18eca892c31f2ee2bb8783756c63cac750c4f2ac6d76dbe71d4fd1b46",
+      "entries": {
+        "name#0": {
+          "src": "3f502bdccaced555fc5e0c4c3720f6afbde673f8eff993dc79a54c1744f7ea1d",
+          "text": "Reboque 1: lanternas"
+        }
+      }
+    },
+    "makes/trailer/trailer1/acc/rlights/!desc.def": {
+      "src": "575ce08648315d31fe44e40af8c297c757e71a77c74addc2c03207e494c2c8c2",
+      "entries": {
+        "name#0": {
+          "src": "2032b4c6bca974e750a54071d7133b5c88fd4ae8cb62f39de52da0e52f92bb0d",
+          "text": "Reboque 1: luzes de ré"
+        }
+      }
+    },
+    "makes/trailer/trailer10/acc/base/!desc.def": {
+      "src": "fa3b59a1358a5a25401ddf223fbce9b92d93593547227663cb7cb67f4c9ef112",
+      "entries": {
+        "name#0": {
+          "src": "57c3c29dbfe163f9c2b4fb486a26d0e526b9a66715faf1271075db396bed6337",
+          "text": "Reboque 10: base"
+        }
+      }
+    },
+    "makes/trailer/trailer10/acc/blights/!desc.def": {
+      "src": "4baea6d51e51abb8df9dab44cb2ae7234cf9ea9b0867cf1e428419abd6c43320",
+      "entries": {
+        "name#0": {
+          "src": "887bcd12efb19b6d29595be76c94695312207ed93f512391c0d6b804f071d24b",
+          "text": "Reboque 10: luzes de freio"
+        }
+      }
+    },
+    "makes/trailer/trailer10/acc/flares/!desc.def": {
+      "src": "f476347fbd31ed1b35f01617e4d9a21dd0299df4bffc18f3f9f16c5f637419ff",
+      "entries": {
+        "name#0": {
+          "src": "03bb5ee232f131de8322f856f3e7490ca8ca3392ea4465693f2e85fcdf278605",
+          "text": "Reboque 10: sinalizadores"
+        }
+      }
+    },
+    "makes/trailer/trailer10/acc/lblinker/!desc.def": {
+      "src": "ef402d625f1258dbc69002fd8f4104b8bb4de655a42756468e744fdb365bbb55",
+      "entries": {
+        "name#0": {
+          "src": "33fa2c04c0397cefd4deec18348f33129f8d25de00a329fb3e2cc44e139a1e90",
+          "text": "Reboque 10: seta esquerda"
+        }
+      }
+    },
+    "makes/trailer/trailer10/acc/rblinker/!desc.def": {
+      "src": "5920cf38b250e9e12f4cbfa0b5ef9e09c446e467ecfd4f8f00f8c06942622ced",
+      "entries": {
+        "name#0": {
+          "src": "167cdbbb4d972f25ee8842c7499f94976644c2d065eadd1c3271945eb1240197",
+          "text": "Reboque 10: seta direita"
+        }
+      }
+    },
+    "makes/trailer/trailer10/acc/rearl/!desc.def": {
+      "src": "7543d752d936bc4cefcac20a2cd161d010f3cd11e5bbc02f575d89b2304cd5c0",
+      "entries": {
+        "name#0": {
+          "src": "0799e9ddbf7101aa908d7a3ce161cf31cab792b6914f9c90d2f696de0579c4f9",
+          "text": "Reboque 10: lanternas"
+        }
+      }
+    },
+    "makes/trailer/trailer10/acc/rlights/!desc.def": {
+      "src": "e4a894a046e3efa6fd4f9f72f92a0a527f2b93bbfed0aca549744442a3abd6f0",
+      "entries": {
+        "name#0": {
+          "src": "14c11b142890f10407a76111394e80849c6b78c582ec6a7fe6204551a628e53f",
+          "text": "Reboque 10: luzes de ré"
+        }
+      }
+    },
+    "makes/trailer/trailer11/acc/base/!desc.def": {
+      "src": "aeb2d4f2994e6a3c534bc67c4b5bbaa5ee6f8515ec9deb35443bdf50a3f2b480",
+      "entries": {
+        "name#0": {
+          "src": "b77cada9bfb0d728013c88d9a77e9ce2634cb2978a113678f84f84c559ad38d3",
+          "text": "Reboque 11: base"
+        }
+      }
+    },
+    "makes/trailer/trailer11/acc/blights/!desc.def": {
+      "src": "b2a6215ae57e14a0bfb0701dffabe1bfadd7eef4bfb0935ae79d370af3f85fca",
+      "entries": {
+        "name#0": {
+          "src": "be62c9c3f8b7ef049a87964b878c5ef4bdfc5cc0a9fea3e7c94b513b97043d52",
+          "text": "Reboque 11: luzes de freio"
+        }
+      }
+    },
+    "makes/trailer/trailer11/acc/flares/!desc.def": {
+      "src": "b62051cae95c880fd81914a1734936588aa900f2bf4ed4c808543883ee7a24ac",
+      "entries": {
+        "name#0": {
+          "src": "a9057bd1ed3ef671a890ed5d0698da3f24509c986e009c6c1c19bba9a9bc4e3d",
+          "text": "Reboque 11: sinalizadores"
+        }
+      }
+    },
+    "makes/trailer/trailer11/acc/lblinker/!desc.def": {
+      "src": "547d35b21823efb8448d5dbec3e70027e8581a8be28b1050adeff5f1baba132b",
+      "entries": {
+        "name#0": {
+          "src": "7a203c295662c85320537e5f0de5a76f7b5da238935d5a30b31085efb1ef2d77",
+          "text": "Reboque 11: seta esquerda"
+        }
+      }
+    },
+    "makes/trailer/trailer11/acc/rblinker/!desc.def": {
+      "src": "00e3f040eb9581911d2ff07bccdc8ba537e7a927eb8dffa4b7d5fdc3036b1135",
+      "entries": {
+        "name#0": {
+          "src": "f58a47f032922c0868b78828a38fd5b2ed6c5705433e65d9f224004f67ec266b",
+          "text": "Reboque 11: seta direita"
+        }
+      }
+    },
+    "makes/trailer/trailer11/acc/rearl/!desc.def": {
+      "src": "75bf840bb9c309b8aacd988a8af57b4413b68c23e29aaeacd10d709af1919a70",
+      "entries": {
+        "name#0": {
+          "src": "384dd1deafea9087297c88c6ea83cf3d13a96dc5792b700e54d0564edd0d5f0a",
+          "text": "Reboque 11: lanternas"
+        }
+      }
+    },
+    "makes/trailer/trailer11/acc/rlights/!desc.def": {
+      "src": "ece1555d2d83d057a2705509d1072e665c28d6b6edb0fd0d3f98ad0eb5a6e0a1",
+      "entries": {
+        "name#0": {
+          "src": "d7619c7851ad8c91717389cdebcebbb3f164cb136649cfce1a6597b0b3234c8a",
+          "text": "Reboque 11: luzes de ré"
+        }
+      }
+    },
+    "makes/trailer/trailer12/acc/base/!desc.def": {
+      "src": "ba13f57d3f035a4c33403554dc3c7312fd52809c6c90a06c41c24d3dadbe80e9",
+      "entries": {
+        "name#0": {
+          "src": "fbdc627fc2babe86bbad2642828f43425b46bb05117e0a463aa63f3f90f81859",
+          "text": "Reboque 12: base"
+        }
+      }
+    },
+    "makes/trailer/trailer12/acc/blights/!desc.def": {
+      "src": "c6af1c538bf53595604b6e3fb6e5102fc3da0b719d01249fcfaae91949ee9027",
+      "entries": {
+        "name#0": {
+          "src": "e960a0f68a07cc947dc2a40c05932ae1cd29b5c4e09e23fd42818e89758622c3",
+          "text": "Reboque 12: luzes de freio"
+        }
+      }
+    },
+    "makes/trailer/trailer12/acc/flares/!desc.def": {
+      "src": "6fbf65f851699cc9b27eb780af26dd19772e77ff09f5621c10476d02d41f7805",
+      "entries": {
+        "name#0": {
+          "src": "c6a33a7fdf38e88cb3f9b583d99f7ffbbde8ce8369da5920daf1cc8d7d1876c9",
+          "text": "Reboque 12: sinalizadores"
+        }
+      }
+    },
+    "makes/trailer/trailer12/acc/lblinker/!desc.def": {
+      "src": "21c2974372aa4fb7684b35d98030a468ddd5aa39a6d81a315a8c62d07a5e09d9",
+      "entries": {
+        "name#0": {
+          "src": "88ccb18288c208c10b8b1b10fd1106ddd0f265c26417dcdd7f6548c1c787354b",
+          "text": "Reboque 12: seta esquerda"
+        }
+      }
+    },
+    "makes/trailer/trailer12/acc/rblinker/!desc.def": {
+      "src": "28c36218322aae4d490655e12a039b0d80989a1229a92c76cebed575244f9ce9",
+      "entries": {
+        "name#0": {
+          "src": "e5a6c7e1a5303261fece5983c0273d747c829a239f2720353451e61be1e5d789",
+          "text": "Reboque 12: seta direita"
+        }
+      }
+    },
+    "makes/trailer/trailer12/acc/rearl/!desc.def": {
+      "src": "40c606cec813149955666106cc3a630fd8693e6a4b62b2dd99b949fa2f270f54",
+      "entries": {
+        "name#0": {
+          "src": "50fb17fe2474898b84b2c2ddb8013b2acf4216bd9c81a796628ab82daea6e984",
+          "text": "Reboque 12: lanternas"
+        }
+      }
+    },
+    "makes/trailer/trailer12/acc/rlights/!desc.def": {
+      "src": "f97a8fd624894504824b5c79cb72d746a32367176b63ce5dfa0116cbaab98091",
+      "entries": {
+        "name#0": {
+          "src": "1874eb7ca4bc73923f2c5f0b7fbf18e45f708963032f58f1f11190917c07e75a",
+          "text": "Reboque 12: luzes de ré"
+        }
+      }
+    },
+    "makes/trailer/trailer13/acc/base/!desc.def": {
+      "src": "e07e3f3458019699e81a2152e9a30be6547ca3df61a056df749793b41aec015d",
+      "entries": {
+        "name#0": {
+          "src": "403102746dd148140af0774fbfddc21ada691fad3390a6322cfb0e5f259e15a2",
+          "text": "Reboque 13: base"
+        }
+      }
+    },
+    "makes/trailer/trailer13/acc/blights/!desc.def": {
+      "src": "76ac6c421124ab6fd09ab5704eb69acdf0e837a0c3013d10fc0fd670b0879a12",
+      "entries": {
+        "name#0": {
+          "src": "02d1e1a406b3191458ef4408fcc125e1512f7e051f3a328e34ae869b6fb87ece",
+          "text": "Reboque 13: luzes de freio"
+        }
+      }
+    },
+    "makes/trailer/trailer13/acc/flares/!desc.def": {
+      "src": "ef8f3b19bc04cbdcfef430900ad4cc68f6902ce27392d03512e4ee249aebe0ea",
+      "entries": {
+        "name#0": {
+          "src": "486453829cbf2f8f98b992a0dd6cdb964b3fa1c8316ddee034eacb708e93bcff",
+          "text": "Reboque 13: sinalizadores"
+        }
+      }
+    },
+    "makes/trailer/trailer13/acc/lblinker/!desc.def": {
+      "src": "2effa2141d82a7e4cafb784c62020203fbb5decd19ac04514dfd18033778d63a",
+      "entries": {
+        "name#0": {
+          "src": "2d8d1f82fa8c447b56b27de509767d93838239efccba016655c334ea8557050a",
+          "text": "Reboque 13: seta esquerda"
+        }
+      }
+    },
+    "makes/trailer/trailer13/acc/rblinker/!desc.def": {
+      "src": "448639565cb99a3812c96285814e90848ff576905b519545f4ae80205e00783a",
+      "entries": {
+        "name#0": {
+          "src": "6627b111bb148db7398b2c7d246c6ee6594fbff84f4f55ace35c9c400a908797",
+          "text": "Reboque 13: seta direita"
+        }
+      }
+    },
+    "makes/trailer/trailer13/acc/rearl/!desc.def": {
+      "src": "f26038d61e86c2609655322c3f62b0cd849a46f2905c22726f21b7edcbe80c74",
+      "entries": {
+        "name#0": {
+          "src": "4423611280c437d8572015fecbbf95810af2112448487247851bf405185e25ea",
+          "text": "Reboque 13: lanternas"
+        }
+      }
+    },
+    "makes/trailer/trailer13/acc/rlights/!desc.def": {
+      "src": "edf89be66a1b834d1f3e4ff55ad769efc3ea53482a40affe6cbddab65e8fd82c",
+      "entries": {
+        "name#0": {
+          "src": "1c19b9d76e04f4f1fac0a136810fa328dcd7364fc777cb6aad56a4030f588b39",
+          "text": "Reboque 13: luzes de ré"
+        }
+      }
+    },
+    "makes/trailer/trailer14/acc/base/!desc.def": {
+      "src": "8eb1a7b008a141b221409347b74ade270cfff3cd24692551df2ce3c2d66829ef",
+      "entries": {
+        "name#0": {
+          "src": "1caa1124245d6aed63346236e7c8f33e634db7739ce6216b83227a002b287dd6",
+          "text": "Reboque 14: base"
+        }
+      }
+    },
+    "makes/trailer/trailer14/acc/blights/!desc.def": {
+      "src": "bb8e2e866cc25d2ac50d79f9a1682f3ee1b087b210c9f8969b0ae7beeccc7ada",
+      "entries": {
+        "name#0": {
+          "src": "3169c0a13394914c080a0b7a5a319424ef36b92ee22a750efc294b9937fca3c4",
+          "text": "Reboque 14: luzes de freio"
+        }
+      }
+    },
+    "makes/trailer/trailer14/acc/flares/!desc.def": {
+      "src": "51ac118b2c58d5460278ce6ff75078b4465d4ead30b7b720381f2d4abf433746",
+      "entries": {
+        "name#0": {
+          "src": "c17f2a8eebc688fa9049e99940278fdae39d664bedbcbeb03d7d1936e5d9ad86",
+          "text": "Reboque 14: sinalizadores"
+        }
+      }
+    },
+    "makes/trailer/trailer14/acc/lblinker/!desc.def": {
+      "src": "e30cc07b2d42bf4ad58e1dc202a1779c36682ed0a43eb0aa9e24c7cc58439331",
+      "entries": {
+        "name#0": {
+          "src": "573bd1756a22bdc137c2c10a731af175041201c04d3cb316bd0c00bbd02f9a5e",
+          "text": "Reboque 14: seta esquerda"
+        }
+      }
+    },
+    "makes/trailer/trailer14/acc/rblinker/!desc.def": {
+      "src": "558a8765c1593fd6c955871de1d0c911ea453f85c7b27f930a502e2866658eda",
+      "entries": {
+        "name#0": {
+          "src": "37581ce0686eefb9ffaab6ffb6650c3b156bb0bea886a20cf3a284d6af8e7358",
+          "text": "Reboque 14: seta direita"
+        }
+      }
+    },
+    "makes/trailer/trailer14/acc/rearl/!desc.def": {
+      "src": "d2847cd0042a3e69f3c4380d305dd54e58a7a6d176fd690eebe886226b97f925",
+      "entries": {
+        "name#0": {
+          "src": "3cc3653830e4ddb77fa0c8066e6093fccd6b76ec82f0a9ff6e54aa293bf2d201",
+          "text": "Reboque 14: lanternas"
+        }
+      }
+    },
+    "makes/trailer/trailer14/acc/rlights/!desc.def": {
+      "src": "37a98cf58f623e22899a5c634c3f318b65774ddfb77f161d7eb697ecd76cd751",
+      "entries": {
+        "name#0": {
+          "src": "c4b751d2ec9e19083fdb8fa95cab0ee4cc3efec720308a856dd92d17caaa7dd7",
+          "text": "Reboque 14: luzes de ré"
+        }
+      }
+    },
+    "makes/trailer/trailer15/acc/base/!desc.def": {
+      "src": "a8f623b353a62691be5a35332fabe556e07ffa2052ba8e501b412afe27231bd6",
+      "entries": {
+        "name#0": {
+          "src": "e8a5de05b4d7f29ad19eee7814665f0b50d301ce1787ad3a4ad8cc5315f8f4a0",
+          "text": "Reboque 15: base"
+        }
+      }
+    },
+    "makes/trailer/trailer15/acc/blights/!desc.def": {
+      "src": "55cb65cda43274584c58992e9ea9d291f340dd7af0d02199250fd893978ac9a6",
+      "entries": {
+        "name#0": {
+          "src": "6ece84476f599134fed856742f0f3d6413b6c842efe08e8adcafb919947cd862",
+          "text": "Reboque 15: luzes de freio"
+        }
+      }
+    },
+    "makes/trailer/trailer15/acc/flares/!desc.def": {
+      "src": "70107c64980a5fc4b5bb7ffa58f57cb34145df9c30343eb9c382d111094af4ed",
+      "entries": {
+        "name#0": {
+          "src": "27252837484ca5c6cbd8c027f5cb5e4b6d40ecab0fd720bc35315939773e45b8",
+          "text": "Reboque 15: sinalizadores"
+        }
+      }
+    },
+    "makes/trailer/trailer15/acc/lblinker/!desc.def": {
+      "src": "5b51429f839132eb33efc2f5f464bb4695a6c94cc1760e59887f41309b4ad6d6",
+      "entries": {
+        "name#0": {
+          "src": "46d817233da15a20bbd14e562e5d145504da2b5a3031b75a87997275d25ceb94",
+          "text": "Reboque 15: seta esquerda"
+        }
+      }
+    },
+    "makes/trailer/trailer15/acc/rblinker/!desc.def": {
+      "src": "8c8ef21176aa8131fbf30c2bd4711ec81ed55789825998574ac049e35046e81c",
+      "entries": {
+        "name#0": {
+          "src": "24e992e8c4efaa02bcf0960cef353510238c74711df636fd87b6b7cd74ef6396",
+          "text": "Reboque 15: seta direita"
+        }
+      }
+    },
+    "makes/trailer/trailer15/acc/rearl/!desc.def": {
+      "src": "7fc006718b5ea37120ecf5ac5af9c85cf2ec4f3a526413117c57ff22a2e47399",
+      "entries": {
+        "name#0": {
+          "src": "a47ef6a78aa2ecac169a53680157747c66154aa5524bae75550a7c3011ad4281",
+          "text": "Reboque 15: lanternas"
+        }
+      }
+    },
+    "makes/trailer/trailer15/acc/rlights/!desc.def": {
+      "src": "3418b75510e7ec3f1e34e0bb8f9cf28fc4f33254da2484aa2fbbfaa600f06d42",
+      "entries": {
+        "name#0": {
+          "src": "457de055115d9076430e7856856999e4bcca7d85544fcddb0826a4e0b4f50252",
+          "text": "Reboque 15: luzes de ré"
+        }
+      }
+    },
+    "makes/trailer/trailer16/acc/base/!desc.def": {
+      "src": "b8325d95e91a51d9a66c0260ca2df5c1ba3181e3263e4b127faa847284ebc5d0",
+      "entries": {
+        "name#0": {
+          "src": "7887e69bfa34630b118d8f5cce04da5e30af75d616bfd85df7ab9e862705bde8",
+          "text": "Reboque 16: base"
+        }
+      }
+    },
+    "makes/trailer/trailer16/acc/blights/!desc.def": {
+      "src": "851790cda1ad151e704a0a626f9677efc9d92ae0ac48718dbaeb66b9e69201ae",
+      "entries": {
+        "name#0": {
+          "src": "b1db8b6035b0ea9103bd6ea10d0cdb63734e90a74586a77a108488e16d065708",
+          "text": "Reboque 16: luzes de freio"
+        }
+      }
+    },
+    "makes/trailer/trailer16/acc/flares/!desc.def": {
+      "src": "f402bea0bab5808a4ddb0197d8bb599c43686658a9e48792a05203ff7538dd76",
+      "entries": {
+        "name#0": {
+          "src": "90ffaadb624199c3ee35afd649d37b0126825a4b9fcf4180f92745a330f0aa63",
+          "text": "Reboque 16: sinalizadores"
+        }
+      }
+    },
+    "makes/trailer/trailer16/acc/lblinker/!desc.def": {
+      "src": "1ff9fd0eef0094dd18554e1db0d7ecee0873078ce7a8eddf50aec7c0a36bc840",
+      "entries": {
+        "name#0": {
+          "src": "695884e0bf6309c4baa9bee761fcdb064daca5d0d7f34ecc76d0ed3df54d194e",
+          "text": "Reboque 16: seta esquerda"
+        }
+      }
+    },
+    "makes/trailer/trailer16/acc/rblinker/!desc.def": {
+      "src": "5995f72e404fbe7d4e3b457367ef5c23eb1bade6396817bbaefc020b424cec2e",
+      "entries": {
+        "name#0": {
+          "src": "83b0a61317df85f4ca3a291e82d4e3a17abab06e512eccdb3860ad4fff9c6569",
+          "text": "Reboque 16: seta direita"
+        }
+      }
+    },
+    "makes/trailer/trailer16/acc/rearl/!desc.def": {
+      "src": "8b4f915e131a176687d52b4455c76ee9b1bdfe6955fe3e2f6733bfc1314c818c",
+      "entries": {
+        "name#0": {
+          "src": "572c4258cc72430c37e5faf84310beb33ac2131ce1c1d62ce590c2950d14d0cb",
+          "text": "Reboque 16: lanternas"
+        }
+      }
+    },
+    "makes/trailer/trailer16/acc/rlights/!desc.def": {
+      "src": "06e754da873b1760b879c4b0b53ff2955a248ee90893bf79e1d507c807f9e444",
+      "entries": {
+        "name#0": {
+          "src": "23989d4310c96eb335de98983fd2b41cd04a85b9c1e3e2d993b5e6e7ecb0a6f8",
+          "text": "Reboque 16: luzes de ré"
+        }
+      }
+    },
+    "makes/trailer/trailer17/acc/base/!desc.def": {
+      "src": "6b06eed7c54ab12cca8cf0e0c1329c9cb955e9de7cec02add854f611271f6500",
+      "entries": {
+        "name#0": {
+          "src": "61d8836975a909f0cd84c334f74b64f08d3df2b47c7bdf31c5a17e7bfb740d40",
+          "text": "Reboque 17: base"
+        }
+      }
+    },
+    "makes/trailer/trailer17/acc/blights/!desc.def": {
+      "src": "768646d8f5a402f643f587d373833375d0c4223d0ccc86dc1180cfc2b43c594f",
+      "entries": {
+        "name#0": {
+          "src": "c4f0f7067bee4255ddb53bcf94c85b23ebf940c1ea87cdb7b4bf1b160e0f42a2",
+          "text": "Reboque 17: luzes de freio"
+        }
+      }
+    },
+    "makes/trailer/trailer17/acc/flares/!desc.def": {
+      "src": "78bb397c10517013df2fd141f3c0156daf5b33ea87a8eb56d1d3c75b692f16ad",
+      "entries": {
+        "name#0": {
+          "src": "58cfa1741f3be2dea17c44bd26b9f3a7abeaa5e310e29ada2771f4731f15daf4",
+          "text": "Reboque 17: sinalizadores"
+        }
+      }
+    },
+    "makes/trailer/trailer17/acc/lblinker/!desc.def": {
+      "src": "9f9a35d32ac7062a03aa49180ec39d3d53fd269581744a006692b359b12428f6",
+      "entries": {
+        "name#0": {
+          "src": "9909e360e5458dae272ca0e780718dc36a22f3732f24a9472c8c9af8c09c813a",
+          "text": "Reboque 17: seta esquerda"
+        }
+      }
+    },
+    "makes/trailer/trailer17/acc/rblinker/!desc.def": {
+      "src": "01b2506931b429738c2278cd33b6a4bbc937d20c5545c14f6af4cdc6cefb30ce",
+      "entries": {
+        "name#0": {
+          "src": "564a3e9bff1fc79d5f8d9718257b79b20c6174dc1197baea7fe5d95eb84adcd0",
+          "text": "Reboque 17: seta direita"
+        }
+      }
+    },
+    "makes/trailer/trailer17/acc/rearl/!desc.def": {
+      "src": "41ca0b8b7599fc5bf24f3677d2017f6a51be1c9fb065a91888a3a4421f31018e",
+      "entries": {
+        "name#0": {
+          "src": "b2d9e58162629276cb273f32cdcc6601f07c173cfcc8c0bdfdd5e010bdc4ad6f",
+          "text": "Reboque 17: lanternas"
+        }
+      }
+    },
+    "makes/trailer/trailer17/acc/rlights/!desc.def": {
+      "src": "737af39067eab08d20435481d7f38a8551e19f4364e152a5405263640f23a219",
+      "entries": {
+        "name#0": {
+          "src": "a9029705d4dad44cd672fbe052471699fc939ff7bd6747abcbd3fbb2f355a00d",
+          "text": "Reboque 17: luzes de ré"
+        }
+      }
+    },
+    "makes/trailer/trailer18/acc/base/!desc.def": {
+      "src": "4b5b5d3c247891d772f32b755e0058d831f7617dcb5e006ae1c4561eaf698585",
+      "entries": {
+        "name#0": {
+          "src": "1f6e6e77ea897c5fcbecce26d6dc632a7ffd396e83ee088bf4d491c10146d9e6",
+          "text": "Reboque 18: base"
+        }
+      }
+    },
+    "makes/trailer/trailer18/acc/blights/!desc.def": {
+      "src": "abe21cbd323f58f44052811aef7c0d5818bac9a707ba8fa6c1cf1f197dea10b1",
+      "entries": {
+        "name#0": {
+          "src": "541808c060fa96071dbdc9b2eeb5682442d0135efa6b554a7c2343cf45d981e4",
+          "text": "Reboque 18: luzes de freio"
+        }
+      }
+    },
+    "makes/trailer/trailer18/acc/flares/!desc.def": {
+      "src": "7bd3d60ea1460d91aa8c7e6e03a2e4655f464d68fd648904f050988553378f81",
+      "entries": {
+        "name#0": {
+          "src": "51fe682db40da48d0a3be7c851c602bcebab710ba81b8819aadb725047e437d6",
+          "text": "Reboque 18: sinalizadores"
+        }
+      }
+    },
+    "makes/trailer/trailer18/acc/lblinker/!desc.def": {
+      "src": "2a1ce05be54c4fc8d1ac05e5b987ce680e6ff6eb32eb7ae2729b1724b43c545b",
+      "entries": {
+        "name#0": {
+          "src": "5f2f7be57e157bd3b52cc94106a18fd597f525fd8f60fa4aa530a30153d507d0",
+          "text": "Reboque 18: seta esquerda"
+        }
+      }
+    },
+    "makes/trailer/trailer18/acc/rblinker/!desc.def": {
+      "src": "712c420185316a0ce748aff2dfc6ef26b40abd966e6631f03089fd63421ae1d2",
+      "entries": {
+        "name#0": {
+          "src": "e11c2298694febeb860056d9cab34e69324056f87d170a339542b30f65b5686c",
+          "text": "Reboque 18: seta direita"
+        }
+      }
+    },
+    "makes/trailer/trailer18/acc/rearl/!desc.def": {
+      "src": "6f7e0d251ff4d0eacc22686d0562d81d5e8d7f3167d70974100372b334898896",
+      "entries": {
+        "name#0": {
+          "src": "f0ad48207dace8c8c272b8be9d4bfa8f8b60bb6b9a4d888c69a8c0777e2bf152",
+          "text": "Reboque 18: lanternas"
+        }
+      }
+    },
+    "makes/trailer/trailer18/acc/rlights/!desc.def": {
+      "src": "4d00c759bfd3990e477cfbba51b3400a4a68e3230d1af9d5dc3d46238642a9d9",
+      "entries": {
+        "name#0": {
+          "src": "f2a806cdc854698de97a5e21fe3ac5625b8944d56a83c3f59392fa7b4230102c",
+          "text": "Reboque 18: luzes de ré"
+        }
+      }
+    },
+    "makes/trailer/trailer19/acc/base/!desc.def": {
+      "src": "f0e38e2bca1bc81e4962d18342e2022cda8acd5616d553c214a7574fd459dafb",
+      "entries": {
+        "name#0": {
+          "src": "4cbe5b4b6c445578b8d239e762a58a1e1e0ab7c6c2f37305ca3488588a636195",
+          "text": "Reboque 19: base"
+        }
+      }
+    },
+    "makes/trailer/trailer19/acc/blights/!desc.def": {
+      "src": "2d5e4b7e53e2c13632839ddbe288dd08b34e790703811d4ec7ecd9fccb83728f",
+      "entries": {
+        "name#0": {
+          "src": "14a7ccc91ac8c14dc0f358159d7c616c667683ae0b8a221373185759cfbed6b9",
+          "text": "Reboque 19: luzes de freio"
+        }
+      }
+    },
+    "makes/trailer/trailer19/acc/flares/!desc.def": {
+      "src": "ffd0fd81f05ac245172eb4b2a63d9f503e0e69ee856b2a3e971729749d8f8f62",
+      "entries": {
+        "name#0": {
+          "src": "16abdbc9657bc1db1cd4f4112f4b94d847a71e264b8aa768eb9e78e0357ecb23",
+          "text": "Reboque 19: sinalizadores"
+        }
+      }
+    },
+    "makes/trailer/trailer19/acc/lblinker/!desc.def": {
+      "src": "27b8843909e7ec028ddc9413df7300e7ca0322fb5c525bed4a75b80c2b221a72",
+      "entries": {
+        "name#0": {
+          "src": "d0977b64c836d3f9d15e5ff6b42eea950bc25e92898582636408a80c11737c4f",
+          "text": "Reboque 19: seta esquerda"
+        }
+      }
+    },
+    "makes/trailer/trailer19/acc/rblinker/!desc.def": {
+      "src": "1a5df62cfddcfd04d49f9a6c374f1172ce5b1bb0dd2bf56f79929467f11764b2",
+      "entries": {
+        "name#0": {
+          "src": "d3fee1d1b8dd088e4a6e36af220e1f62653b38cb93a7171f7d54f20041900bd7",
+          "text": "Reboque 19: seta direita"
+        }
+      }
+    },
+    "makes/trailer/trailer19/acc/rearl/!desc.def": {
+      "src": "e494bae2cc2d39a0f324698531f394377d0437ac726683a7e206d448516e9c3c",
+      "entries": {
+        "name#0": {
+          "src": "4f82631290e9fa79a7bd9f544b39ded589b8527b4b01be64de8a2f4414a96a7e",
+          "text": "Reboque 19: lanternas"
+        }
+      }
+    },
+    "makes/trailer/trailer19/acc/rlights/!desc.def": {
+      "src": "79846fac9492ce3d3f7ebdb185c70d0afef50621e8c20ee101201d2ba3812869",
+      "entries": {
+        "name#0": {
+          "src": "0875b813312e3bfc6a3ca943b979c43a8bde99709608826d11e77922069663c3",
+          "text": "Reboque 19: luzes de ré"
+        }
+      }
+    },
+    "makes/trailer/trailer2/acc/base/!desc.def": {
+      "src": "fcbc0a65b8b3a4c4f96ca8584cf96159247f39f2b2718f5eae7ae57f9953896f",
+      "entries": {
+        "name#0": {
+          "src": "e260ed3efc99c94b9155b983baacaf5e2a1a98f4fa1b42251268d51d438287f4",
+          "text": "Reboque 2: base"
+        }
+      }
+    },
+    "makes/trailer/trailer2/acc/blights/!desc.def": {
+      "src": "5b6a1104700cbef0b458a1e80d3cf10bcaec78744677b3d68282e7c41649be4b",
+      "entries": {
+        "name#0": {
+          "src": "d0070198cc8599f5f55c0f8ae7ef4640c8a02d289737d044135c192615e1494b",
+          "text": "Reboque 2: luzes de freio"
+        }
+      }
+    },
+    "makes/trailer/trailer2/acc/flares/!desc.def": {
+      "src": "def26c695921b1ef874920fadfc35a33883fb899002a03204b5d8b0db62a640c",
+      "entries": {
+        "name#0": {
+          "src": "4debe87c5f876bde9d5d985f159a773dca12460bea22338f5cd602d30d236308",
+          "text": "Reboque 2: sinalizadores"
+        }
+      }
+    },
+    "makes/trailer/trailer2/acc/lblinker/!desc.def": {
+      "src": "c4b0fc855d56b35402a84495949dc51e25c224a77c26e812953ac5c890159c01",
+      "entries": {
+        "name#0": {
+          "src": "0b0de64f4c015d4d1dece44eb8f24b7c15230f22726ed0766a0e45cf6cf2e5b2",
+          "text": "Reboque 2: seta esquerda"
+        }
+      }
+    },
+    "makes/trailer/trailer2/acc/rblinker/!desc.def": {
+      "src": "0c014e4a59ccd07fff27881ad17d87c2b914f095f6d75451a160cb77bb4cbd93",
+      "entries": {
+        "name#0": {
+          "src": "d87f7530bdb4c0f47b5e50cb777087e3187a27c48515df0fdd43bbb3bbf394ca",
+          "text": "Reboque 2: seta direita"
+        }
+      }
+    },
+    "makes/trailer/trailer2/acc/rearl/!desc.def": {
+      "src": "db0b6deb39c80e94eab57bc1de9e639e37496d5a32dbc4523c7ffc7cb411baf9",
+      "entries": {
+        "name#0": {
+          "src": "09ec6fed5f0761d568b77c73093f2c96be1fc59eeff4537ee6964aa0473a52c3",
+          "text": "Reboque 2: lanternas"
+        }
+      }
+    },
+    "makes/trailer/trailer2/acc/rlights/!desc.def": {
+      "src": "89ff160f123b66a09892b99d48003e021772c542088a66466c829c9c29db543c",
+      "entries": {
+        "name#0": {
+          "src": "dcb52234a5f5a6a1e9caf9b9c5a5f66d4b11c6281709c33510e91129e9c49d6f",
+          "text": "Reboque 2: luzes de ré"
+        }
+      }
+    },
+    "makes/trailer/trailer20/acc/base/!desc.def": {
+      "src": "cf17c3ae5d203d879c61ee926d7c7e7320ff9349c2ebdc61085f06577f86d03f",
+      "entries": {
+        "name#0": {
+          "src": "1ed3e1b9c4ef58f1c2477071da1f04241053d91693d8ed5d3e042911c3df3e27",
+          "text": "Reboque 20: base"
+        }
+      }
+    },
+    "makes/trailer/trailer20/acc/blights/!desc.def": {
+      "src": "e74a33cf9f58eeaa60753386945db1b6620db94c43d0141aaa36e181b50ef4ff",
+      "entries": {
+        "name#0": {
+          "src": "07a92544011848ce9c83e817d8844813ea751c2f8c65e1a8728e1221f19c37bc",
+          "text": "Reboque 20: luzes de freio"
+        }
+      }
+    },
+    "makes/trailer/trailer20/acc/flares/!desc.def": {
+      "src": "0b87fed2a9acd3102f575272540860f69f5b097286fd2fe83848db42e9b4362b",
+      "entries": {
+        "name#0": {
+          "src": "b716737a9fd006f917a93d2c610bc1fc8a1d68919438fa8d81cbbf18d4ed5b10",
+          "text": "Reboque 20: sinalizadores"
+        }
+      }
+    },
+    "makes/trailer/trailer20/acc/lblinker/!desc.def": {
+      "src": "98b6a54f1ef469a288100c7a0baf96d67cd443d4e6abce34920a053701b0464b",
+      "entries": {
+        "name#0": {
+          "src": "45716d9728cd1c3d549260d22f02f22b0bd2abdc06b9060be25c2caa41571973",
+          "text": "Reboque 20: seta esquerda"
+        }
+      }
+    },
+    "makes/trailer/trailer20/acc/rblinker/!desc.def": {
+      "src": "e442385a8fb29bf8695ba8afeae4dab4c3cce11935980712695c2040f732e133",
+      "entries": {
+        "name#0": {
+          "src": "c01b4aed7a5719e0f74e1ec922d9812c3e5958af80362685bd2e9a476e25fc5e",
+          "text": "Reboque 20: seta direita"
+        }
+      }
+    },
+    "makes/trailer/trailer20/acc/rearl/!desc.def": {
+      "src": "7abe89420344913a0ed4a444117755bf8acdc2ec5ff6c061d48f882c912f2f1f",
+      "entries": {
+        "name#0": {
+          "src": "b922484add1f8aa1a16aef137035776214161dd0ca1f1202911c71f62cc97303",
+          "text": "Reboque 20: lanternas"
+        }
+      }
+    },
+    "makes/trailer/trailer20/acc/rlights/!desc.def": {
+      "src": "159510bd5bc9de9b76e3f6110906b1b8f08b09b2c07d4d1b6b97865eabda4b3f",
+      "entries": {
+        "name#0": {
+          "src": "5907eec0e5cea182fd4f13893e657118522c4e0c0c99b19923cb9037eb1d45b2",
+          "text": "Reboque 20: luzes de ré"
+        }
+      }
+    },
+    "makes/trailer/trailer21/acc/base/!desc.def": {
+      "src": "223ba7c5d66936fdff03be2a956179ec5bc85eb28f7a6e7de168fe60c8b88ec7",
+      "entries": {
+        "name#0": {
+          "src": "170c84a23ab06d8af991446edd826ad8a611a5e085144120a6e886d2f414437d",
+          "text": "Reboque 21: base"
+        }
+      }
+    },
+    "makes/trailer/trailer21/acc/blights/!desc.def": {
+      "src": "f9603c290d62786ecbdb896516571ea0df81fcb38de4e7b66d61571560335958",
+      "entries": {
+        "name#0": {
+          "src": "ccf04d50b04f602ddeb2390cbee1e1505d11a5d1b8d02030cdede8e7ab947c3e",
+          "text": "Reboque 21: luzes de freio"
+        }
+      }
+    },
+    "makes/trailer/trailer21/acc/flares/!desc.def": {
+      "src": "7b3465389ff565a9eb3e3c1b077a8c4e03e047d9115e9363373934d296f657df",
+      "entries": {
+        "name#0": {
+          "src": "84ad6dbe635f76ac344cdd65fa9143a169aaa4566dc513394d113b0868be01e2",
+          "text": "Reboque 21: sinalizadores"
+        }
+      }
+    },
+    "makes/trailer/trailer21/acc/lblinker/!desc.def": {
+      "src": "e4381af9eabea0104af59bed5e8a313831dfa339bc013c409104882c59e6b891",
+      "entries": {
+        "name#0": {
+          "src": "5fdb41cfd1180eb5ca07a49f114709cc3009ce526f226e690a6d04e9c8e12b4c",
+          "text": "Reboque 21: seta esquerda"
+        }
+      }
+    },
+    "makes/trailer/trailer21/acc/rblinker/!desc.def": {
+      "src": "4cf4adffcf072780ae099faeb8c71936bb68e82107f2d9ca5d142c906e6857d4",
+      "entries": {
+        "name#0": {
+          "src": "c2970ee18a8f03a1105668db76f08627968a3021292ff39b532f15986747c6ed",
+          "text": "Reboque 21: seta direita"
+        }
+      }
+    },
+    "makes/trailer/trailer21/acc/rearl/!desc.def": {
+      "src": "b3ed952207ce520f6df2ed446181931b688c54736366a171738d6e1f454ffd61",
+      "entries": {
+        "name#0": {
+          "src": "798a908106ab87c1b219efd661aefada6a171324daa96fefbc9600624ea42168",
+          "text": "Reboque 21: lanternas"
+        }
+      }
+    },
+    "makes/trailer/trailer21/acc/rlights/!desc.def": {
+      "src": "f849db38a455e9a43cf686a85e2e793f12669aefaa74e539ae8abc5ead069cf5",
+      "entries": {
+        "name#0": {
+          "src": "965191fe3838d1a671cdf66656d56ca55b8174a5c9f9f43cce087557bf004590",
+          "text": "Reboque 21: luzes de ré"
+        }
+      }
+    },
+    "makes/trailer/trailer3/acc/base/!desc.def": {
+      "src": "6db4c2b901e111d1824b3cdce39b52beb3b88f940e02c353f41361f7a95b866e",
+      "entries": {
+        "name#0": {
+          "src": "477e05c2b950363965947fd8baadad8fb856af9c17675e4e8c3ed2b0b68a3af3",
+          "text": "Reboque 3: base"
+        }
+      }
+    },
+    "makes/trailer/trailer3/acc/blights/!desc.def": {
+      "src": "4ee077e3bbd6b19c59f393f19a6c2d070ff533ead52db33b7d8a8d9b94c9ce4c",
+      "entries": {
+        "name#0": {
+          "src": "21af52cb12a2733f086f609dc1f84662efb043f74fa1cc6c4079deeef114e748",
+          "text": "Reboque 3: luzes de freio"
+        }
+      }
+    },
+    "makes/trailer/trailer3/acc/flares/!desc.def": {
+      "src": "11f7c048aeb014c45fec67205739666d5f0e0499368d764d0f2429c6c8a4f146",
+      "entries": {
+        "name#0": {
+          "src": "db2b66fcc7e7dc6f9788709ab953a622f6157416d8577bfe7448db8c1d87d122",
+          "text": "Reboque 3: sinalizadores"
+        }
+      }
+    },
+    "makes/trailer/trailer3/acc/lblinker/!desc.def": {
+      "src": "1bb6ff4a8bcb872a44333054db39cd5afb51ea0f4bc6e28abb6c4b5ad1a485e4",
+      "entries": {
+        "name#0": {
+          "src": "d54c5aa313d0a7b05346ac9c6d3c14f624ed6ec5591d113b37635efba2daf6ff",
+          "text": "Reboque 3: seta esquerda"
+        }
+      }
+    },
+    "makes/trailer/trailer3/acc/rblinker/!desc.def": {
+      "src": "f8bcdf2cc8654c7589e45702b7c92a48a5c1867885c24f2bee942f6bce28d2bd",
+      "entries": {
+        "name#0": {
+          "src": "c72ec4a0b250bd04a5445235fbc914a0aaca8d951105c809b1bdc9093b827313",
+          "text": "Reboque 3: seta direita"
+        }
+      }
+    },
+    "makes/trailer/trailer3/acc/rearl/!desc.def": {
+      "src": "3e9da51124ad98738d434ccdcfe83281448c1e4d11e7c8280da0ee973aed87ce",
+      "entries": {
+        "name#0": {
+          "src": "04b5eed6af13750e884e84db121fa149e99638b731bf524fe40c699f295ae643",
+          "text": "Reboque 3: lanternas"
+        }
+      }
+    },
+    "makes/trailer/trailer3/acc/rlights/!desc.def": {
+      "src": "396ab21d70a236f5759afb56412eeaa2f5847af5a1a7c9d4544ab9868d404ef5",
+      "entries": {
+        "name#0": {
+          "src": "e3f48db69305e3146d45a0537a4c1b35d7a5de5ee3aea8b3ef271785c2e65ff8",
+          "text": "Reboque 3: luzes de ré"
+        }
+      }
+    },
+    "makes/trailer/trailer4/acc/base/!desc.def": {
+      "src": "4c9361547b2237202e171458fcd9a79d094c86ee331b2e91d08c633036850f90",
+      "entries": {
+        "name#0": {
+          "src": "d709e970757efa83331d87918abbb8a5ff0852a54c2452b842797dcf303b2256",
+          "text": "Reboque 4: base"
+        }
+      }
+    },
+    "makes/trailer/trailer4/acc/blights/!desc.def": {
+      "src": "e0023673f67d56345c102ce8596ff911b9aecd2f07d0389b0bcc063428773c1f",
+      "entries": {
+        "name#0": {
+          "src": "ae03b9beda6b032f541937552a4950389cc5971990b4e20a1709e16b819e36aa",
+          "text": "Reboque 4: luzes de freio"
+        }
+      }
+    },
+    "makes/trailer/trailer4/acc/flares/!desc.def": {
+      "src": "17b712ca80bca0242363d4956b6390e5b6975b4bdc3d49d95ef697620c8526da",
+      "entries": {
+        "name#0": {
+          "src": "9409e22dffe2460d4ecb17c062a04228dadaaa30e6bf80af98c6eec0ab74df3f",
+          "text": "Reboque 4: sinalizadores"
+        }
+      }
+    },
+    "makes/trailer/trailer4/acc/lblinker/!desc.def": {
+      "src": "13574728538c45c355bd08a94c5825cb5087763529e718d3b65360e042becfbf",
+      "entries": {
+        "name#0": {
+          "src": "226b2f69e60d5e6de9fbe0a97cc068e2ef933639b6b520ea5453abaecc8ed2df",
+          "text": "Reboque 4: seta esquerda"
+        }
+      }
+    },
+    "makes/trailer/trailer4/acc/rblinker/!desc.def": {
+      "src": "9da04a850dc8af910b3d0cddbb6fb9dddcf3e4e1a53cd00a6dd2481101804700",
+      "entries": {
+        "name#0": {
+          "src": "e4dc69d97684f6187528fb929fae65eaacc8089e9ffe9dc4fb9e04e68a55b56e",
+          "text": "Reboque 4: seta direita"
+        }
+      }
+    },
+    "makes/trailer/trailer4/acc/rearl/!desc.def": {
+      "src": "9660972cdc6be4c967cc60af1111cf3efb3ea1f2fc28fe2df44b976577142a18",
+      "entries": {
+        "name#0": {
+          "src": "cba3f5d1093f00570d23ae10448616dadc67eed3d5258a8cb8ff79ddeca76f25",
+          "text": "Reboque 4: lanternas"
+        }
+      }
+    },
+    "makes/trailer/trailer4/acc/rlights/!desc.def": {
+      "src": "fe3b4bb585b6ab62675fa27fbfcccbc525d98371c61bdaacba9d04409be324f7",
+      "entries": {
+        "name#0": {
+          "src": "56c6c6d7048cc0be836a3c4606abef250887b544af0c0fb1c22ee85969a7e7cc",
+          "text": "Reboque 4: luzes de ré"
+        }
+      }
+    },
+    "makes/trailer/trailer5/acc/base/!desc.def": {
+      "src": "c63938e8f5610ea191e3ed0a9dc1bb4b8670c17316ab085e978516c14092fb34",
+      "entries": {
+        "name#0": {
+          "src": "69d278f3e63eaa50d650c83d170fbe94e538c2be7315b5b90903df9a590a1a34",
+          "text": "Reboque 5: base"
+        }
+      }
+    },
+    "makes/trailer/trailer5/acc/blights/!desc.def": {
+      "src": "85d24e01fbb2d1dc0594543d7ba6ad80c3577ca19124e6a30c02babb357297f7",
+      "entries": {
+        "name#0": {
+          "src": "454dc54487e1d75f3dbf175774657f88f440705618e0704efceffadb996ebbc3",
+          "text": "Reboque 5: luzes de freio"
+        }
+      }
+    },
+    "makes/trailer/trailer5/acc/flares/!desc.def": {
+      "src": "a1ed65bcd76e52b81e72636ce147faf7bdcff65e02ec97a1ac873966f5ccea28",
+      "entries": {
+        "name#0": {
+          "src": "a64fa5082577f62029989f4f5e7ccdc5cbd99b3db703707a4d658e4fc6832074",
+          "text": "Reboque 5: sinalizadores"
+        }
+      }
+    },
+    "makes/trailer/trailer5/acc/lblinker/!desc.def": {
+      "src": "77de232fed8923b5176d2edbc17b25ec68bbce412947db709482c479b0d25ee8",
+      "entries": {
+        "name#0": {
+          "src": "38b5fe8221cc21c0002a36c1fa53e877aef631653703965b47d04907f001e40b",
+          "text": "Reboque 5: seta esquerda"
+        }
+      }
+    },
+    "makes/trailer/trailer5/acc/rblinker/!desc.def": {
+      "src": "74de352d60d6336164c01ccd2edc8c6762442016c7071ffb17451f2db8575caf",
+      "entries": {
+        "name#0": {
+          "src": "904f0ce3230e249da18ab23a9d04476bbe9491ec92936761e6a0c5023d1cfc8a",
+          "text": "Reboque 5: seta direita"
+        }
+      }
+    },
+    "makes/trailer/trailer5/acc/rearl/!desc.def": {
+      "src": "46948695bc9997bb27dd4680438ca3989da207bb9b6b3b351a5052c8495fa2c1",
+      "entries": {
+        "name#0": {
+          "src": "31090aa26cabcf5d24d74270b30c79cd602b55541908a7f76eb082c967592cf3",
+          "text": "Reboque 5: lanternas"
+        }
+      }
+    },
+    "makes/trailer/trailer5/acc/rlights/!desc.def": {
+      "src": "80fe36763285611122fa47edd82bcdb2400e2a31ad84630f2abadef318243fcb",
+      "entries": {
+        "name#0": {
+          "src": "2a6701958dc37a360e5d31c26540d684ca13147051f9e6b1690209385e34baf6",
+          "text": "Reboque 5: luzes de ré"
+        }
+      }
+    },
+    "makes/trailer/trailer5/acc/wheel/!desc.def": {
+      "src": "f207b385c55a3789fd08a61728372a509add857651cac5bf3fe20bfca6ede5de",
+      "entries": {
+        "name#0": {
+          "src": "a67bac5624b31543804e1112f0dd2102a4657a3b9d4230a6bddd421d0a1bce2e",
+          "text": "Reboque 5: rodas"
+        }
+      }
+    },
+    "makes/trailer/trailer6/acc/base/!desc.def": {
+      "src": "2e639daa587eca9f9f1908edb286223502e94be5763c582ca089e5b9cb6532a9",
+      "entries": {
+        "name#0": {
+          "src": "0fed72a16c5ee49640b11e683f337cb920e0273c4a142a4483684f3d6ca1a249",
+          "text": "Reboque 6: base"
+        }
+      }
+    },
+    "makes/trailer/trailer6/acc/blights/!desc.def": {
+      "src": "9ad9e041f5bd98776fa5ede0b57286de442c82da7787ded35669fe2b50aa40a7",
+      "entries": {
+        "name#0": {
+          "src": "0c4274adce63a849daadb97459b055c91a125c22d2954e5384ba8bb4d11a3500",
+          "text": "Reboque 6: luzes de freio"
+        }
+      }
+    },
+    "makes/trailer/trailer6/acc/flares/!desc.def": {
+      "src": "ae19a421d09fd705b02882801248a3b3cfcde9c2e1ab84080d60e748cbaba301",
+      "entries": {
+        "name#0": {
+          "src": "75d882fa619a5aa7c416c974651e3c689442cda484bac73f7243d6ea7400110c",
+          "text": "Reboque 6: sinalizadores"
+        }
+      }
+    },
+    "makes/trailer/trailer6/acc/lblinker/!desc.def": {
+      "src": "c1f407bcdec93ed2b5adec122e6df04c39b78b62f111ce57e9a596dc80184865",
+      "entries": {
+        "name#0": {
+          "src": "7234258577129b76e30007caa266fe105b75eb6b1734859d20be28345924863e",
+          "text": "Reboque 6: seta esquerda"
+        }
+      }
+    },
+    "makes/trailer/trailer6/acc/rblinker/!desc.def": {
+      "src": "8bb791891f6caf6953e45e074b6b3987a2ceccc27fefb4c8481bfb5476eb57c0",
+      "entries": {
+        "name#0": {
+          "src": "6e5d13f1f70d89729abfff921ab15879fd272c2d34216a58dc11f263a54917a4",
+          "text": "Reboque 6: seta direita"
+        }
+      }
+    },
+    "makes/trailer/trailer6/acc/rearl/!desc.def": {
+      "src": "6b00b33d1a1246f3d320597a86395fb8cb2fd1d9e3be19e4049e740c5ade2c8d",
+      "entries": {
+        "name#0": {
+          "src": "2351ac125dcfd3ff40948dfeb3ce9a6f437e6de61b809909da47c91da3257204",
+          "text": "Reboque 6: lanternas"
+        }
+      }
+    },
+    "makes/trailer/trailer6/acc/rlights/!desc.def": {
+      "src": "c8fca3e9e1fab2b52c4d4483b294b26968481cc8f0ce3fdf9e17a2b2fa296fba",
+      "entries": {
+        "name#0": {
+          "src": "d914e611e10b8f23af0e640848b23459592259843ba7699017244e64a55ec984",
+          "text": "Reboque 6: luzes de ré"
+        }
+      }
+    },
+    "makes/trailer/trailer7/acc/base/!desc.def": {
+      "src": "9f173730da1570673b2619562dfbc2d398cac8f99fea56f777d19ba0e0dff0c4",
+      "entries": {
+        "name#0": {
+          "src": "ce86865ce7c122940bd67b4214ba470764b40f032f63d44973e1cde0961117eb",
+          "text": "Reboque 7: base"
+        }
+      }
+    },
+    "makes/trailer/trailer7/acc/blights/!desc.def": {
+      "src": "ee986f2bf4f354be728d9d8496d1d436ed2619c5b69961c567d0e676b3c4dd55",
+      "entries": {
+        "name#0": {
+          "src": "d206d6b0a742f732b3a7f4e76ef4a717c91ed4c332515890343029cde4f4979e",
+          "text": "Reboque 7: luzes de freio"
+        }
+      }
+    },
+    "makes/trailer/trailer7/acc/flares/!desc.def": {
+      "src": "fe6f903c71ae12929216d6b8718303149aed47a605bffdb310c32111c2d39e59",
+      "entries": {
+        "name#0": {
+          "src": "435379d52977f9759b59bc8577b6187635f75be87ca8f73c176a69e5f8f21b3b",
+          "text": "Reboque 7: sinalizadores"
+        }
+      }
+    },
+    "makes/trailer/trailer7/acc/lblinker/!desc.def": {
+      "src": "3d97bd8cbaf593a24b66c6a23167b67c16077839869466fb59eeb90ad9b5ceb0",
+      "entries": {
+        "name#0": {
+          "src": "ae0b8f0a7f3c1b9644989a4fcb75490f2f819ec10a105cc40ee332209324d64f",
+          "text": "Reboque 7: seta esquerda"
+        }
+      }
+    },
+    "makes/trailer/trailer7/acc/rblinker/!desc.def": {
+      "src": "b4b052e97ab97d9b8a5a2dbd0668edfafe593018924639d21edbac1d342474d9",
+      "entries": {
+        "name#0": {
+          "src": "6b4d93a28b73b6c21657ec61d3cc425bce054b2fc8d59f46596ea6a735aa82c4",
+          "text": "Reboque 7: seta direita"
+        }
+      }
+    },
+    "makes/trailer/trailer7/acc/rearl/!desc.def": {
+      "src": "84878693fd9dace2fbcd270965ba6b0ac417c4cd79ba7da4b9c493f5686e9993",
+      "entries": {
+        "name#0": {
+          "src": "045d692ac2ee0a8cab588d178851c8925ddb449c8e64d74d4560369d9cf5fb92",
+          "text": "Reboque 7: lanternas"
+        }
+      }
+    },
+    "makes/trailer/trailer7/acc/rlights/!desc.def": {
+      "src": "35bf6e43907c3bd9649c96a806d315cf87a51a55a4c961903717ab74a677fd62",
+      "entries": {
+        "name#0": {
+          "src": "ec9b28b560d8ab40ea116c361354f82d5e97581d9aa45b74ce43cade3e22f2f4",
+          "text": "Reboque 7: luzes de ré"
+        }
+      }
+    },
+    "makes/trailer/trailer8/acc/base/!desc.def": {
+      "src": "a7854ccb911a64b2dfd484e4013bf06b4c9381cf6bc8b1839ce5da880f8578c0",
+      "entries": {
+        "name#0": {
+          "src": "c79b51068e826a032941f626f3aefc9a9e73c454efc070c8bb9c66f79fa981ae",
+          "text": "Reboque 8: base"
+        }
+      }
+    },
+    "makes/trailer/trailer8/acc/blights/!desc.def": {
+      "src": "b40261cdf788bbc2506fd10f0183677e3fa4f699a43ac5dd898103f1931eb643",
+      "entries": {
+        "name#0": {
+          "src": "17241b973cd376cfcf44d4f0bf198494b6df062dbadbf8c74fa2db335df6d744",
+          "text": "Reboque 8: luzes de freio"
+        }
+      }
+    },
+    "makes/trailer/trailer8/acc/flares/!desc.def": {
+      "src": "a6866e68c3d66f943c1d5d5fb619a747ec8cc765b4349448a502bd3ab362bcfc",
+      "entries": {
+        "name#0": {
+          "src": "589e98fe6f815b652b3e0a4d1c1a12ee6469739123e0e70a7ef180c7e4274b49",
+          "text": "Reboque 8: sinalizadores"
+        }
+      }
+    },
+    "makes/trailer/trailer8/acc/lblinker/!desc.def": {
+      "src": "3d3ec8dd4b1cb3a839c0999662ea7283a2caa406f3f4a7eb57f42ae9628b7245",
+      "entries": {
+        "name#0": {
+          "src": "788e15298cb4479f89c9bded1ed1aa514652eaa88eda24834b1d3af42f0e519e",
+          "text": "Reboque 8: seta esquerda"
+        }
+      }
+    },
+    "makes/trailer/trailer8/acc/rblinker/!desc.def": {
+      "src": "3beb1676a461dfa4f9474893cebc77bf2fa9597226d7f9969ad2986cc81f0599",
+      "entries": {
+        "name#0": {
+          "src": "14bdce8f498130065e1b1c4ad4ed9d0b79661387302f9aa1a6d9668b01cef4af",
+          "text": "Reboque 8: seta direita"
+        }
+      }
+    },
+    "makes/trailer/trailer8/acc/rearl/!desc.def": {
+      "src": "c84ef1bf9ac0a12b836b489d73c528a0a30a5e029093cfcf02a7cbe8315c50c2",
+      "entries": {
+        "name#0": {
+          "src": "bcf39a26ee45c95dcdd8a82f8eb403a87402c5d1a65635f052814821075a5375",
+          "text": "Reboque 8: lanternas"
+        }
+      }
+    },
+    "makes/trailer/trailer8/acc/rlights/!desc.def": {
+      "src": "bf74fb15fdf93027fecc111fd79ca83588af0d5dcd3552e9b5ff11fba10467d2",
+      "entries": {
+        "name#0": {
+          "src": "e471c168018615ce55d7d5ae56a0bf852593bcddde68269378557b2983642e9b",
+          "text": "Reboque 8: luzes de ré"
+        }
+      }
+    },
+    "makes/trailer/trailer9/acc/base/!desc.def": {
+      "src": "e41d8dcb1d4d1ce9b72892d5a60b98b363639817e55c575845f5145a105d4c32",
+      "entries": {
+        "name#0": {
+          "src": "6eaa09d7af785697e434600ce77b7f8acf735831c46fec02468ef5193d845c18",
+          "text": "Reboque 9: base"
+        }
+      }
+    },
+    "makes/trailer/trailer9/acc/blights/!desc.def": {
+      "src": "d4d390aa5584805065f5d29852a72f51c133ab2aa3415e32010db6c3b3038dab",
+      "entries": {
+        "name#0": {
+          "src": "e5d10f8c3b4c01191e3b1149ee1295ae057835b4e1a34819b69b5bd7e6c7e068",
+          "text": "Reboque 9: luzes de freio"
+        }
+      }
+    },
+    "makes/trailer/trailer9/acc/flares/!desc.def": {
+      "src": "02137cf534238e337da4f422b982c060b9c2b3d1cd9886ed22b2774181335d5f",
+      "entries": {
+        "name#0": {
+          "src": "a895d9848a3c55b82ae8d0a51c1890a216b2753182af19223c7151976da4bb2a",
+          "text": "Reboque 9: sinalizadores"
+        }
+      }
+    },
+    "makes/trailer/trailer9/acc/lblinker/!desc.def": {
+      "src": "69d89456a283a104e10df478def0eb9c43281b7fcf868c6794139301eb5c0298",
+      "entries": {
+        "name#0": {
+          "src": "ec6e83e36f00b5a5c10a15c212016ffa23a98326c41ecc8ee3cc7dcfb3e631d1",
+          "text": "Reboque 9: seta esquerda"
+        }
+      }
+    },
+    "makes/trailer/trailer9/acc/rblinker/!desc.def": {
+      "src": "935ae226b9ad0bad646465c1b74899482f70f08aa94da0ae59bcb819b4368800",
+      "entries": {
+        "name#0": {
+          "src": "4a305d14678fe7c2498b5962541ab910a372108ec06691e0b1e1cab9b5aec65f",
+          "text": "Reboque 9: seta direita"
+        }
+      }
+    },
+    "makes/trailer/trailer9/acc/rearl/!desc.def": {
+      "src": "84ff2eb202a2a633ee5634d3e715854d6f8ee1478a4d2dc9fb5c94e7f0519bce",
+      "entries": {
+        "name#0": {
+          "src": "94e00d2f04fcffc74625659c86f38323559096b3ff69dc38a449e18391c5779b",
+          "text": "Reboque 9: lanternas"
+        }
+      }
+    },
+    "makes/trailer/trailer9/acc/rlights/!desc.def": {
+      "src": "1273d0475ec9061cc289051fecf40b2f9e9d52a7b2053d73449389ac972f2904",
+      "entries": {
+        "name#0": {
+          "src": "110b9ea45fecb2387433563e06be50cd3b3ca812e84d309a843ee277bd544bf9",
+          "text": "Reboque 9: luzes de ré"
+        }
+      }
+    },
+    "makes/truck/fcl/acc/paint0/!desc.def": {
+      "src": "c4973c3c94e3abd2152d9d55b5ecb3df71c96d5d02a79ed8ef7e3a9d35ff0a38",
+      "entries": {
+        "name#0": {
+          "src": "c91a6b022463f649ab5afe0c2e0dc70d770570b9ab660e400f616aef284bea82",
+          "text": "Chama vermelha"
+        }
+      }
+    },
+    "makes/truck/fcl/acc/paint1/!desc.def": {
+      "src": "fc7a9314f60f31982c70f4c894d685193d624d1c4e14885870ab81a10b705d2c",
+      "entries": {
+        "name#0": {
+          "src": "84aaff169fc4b6df8f5a6ad09cc01d37d469132dcf16e0b9c0c901120bd5f291",
+          "text": "Garras de urso"
+        }
+      }
+    },
+    "makes/truck/fcl/acc/paint2/!desc.def": {
+      "src": "60fb2779c807fb86a9c872cd34fe3eb622c4b951c810b2632cd278cb3b25d4e7",
+      "entries": {
+        "name#0": {
+          "src": "d07ac6484d69197f7c03cef6736726b1a994971376b46ab88ae9f169c1ede6f7",
+          "text": "Doce de café"
+        }
+      }
+    },
+    "makes/truck/fcl/acc/paint3/!desc.def": {
+      "src": "5ee6fe7d9c210317bd5e11daa96cc40d9391d7da68dead1c4699a6b5503f0c4d",
+      "entries": {
+        "name#0": {
+          "src": "a61cb7143ebb9e64d42d990afb074e566f64fdc5a9bcc035799b046c03b6c1b5",
+          "text": "Voo azul"
+        }
+      }
+    },
+    "makes/truck/fla/acc/paint0/!desc.def": {
+      "src": "4601ff7ef916d82c4ee003f2ff1c6ca32cd1f1025f7b65c1c87a39d684c00f2f",
+      "entries": {
+        "name#0": {
+          "src": "f32e6f245d79d2617b94b85be3aff72373d4c4d43d4047764f6863ea862a9cee",
+          "text": "Cunha de fogo"
+        }
+      }
+    },
+    "makes/truck/fla/acc/paint1/!desc.def": {
+      "src": "e97ee4d46dca723ef5ead020ee949328e689aefce253125ba44fb463c93e0d07",
+      "entries": {
+        "name#0": {
+          "src": "e3e6c05a4b2fb4c4bc70a2e91b3d694b6e58ff539fdca0874103c79b63e8cb0b",
+          "text": "Brilho do destino"
+        }
+      }
+    },
+    "makes/truck/fla/acc/paint2/!desc.def": {
+      "src": "35ecd7d519183b594c5ea4c61553ebf8c31cc5c8c68bad288c71baf7be640078",
+      "entries": {
+        "name#0": {
+          "src": "bbca6759c82c834b5839914b3f2359ab50b030623cffc96d9e7b358f74104f32",
+          "text": "Rastro veloz"
+        }
+      }
+    },
+    "makes/truck/flcc/acc/paint0/!desc.def": {
+      "src": "1487560c2476ae5de29b576fac5e15bcfefa66164e1f311a3a283a5ebf444bb6",
+      "entries": {
+        "name#0": {
+          "src": "31b8db8cc0c9025492caeb13d391f9b46bdc07e1b6c0a4bd031ec9c2c67b5bad",
+          "text": "Ganso vermelho"
+        }
+      }
+    },
+    "makes/truck/flcc/acc/paint1/!desc.def": {
+      "src": "7edbaa38e77ccd0cd502b9567d098fc20b35c35096e18f24aee7976a99b3bce3",
+      "entries": {
+        "name#0": {
+          "src": "55e898bd3855e6094b1ddb0fbaef25a5a120430714cc5a54e6e3cf1b71633ff0",
+          "text": "Sorvete"
+        }
+      }
+    },
+    "makes/truck/flcc/acc/paint2/!desc.def": {
+      "src": "ca304401e4c260d31505d07548841f0ac6729752874422754934b922a34b6991",
+      "entries": {
+        "name#0": {
+          "src": "2992c228b380ef073c480466908a99246aa50609cdc49f4f225b09280d1368dd",
+          "text": "Sonho celeste"
+        }
+      }
+    },
+    "makes/truck/flcc/acc/paint3/!desc.def": {
+      "src": "de07154a2300df660dd22e498935fb6bebb8650dd3c91929bb2d4377cedd3f16",
+      "entries": {
+        "name#0": {
+          "src": "1b160d82e9026f7b1f38c1c7183215db7d30003361b30a2f63ee3f4882f7258c",
+          "text": "Café quente"
+        }
+      }
+    },
+    "makes/truck/fln/acc/paint0/!desc.def": {
+      "src": "744dba65818bf6f043d1dbafa91c4973c3a09c0fa315f92b5165bdf67d7351fb",
+      "entries": {
+        "name#0": {
+          "src": "30bfd250732b2d91e8056d25b8770110bcd63b4e8f1fdbdd6b2355925dad9ca0",
+          "text": "Clarão laranja"
+        }
+      }
+    },
+    "makes/truck/fln/acc/paint1/!desc.def": {
+      "src": "bce68c13b388ec9972e6a096101fda2d119539ea1dae1a9c02240f65ba84f888",
+      "entries": {
+        "name#0": {
+          "src": "a903db241db57ca61de804aeb15ea0375f991d2cd19426ec071a4e6a113cacab",
+          "text": "Inferno em chamas"
+        }
+      }
+    },
+    "makes/truck/fln/acc/paint2/!desc.def": {
+      "src": "8ab6329a30fd73ebf981a8d43180062b274b0230399f6b7c88ac8777b2e10db7",
+      "entries": {
+        "name#0": {
+          "src": "49f38684336ce7575c44ac3bb8b6110c05657b8819dee97b3b632bcd0418d608",
+          "text": "Magia natural"
+        }
+      }
+    },
+    "makes/truck/fln/acc/paint3/!desc.def": {
+      "src": "3d099e352ca9cee5bc0d129a4b42c0c73284c0f354aedaac2df3e1cbbe263b1b",
+      "entries": {
+        "name#0": {
+          "src": "99bd8b3f6f13cfb8353d5bb8c939fc807e7ab13c97312cc2add133c898c83c9a",
+          "text": "Gelo profundo"
+        }
+      }
+    },
+    "makes/truck/kk100/acc/paint0/!desc.def": {
+      "src": "681c277f61773e4c8dee0679a4b0b35ea679f0a4c1d11605b5365eb9b3eb2f98",
+      "entries": {
+        "name#0": {
+          "src": "14032a5c76d680b099252bb202066e39eaf84f9e2445dde779027f9b1973fcd9",
+          "text": "Tocha diabólica"
+        }
+      }
+    },
+    "makes/truck/kk100/acc/paint1/!desc.def": {
+      "src": "6b1b4f7138eea9070eb1421fad469e49c01047eed3e33e6e9c13cee37eee615c",
+      "entries": {
+        "name#0": {
+          "src": "9ec9bfaa151fe063ee970355337467702301ea6ee46333974b1ffec13f316a86",
+          "text": "Marcha adiante"
+        }
+      }
+    },
+    "makes/truck/kk100/acc/paint2/!desc.def": {
+      "src": "d56732c7657044b9a67f887c2cad3720a5e2f4f53b5b0cf4265564a583ecc594",
+      "entries": {
+        "name#0": {
+          "src": "32ce48e1ec66a111e6a8127e157c5fb8f7f1872a6e7dd796d671bcfce616e556",
+          "text": "Raio de sol"
+        }
+      }
+    },
+    "makes/truck/kk100/acc/paint3/!desc.def": {
+      "src": "097fb7d05263738a6d8bbc7dd8f59edd1fee91780cd2958909e0194a0180b846",
+      "entries": {
+        "name#0": {
+          "src": "3e1806d0ffb83868067be0b59c04b369d365d4465bfeb368e351faccc78230e6",
+          "text": "Patriota"
+        }
+      }
+    },
+    "makes/truck/kt2000/acc/paint0/!desc.def": {
+      "src": "142924725f7ad633835d8c76c8679b39b9dcb4f1583669cfb16927c9e1658065",
+      "entries": {
+        "name#0": {
+          "src": "ad0dc6d577178f1fbcd499184c4b29aced6ac63a07a7bb73f3c5f188fd0fb1f7",
+          "text": "Tecelão de luz"
+        }
+      }
+    },
+    "makes/truck/kt2000/acc/paint1/!desc.def": {
+      "src": "c9aec48bf9c9a433753d381f9bad90198bd69b97dc0ec4ab7383161fdfd3a06b",
+      "entries": {
+        "name#0": {
+          "src": "e257174c4dadaa2409cdbfcff3b62026f1c60d89c078dcf6465e4ad36f264d50",
+          "text": "Céu noturno"
+        }
+      }
+    },
+    "makes/truck/kt2000/acc/paint2/!desc.def": {
+      "src": "07bc476a98c4f73eae16c1b5405fc7e662f2f624961d012e3f3efdc763cae3f7",
+      "entries": {
+        "name#0": {
+          "src": "297e6e7881bfbaafed3f2cab8f50e53e17b8fb5c3a2d92ab872e39e4e30d4c25",
+          "text": "Reflexo azul"
+        }
+      }
+    },
+    "makes/truck/kt2000/acc/paint3/!desc.def": {
+      "src": "f7cbfcd61b286f5cc5569fe31ff2a0b736b6be4117b3ad0e4a3b0855a8d69ffc",
+      "entries": {
+        "name#0": {
+          "src": "cc2bbc762d162fffb9d05886e2185cfeee6f45b99cc88989791f0df9f70c9d04",
+          "text": "Ciência espacial"
+        }
+      }
+    },
+    "makes/truck/kw900/acc/paint0/!desc.def": {
+      "src": "db01c60032b2b3dbc532d3c7fc227927d163838f46101bd64705183f01a514bb",
+      "entries": {
+        "name#0": {
+          "src": "ad359c311a69ab65e9acb5e58a355afedfdb63929d92c58bf93ab619627896dd",
+          "text": "Pássaro de fogo"
+        }
+      }
+    },
+    "makes/truck/kw900/acc/paint1/!desc.def": {
+      "src": "9bb9d2fc21a6fea78630f3a0f812ae84ee653df3332a3e56f8c0686872e2989b",
+      "entries": {
+        "name#0": {
+          "src": "1f73f5aa5402ebbe0fc994887b6c63d651ab65633ecebd7524dd4ed5ac18a15f",
+          "text": "Tigre fantasma"
+        }
+      }
+    },
+    "makes/truck/kw900/acc/paint3/!desc.def": {
+      "src": "4ace1e06712c5748904f4d61a343872f75b4e907819b2efbeb2db887238084d4",
+      "entries": {
+        "name#0": {
+          "src": "eaa2c5739339c599468d98699f9e77216135de5436096ee5c668a7d781ec1678",
+          "text": "Clarão do futuro"
+        }
+      }
+    },
+    "makes/truck/mch603/acc/paint0/!desc.def": {
+      "src": "81d00affd8e54943d6c5c58e32ea22418b8c331d493ce8513e70f64b5a482782",
+      "entries": {
+        "name#0": {
+          "src": "370ba1c7074ca2ae34bd3d908bc380f9053724a7e9853e2b39e6d7e722c7bc69",
+          "text": "Abismo oceânico"
+        }
+      }
+    },
+    "makes/truck/mch603/acc/paint1/!desc.def": {
+      "src": "a0e1838c6c57cdeb74ca42447966a42aba0b0ae33a6460e7386abaf099766ada",
+      "entries": {
+        "name#0": {
+          "src": "e9756c976af95b3aaef1bd0a3fe34df921410ed99cdc34c8905f1490cf202d20",
+          "text": "Mosaicos e listras"
+        }
+      }
+    },
+    "makes/truck/mch603/acc/paint2/!desc.def": {
+      "src": "2b04c019799f0a6d5ee455732b2c92bcc8a00c1b931f976de55f54023f4e1f73",
+      "entries": {
+        "name#0": {
+          "src": "35485fb16257dbcb1e3945cc77552564d3d440d0dc38681982595cdb4c71686f",
+          "text": "Veneno negro"
+        }
+      }
+    },
+    "makes/truck/mch603/acc/paint3/!desc.def": {
+      "src": "3b40420004bda2a1bda3b47e353faec7b9f5b481a6e13e6a23cd3a8c2b653004",
+      "entries": {
+        "name#0": {
+          "src": "7214f72692369aee5f9ef07d74325f2abba85f1a52d7f10fa805317a2dc50e53",
+          "text": "Sopro de dragão"
+        }
+      }
+    },
+    "makes/truck/mch613/acc/paint0/!desc.def": {
+      "src": "e80b54048725bbb31e240689209dfd7dfb474a5b4d8a509a39520803d1deb4d2",
+      "entries": {
+        "name#0": {
+          "src": "ceebfa451a18cd01657dc732762c59e06615f00f0704e0d1dfc40d6c8a0bb561",
+          "text": "Calor intenso"
+        }
+      }
+    },
+    "makes/truck/mch613/acc/paint1/!desc.def": {
+      "src": "b88d51ab9efcc35a4c6609804043934adc9eca37941a0005e84a4714634ca562",
+      "entries": {
+        "name#0": {
+          "src": "0caaf06fe533668e215f6a9c001c6e5c5246a09654dcd16568ab875eb6748893",
+          "text": "Cavaleiro veloz"
+        }
+      }
+    },
+    "makes/truck/mch613/acc/paint2/!desc.def": {
+      "src": "18e72b47fd0f5d3fe23acd9572ce9da5d1f0305fc4cb4698bb2707cceace5e2f",
+      "entries": {
+        "name#0": {
+          "src": "1bfea92eb0aa530882040a557c60f8808108974a9330986540c55e9c8763ad02",
+          "text": "Barbatana azul"
+        }
+      }
+    },
+    "makes/truck/mch613/acc/paint3/!desc.def": {
+      "src": "5c47f9b773ebdbe09598df741ee55a3ada5a21836632f5263d2bcc31d51de680",
+      "entries": {
+        "name#0": {
+          "src": "c282069996a6f93016a69648d863a68a7da87a4ec0438e247bf794162cd4ec7f",
+          "text": "Tocha de enxofre"
+        }
+      }
+    },
+    "makes/truck/p351/acc/paint0/!desc.def": {
+      "src": "763de5506b181a025c7111fe83351b3ea6e736d1cdbf2a375fe39c123989d633",
+      "entries": {
+        "name#0": {
+          "src": "c39d94d5a93beaeb62cb7d0811dcf0002ca26966636810a143e005565f3a6013",
+          "text": "Chama ousada"
+        }
+      }
+    },
+    "makes/truck/p351/acc/paint1/!desc.def": {
+      "src": "e1414e34699a071494acd09ca123e0bfd0a3789ddba1edc419d57bc3770eec5f",
+      "entries": {
+        "name#0": {
+          "src": "44ea8007f05dce2f444a15a8c60b04a7b75ffac6bfa20a9c0d44021005539918",
+          "text": "Chuva fria"
+        }
+      }
+    },
+    "makes/truck/p351/acc/paint2/!desc.def": {
+      "src": "65d7062a7e2435cbad32c39ef05b746c5d8749948c83de88949132c544a6305b",
+      "entries": {
+        "name#0": {
+          "src": "69c0d61f1810ed113f9ceb372ba0d2bef26611403e30650a6e7109713e5953ce",
+          "text": "Creme de cacau"
+        }
+      }
+    },
+    "makes/truck/p351/acc/paint3/!desc.def": {
+      "src": "274f1b27adaf231ef5379b0d1cadeae4295bd65f3780786f37ef75467b77a6bc",
+      "entries": {
+        "name#0": {
+          "src": "18efd03b7957378cd81e8021789a0a4149540fcbbc221101bc4f0047b26eae91",
+          "text": "Cores de orgulho"
+        }
+      }
+    },
+    "makes/truck/p362/acc/paint0/!desc.def": {
+      "src": "db833bfeeb3aaef427178d556b93b451e8985db6ce2077681d8ebab89b250f2a",
+      "entries": {
+        "name#0": {
+          "src": "6deb937ae737592215001a07bebe836742750fd4c36e8919fc9730a4d1dafa9f",
+          "text": "Senhor das flechas"
+        }
+      }
+    },
+    "makes/truck/p362/acc/paint1/!desc.def": {
+      "src": "52763d93f36d71bd7a272ed39f1ffbc57f0d5e91f52a51222280128abf22d60a",
+      "entries": {
+        "name#0": {
+          "src": "2f7e7e31eafb941adea3a1b3619aad48c1da2106bfa591683744f54f917c7b01",
+          "text": "Cruzado"
+        }
+      }
+    },
+    "makes/truck/p362/acc/paint2/!desc.def": {
+      "src": "1e420833f504bda375018fe44a0428f8689b39f1b99622352bd347f373405159",
+      "entries": {
+        "name#0": {
+          "src": "c30a45605d61c8e7830f7a6fd006f6525b3d02b596e2c4e8b3a4b7ffb13dc2ff",
+          "text": "Serviço pesado"
+        }
+      }
+    },
+    "makes/truck/p362/acc/paint3/!desc.def": {
+      "src": "e57ba95628a02b95149047ea8ff6740378b551bb9e7dc9bbb77f1f08228c245f",
+      "entries": {
+        "name#0": {
+          "src": "42ba4020e2d40c026b7037c840394dbad3fbcce44ca4b155c661d9054c554f2f",
+          "text": "Sonho crepuscular"
+        }
+      }
+    },
+    "makes/truck/p379/acc/paint0/!desc.def": {
+      "src": "7b6f220f425801cdcd20deeecc387c6c0251a5b7e88f6ad1c1cf09d3b8501130",
+      "entries": {
+        "name#0": {
+          "src": "ded309500883d379a923f131e0b369324d81fe05c588c0e025c2fe3719c5985f",
+          "text": "Fragmentos de cometa"
+        }
+      }
+    },
+    "makes/truck/p379/acc/paint1/!desc.def": {
+      "src": "9da03075d3e894c43490584c81fdb4d1f683d167c4b3004068b6d9b894b085d8",
+      "entries": {
+        "name#0": {
+          "src": "649ed266082dabfe9a39b39347c563139aad85b9d55b8f56e3eec12bf403cfee",
+          "text": "Fogo selvagem"
+        }
+      }
+    },
+    "makes/truck/p379/acc/paint2/!desc.def": {
+      "src": "bbc2b06ea15cd171578e3519c7e3d3531e2e8d69ee8a1ff8440b425ebed3a232",
+      "entries": {
+        "name#0": {
+          "src": "c2e4b525799c7db5f9113dca97ebf129380221322c1b671d62ed37ec82217483",
+          "text": "Mestre sombrio"
+        }
+      }
+    },
+    "makes/truck/p379/acc/paint3/!desc.def": {
+      "src": "2a53d25dc0044c054ce11d89d5ee5730c717cd868014fee7bbc1e03f18123a5d",
+      "entries": {
+        "name#0": {
+          "src": "e8e26b37eb0c339ded136d1d3ffaa61731042f8e72ebed7cd8b4122db56c1489",
+          "text": "Guerreiro da floresta"
+        }
+      }
+    },
+    "makes/truck/slt/acc/paint0/!desc.def": {
+      "src": "51a96728e8b3b58443bf750ad70d1d3bbabce58e9e0ad54a8b44ad9336395d6c",
+      "entries": {
+        "name#0": {
+          "src": "54f93666914361124b189a91e4864b7298e8e49776780c9af386a0fceae0edb1",
+          "text": "Dia azul"
+        }
+      }
+    },
+    "makes/truck/slt/acc/paint1/!desc.def": {
+      "src": "fa9624dfb549725adcd283a57baa6e2911099bc877f92f50225b56af8caa1f0c",
+      "entries": {
+        "name#0": {
+          "src": "12855aa1ec6391db7e8fab34d6193e8dba126bdea1dd34254c40a305f97ba259",
+          "text": "Fúria das chamas"
+        }
+      }
+    },
+    "makes/truck/slt/acc/paint2/!desc.def": {
+      "src": "aeba892ba6e7720c98729695b387dcc7b3bc4bb3095aeb010d4815c8d9b6090c",
+      "entries": {
+        "name#0": {
+          "src": "310a6172d6503bd1a502705c53f7bd6f00c8efc3f366ed6baaee37cfc9c66f3c",
+          "text": "Listras frias"
+        }
+      }
+    },
+    "makes/truck/slt/acc/paint3/!desc.def": {
+      "src": "36690109dfc64d6f92593577a8b901b88494c6a99fef1d7637c570a0c7bdd548",
+      "entries": {
+        "name#0": {
+          "src": "763f89347567700ab2bfb888c532c979fe8369d1ffbcd4198e7a07ecd1a1463b",
+          "text": "Núcleo ardente"
+        }
+      }
+    },
+    "makes/truck/vvn/acc/paint0/!desc.def": {
+      "src": "5b713fcda2c5473e4d6c8fe3b62dce2bb967d558023508745f84dd5104c364b8",
+      "entries": {
+        "name#0": {
+          "src": "f89d80f079628edda51ba2dea703ab9bd5a97c4e4d295e0343d37fc0ac573a0f",
+          "text": "Monstro verde"
+        }
+      }
+    },
+    "makes/truck/vvn/acc/paint1/!desc.def": {
+      "src": "f1c9bc49d6f3b3ce4963435bd82e09e1e7e3264b326bedc61ef57598336bb3fa",
+      "entries": {
+        "name#0": {
+          "src": "21b64c1f8c4cdb6e9525574a61922233d824440368c7f8046dbc5899702934e3",
+          "text": "Pintas de canela"
+        }
+      }
+    },
+    "makes/truck/vvn/acc/paint2/!desc.def": {
+      "src": "660f6320c88013ffe2e3bce1b9605c8c41588db34bb700dc8335bed6626a835d",
+      "entries": {
+        "name#0": {
+          "src": "ab94a953eadbfe631c82b3d62ecaecc9844f09cf55bbfa9f94bd761ebd46f6bd",
+          "text": "Campeão das pistas"
+        }
+      }
+    },
+    "makes/truck/vvn/acc/paint3/!desc.def": {
+      "src": "6f772f4dea93eb91c37be72aa1167aacde012b1a141de75f0a7b662a08ec3d2e",
+      "entries": {
+        "name#0": {
+          "src": "6fe7bcda3932617447f51338cfa0f8912867e7cbf4bcb7b3414a22fa2fc5738d",
+          "text": "Onda do milênio"
+        }
+      }
+    },
+    "makes/truck/ws/acc/paint0/!desc.def": {
+      "src": "2532fca3cd2e8e62816ff6e1800e12b8ce71aff35d2db0415ed6539e242ec23a",
+      "entries": {
+        "name#0": {
+          "src": "b8ed21f6e92c3b610aedb0fbca5a376660eeaec5e4da4a957e20fb252480c1a7",
+          "text": "Brilho do sol"
+        }
+      }
+    },
+    "makes/truck/ws/acc/paint1/!desc.def": {
+      "src": "3e462d1178dcfab3ac0b86da5b3ce27d1694e77abe1db96dfdd5f2faac2ac934",
+      "entries": {
+        "name#0": {
+          "src": "67319d1eac56519eed84ef0afefe2f63dcd06a8b61a37ffc651f80b98e5118d8",
+          "text": "Rumo ao oeste"
+        }
+      }
+    },
+    "makes/truck/ws/acc/paint2/!desc.def": {
+      "src": "45571fbd5f3b5b867a925a990d9f1de6ae9fc1b3ea8f75a01d387abb48ee3d2f",
+      "entries": {
+        "name#0": {
+          "src": "706452ef1c2b077a06a5eeb9ec6edd747335e4502858942955d5c8db55d17e81",
+          "text": "Chicote demoníaco"
+        }
+      }
+    },
+    "makes/truck/ws/acc/paint3/!desc.def": {
+      "src": "10cfa25cfdeda550311c776430b234ef2e2f4e28c7429ad0080f370ebfc24dc9",
+      "entries": {
+        "name#0": {
+          "src": "33fd09096c24c17da9ab89b29c35fdae1d6842e18ea79b84839c9e8a22539e41",
+          "text": "Estilhaços"
+        }
+      }
+    }
+  }
+}

@@ -1,5 +1,66 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Textos fora da tabela: definições de exibição — 30/10/2026
+
+Continuado de `025d9f9`, sem abrir jogos ou requerer o segundo PC. Entregue o
+primeiro bloco T2 de docs/LOCALIZATION.md: catálogo próprio
+`translations/pt-BR/literal_def.json` com **208 valores em 207 definições**
+(148 componentes de reboques, 58 pinturas, título/instruções de Become a
+Millionaire). Marcas/modelos de motores/caminhões, cidades, empresas e demais
+nomes próprios preservados. Não altera a disponibilidade dos outros cenários,
+vitória original, valores financeiros, potência, peças ou referências a assets.
+
+`localization::literals` oferece lexer limitado, classificação de campos,
+hashes completos por arquivo/valor, ocorrências com ordinal, catálogo estrito
+e substituição só dos spans de texto autorizados. `l10n_tools literal-scan`
+omite prosa original por padrão; `--include-source` é autoria privada.
+`literal-compose` associa escolhas próprias por hash sem copiar inglês;
+`literal-check` confere contexto, caracteres e placeholders antes do build.
+Leitura em lote respeita prioridade dos SCS, limita expansão/quantidade e
+recusa duplicatas/colisões de caixa dos recursos selecionados.
+
+Inventário local: 218 campos elegíveis, 1.729 protegidos/adiados, 36 recursos
+sem aspas de fechamento que não foram reconstruídos. Editor excluído. Dez
+valores elegíveis ficaram fora por decisão: oito textos dos demais cenários,
+uma pintura cujo nome já é igual em PT-BR e uma com nome geográfico. Não chamar
+isso de T2 completa: ESC/PML, ajuda/imagens e definições malformadas continuam
+pendentes, assim como dublagem (T3) e moeda R$ (M7).
+
+`l10n_tools build --literals CATALOGO` combina T1/fontes/T2 no projeto
+`ptbr-text` **0.3.0**; modos anteriores sem a opção continuam disponíveis.
+Relatório `literal_def` dá a cobertura concreta; flags de tradução integral/
+prova no motor permanecem false. `ui_tools` aceita os novos caminhos apenas
+como derived_local e compara sua estrutura com as três montagens originais
+locais **antes de criar backup/escrever na instalação**. Alterações em regras,
+modelos, comentários, campos protegidos ou configuração com montagens
+desconhecidas são recusadas; menu próprio p4 compatível, tradução em p5.
+Restauração anterior pelo backup antes de instalar outra versão, backup novo.
+
+Validação Fedora: **196 testes x86 sob Proton/262 nativos**, releases,
+Clippy nos escopos padrão e rustfmt. Nove casos novos de fixture cobrem lexer,
+privacidade, byte único/acentos, placeholders, nomes/referências protegidos,
+limites/malformed, origem alterada, precedência/colisões, schema e montagem/
+restauração/rejeição antes de escrita. Ferramenta `l10n_tools.exe` teve build
+e Clippy x86 adicionais; os nove testes específicos também passaram sob Proton
+(fora dos 196 da bancada padrão), incluindo a recusa de entradas sem mudança.
+Catálogo composto e projeto completo (263 entradas,
+13 fontes, 26 PNGs) idênticos byte a byte ao nativo. Pacote 0.3.0 aprovado por
+`mod-verify`, 3.776.468 bytes, distributable=false. Artefatos/inventários/prosa/
+prévias/pacote permanecem privados em target/analysis. Logs principais:
+`verify-fedora-20261030-literal-defs-final.log`,
+`l10n-literals-x86-{build,clippy}-final-20261030.log`,
+`l10n-t2-{catalog,project}-parity-final-20261030.log` (vazios: saídas iguais).
+Teste extra em `l10n-literals-tests-x86-final-20261030.log`. Instruções locais
+para instalar/consultar/restaurar em
+`target/analysis/l10n-t2-20261030/APLICAR-NESTE-PC.txt`, sem executar a montagem.
+
+Nenhuma instalação/abertura do jogo ou nova LAN. Config original com hash
+inalterado e overlay PT-BR ausente nesta árvore. G11 atualizado para uma rodada
+local agrupando fonte/layout/rótulos novos, preservando o teste geral positivo
+relatado pelo proprietário e as provas LAN anteriores. Próximo: investigar PML/
+codificação ESC antes de ampliar as superfícies de tradução; adaptação de menus
+Multiplayer aos serviços continua independente e não entregue por esse bloco.
+
 ## Revisão dos blocos recentes e fontes suavizadas — 30/10/2026
 
 Retomado de `fed7ac5` no Fedora, árvore inicialmente limpa. Revistos os quatro

@@ -54,6 +54,7 @@ fn stage_and_head_audit_exact_git_blobs_not_dirty_worktree() {
 
 #[test]
 fn forced_game_and_private_paths_fail_even_with_ignore_rules() {
+    assert!(allowed("translations/pt-BR/literal_def.json").is_ok());
     assert!(allowed("docs/GAME_VALIDATION.md").is_ok());
     assert!(allowed("docs/UI_DESIGN.md").is_ok());
     assert!(allowed("mod_ui/Cargo.toml").is_ok());
@@ -71,6 +72,8 @@ fn forced_game_and_private_paths_fail_even_with_ignore_rules() {
         "client_dll/src/generated/x.rs",
         "client_dll/src/own.rs/",
         "docs/private.json",
+        "translations/pt-BR/literal-inventory.json",
+        "translations/en/local_def.json",
         "docs/GAME_VALIDATION.scs",
         "base.scs",
         ".cargo/config.toml",

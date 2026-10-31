@@ -1,5 +1,24 @@
 # Orientações para continuar o projeto
 
+T2 em 30/10 após `025d9f9`: `localization::literals` e `l10n_tools literal-scan/
+compose/check`, build opcional `--literals`. Catálogo próprio
+`translations/pt-BR/literal_def.json`: 208 textos/207 definições (148 componentes
+de reboques, 58 pinturas, dois textos da carreira milionária). Nomes de marcas/
+modelos/cidades/empresas/motores preservados. Hashes completos do arquivo e do
+valor; recompõe só os bytes dos campos autorizados. 36 recursos originais com
+aspas incompletas ficaram intocados; ESC/PML/ajuda/dublagem seguem pendentes.
+Não marcar toda T2 ou G11. Projeto combinado derived_local 0.3.0, 263 arquivos,
+Carlito Bold/484 chaves T1; não instalado nem aberto jogo. Instalador compara
+novas definições com montagens originais e recusa alteração mecânica/estrutural
+antes do backup/escritas; requer p1/p2/p3 originais, aceita menu próprio p4.
+Restaurar tradução anterior pelo backup e usar backup novo. Verify Fedora:
+196 x86 Proton/262 nativos, releases, Clippy/fmt; CLI x86 com build/Clippy
+adicionais, catálogo/projeto idênticos ao nativo.
+Nove testes específicos do tradutor/instalador x86 também passaram sob Proton,
+separados dos 196 da bancada padrão. Artefatos/instruções/pacote privados em
+target/analysis/l10n-t2-20261030/ e verify-fedora-20261030-literal-defs-final.log.
+Próxima rodada G11 agrupa tipografia/layout/rótulos sem novo par LAN.
+
 Fontes em 30/10, após `fed7ac5`: proprietário relatou teste geral positivo da
 tradução, mas considerou a fonte quadrada. Não afirmar que ninguém testou a
 tradução nem marcar toda G11 sem detalhe. `l10n_tools build --typeface TTF`

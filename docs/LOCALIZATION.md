@@ -155,7 +155,76 @@ Instruções locais em `target/analysis/l10n-carlito-bold-20261030/APLICAR-NESTE
 nenhuma instalação/abertura automática. Esses números são bancada/pipeline,
 não provas de acentos/filtragem/layout na partida.
 
-## Etapa T2 — texto fora da tabela (pendente)
+## Etapa T2 — texto fora da tabela (primeiro bloco entregue offline)
+
+`localization::literals` inventaria campos sem exportar a prosa original por
+padrão. O catálogo próprio `translations/pt-BR/literal_def.json` traz **208
+traduções em 207 arquivos**: 148 nomes de componentes de reboques, 58 nomes de
+pinturas e os dois textos da carreira milionária. Conserva modelos/marcas de
+caminhões e motores, cidades, empresas, motoristas, `Zebra` (já igual em PT-BR)
+e o nome geográfico de uma pintura. Os outros cenários originais não receberam
+traduções neste catálogo; não foram acrescentados ao fluxo do mod.
+
+Cada arquivo tem SHA-256 completo da origem decodificada; cada ocorrência tem
+chave `atributo#ordinal` e hash do valor. A reconstrução substitui somente os
+bytes entre aspas dos campos permitidos. Preços, potência, peças/modelos,
+regras financeiras, comentários, referências `@@`, PML e todos os demais bytes
+ficam intactos. Mudança na origem, caractere sem glifo, aspas/controle/escape,
+marcação nova ou placeholders diferentes impedem a geração. O texto da meta
+continua em `$`, com o valor original: não implementa R$, rebalanceamento,
+`Sem limite` nem altera a condição de vitória do motor.
+
+O inventário desta instalação encontrou 218 campos elegíveis, 1.729 protegidos
+ou adiados e **36 recursos com sintaxe incompleta** (aspas de strings sem
+fechamento nos originais). Esses recursos são registrados em
+`unreadable_resources` e permanecem intocados; nenhuma correção automática do
+jogo é feita. Editor (`seg_server`, `prefabs`) fica fora do levantamento.
+O inventário é parcial por política e não comprova toda a tradução T2.
+
+Novos comandos, a partir da raiz do jogo; ajustar `REPO` e saídas:
+
+```text
+l10n_tools literal-scan --output PASTA-EXISTENTE/inventario-NOVO.json
+l10n_tools literal-check --catalog REPO/translations/pt-BR/literal_def.json
+l10n_tools build --catalog REPO/translations/pt-BR/local_def.json --literals REPO/translations/pt-BR/literal_def.json --typeface CAMINHO/Carlito-Bold.ttf --output PASTA-EXISTENTE/projeto-NOVO
+asset_tools mod-build PASTA-EXISTENTE/projeto-NOVO/project.json PASTA-EXISTENTE/pacote-NOVO
+asset_tools mod-verify PASTA-EXISTENTE/pacote-NOVO
+```
+
+`--archive` repetido escolhe SCS por prioridade crescente, como em T1.
+`literal-scan --include-source` exporta a prosa original **somente para autoria
+privada**, nunca Git. `literal-compose --choices ESCOLHAS.json --output NOVO.json`
+associa um mapa `SHA256-do-valor → texto PT-BR` aos campos editáveis locais;
+recusa hashes ausentes e não copia prosa inglesa. Saídas dos dois comandos
+exigem arquivo novo e pasta existente. Catálogos não alteram os SCS originais.
+
+Com `--literals`, o projeto é `ptbr-text` **0.3.0**, ainda derived_local. O
+relatório separa `literal_def` (contagem/erros) da tabela; `all_t2_translated` e
+`game_tested` continuam false. Sem a opção, os builds T1/fontes antigos seguem
+disponíveis. Pacote combinado preparado em
+`target/analysis/l10n-t2-20261030/`, sem montagem ou abertura do jogo.
+
+Bancada deste bloco: 196 x86 sob Proton/262 nativos no verify completo,
+releases, Clippy/fmt; mais nove testes específicos do tradutor/instalador x86
+sob Proton e build/Clippy x86 da ferramenta. Catálogo e projeto gerados pelo
+Windows x86 são idênticos ao nativo, inclusive após a revisão final das
+recusas. Pacote 0.3.0 conferido, 263 entradas/3.776.468 bytes. Instruções locais
+em `APLICAR-NESTE-PC.txt` junto ao pacote. Essas provas não substituem G11.
+
+O instalador `ui_tools install --kind ptbr-text` aceita essas definições somente
+após comparar seu conteúdo com os arquivos visíveis dos três SCS locais. Uma
+alteração fora dos campos de texto autorizados é recusada **antes do backup ou
+de qualquer escrita na instalação**. Para esse bloco T2, exige as três montagens
+originais p1/p2/p3 e aceita também o menu próprio p4; outra montagem/configuração
+exige investigação em vez de adivinhar a precedência. Fixtures verificam
+instalação/restauração e rejeição de mudanças em regras/peças/comentários.
+Não confundir essas fixtures com instalação real neste jogo.
+
+Restaurar a tradução anterior pelo backup antes de instalar 0.3.0 com backup
+novo. Manter o menu experimental p4. Agrupar a prova dos novos rótulos com
+tipografia/layout em G11; não precisa repetir LAN nem usar outro computador.
+
+### Restante de T2
 
 Levantamento por contagem, sem copiar prosa, de atributos literais com frases
 em inglês fora de `local.def`. Fora do editor (`seg_server`, `prefabs`), os
@@ -169,9 +238,9 @@ principais grupos são:
 | atributos `*_pml` (p/n/s/s2/d) | ~150 trechos de texto formatado | Investigar a sintaxe PML antes de traduzir |
 | `help.html`, `readme.txt`, `help/*.png` | ajuda fora dos SCS, texto em imagens | Fora do pacote de overlay; tratar à parte |
 
-Próximo passo da T2: um extrator por tipo de arquivo, com catálogo próprio por
-origem (mesmo esquema de hash) e reconstrução só dos arquivos tocados. A
-codificação dos `.esc` precisa de decisão comprovada no jogo (G11) antes.
+Ainda pendentes: PML de descrições, literais ESC, ajuda externa/imagens e os
+36 arquivos malformados. A codificação dos `.esc` precisa de decisão comprovada
+no jogo (G11); o extrator os classifica como adiados, sem aplicar substituições.
 
 ## Etapa T3 — dublagem (planejada, etapa própria)
 

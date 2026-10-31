@@ -16,6 +16,7 @@ pub mod codec;
 pub mod def;
 pub mod font;
 pub mod glyphs;
+pub mod literals;
 pub mod typeface;
 
 pub fn read_entry(archive: &Path, name: &str) -> Result<Vec<u8>> {
@@ -114,6 +115,56 @@ impl Mounts {
         all.dedup();
         all
     }
+    /// Bounded batch read: one ZIP directory per archive, last mount wins.
+    /// This avoids re-reading the complete central directory for every literal.
+    pub fn read_matching(
+        &self,
+        selected: impl Fn(&str) -> bool,
+    ) -> Result<BTreeMap<String, Vec<u8>>> {
+        let mut out = BTreeMap::new();
+        let mut spelling = BTreeMap::new();
+        let mut total = 0usize;
+        for (path, _) in &self.archives {
+            let mut zip = zip::ZipArchive::new(File::open(path)?)?;
+            ensure!(zip.len() <= 100_000, "archive entry limit");
+            let mut seen = std::collections::BTreeSet::new();
+            for i in 0..zip.len() {
+                let mut entry = zip.by_index(i)?;
+                let name = entry.name()?.into_owned();
+                if !entry.is_file() || !(selected(&name) || selected(&name.to_ascii_lowercase())) {
+                    continue;
+                }
+                crate::safe_relative(&name)?;
+                ensure!(
+                    name.len() <= 240 && seen.insert(name.to_ascii_lowercase()),
+                    "duplicate/case-colliding selected resource"
+                );
+                let canonical = spelling
+                    .entry(name.to_ascii_lowercase())
+                    .or_insert_with(|| name.clone());
+                ensure!(*canonical == name, "case collision between mounts");
+                let expected = entry.size();
+                ensure!(expected <= 1024 * 1024, "selected resource exceeds 1 MiB");
+                let mut bytes = vec![];
+                entry
+                    .by_ref()
+                    .take(1024 * 1024 + 1)
+                    .read_to_end(&mut bytes)?;
+                ensure!(
+                    bytes.len() as u64 == expected && bytes.len() <= 1024 * 1024,
+                    "selected resource size mismatch"
+                );
+                total += bytes.len();
+                ensure!(
+                    total <= 32 * 1024 * 1024,
+                    "selected resources exceed 32 MiB"
+                );
+                out.insert(name, codec::decode(&bytes)?);
+                ensure!(out.len() <= 8192, "selected resource count exceeds limit");
+            }
+        }
+        Ok(out)
+    }
 }
 
 pub const TABLE: &str = "scripts/local.def";
@@ -136,7 +187,11 @@ pub struct BuildReport {
     pub skipped_fonts: Vec<String>,
     pub files: usize,
     pub game_tested: bool,
+    /// Legacy aggregate flag: full T2 completion, not the presence of a subset.
+    /// See literal_def for exact partial coverage.
     pub text_outside_table_translated: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub literal_def: Option<literals::Report>,
 }
 
 #[derive(Serialize)]
@@ -164,6 +219,14 @@ fn create_new(path: &Path, bytes: &[u8]) -> Result<()> {
         .with_context(|| format!("{} already exists", path.display()))?;
     f.write_all(bytes)?;
     Ok(())
+}
+pub fn read_catalog_file(path: &Path) -> Result<Vec<u8>> {
+    let file = File::open(path)?;
+    ensure!(file.metadata()?.is_file(), "catalog must be a regular file");
+    let mut bytes = vec![];
+    file.take(4 * 1024 * 1024 + 1).read_to_end(&mut bytes)?;
+    ensure!(bytes.len() <= 4 * 1024 * 1024, "catalog exceeds 4 MiB");
+    Ok(bytes)
 }
 
 /// Shader variants (plain, 3D, shadow) of one font must share one atlas.
@@ -214,6 +277,15 @@ pub fn build_with_typeface(
     output: &Path,
     face: Option<&typeface::Typeface>,
 ) -> Result<BuildReport> {
+    build_with_literals(mounts, cat, output, face, None)
+}
+pub fn build_with_literals(
+    mounts: &Mounts,
+    cat: &catalog::Catalog,
+    output: &Path,
+    face: Option<&typeface::Typeface>,
+    extra: Option<&literals::Catalog>,
+) -> Result<BuildReport> {
     ensure!(!output.exists(), "output must be a NEW directory");
     let table = mounts.read(TABLE)?;
     let source = def::parse(&table)?;
@@ -229,6 +301,20 @@ pub fn build_with_typeface(
         .collect();
     let mut outputs: BTreeMap<String, (Vec<u8>, Vec<String>)> = BTreeMap::new();
     outputs.insert(TABLE.into(), (def::rebuild(&table, &values)?, vec![]));
+    let literal_report = if let Some(extra) = extra {
+        let result = literals::compile(mounts, extra)?;
+        ensure!(
+            result.report.errors.is_empty(),
+            "literal catalog rejected: {}",
+            result.report.errors.join("; ")
+        );
+        for (path, bytes) in result.outputs {
+            outputs.insert(path, (bytes, vec![]));
+        }
+        Some(result.report)
+    } else {
+        None
+    };
 
     let mut fonts = vec![];
     let mut skipped = vec![];
@@ -344,7 +430,13 @@ pub fn build_with_typeface(
     let project = Project {
         schema: 1,
         id: "ptbr-text",
-        version: if face.is_some() { "0.2.0" } else { "0.1.0" },
+        version: if extra.is_some() {
+            "0.3.0"
+        } else if face.is_some() {
+            "0.2.0"
+        } else {
+            "0.1.0"
+        },
         files,
     };
     create_new(
@@ -366,6 +458,7 @@ pub fn build_with_typeface(
         files: outputs.len(),
         game_tested: false,
         text_outside_table_translated: false,
+        literal_def: literal_report,
     };
     create_new(
         &output.join("l10n-report.json"),

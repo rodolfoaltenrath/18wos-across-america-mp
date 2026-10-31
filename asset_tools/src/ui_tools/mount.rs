@@ -13,7 +13,7 @@ const CFG: &str = "aa/init.cfg";
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Overlay {
     UiPreview,
-    /// Translated `scripts/local.def` plus extended fonts, one priority above the menu.
+    /// Translated table, fonts and guarded display definitions, above the menu.
     PtBrText,
 }
 impl Overlay {
@@ -73,10 +73,14 @@ impl Overlay {
                 let m = crate::mod_package::verify(package, false)?;
                 ensure!(
                     m.id == "ptbr-text"
+                        && m.files
+                            .iter()
+                            .all(|f| f.input.origin == crate::mod_package::Origin::DerivedLocal)
                         && m.files.iter().any(|f| f.input.path == "scripts/local.def")
                         && m.files.iter().all(|f| {
                             let p = &f.input.path;
                             p == "scripts/local.def"
+                                || crate::localization::literals::writable_path(p)
                                 || (p.starts_with("fonts/")
                                     && !p[6..].contains('/')
                                     && [".font", ".tga", ".shd"].iter().any(|e| p.ends_with(e)))
@@ -321,6 +325,9 @@ fn install_guarded(
         hash(&payload) == m.payload_sha256,
         "package changed during preparation"
     );
+    if overlay == Overlay::PtBrText {
+        verify_literals(&root, cfg, &payload, &m)?;
+    }
     let mut after = original.clone();
     after.extend_from_slice(overlay.line().as_bytes());
     let p = Plan {
@@ -343,6 +350,80 @@ fn install_guarded(
     write_new(&root.join(overlay.file()), &payload)?;
     replace_cfg(&root, &after, &p.before, overlay)?;
     status(&root, &backup)
+}
+/// T2 files must only change the allowed display spans in this installation.
+/// Validate before creating a backup or changing any installation file.
+fn verify_literals(
+    root: &Path,
+    cfg: &str,
+    payload: &[u8],
+    manifest: &crate::mod_package::Manifest,
+) -> Result<()> {
+    use crate::localization::{Mounts, codec, literals};
+    use std::io::{Cursor, Read};
+    let selected: std::collections::BTreeSet<_> = manifest
+        .files
+        .iter()
+        .filter(|e| literals::writable_path(&e.input.path))
+        .map(|e| e.input.path.as_str())
+        .collect();
+    if selected.is_empty() {
+        return Ok(());
+    }
+    // Unknown higher-priority mounts could change the structure being guarded.
+    // Do not guess which resource version is actually visible to the game.
+    let expected = [
+        ("ro,p1", "\"data.scs\""),
+        ("ro,p2", "\"aa/base.scs\""),
+        ("ro,p3", "\"aa/patch_1_10.scs\""),
+    ];
+    let mut seen = std::collections::BTreeSet::new();
+    for line in cfg.lines() {
+        let line = line.split('#').next().unwrap_or("").trim();
+        if line.is_empty() {
+            continue;
+        }
+        let parts: Vec<_> = line.split_whitespace().collect();
+        ensure!(
+            parts.len() == 5 && parts[0] == "mount" && parts[1] == "-o" && parts[4] == "/",
+            "T2 requires the supported original mount configuration"
+        );
+        if let Some(index) = expected
+            .iter()
+            .position(|(p, f)| parts[2] == *p && parts[3] == *f)
+        {
+            ensure!(seen.insert(index), "duplicate original mount");
+        } else {
+            ensure!(
+                parts[2] == "ro,p4" && parts[3] == "\"aa/rust_mp_ui.scs\"",
+                "T2 cannot guard definitions overridden by unknown mounts"
+            );
+        }
+    }
+    ensure!(seen.len() == 3, "T2 original mounts missing");
+    let archives = [
+        root.join("data.scs"),
+        root.join("aa/base.scs"),
+        root.join("aa/patch_1_10.scs"),
+    ];
+    let originals = Mounts::open(&archives)?.read_matching(|p| selected.contains(p))?;
+    let mut zip = zip::ZipArchive::new(Cursor::new(payload))?;
+    for path in selected {
+        let original = originals
+            .get(path)
+            .with_context(|| format!("missing T2 source: {path}"))?;
+        let mut entry = zip.by_name(path)?;
+        ensure!(entry.size() <= 1024 * 1024, "T2 entry exceeds limit");
+        let mut bytes = vec![];
+        entry
+            .by_ref()
+            .take(1024 * 1024 + 1)
+            .read_to_end(&mut bytes)?;
+        ensure!(bytes.len() <= 1024 * 1024, "T2 entry exceeds limit");
+        literals::verify_translation(path, original, &codec::decode(&bytes)?)
+            .with_context(|| format!("T2 rejected: {path}"))?;
+    }
+    Ok(())
 }
 fn replace_cfg(root: &Path, bytes: &[u8], expected: &str, overlay: Overlay) -> Result<()> {
     let cfg = root.join(CFG);
@@ -524,6 +605,88 @@ mod tests {
         let pkg = t.join("package");
         crate::mod_package::build(&project.join("project.json"), &pkg, true).unwrap();
         (root, pkg)
+    }
+    fn literal_package(t: &Path, path: &str, translated: &[u8]) -> PathBuf {
+        fs::create_dir_all(t).unwrap();
+        ptbr_package(t, "ptbr-text");
+        let project = t.join("ptbr-text-project");
+        let json = project.join("project.json");
+        let mut p: crate::mod_package::Project =
+            serde_json::from_slice(&fs::read(&json).unwrap()).unwrap();
+        let source = format!("inputs/local/{path}");
+        fs::create_dir_all(project.join(&source).parent().unwrap()).unwrap();
+        fs::write(project.join(&source), translated).unwrap();
+        p.files.push(crate::mod_package::Input {
+            source,
+            path: path.into(),
+            origin: crate::mod_package::Origin::DerivedLocal,
+            depends_on: vec![],
+        });
+        p.version = "0.3.0".into();
+        fs::write(&json, serde_json::to_vec(&p).unwrap()).unwrap();
+        let out = t.join("literal-package");
+        crate::mod_package::build(&json, &out, false).unwrap();
+        out
+    }
+    #[test]
+    fn literal_install_verifies_display_only_against_local_mounts_before_any_writes() {
+        use std::io::Write;
+        let t = tempfile::tempdir().unwrap();
+        let (root, _) = fixture(t.path());
+        let path = "defs/scenarios/own.def";
+        let original = b"def own {name:\"Own challenge\"\nwin_money:400\n}\n";
+        let translated = b"def own {name:\"Desafio de teste\"\nwin_money:400\n}\n";
+        for (archive, has_source) in [
+            ("data.scs", false),
+            ("aa/base.scs", true),
+            ("aa/patch_1_10.scs", false),
+        ] {
+            let mut zip = zip::ZipWriter::new(fs::File::create(root.join(archive)).unwrap());
+            if has_source {
+                zip.start_file(path, zip::write::SimpleFileOptions::default())
+                    .unwrap();
+                zip.write_all(original).unwrap();
+            }
+            zip.finish().unwrap();
+        }
+        let cfg=b"# own config\nmount -o ro,p2 \"aa/base.scs\" /\nmount -o ro,p3 \"aa/patch_1_10.scs\" /\nmount -o ro,p1 \"data.scs\" /\n";
+        fs::write(root.join(CFG), cfg).unwrap();
+        let bad = literal_package(
+            &t.path().join("bad"),
+            path,
+            &String::from_utf8_lossy(translated)
+                .replace("400", "0")
+                .into_bytes(),
+        );
+        let good = literal_package(&t.path().join("good"), path, translated);
+        let backup = t.path().join("backup");
+        let game = hash(b"own module fixture");
+        assert!(
+            install_guarded(&root, &bad, &backup, &game, || Ok(()), Overlay::PtBrText).is_err()
+        );
+        assert!(!backup.exists());
+        assert!(!root.join(Overlay::PtBrText.file()).exists());
+        assert_eq!(fs::read(root.join(CFG)).unwrap(), cfg);
+        let mut unknown = cfg.to_vec();
+        unknown.extend_from_slice(b"mount -o ro,p4 \"unknown.scs\" /\n");
+        fs::write(root.join(CFG), unknown).unwrap();
+        assert!(
+            install_guarded(&root, &good, &backup, &game, || Ok(()), Overlay::PtBrText).is_err()
+        );
+        assert!(!backup.exists());
+        fs::write(root.join(CFG), cfg).unwrap();
+        assert_eq!(
+            install_guarded(&root, &good, &backup, &game, || Ok(()), Overlay::PtBrText)
+                .unwrap()
+                .state,
+            "installed"
+        );
+        assert_eq!(
+            restore_guarded(&root, &backup, || Ok(())).unwrap().state,
+            "restored"
+        );
+        assert_eq!(fs::read(root.join(CFG)).unwrap(), cfg);
+        assert!(!root.join(Overlay::PtBrText.file()).exists());
     }
     #[test]
     fn fixture_mount_restores_exact_config_and_rejects_open_game_before_writes() {

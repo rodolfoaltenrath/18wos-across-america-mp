@@ -483,7 +483,7 @@ BMP principal inspecionado, pacote gerado, sem instalar ou abrir o jogo.
 Registrar observação humana, build/perfil/resolução/escala e resultado por item.
 Nova prova LAN só para o fluxo integrado quando houver dois computadores.
 
-### G11 — Tradução PT-BR da tabela e fontes (T1 entregue offline, 30/10)
+### G11 — Tradução PT-BR e fontes (T1 e primeiro bloco T2, 30/10)
 
 Retorno posterior do proprietário em 30/10: até onde testou a tradução, ficou
 boa; solicitou uma fonte menos quadrada. Relato geral, sem lista de telas,
@@ -492,6 +492,10 @@ não repetir toda a tradução só para registrar números. A alternativa Carlit
 Bold já está preparada pelo pipeline `--typeface`, com prévias e pacote
 derived_local 0.2.0; não foi instalada/testada no motor nesta implementação.
 Na próxima rodada local, concentrar nos itens abaixo com a fonte nova.
+O pacote combinado 0.3.0 acrescenta 208 traduções em 207 definições: componentes
+de reboques, pinturas e textos da carreira milionária. Não instalado/testado
+no jogo por esse incremento. Agrupar a prova desses rótulos com a tipografia;
+não é necessário repetir conexão LAN ou os ciclos de lifetime já comprovados.
 
 Bancada após essa alteração: 196 x86 sob Proton/253 nativos e verificações de
 build/Clippy/fmt passaram. `l10n_tools` nativo e Windows x86 geraram projetos
@@ -520,8 +524,14 @@ montagem/abertura feita. Dublagem é etapa própria (T3), fora desta rodada.
   Caderno (economia/frota), loja e mensagens de entrega. Anotar cortes.
 - [ ] Chaves com cor (`qh_city_buttonx`, `qh_cargo_listx`) e `<br>` em
   `ui_gfx_changed` (trocar resolução) exibem cor/quebra corretas.
-- [ ] Textos fora da tabela continuam em inglês (esperado até T2); anotar onde
-  aparecem para priorizar.
+- [ ] Com o pacote 0.3.0, conferir na concessionária/oficina os nomes de pinturas
+  e, onde o jogo os expõe, componentes de reboques. Conferir título/instruções
+  da carreira milionária sem criar/sobrescrever save. Se um campo não aparecer
+  no fluxo normal, registrar como não observado, sem inventar cobertura.
+- [ ] Marcas/modelos, cidades/empresas e valores originais permanecem corretos;
+  layout dos rótulos novos não corta. Não atribuir mudança em saldo/regras à
+  tradução: o pacote altera somente texto. PML, ESC, ajuda e 36 definições
+  malformadas permanecem fora desse bloco; anotar textos restantes para priorizar.
 - [ ] Fechar normalmente, `ui_tools restore` e confirmar config original e
   overlay ausente. Com menu experimental também montado, restaurar na ordem
   inversa da instalação.

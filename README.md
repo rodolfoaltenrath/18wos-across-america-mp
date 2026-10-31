@@ -124,8 +124,9 @@ ui_tools install --kind ptbr-text --game . --package target/analysis/NOVO/packag
 Instalar e restaurar só com o jogo fechado; `ui_tools restore` volta ao
 `init.cfg` original. O proprietário relatou teste inicial positivo da tradução
 em 30/10, com pedido de uma fonte menos quadrada; a matriz detalhada permanece
-em [docs/GAME_VALIDATION.md](docs/GAME_VALIDATION.md). Textos fora da tabela,
-dublagem e R$ estão pendentes; detalhes em
+em [docs/GAME_VALIDATION.md](docs/GAME_VALIDATION.md). O primeiro bloco de textos
+fora da tabela está preparado offline; restante da tradução, dublagem e R$
+seguem pendentes. Detalhes em
 [docs/LOCALIZATION.md](docs/LOCALIZATION.md).
 
 Para gerar a alternativa suavizada, acrescentar
@@ -137,6 +138,15 @@ O pacote 0.2.0 mantém as 484 traduções e as medidas dos textos; não altera
 cenário/logos/layout do painel esquerdo. Foi preparado fora do jogo; a aparência
 no motor ainda exige conferência. Se a tradução anterior estiver montada,
 restaurá-la com seu backup antes de instalar este pacote com backup novo.
+
+Para incluir também **208 traduções de peças de reboques, pinturas e textos da
+carreira milionária**, acrescentar
+`--literals translations/pt-BR/literal_def.json` ao build (ajustar o caminho do
+catálogo se executar da raiz do jogo). O pacote combinado é 0.3.0. O instalador
+confere que somente campos de exibição mudaram nas definições; preços,
+potência, referências a peças e regras do jogo são preservados. Nenhum pacote
+deste incremento foi instalado nem testado no motor. ESC/PML e arquivos
+originais com sintaxe incompleta ficam para outro bloco.
 
 ## Kit local para o segundo PC Windows
 
