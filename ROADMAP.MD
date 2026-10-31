@@ -13,7 +13,7 @@ tokens JSON de borda e words extremos), compartilhado por:
   remoto), `session_evidence` (parse + sanitize + analyze),
   `transition_analysis`, todos os decodificadores da EngineControl v3 (blocos
   arbitrários, ida e volta do status do gate) e captura de argv com limites.
-- `asset_tools/tests/parser_fuzz.rs`: `.font`, `.def`, codec 3nK, TGA, PML,
+- `asset_tools/src/parser_fuzz_tests.rs`: `.font`, `.def`, codec 3nK, TGA, PML,
   catálogo, literais e PE32, com sementes iguais às fixtures próprias.
 
 **Defeito real encontrado:** `session_evidence::parse` decodificava via

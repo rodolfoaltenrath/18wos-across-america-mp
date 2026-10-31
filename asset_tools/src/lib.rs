@@ -459,4 +459,6 @@ mod tests {
     }
 }
 pub mod binary;
+#[cfg(test)]
+mod parser_fuzz_tests;
 pub mod pe32;
