@@ -1,5 +1,58 @@
 # Roadmap — Across America multiplayer em Rust
 
+## M2 concluída: G0 no jogo original sob Proton — 31/10/2026
+
+Validada a DLL de `07ec04e` na instalação Steam perfilada, Fedora/Proton
+Experimental, um PC, save de teste carregado pelo proprietário. Processo e
+thread históricos: PID Windows 396/thread 400; nunca reutilizar esses valores.
+Não é nova LAN. Doctor estático passou antes da carga; backup dos cinco
+originais e três saves foi criado antes da primeira chamada à DLL.
+
+**Resultado: M2 9/9.** O ciclo real agora cobre start/stop/restart,
+descarga/recarga sem sondas, falhas respondidas de inicialização, rede
+indisponível, referências visuais e saída normal com integridade conferida.
+
+| Prova | Evidência preservada |
+| --- | --- |
+| Inicialização inválida | Endpoint de porta zero recusado pela DLL; nenhum worker iniciado, dispatcher ausente, sem visual/tarefas/pin. A configuração válida seguinte iniciou normalmente. |
+| Ciclo básico | Três conexões com coordenadas reais; stop/restart e duas descargas bem-sucedidas no mesmo processo, com uma recarga real da DLL. Primeiro stop: worker aguardado, cleanup completo, sem callbacks/pin e leave confirmado. |
+| Rede com visual | Eco v2, offset 4 m e três partes com shader. Antes: conexão 4/um remoto; durante: worker ativo, reconnects 1/zero remotos; depois: conexão 5/um remoto, accepted 2 e retomada do draw. Flags/foreign do draw e fault do visual zerados. |
+| Interrupção de 30 s | Proxy A: primeiro cliente em 2.766 ms, blackout em +15.000 ms por 30.000 ms, execução de 150.000 ms. Usou também defaults seed 42, perda 50‰, duplicação 100‰, atraso 40 ms e jitter 80 ms; não foi uma rede limpa fora do blackout. Descartes no blackout: 363 uplink/66 downlink, sem overflow. |
+| Liberação do visual | Um preflight/uma liberação, item ausente, filas zeradas, worker aguardado, dispatcher removido e 14 slots restaurados. Oito hashes iguais. Pin permaneceu até a saída, como previsto. |
+| Inicialização parcial | Uma tentativa de reinstalar a sessão visual no mesmo processo foi recusada no pump: ele é de uso único. Load/attach já haviam ocorrido; cleanup posterior restaurou os 14 slots e confirmou ausência de worker/visual/tarefas. Não tentar reinstalar a sonda nem afrouxar essa guarda. |
+| Stop sem servidor acessível | Sub-sessão básica, sem reinstalar sondas, recebeu 299 atualizações. Proxy B interrompeu o tráfego e encerrou pelo prazo; cliente continuou ativo/reconectando, com zero remotos. Stop terminou com status 2/worker aguardado, cleanup completo, phase closed e leave_confirmed=false. |
+| Recusa de descarga com pin | `unload` recusou FreeLibrary após confirmar a parada, exigindo saída do processo. É o resultado esperado; não ficou trabalho ou visual retido. |
+| Fechamento e arquivos | Proprietário relatou tudo funcional e fechou pelo menu. Enumeração posterior não encontrou o jogo; verificação independente pós-saída conferiu os oito arquivos. init.cfg manteve SHA-256 dddbacf5…7774. |
+
+Proxy B tinha prazo de 75.000 ms e só recebeu seu primeiro cliente em
+68.064 ms, após a tentativa visual recusada. Seu blackout foi observado por
+1.936 ms antes do encerramento do helper; **não** é uma segunda prova de
+blackout completo de 30 s. A parada foi exercitada depois, com o endpoint
+indisponível. A prova de recuperação após 30 s é a do proxy A.
+
+Servidor final: seis admissões sucessivas da mesma identidade, quatro leaves,
+duas expirações, zero ativos no shutdown, 9.295 datagramas recebidos/7.729 poses;
+invalid/oversized/rate_limited/send_errors/late_ticks zerados. Houve 1.258 stale
+e um unauthenticated, com duplicação/reordenação/troca de geração; preservar os
+contadores, sem anunciar tráfego integralmente aceito ou seis jogadores.
+
+O proprietário não estava acompanhando a tela durante a interrupção. Confirmou
+apenas ausência de travamento/comportamento estranho ao retornar. Não há nova
+confirmação humana de textura, desaparecimento/reaparecimento ou suavidade.
+Capturas mostram pose disponível e desenho antes/depois; não mediram foco do SO,
+FPS nem latência visual. Queda provocada do jogo, timeout de transporte no jogo,
+falha real de criação de thread e sessão longa continuam fora desta prova;
+recuperação nesses cenários permanece na bancada e nas pendências de M8/G6.
+Isso não fecha a matriz de M1, menus/teardown de M4 ou toda M8.
+
+Artefatos privados em `target/analysis/m2-game-20261031-01/`: doctor, backup,
+recusas, start/status/stop/lifecycle, proxies/servidor e verificação antes/depois
+da saída. `basic-analysis.json`, `visual-analysis.json` e
+`outage-stop-analysis.json` foram gerados pelo analisador já entregue, sem
+inventar deltas entre conexões. Auxiliares encerrados; nenhum jogo restante,
+original/save modificado, build ou novo código necessário nesta rodada.
+Próximo: revisar as pendências existentes de M1 e M3/M4 por dependência.
+
 ## Prioridade M2: ciclo de vida, falhas e descarga conservadora — 31/10/2026
 
 O proprietário pediu concluir etapas existentes antes de ampliar features.
@@ -4312,11 +4365,13 @@ sem inventar posições e passa por toda a matriz de estados documentada.
   duplicado. O modo básico não retém entidades; com o visual de M4, concluir a
   liberação no loop e a remoção dos callbacks antes de confirmar a limpeza.
   A DLL fixada pela sonda continua residente até a saída do processo.
-- [ ] Ampliar validação de saída do jogo, falha de rede prolongada e
+- [x] Ampliar validação de saída do jogo, falha de rede prolongada e
   inicialização incompleta. Cobrir referências ao motor quando M4 as introduzir.
-  Bancada de 31/10 cobre as falhas, host próprio e visual retido, com guard de
-  chamadas indeterminadas e evidência obrigatória antes da descarga. A prova
-  agrupada da DLL revisada no jogo original está em G0; item permanece aberto.
+  Bancada e G0 de 31/10 passaram: ciclo real start/stop/unload/reload,
+  inicialização inválida/parcial, blackout de 30 s com retomada, stop sem
+  resposta, liberação do visual/14 slots, saída normal e oito hashes iguais.
+  Saída forçada/timeouts de transporte seguem comprovados em fixtures próprias;
+  queda provocada no motor e endurance continuam nas pendências de M8/G6.
 - [x] Separar falha de leitura temporária de uma versão realmente incompatível.
 - [x] Validar o ciclo em host Rust próprio e depois no processo original, com
   dados reais enviados e recebidos por outro cliente.

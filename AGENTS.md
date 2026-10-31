@@ -1,5 +1,27 @@
 # Orientações para continuar o projeto
 
+G0 real em 31/10 com DLL 07ec04e: M2 agora 9/9. Fedora/Proton, um PC,
+perfil Steam, backup antes da carga. Endpoint inválido recusado sem worker;
+três conexões básicas reais com stop/restart e duas descargas/recarga da DLL.
+Visual eco v2: blackout A completo de 30 s; conexão 4→5, zero remotos durante
+e um após, worker ativo/draw retomado. Proxy A também tinha perda/dup/jitter
+padrões; não chamar rede limpa. Liberação única, 14 slots, oito hashes iguais.
+Pump é de uso único: tentativa de outra sessão visual foi recusada depois de
+load/attach; cleanup completo passou. Não reinstalar pump no mesmo processo.
+Stop durante endpoint indisponível foi provado em sub-sessão básica sem sondas;
+leave_confirmed=false, worker aguardado, cleanup/filas/item corretos. Proxy B
+terminou no prazo e só observou 1.936 ms de blackout antes de fechar; não
+confundir com a prova A completa. Unload com pin foi recusado corretamente.
+Proprietário retornou e relatou tudo funcional; não assistiu ao sumiço/retorno
+do caminhão, portanto sem nova confirmação humana dessa aparência/suavidade.
+Fechou pelo menu; enumeração sem jogo, pós-saída oito hashes iguais e init.cfg
+dddbacf5…7774 intacto. Servidor: seis admissões sucessivas, quatro leaves,
+duas expirações/zero ativos finais; proxies/servidor encerrados. Nenhum build
+na partida. Logs/análises privados target/analysis/m2-game-20261031-01/.
+Não fechar M1/M4/M8 por essa prova: queda provocada no motor, timeout real,
+endurance, matriz de menus e percepção visual continuam pendentes. Próximo
+trabalho deve seguir as pendências existentes M1 e M3/M4, sem ampliar features.
+
 Prioridade do proprietário em 31/10: concluir M2 antes de ampliar features.
 O item restante reúne falhas/rede/saída e referências de M4. Não marcar M2
 completo por fixtures; G0 em docs/GAME_VALIDATION.md agrupa a prova no jogo

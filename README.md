@@ -46,8 +46,13 @@ critérios e distinção entre teste disponível e integração ainda não entre
 Prioridade de conclusão em 31/10: fechar M2 antes de ampliar funcionalidades.
 As proteções de inicialização/parada/descarga foram reforçadas e a bancada
 agora cobre falhas de preparo, interrupção UDP e saída do host próprio com o
-worker ativo. A pendência prática de M2 permanece aberta: fixtures não substituem
-a rodada agrupada no jogo, descrita em G0 do procedimento de validação.
+worker ativo. A rodada G0 passou depois no jogo original sob Proton: **M2 9/9**,
+com ciclo real de carga/parada/recarga, falhas de preparo, recuperação após
+30 s sem comunicação, liberação do visual e oito arquivos iguais após a saída.
+O proprietário confirmou que o jogo continuou funcional, mas não acompanhou
+o desaparecimento/reaparecimento do remoto. Queda provocada no motor, sessões
+longas e as matrizes de M1/M4/M8 continuam pendentes. Evidências e limites em
+G0 do procedimento de validação e no primeiro registro do roadmap.
 
 ## Telas do mod: prévia local
 

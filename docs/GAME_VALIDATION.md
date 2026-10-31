@@ -12,8 +12,9 @@ comandos de teardown, suavização na LAN, vários jogadores e sessão longa
 continuam pendentes. Testes em fixture/sockets locais não fecham essas lacunas.
 
 Prioridade em 31/10: concluir M2 antes de ampliar funcionalidades. A proteção
-de ciclo de vida e a bancada foram reforçadas; G0 abaixo concentra a pendência
-prática. Não abrir o jogo automaticamente nem solicitar uma nova LAN básica.
+de ciclo de vida e a bancada foram reforçadas; G0 passou depois no jogo
+original sob Proton e M2 está 9/9. As demais pendências permanecem específicas;
+não solicitar uma nova LAN básica para repetir essa prova.
 
 ## Incremento offline de carreira — 29/10/2026
 
@@ -271,7 +272,7 @@ e o fallback estão no README; não usar PIDs ou endereços históricos.
 
 | ID | Cobertura | Situação antes da rodada |
 | --- | --- | --- |
-| G0 | Fechamento prático de M2: falhas e ciclo de vida | Bancada ampliada em 31/10; DLL revisada no jogo pendente |
+| G0 | Fechamento prático de M2: falhas e ciclo de vida | Passou em 31/10 no jogo original sob Proton; M2 9/9, limites abaixo |
 | G1 | Visual/pose/skin e funcionamento básico | Regressão; passou em sessão anterior |
 | G2 | Ajustes de interpolação/extrapolação e métricas novas | Bancada; nova prova na partida pendente |
 | G3 | Interrupção/reconexão e desaparecimento percebido | Recuperação anterior passou; visibilidade pendente |
@@ -289,31 +290,51 @@ processos novos entre grupos; rodada agrupada não significa uma única injeçã
 
 ### G0 — Concluir M2 numa rodada local
 
+**Passou em 31/10/2026**, DLL `07ec04e`, Fedora/Proton, save de teste e um PC.
+Registro detalhado/contadores no primeiro bloco do ROADMAP.MD; artefatos privados
+em `target/analysis/m2-game-20261031-01/`. Não repetir para gerar a mesma prova.
+
 Este bloco exige somente um PC. Preparar backup normal da sessão e logs novos,
 recompilar/verificar com o jogo fechado e selecionar o PID atual. Não reutilizar
 endereços/PIDs históricos nem retirar proteção para provocar um crash. A versão
 de 31/10 mantém ABI v1 e exige launcher/DLL correspondentes. `lifecycle` é
 consultado e salvo também nos relatórios normais, sem intervenção extra.
 
-- [ ] Sem visual/sondas: carregar a DLL revisada, iniciar/parar/reiniciar o
+- [x] Sem visual/sondas: carregar a DLL revisada, iniciar/parar/reiniciar o
   worker e confirmar pacotes reais. Após stop, `lifecycle` deve indicar
   `worker_joined`, `cleanup_complete`, `dispatcher_detached`, zero tarefas e
   `visual_retained=false`. Só sem pin é permitido descarregar/recarregar.
-- [ ] Com sessão visual, usar o proxy UDP já entregue para uma interrupção
+- [x] Com sessão visual, usar o proxy UDP já entregue para uma interrupção
   programada de 30 s, mantendo o jogo em primeiro plano. Registrar antes,
   durante e depois: worker ativo, reconexão, descarte do remoto antigo e
   recuperação; uma tentativa de parada durante a interrupção fica em
   sub-sessão própria. ACK de leave pode faltar; não o inventar.
-- [ ] Encerramento normal pela sequência de G8: liberar visual, drenar filas,
+  Proxy A completou 30 s, com perda/duplicação/jitter adicionais. Parada sem
+  resposta passou depois em sessão básica com endpoint fechado, sem visual.
+- [x] Encerramento normal pela sequência de G8: liberar visual, drenar filas,
   remover sondas, aguardar worker e conferir slots/arquivos. O relatório deve
   confirmar limpeza e continuar com `process_pinned=true` se o pump foi usado.
   Recusa de unload por pin é o resultado correto, não falha de stop.
-- [ ] Fechar normalmente o jogo, confirmar ausência do processo e conferir
+- [x] Fechar normalmente o jogo, confirmar ausência do processo e conferir
   arquivos após saída. Avaliar a cobertura dos registros de saídas anteriores
   e identificar qualquer diferença da DLL revisada antes de fechar M2.
-- [ ] Saída abrupta real e inicialização incompleta real continuam sem nova
-  prova; sua necessidade residual deve ser explicitada no fechamento. Não
-  matar o jogo, inserir falhas ou alterar o save normal automaticamente.
+- [x] Registrar limites do fechamento: endpoint inválido e inicialização
+  parcial após attach foram recusados/limpos no jogo real. Saída abrupta
+  provocada e timeout de transporte no motor não foram exercitados; permanecem
+  na bancada e nas pendências de M8/G6. Não matar o jogo ou alterar saves para
+  preencher essa lacuna automaticamente.
+
+Limites desta rodada: o proprietário estava fora do computador durante o teste,
+relatando depois tudo funcional. Não confirmou visualmente sumiço/retorno,
+textura ou suavidade. A tentativa de reinstalar o pump no mesmo processo foi
+recusada por sua guarda de uso único; cleanup passou. Proxy B ficou ativo
+75 s, recebeu cliente só em 68.064 ms e encerrou depois de 1.936 ms do blackout;
+não equivale a outra interrupção completa de 30 s. O cliente continuou ativo e
+foi parado sem ACK depois do fechamento do endpoint. A prova completa é A.
+As duas limpezas conferiram 14 slots/oito arquivos e a checagem pós-saída
+confirmou os oito hashes, sem processo restante. Sem nova LAN ou teste Windows
+nativo. G1–G6/G8 continuam com suas pendências amplas, apesar dessas provas
+pontuais; G0 não certifica todo o comportamento de M4/M8.
 
 Evidência offline de 31/10: DLL x86 real em hosts Rust próprios; falhas de
 preparo/restart, join sem resposta, interrupção UDP de 30 s/leases de 2 s,
@@ -322,7 +343,8 @@ launchers, stop recusado com item referenciado e recuperação após liberação
 stop durante conexão sem resposta e nova sessão após a parada sem ACK.
 O cenário de timeout retém payload/marcador até a saída: não tentar recuperação
 por novos comandos naquele processo nem exigir reexecução no jogo para provar
-de novo a regra de retenção. Essas provas não marcam as caixas acima.
+de novo a regra de retenção. As caixas acima foram marcadas pela rodada real
+posterior, não somente pelas fixtures.
 
 ### G1 — Visual básico
 
