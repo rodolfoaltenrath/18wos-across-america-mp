@@ -1,5 +1,15 @@
 # Orientações para continuar o projeto
 
+Artefato final31/10: kit novo de bc89aed, schema2/seis binários, em Downloads
+com sufixo roadmap. Builder/hashes e mp_lan --check-only x86 Proton passaram;
+sem instalação/atualização do kit anterior ou novo jogo. G12/LAN desse build
+pendentes, lan_tested=false. Logs privados offline-batch-final-kit-*.
+Conferência real pós-lote: session-verify no PREFIXO DA PARTIDA retornou oito
+iguais; init.cfg dddbacf5…7774. Primeira tentativa no prefixo da bancada não
+encontrou os três saves (C:/Documents isolado); não era alteração dos arquivos.
+Log correto ...final-originals-correct-prefix-20261031.log. Sem jogo/fixtures/
+controladores na enumeração final; não repetir LAN básica por esses checks.
+
 Fechamento31/10: session_evidence valida actual/expected mesmo restored=false;
 curto-circuito anterior podia exportar texto arbitrário nesses campos. Estado
 de stop limitado; resumo do recorder valida versão limitada, sem caminhos/texto.

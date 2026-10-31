@@ -1,5 +1,23 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Artefato final e conferência após o lote — 31/10/2026
+
+Kit local novo gerado de `bc89aed`, schema2/seis binários x86, em pasta nova
+de Downloads; manifestos/hashes conferidos pelo builder. O assistente real
+x86 passou `--check-only` sob Proton, sem abrir processo do jogo, injetar ou
+instalar. `lan_tested=false` para esse build novo; as provas LAN históricas
+continuam válidas, sem serem atribuídas automaticamente ao kit atualizado.
+Kits anteriores/instalados preservados. Logs privados `offline-batch-final-kit-*`.
+
+`session-verify`, independente do PID, confirmou novamente os oito arquivos
+originais/saves do backup real; init.cfg conserva dddbacf5…7774. A primeira
+tentativa foi executada no prefixo da bancada: C:/Documents é isolado ali,
+portanto os três saves não eram encontrados. Repetida no prefixo correto da
+partida, retornou oito iguais, sem alterar/copiar saves ou o manifesto. Log
+definitivo `offline-batch-final-originals-correct-prefix-20261031.log`.
+Enumeração final sem jogo/fixtures/controladores. Workspace limpo após os
+commits, sem coautor. Nenhuma prova prática de G12 foi inferida desses checks.
+
 ## Fechamento do lote: filtros dos relatórios — 31/10/2026
 
 Revisão adicional encontrou um desvio concreto em `session_evidence`: quando
