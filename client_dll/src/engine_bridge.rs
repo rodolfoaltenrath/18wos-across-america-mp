@@ -398,6 +398,26 @@ pub fn detach() -> Result<(), String> {
     let _control = CONTROL.lock().map_err(|_| "dispatcher control poisoned")?;
     detach_locked()
 }
+pub fn lifecycle_state(state: &mut crate::lifecycle::State) -> Result<(), String> {
+    let _control = CONTROL.lock().map_err(|_| "dispatcher control poisoned")?;
+    state.dispatcher_detached = LEASE.load(Ordering::Acquire) == 0
+        && WINDOW.load(Ordering::Acquire) == 0
+        && DEPTH.load(Ordering::Acquire) == 0
+        && JOBS
+            .lock()
+            .map_err(|_| "dispatcher queue poisoned")?
+            .is_empty();
+    #[cfg(target_arch = "x86")]
+    {
+        let mut phase = EngineControl::new(api::UI_PUMP_STATUS);
+        crate::engine_phase::fill(&mut phase);
+        state.process_pinned = crate::engine_phase::pinned();
+        state.phase_pending = phase.phase_pending;
+        state.phase_running = phase.phase_running;
+        state.visual_retained = crate::engine_visual::allocated();
+    }
+    Ok(())
+}
 #[cfg(target_arch = "x86")]
 pub(super) fn window_depth() -> u32 {
     DEPTH.load(Ordering::Acquire)

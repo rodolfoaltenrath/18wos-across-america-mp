@@ -43,10 +43,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "client_get_remote",
         unsafe extern "system" fn(u32, *mut client_dll::RemoteState) -> i32
     );
-    if start() != 0 {
-        unsafe {
-            FreeLibrary(module);
+    let control = symbol!(
+        "client_control",
+        unsafe extern "system" fn(*mut client_dll::api::Control) -> u32
+    );
+    let release = || -> Result<(), Box<dyn std::error::Error>> {
+        let stopped = stop();
+        let mut evidence = client_dll::api::Control::new(client_dll::api::LIFECYCLE_STATUS);
+        if unsafe { control(&mut evidence) } != 0 || evidence.result != 0 {
+            return Err(
+                "lifecycle evidence unavailable; retaining DLL until this host exits".into(),
+            );
         }
+        let state: client_dll::lifecycle::State =
+            serde_json::from_str(client_dll::api::text(&evidence.message)?)?;
+        state.require_unload()?;
+        // Only the joined, detached, unpinned DLL may release this host's lease.
+        if unsafe { FreeLibrary(module) } == 0 {
+            return Err(std::io::Error::last_os_error().into());
+        }
+        if stopped != 0 {
+            return Err("DLL worker stopped with an error".into());
+        }
+        Ok(())
+    };
+    if start() != 0 {
+        release()?;
         return Err("client_start failed; check AA_MP_* configuration".into());
     }
     println!(
@@ -77,13 +99,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             break;
         }
     }
-    let stopped = stop(); // Join the worker BEFORE unloading any of its code.
-    unsafe {
-        FreeLibrary(module);
-    }
-    if stopped != 0 {
-        return Err("DLL worker stopped with an error".into());
-    }
+    release()?;
     Ok(())
 }
 

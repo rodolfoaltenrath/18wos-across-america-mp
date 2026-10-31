@@ -48,6 +48,7 @@ impl Drop for Runner {
 struct Server {
     address: SocketAddr,
     restart: Arc<AtomicBool>,
+    blackout: Arc<AtomicBool>,
     _runner: Runner,
 }
 fn settings() -> Settings {
@@ -67,6 +68,8 @@ fn server() -> Server {
     let stopped = stop.clone();
     let restart = Arc::new(AtomicBool::new(false));
     let restarted = restart.clone();
+    let blackout = Arc::new(AtomicBool::new(false));
+    let blacked_out = blackout.clone();
     let thread = thread::spawn(move || {
         let start = Instant::now();
         let mut hub = Hub::new(settings(), 11).unwrap();
@@ -80,6 +83,9 @@ fn server() -> Server {
             for _ in 0..256 {
                 match socket.recv_from(&mut buffer) {
                     Ok((len, address)) => {
+                        if blacked_out.load(Ordering::Acquire) {
+                            continue;
+                        }
                         for (destination, frame) in hub
                             .ingest(address, &buffer[..len], now, identity::random_id)
                             .unwrap()
@@ -94,7 +100,9 @@ fn server() -> Server {
             }
             if now >= tick {
                 for (destination, frame) in hub.tick(now) {
-                    let _ = socket.send_to(&w::encode_server(&frame).unwrap(), destination);
+                    if !blacked_out.load(Ordering::Acquire) {
+                        let _ = socket.send_to(&w::encode_server(&frame).unwrap(), destination);
+                    }
                 }
                 tick = now + 16;
             }
@@ -104,6 +112,7 @@ fn server() -> Server {
     Server {
         address,
         restart,
+        blackout,
         _runner: Runner {
             stop,
             thread: Some(thread),
@@ -281,6 +290,7 @@ fn dll_heartbeats_without_coordinates_restarts_histories_recovers_server_and_rem
         .unwrap(),
     )
     .unwrap();
+    let request = start;
     c.control(&dll, &mut start).unwrap();
     let (initial, row) = until(&c, &dll, "room connected", |_, s, r| {
         s.phase == Phase::Connected && r.count == 1 && r.sequence >= 50
@@ -333,6 +343,45 @@ fn dll_heartbeats_without_coordinates_restarts_histories_recovers_server_and_rem
     until(&c, &dll, "coordinates resumed", |state, _, _| {
         state.sample_state == 1
     });
+    let before = status(&c, &dll).unwrap();
+    server.blackout.store(true, Ordering::Release);
+    let outage = Instant::now();
+    while outage.elapsed() < Duration::from_secs(30) {
+        assert_eq!(control(&c, &dll, api::STATUS).status, 1);
+        thread::sleep(Duration::from_millis(50));
+    }
+    let waiting = status(&c, &dll).unwrap();
+    assert_eq!(waiting.phase, Phase::Reconnecting);
+    assert!(waiting.reconnects > before.reconnects);
+    assert_eq!(
+        remote(&c, &dll).count,
+        0,
+        "old room state must not survive expiry"
+    );
+    server.blackout.store(false, Ordering::Release);
+    until(
+        &c,
+        &dll,
+        "recovery after multiple lease intervals",
+        |_, s, r| s.phase == Phase::Connected && s.accepted > before.accepted && r.count == 1,
+    );
+    // Stop while an accepted room is unreachable: it must join without an ACK.
+    server.blackout.store(true, Ordering::Release);
+    let stopping = Instant::now();
+    assert_eq!(control(&c, &dll, api::STOP).status, 2);
+    assert!(stopping.elapsed() < Duration::from_secs(3));
+    assert!(!status(&c, &dll).unwrap().leave_confirmed);
+    c.lifecycle(&dll).unwrap().require_unload().unwrap();
+    server.blackout.store(false, Ordering::Release);
+    // No leave ACK means the old identity may still hold its lease. A fresh
+    // worker has no resume credentials; wait for expiry rather than weakening
+    // IdentityInUse or relying on the speed of remote control calls under Wine.
+    thread::sleep(Duration::from_millis(2100));
+    start = request;
+    c.control(&dll, &mut start).unwrap();
+    until(&c, &dll, "restart after unacknowledged stop", |_, s, r| {
+        s.phase == Phase::Connected && r.count == 1
+    });
     drop(peer.runner);
     until(&c, &dll, "leaver removed by roster", |_, s, r| {
         s.phase == Phase::Connected && r.count == 0
@@ -344,4 +393,65 @@ fn dll_heartbeats_without_coordinates_restarts_histories_recovers_server_and_rem
     assert!(closed.leave_confirmed);
     c.unload(&dll).unwrap();
     assert!(c.control(&dll, &mut Control::new(api::STATUS)).is_err());
+}
+
+#[test]
+fn stop_during_unanswered_join_is_bounded_without_fabricating_leave_confirmation() {
+    let dll = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../target/i686-pc-windows-gnu/release/client_dll.dll")
+        .canonicalize()
+        .unwrap();
+    let mut fixture = Fixture(
+        Command::new(env!("CARGO_BIN_EXE_memory_tool"))
+            .arg("fixture")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap(),
+    );
+    let mut output = BufReader::new(fixture.0.stdout.take().unwrap());
+    let mut line = String::new();
+    output.read_line(&mut line).unwrap();
+    let c = Controller::open(fixture.0.id()).unwrap();
+    c.load(&dll).unwrap();
+    // A bound, silent socket deliberately never accepts. No external network.
+    let silent = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let mut start = Control::new(api::START_SESSION);
+    start.config.mode = api::SIMULATED;
+    api::put(
+        &mut start.config.server,
+        &silent.local_addr().unwrap().to_string(),
+    )
+    .unwrap();
+    api::put(&mut start.config.profile, w::PROFILE).unwrap();
+    api::put(
+        &mut start.message,
+        &serde_json::to_string(&Options {
+            admission: None,
+            room: "lan".into(),
+            identity: "c".repeat(32),
+            profile: w::PROFILE.into(),
+        })
+        .unwrap(),
+    )
+    .unwrap();
+    let request = start;
+    c.control(&dll, &mut start).unwrap();
+    silent
+        .set_read_timeout(Some(Duration::from_secs(3)))
+        .unwrap();
+    silent.recv_from(&mut [0; 1201]).unwrap();
+    let waiting = status(&c, &dll).unwrap();
+    assert_eq!(waiting.phase, Phase::Joining);
+    assert_eq!(waiting.accepted, 0);
+    let stopping = Instant::now();
+    assert_eq!(control(&c, &dll, api::STOP).status, 2);
+    assert!(stopping.elapsed() < Duration::from_secs(3));
+    assert!(!status(&c, &dll).unwrap().leave_confirmed);
+    c.lifecycle(&dll).unwrap().require_unload().unwrap();
+    // Repeat to show cancellation did not leave a worker/stop flag behind.
+    start = request;
+    c.control(&dll, &mut start).unwrap();
+    assert_eq!(control(&c, &dll, api::STOP).status, 2);
+    c.unload(&dll).unwrap();
 }

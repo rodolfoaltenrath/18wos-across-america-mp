@@ -13,6 +13,8 @@ pub const PRESENTATION_SET: u32 = 6;
 pub const PRESENTATION_STATUS: u32 = 7;
 /// Per-connection v2 Timing JSON (or null for v1); no credentials.
 pub const NETWORK_TIMING: u32 = 8;
+/// Lifecycle State JSON: mandatory evidence before unloading. Layout unchanged.
+pub const LIFECYCLE_STATUS: u32 = 9;
 pub const SIMULATED: u32 = 1;
 pub const GAME: u32 = 2;
 pub const MEMORY: u32 = 3;

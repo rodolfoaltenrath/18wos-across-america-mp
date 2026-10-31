@@ -58,6 +58,11 @@ fn loads_configures_captures_recovers_stops_restarts_and_unloads_real_dll() {
     controller.load(&dll).unwrap();
     controller.load(&dll).unwrap(); // no extra LoadLibrary reference
     assert_eq!(control(&controller, &dll, api::STATUS).status, 0); // DllMain starts nothing
+    controller
+        .lifecycle(&dll)
+        .unwrap()
+        .require_unload()
+        .unwrap();
     let receiver = UdpSocket::bind("127.0.0.1:0").unwrap();
     receiver
         .set_read_timeout(Some(Duration::from_secs(3)))
@@ -87,6 +92,7 @@ fn loads_configures_captures_recovers_stops_restarts_and_unloads_real_dll() {
     assert!(controller.control(&dll, &mut invalid).is_err());
     assert_eq!(control(&controller, &dll, api::STATUS).status, 0);
     controller.control(&dll, &mut start).unwrap();
+    assert!(!controller.lifecycle(&dll).unwrap().worker_joined);
     let mut duplicate = start;
     assert!(controller.control(&dll, &mut duplicate).is_err());
     let mut bytes = [0; protocol::MAX_PACKET];
@@ -143,6 +149,11 @@ fn loads_configures_captures_recovers_stops_restarts_and_unloads_real_dll() {
     assert_eq!(resumed.sample_state, 1);
     assert!(resumed.sent > paused.sent);
     assert_eq!(control(&controller, &dll, api::STOP).status, 2);
+    controller
+        .lifecycle(&dll)
+        .unwrap()
+        .require_unload()
+        .unwrap();
     // A temporary invalid coordinate must keep the worker alive and emit no invented state.
     let mut unavailable = start;
     api::put(&mut unavailable.config.addresses[0], "1").unwrap();
@@ -167,4 +178,139 @@ fn loads_configures_captures_recovers_stops_restarts_and_unloads_real_dll() {
     controller.load(&dll).unwrap();
     assert_eq!(control(&controller, &dll, api::STATUS).status, 0);
     controller.unload(&dll).unwrap();
+}
+
+#[test]
+fn incomplete_initialization_keeps_status_cleanup_and_restart_available() {
+    let dll = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../target/i686-pc-windows-gnu/release/client_dll.dll")
+        .canonicalize()
+        .unwrap();
+    let mut fixture = Fixture(
+        Command::new(env!("CARGO_BIN_EXE_memory_tool"))
+            .arg("fixture")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap(),
+    );
+    let mut output = BufReader::new(fixture.0.stdout.take().unwrap());
+    let mut line = String::new();
+    output.read_line(&mut line).unwrap();
+    let c = Controller::open(fixture.0.id()).unwrap();
+    c.load(&dll).unwrap();
+    drop(c);
+    let diagnostic = Command::new(env!("CARGO_BIN_EXE_mp_launcher"))
+        .args(["--pid", &fixture.0.id().to_string(), "--dll"])
+        .arg(&dll)
+        .args(["--fixture", "lifecycle"])
+        .output()
+        .unwrap();
+    assert!(diagnostic.status.success(), "{diagnostic:?}");
+    serde_json::from_slice::<client_dll::lifecycle::State>(&diagnostic.stdout)
+        .unwrap()
+        .require_unload()
+        .unwrap();
+    let c = Controller::open(fixture.0.id()).unwrap();
+    let receiver = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let mut good = Control::new(api::START);
+    good.config.mode = api::SIMULATED;
+    api::put(
+        &mut good.config.server,
+        &receiver.local_addr().unwrap().to_string(),
+    )
+    .unwrap();
+    for case in 0..7 {
+        let mut invalid = good;
+        match case {
+            0 => {
+                api::put(&mut invalid.config.server, "0.0.0.0:0").unwrap();
+            }
+            1 => invalid.config.mode = 999,
+            2 => invalid.config.phase = f32::NAN,
+            3 => {
+                invalid.config.mode = api::GAME;
+                api::put(&mut invalid.config.profile, "unknown").unwrap();
+            }
+            4 => {
+                invalid.config.mode = api::MEMORY;
+                api::put(&mut invalid.config.addresses[0], "invalid").unwrap();
+            }
+            5 => {
+                invalid.command = api::START_SESSION;
+                api::put(&mut invalid.message, "{}").unwrap();
+            }
+            _ => {
+                invalid.command = api::START_SESSION;
+                api::put(
+                    &mut invalid.message,
+                    &serde_json::to_string(&multiplayer_server::session_client::Options {
+                        admission: None,
+                        room: "lan".into(),
+                        identity: "invalid".into(),
+                        profile: String::new(),
+                    })
+                    .unwrap(),
+                )
+                .unwrap();
+            }
+        }
+        assert!(c.control(&dll, &mut invalid).is_err(), "case {case}");
+        assert!(matches!(control(&c, &dll, api::STATUS).status, 0 | 2));
+        assert_eq!(control(&c, &dll, api::STATUS).sent, 0);
+        c.lifecycle(&dll).unwrap().require_unload().unwrap();
+        assert_eq!(control(&c, &dll, api::STOP).status, 2);
+    }
+    // Rejected initialization does not require a new DLL or process.
+    c.control(&dll, &mut good).unwrap();
+    receiver
+        .set_read_timeout(Some(Duration::from_secs(3)))
+        .unwrap();
+    receiver.recv_from(&mut [0; protocol::MAX_PACKET]).unwrap();
+    assert_eq!(control(&c, &dll, api::STATUS).status, 1);
+    c.unload(&dll).unwrap();
+}
+
+#[test]
+fn target_exit_with_worker_active_is_reported_without_reusing_the_controller() {
+    let dll = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../target/i686-pc-windows-gnu/release/client_dll.dll")
+        .canonicalize()
+        .unwrap();
+    for abrupt in [false, true] {
+        let mut fixture = Fixture(
+            Command::new(env!("CARGO_BIN_EXE_memory_tool"))
+                .arg("fixture")
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()
+                .unwrap(),
+        );
+        let mut output = BufReader::new(fixture.0.stdout.take().unwrap());
+        let mut line = String::new();
+        output.read_line(&mut line).unwrap();
+        let c = Controller::open(fixture.0.id()).unwrap();
+        c.load(&dll).unwrap();
+        let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
+        socket
+            .set_read_timeout(Some(Duration::from_secs(3)))
+            .unwrap();
+        let mut start = Control::new(api::START);
+        start.config.mode = api::SIMULATED;
+        api::put(
+            &mut start.config.server,
+            &socket.local_addr().unwrap().to_string(),
+        )
+        .unwrap();
+        c.control(&dll, &mut start).unwrap();
+        socket.recv_from(&mut [0; protocol::MAX_PACKET]).unwrap();
+        if abrupt {
+            fixture.0.kill().unwrap();
+        } else {
+            writeln!(fixture.0.stdin.as_mut().unwrap(), "quit").unwrap();
+        }
+        fixture.0.wait().unwrap();
+        assert!(c.control(&dll, &mut Control::new(api::STATUS)).is_err());
+        assert!(c.unload(&dll).is_err());
+    }
 }

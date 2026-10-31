@@ -58,9 +58,11 @@ mod hook_transaction;
 pub mod inspection;
 pub mod interpolation;
 pub mod lan_kit;
+pub mod lifecycle;
 pub mod load_gate;
 mod memory;
 pub mod network_conditions;
+mod network_io;
 pub mod pe_exports;
 #[cfg(any(all(windows, target_arch = "x86"), test))]
 mod phase_queue;
@@ -75,6 +77,9 @@ pub mod transition_observation;
 pub mod udp_proxy;
 
 static WORKER: Mutex<Option<JoinHandle<Result<(), String>>>> = Mutex::new(None);
+// Cover the entire start/stop operation, including engine detach after joining.
+static LIFECYCLE: Mutex<()> = Mutex::new(());
+static CLEANUP_REQUIRED: AtomicBool = AtomicBool::new(false);
 static STOP: AtomicBool = AtomicBool::new(false);
 static STATUS: AtomicU32 = AtomicU32::new(0);
 static SENT: AtomicU64 = AtomicU64::new(0);
@@ -285,14 +290,7 @@ fn transmit(socket: &UdpSocket, bytes: &[u8]) -> Result<(), String> {
             SENT.fetch_add(1, Ordering::Relaxed);
             Ok(())
         }
-        Err(e)
-            if matches!(
-                e.kind(),
-                std::io::ErrorKind::WouldBlock | std::io::ErrorKind::ConnectionRefused
-            ) || e.raw_os_error() == Some(10054) =>
-        {
-            Ok(())
-        }
+        Err(e) if network_io::transient(&e) => Ok(()),
         Err(e) => Err(e.to_string()),
     }
 }
@@ -389,13 +387,8 @@ fn run(
                     };
                     publish_remote(update, false)?;
                 }
-                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => break,
-                Err(error)
-                    if matches!(error.raw_os_error(), Some(10040 | 10054))
-                        || error.kind() == std::io::ErrorKind::ConnectionRefused =>
-                {
-                    continue;
-                }
+                Err(error) if network_io::oversized(&error) => continue,
+                Err(error) if network_io::transient(&error) => break,
                 Err(error) => return Err(error.to_string()),
             }
         }
@@ -429,13 +422,8 @@ fn run(
                     Ok(size) => {
                         let _ = client.ingest(&buffer[..size], start.elapsed().as_millis() as u64);
                     }
-                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => break,
-                    Err(error)
-                        if matches!(error.raw_os_error(), Some(10040 | 10054))
-                            || error.kind() == std::io::ErrorKind::ConnectionRefused =>
-                    {
-                        continue;
-                    }
+                    Err(error) if network_io::oversized(&error) => continue,
+                    Err(error) if network_io::transient(&error) => break,
                     Err(error) => return Err(error.to_string()),
                 }
             }
@@ -520,6 +508,12 @@ fn start_source_session(
     source: Source,
     options: Option<multiplayer_server::session_client::Options>,
 ) -> Result<(), String> {
+    let _lifecycle = LIFECYCLE.lock().map_err(|_| "lifecycle mutex poisoned")?;
+    if CLEANUP_REQUIRED.load(Ordering::Acquire) {
+        return Err(
+            "previous stop left engine cleanup incomplete; retry stop before starting".into(),
+        );
+    }
     if let Some(options) = &options {
         options.validate()?;
     }
@@ -592,6 +586,10 @@ pub extern "system" fn client_start() -> i32 {
 #[unsafe(no_mangle)]
 pub extern "system" fn client_stop() -> i32 {
     panic::catch_unwind(|| {
+        let Ok(_lifecycle) = LIFECYCLE.lock() else {
+            return 1;
+        };
+        CLEANUP_REQUIRED.store(true, Ordering::Release);
         let Ok(mut worker) = WORKER.lock() else {
             return 1;
         };
@@ -609,8 +607,14 @@ pub extern "system" fn client_stop() -> i32 {
             STATUS.store(3, Ordering::Release);
             return 1;
         }
+        // Clear after detach so the last draw during teardown cannot republish
+        // a pose that the next session might otherwise mistake for fresh input.
+        if let Ok(mut pose) = LOCAL_POSE.lock() {
+            *pose = None;
+        }
         STATUS.store(2, Ordering::Release);
         SAMPLE_STATE.store(0, Ordering::Release);
+        CLEANUP_REQUIRED.store(false, Ordering::Release);
         result
     })
     .unwrap_or(1)
@@ -630,6 +634,26 @@ pub extern "system" fn client_packets_sent() -> u64 {
 #[unsafe(no_mangle)]
 pub extern "system" fn client_packets_received() -> u64 {
     RECEIVED.load(Ordering::Relaxed)
+}
+
+fn lifecycle_state() -> Result<lifecycle::State, String> {
+    let _lifecycle = LIFECYCLE.lock().map_err(|_| "lifecycle mutex poisoned")?;
+    let mut state = lifecycle::State {
+        schema: 1,
+        worker_joined: WORKER
+            .lock()
+            .map_err(|_| "worker mutex poisoned")?
+            .is_none(),
+        cleanup_complete: !CLEANUP_REQUIRED.load(Ordering::Acquire),
+        dispatcher_detached: true,
+        ..lifecycle::State::default()
+    };
+    #[cfg(windows)]
+    engine_bridge::lifecycle_state(&mut state)?;
+    // Keep the binding mutable on non-Windows without platform-specific layouts.
+    #[cfg(not(windows))]
+    let _ = &mut state;
+    Ok(state)
 }
 
 /// Explicit control, callable as a Win32 remote-thread procedure. No Rust
@@ -668,6 +692,7 @@ pub unsafe extern "system" fn client_control(block: *mut api::Control) -> u32 {
             })(),
             api::SESSION_STATUS => Ok(()),
             api::NETWORK_TIMING => Ok(()),
+            api::LIFECYCLE_STATUS => Ok(()),
             api::PRESENTATION_SET => serde_json::from_str::<interpolation::Config>(
                 api::text(&block.message).unwrap_or(""),
             )
@@ -696,7 +721,19 @@ pub unsafe extern "system" fn client_control(block: *mut api::Control) -> u32 {
         block.sent = client_packets_sent();
         block.received = client_packets_received();
         block.read_failures = READ_FAILURES.load(Ordering::Relaxed);
-        if block.command == api::PRESENTATION_STATUS
+        if block.command == api::LIFECYCLE_STATUS {
+            if lifecycle_state()
+                .and_then(|state| serde_json::to_string(&state).map_err(|e| e.to_string()))
+                .and_then(|json| api::put(&mut block.message, &json))
+                .is_err()
+            {
+                block.result = 1;
+                let _ = api::put(
+                    &mut block.message,
+                    "lifecycle evidence unavailable; DLL retained",
+                );
+            }
+        } else if block.command == api::PRESENTATION_STATUS
             || (block.command == api::PRESENTATION_SET && block.result == 0)
         {
             if serde_json::to_string(&presentation::status())

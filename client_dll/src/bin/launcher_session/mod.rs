@@ -209,6 +209,7 @@ pub fn status(c: &Controller, dll: &Path) -> Result<Value> {
         "visual": visual, "draw": draw, "load_gate": gate, "remotes": remotes, "network_session":session,
         "presentation": presentation,
         "network_timing": timing,
+        "lifecycle": c.lifecycle(dll)?,
     }))
 }
 
@@ -351,11 +352,14 @@ pub fn stop(c: &Controller, dll: &Path, pid: u32, timeout: Duration, game: bool)
     }
     let mut stop = Control::new(api::STOP);
     c.control(dll, &mut stop)?;
+    let lifecycle = c.lifecycle(dll)?;
+    lifecycle.require_stopped().map_err(anyhow::Error::msg)?;
     let slots = if game { verify_slots(pid)? } else { Vec::new() };
     if slots.iter().any(|s| s["restored"] != true) {
         bail!("slots not restored: {slots:?}");
     }
     report["client_status"] = stop.status.into();
+    report["lifecycle"] = serde_json::to_value(lifecycle)?;
     report["slots"] = slots.into();
     report["note"] = "the DLL stays pinned until the game exits".into();
     Ok(report)

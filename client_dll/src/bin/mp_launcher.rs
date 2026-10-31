@@ -48,6 +48,8 @@ fn main() -> anyhow::Result<()> {
             identity_file: Option<PathBuf>,
         },
         Status,
+        /// Explain worker, cleanup, callbacks and process-pinned DLL ownership.
+        Lifecycle,
         /// Query RTT/arrival timing for the accepted v2 connection (null for v1).
         NetworkTiming,
         /// Read/change local interpolation; never calls a game API.
@@ -353,6 +355,13 @@ fn main() -> anyhow::Result<()> {
         );
     }
     match &args.command {
+        Task::Lifecycle => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&controller.lifecycle(&dll)?)?
+            );
+            return Ok(());
+        }
         Task::NetworkTiming => {
             let mut timing = Control::new(api::NETWORK_TIMING);
             controller.control(&dll, &mut timing)?;
@@ -837,6 +846,7 @@ fn main() -> anyhow::Result<()> {
             return Ok(());
         }
         Task::SessionStart { .. }
+        | Task::Lifecycle
         | Task::NetworkTiming
         | Task::Presentation { .. }
         | Task::SessionBackup { .. }

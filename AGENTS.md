@@ -1,5 +1,31 @@
 # Orientações para continuar o projeto
 
+Prioridade do proprietário em 31/10: concluir M2 antes de ampliar features.
+O item restante reúne falhas/rede/saída e referências de M4. Não marcar M2
+completo por fixtures; G0 em docs/GAME_VALIDATION.md agrupa a prova no jogo
+em um PC, sem nova LAN básica. Novo LIFECYCLE_STATUS (9, ABI v1 preservada)
+e mp_launcher lifecycle exigem evidência antes de descarregar; consulta ausente
+ou inválida mantém a DLL. Launcher/DLL devem ser atualizados juntos com jogo
+fechado. Start/stop serializados; stop incompleto bloqueia restart até cleanup.
+Pin registrado mesmo se instalar pump falhar depois; DLL fixa exige saída.
+Calls remotas usam evento nomeado PID/criação com handle no alvo. Timeout/espera
+indeterminada retém payload e guard mesmo reabrindo launcher; somente a saída
+do alvo libera. Não terminar threads/descarregar para tentar recuperar.
+Erros UDP transitórios de rede inacessível/reset permitem retry/parada;
+permissão/config continuam fatais. Status/stop/diagnósticos preservam lifecycle;
+relatórios antigos seguem legíveis sem inventar evidência ausente.
+Bancada cobre inicialização incompleta, saída normal/forçada só de fixtures,
+timeout entre controladores/launcher, visual referenciado/cleanup/restart,
+30 s de blackout UDP com lease de 2 s e stop sem ACK/reinício. Nenhum jogo
+aberto/original/save alterado; não atualizar automaticamente kit instalado.
+Resultados finais deste bloco constam do primeiro registro do roadmap.
+Verify final: 211 x86 Proton/279 nativos, releases, Clippy/fmt; log privado
+target/analysis/verify-fedora-20261031-m2-lifecycle-confirmed.log. A primeira
+falha era reaproveitamento incorreto do pedido no teste, corrigido e preservado
+em ...-first.log. Rodada final repetida integralmente após ajustes de teardown.
+Sem ACK de leave, novo worker aguarda lease antigo; não herda credenciais do
+anterior e não afrouxa IdentityInUse. M2 permanece 8/9 até prova prática G0.
+
 ZIP entre hosts em 31/10 após `4062626`: writer de mod_package fixa criador
 Unix; leitor compara bytes integrais Unix ou DOS legado. Pacotes Windows
 antigos verificam/stage/restore; rebuild novo exige destino novo. Não afrouxar

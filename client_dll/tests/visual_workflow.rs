@@ -213,6 +213,26 @@ fn test_visual_draws_only_in_validated_context_and_releases_after_flush() {
     assert_eq!(holding.refusal, Some(Refusal::Referenced));
     assert!(holding.retryable && holding.evidence.ever_drawn);
     assert!(error(&controller, &dll, release).contains("still referenced"));
+    // Stop may join the worker while engine cleanup remains unsafe. It must
+    // preserve the instance/hooks, expose that distinction and block restart.
+    let mut stop = api::Control::new(api::STOP);
+    assert!(controller.control(&dll, &mut stop).is_err());
+    let lifecycle = controller.lifecycle(&dll).unwrap();
+    assert!(lifecycle.worker_joined && lifecycle.visual_retained && lifecycle.process_pinned);
+    assert!(!lifecycle.cleanup_complete && !lifecycle.dispatcher_detached);
+    assert!(lifecycle.require_unload().is_err());
+    let mut restart = api::Control::new(api::START);
+    restart.config.mode = api::SIMULATED;
+    api::put(&mut restart.config.server, "127.0.0.1:39000").unwrap();
+    assert!(
+        controller
+            .control(&dll, &mut restart)
+            .unwrap_err()
+            .to_string()
+            .contains("retry stop")
+    );
+    assert!(controller.unload(&dll).is_err());
+    assert_eq!(status(&controller, &dll).item, retained.item);
     assert!(
         error(&controller, &dll, EngineControl::new(api::UI_RENDER_REMOVE)).contains("release")
     );
@@ -274,6 +294,21 @@ fn test_visual_draws_only_in_validated_context_and_releases_after_flush() {
             .parse::<serde_json::Value>()
             .unwrap()["pending"],
         0
+    );
+    controller
+        .control(&dll, &mut api::Control::new(api::STOP))
+        .unwrap();
+    let cleaned = controller.lifecycle(&dll).unwrap();
+    assert!(cleaned.worker_joined && cleaned.cleanup_complete && cleaned.dispatcher_detached);
+    assert!(!cleaned.visual_retained);
+    assert_eq!((cleaned.phase_pending, cleaned.phase_running), (0, 0));
+    assert!(cleaned.process_pinned);
+    assert!(
+        controller
+            .unload(&dll)
+            .unwrap_err()
+            .to_string()
+            .contains("pins DLL")
     );
     writeln!(host.0.stdin.as_mut().unwrap(), "quit").unwrap();
     assert!(host.0.wait().unwrap().success());

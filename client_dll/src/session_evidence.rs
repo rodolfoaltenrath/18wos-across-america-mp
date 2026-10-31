@@ -53,6 +53,8 @@ pub struct Snapshot {
     pub network_timing: Option<Timing>,
     pub presentation: crate::presentation::Status,
     pub remotes: Vec<Remote>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lifecycle: Option<crate::lifecycle::State>,
 }
 impl Snapshot {
     pub fn validate(&self) -> Result<()> {
@@ -70,6 +72,9 @@ impl Snapshot {
             .map_err(anyhow::Error::msg)?;
         if let Some(s) = &self.network_session {
             ensure!(s.protocol == 2, "unsupported session protocol");
+        }
+        if let Some(s) = &self.lifecycle {
+            ensure!(s.schema == 1, "unsupported lifecycle schema");
         }
         Ok(())
     }
@@ -102,6 +107,9 @@ impl Snapshot {
         if self.client.read_failures.is_some_and(|v| v > 0) {
             out.push("sample_unavailability_counter_is_not_memory_read_failure_count");
         }
+        if self.lifecycle.as_ref().is_some_and(|s| !s.cleanup_complete) {
+            out.push("engine_cleanup_incomplete_restart_blocked");
+        }
         out
     }
 }
@@ -124,6 +132,8 @@ struct Stop {
     slots: Vec<Slot>,
     preflight_checks: u64,
     release_attempts: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    lifecycle: Option<crate::lifecycle::State>,
 }
 #[derive(Debug, Serialize)]
 pub struct StopSummary {
@@ -135,6 +145,12 @@ pub struct StopSummary {
     pub unchanged_files_reported: Option<u64>,
     pub preflight_checks: u64,
     pub release_attempts: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lifecycle: Option<crate::lifecycle::State>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cleanup_confirmed: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unload_allowed: Option<bool>,
 }
 #[derive(Debug, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -166,6 +182,9 @@ pub fn parse(bytes: &[u8]) -> Result<Capture> {
     } else {
         let stop: Stop = serde_json::from_value(value).context("expected session-status/session-stop; identity, backups and unrelated files are not reports")?;
         ensure!(stop.slots.len() <= 64, "too many slots");
+        if let Some(s) = &stop.lifecycle {
+            ensure!(s.schema == 1, "unsupported lifecycle schema");
+        }
         let mut matching_slots = 0;
         for s in &stop.slots {
             let address = |v: &str| -> Result<u64> {
@@ -191,6 +210,9 @@ pub fn parse(bytes: &[u8]) -> Result<Capture> {
                 unchanged_files_reported: stop.files.map(|f| f.unchanged),
                 preflight_checks: stop.preflight_checks,
                 release_attempts: stop.release_attempts,
+                cleanup_confirmed: stop.lifecycle.as_ref().map(|s| s.require_stopped().is_ok()),
+                unload_allowed: stop.lifecycle.as_ref().map(|s| s.require_unload().is_ok()),
+                lifecycle: stop.lifecycle,
             },
         })
     }
@@ -381,6 +403,43 @@ mod tests {
         assert!(!summary.all_reported_slots_match);
         assert_eq!(summary.matching_slots, 0);
         assert_eq!(summary.unchanged_files_reported, Some(8));
+    }
+    #[test]
+    fn lifecycle_evidence_preserves_cleanup_pin_distinction_and_legacy_privacy() {
+        let mut v = json!({"client_status":2,"released":true,"preflight_checks":1,
+            "release_attempts":1,"slots":[]});
+        let Capture::Stop { summary, .. } = capture(&v) else {
+            panic!()
+        };
+        assert_eq!(summary.cleanup_confirmed, None);
+        assert!(
+            !String::from_utf8(sanitize(&serde_json::to_vec(&v).unwrap()).unwrap())
+                .unwrap()
+                .contains("lifecycle")
+        );
+        v["lifecycle"] = json!({"schema":1,"worker_joined":true,"cleanup_complete":true,
+            "dispatcher_detached":true,"process_pinned":true,"phase_pending":0,
+            "phase_running":0,"visual_retained":false});
+        let Capture::Stop { summary, .. } = capture(&v) else {
+            panic!()
+        };
+        assert_eq!(summary.cleanup_confirmed, Some(true));
+        assert_eq!(summary.unload_allowed, Some(false));
+        let clean = sanitize(&serde_json::to_vec(&v).unwrap()).unwrap();
+        assert!(String::from_utf8_lossy(&clean).contains("process_pinned"));
+        v["lifecycle"]["cleanup_complete"] = false.into();
+        let Capture::Stop { summary, .. } = capture(&v) else {
+            panic!()
+        };
+        assert_eq!(summary.cleanup_confirmed, Some(false));
+        v["lifecycle"]["private_path"] = "private".into();
+        assert!(sanitize(&serde_json::to_vec(&v).unwrap()).is_err());
+        let mut snapshot = own_snapshot(1);
+        snapshot["lifecycle"] =
+            serde_json::from_slice::<Value>(&clean).unwrap()["lifecycle"].clone();
+        let exported = sanitize(&serde_json::to_vec(&snapshot).unwrap()).unwrap();
+        assert!(!String::from_utf8_lossy(&exported).contains("private"));
+        assert!(String::from_utf8_lossy(&exported).contains("process_pinned"));
     }
     #[test]
     fn rejects_unrelated_oversized_truncated_and_out_of_range_reports() {

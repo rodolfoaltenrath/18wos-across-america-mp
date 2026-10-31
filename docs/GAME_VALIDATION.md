@@ -11,6 +11,10 @@ mas ele não percebeu o desaparecimento do remoto durante a interrupção. Outro
 comandos de teardown, suavização na LAN, vários jogadores e sessão longa
 continuam pendentes. Testes em fixture/sockets locais não fecham essas lacunas.
 
+Prioridade em 31/10: concluir M2 antes de ampliar funcionalidades. A proteção
+de ciclo de vida e a bancada foram reforçadas; G0 abaixo concentra a pendência
+prática. Não abrir o jogo automaticamente nem solicitar uma nova LAN básica.
+
 ## Incremento offline de carreira — 29/10/2026
 
 Sem abrir os jogos: `mp_career` passou em transferência TCP de save-base e
@@ -267,6 +271,7 @@ e o fallback estão no README; não usar PIDs ou endereços históricos.
 
 | ID | Cobertura | Situação antes da rodada |
 | --- | --- | --- |
+| G0 | Fechamento prático de M2: falhas e ciclo de vida | Bancada ampliada em 31/10; DLL revisada no jogo pendente |
 | G1 | Visual/pose/skin e funcionamento básico | Regressão; passou em sessão anterior |
 | G2 | Ajustes de interpolação/extrapolação e métricas novas | Bancada; nova prova na partida pendente |
 | G3 | Interrupção/reconexão e desaparecimento percebido | Recuperação anterior passou; visibilidade pendente |
@@ -281,6 +286,43 @@ Não iniciar os trechos dependentes de outro ainda reprovado. G4b e G7 exigem
 preparo técnico antes da ação humana; não são instruções para experimentar
 comandos desconhecidos ou editar originais agora. Pode ser necessário usar
 processos novos entre grupos; rodada agrupada não significa uma única injeção.
+
+### G0 — Concluir M2 numa rodada local
+
+Este bloco exige somente um PC. Preparar backup normal da sessão e logs novos,
+recompilar/verificar com o jogo fechado e selecionar o PID atual. Não reutilizar
+endereços/PIDs históricos nem retirar proteção para provocar um crash. A versão
+de 31/10 mantém ABI v1 e exige launcher/DLL correspondentes. `lifecycle` é
+consultado e salvo também nos relatórios normais, sem intervenção extra.
+
+- [ ] Sem visual/sondas: carregar a DLL revisada, iniciar/parar/reiniciar o
+  worker e confirmar pacotes reais. Após stop, `lifecycle` deve indicar
+  `worker_joined`, `cleanup_complete`, `dispatcher_detached`, zero tarefas e
+  `visual_retained=false`. Só sem pin é permitido descarregar/recarregar.
+- [ ] Com sessão visual, usar o proxy UDP já entregue para uma interrupção
+  programada de 30 s, mantendo o jogo em primeiro plano. Registrar antes,
+  durante e depois: worker ativo, reconexão, descarte do remoto antigo e
+  recuperação; uma tentativa de parada durante a interrupção fica em
+  sub-sessão própria. ACK de leave pode faltar; não o inventar.
+- [ ] Encerramento normal pela sequência de G8: liberar visual, drenar filas,
+  remover sondas, aguardar worker e conferir slots/arquivos. O relatório deve
+  confirmar limpeza e continuar com `process_pinned=true` se o pump foi usado.
+  Recusa de unload por pin é o resultado correto, não falha de stop.
+- [ ] Fechar normalmente o jogo, confirmar ausência do processo e conferir
+  arquivos após saída. Avaliar a cobertura dos registros de saídas anteriores
+  e identificar qualquer diferença da DLL revisada antes de fechar M2.
+- [ ] Saída abrupta real e inicialização incompleta real continuam sem nova
+  prova; sua necessidade residual deve ser explicitada no fechamento. Não
+  matar o jogo, inserir falhas ou alterar o save normal automaticamente.
+
+Evidência offline de 31/10: DLL x86 real em hosts Rust próprios; falhas de
+preparo/restart, join sem resposta, interrupção UDP de 30 s/leases de 2 s,
+saída normal/forçada da fixture, timeout com marcador persistindo entre
+launchers, stop recusado com item referenciado e recuperação após liberação,
+stop durante conexão sem resposta e nova sessão após a parada sem ACK.
+O cenário de timeout retém payload/marcador até a saída: não tentar recuperação
+por novos comandos naquele processo nem exigir reexecução no jogo para provar
+de novo a regra de retenção. Essas provas não marcam as caixas acima.
 
 ### G1 — Visual básico
 

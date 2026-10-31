@@ -1,4 +1,5 @@
 //! Explicit x86 process control. Allocates data only; resolves code in target images.
+mod call_lease;
 use crate::{
     api::{self, Control},
     inspection::process::{Module, Process},
@@ -21,8 +22,9 @@ use windows_sys::Win32::{
         },
         Threading::{
             CreateMutexW, CreateRemoteThread, GetExitCodeThread, OpenProcess,
-            PROCESS_CREATE_THREAD, PROCESS_QUERY_INFORMATION, PROCESS_VM_OPERATION,
-            PROCESS_VM_READ, PROCESS_VM_WRITE, ReleaseMutex, WaitForSingleObject,
+            PROCESS_CREATE_THREAD, PROCESS_DUP_HANDLE, PROCESS_QUERY_INFORMATION,
+            PROCESS_VM_OPERATION, PROCESS_VM_READ, PROCESS_VM_WRITE, ReleaseMutex,
+            WaitForSingleObject,
         },
     },
 };
@@ -39,6 +41,7 @@ pub struct Controller {
     process: Process,
     handle: Handle,
     lock: Handle,
+    call_guard: Vec<u16>,
 }
 impl Drop for Controller {
     fn drop(&mut self) {
@@ -83,6 +86,7 @@ impl Controller {
             let handle = Handle(unsafe {
                 OpenProcess(
                     PROCESS_CREATE_THREAD
+                        | PROCESS_DUP_HANDLE
                         | PROCESS_QUERY_INFORMATION
                         | PROCESS_VM_OPERATION
                         | PROCESS_VM_WRITE
@@ -119,13 +123,16 @@ impl Controller {
                 timestamp == process.identity.created,
                 "PID reused while opening target"
             );
-            Ok((process, handle))
+            let call_guard = call_lease::name(pid, process.identity.created);
+            call_lease::ensure_clear(&call_guard)?;
+            Ok((process, handle, call_guard))
         })();
         match result {
-            Ok((process, handle)) => Ok(Self {
+            Ok((process, handle, call_guard)) => Ok(Self {
                 process,
                 handle,
                 lock,
+                call_guard,
             }),
             Err(error) => {
                 unsafe {
@@ -179,7 +186,17 @@ impl Controller {
     /// On timeout the remote allocation is intentionally retained: the target
     /// may still access it. No thread termination or automatic unload follows.
     fn call(&self, function: usize, payload: &mut [u8], direct: Option<usize>) -> Result<u32> {
+        self.call_wait(function, payload, direct, 30000)
+    }
+    fn call_wait(
+        &self,
+        function: usize,
+        payload: &mut [u8],
+        direct: Option<usize>,
+        wait_ms: u32,
+    ) -> Result<u32> {
         self.process.ensure_running()?;
+        let mut lease = call_lease::Lease::acquire(self.handle.0, &self.call_guard)?;
         let allocation = if direct.is_none() {
             let pointer = unsafe {
                 VirtualAllocEx(
@@ -242,12 +259,14 @@ impl Controller {
             "remote thread failed: {}",
             std::io::Error::last_os_error()
         );
-        if unsafe { WaitForSingleObject(thread.0, 30000) } != WAIT_OBJECT_0 {
+        lease.started();
+        if unsafe { WaitForSingleObject(thread.0, wait_ms) } != WAIT_OBJECT_0 {
             memory.release = false;
             bail!(
                 "remote call did not finish; payload retained; restart target before more control/unload operations"
             );
         }
+        lease.completed();
         let mut code = 0;
         ensure!(
             unsafe { GetExitCodeThread(thread.0, &mut code) } != 0,
@@ -272,6 +291,7 @@ impl Controller {
         Ok(code)
     }
     pub fn load(&self, dll: &Path) -> Result<()> {
+        call_lease::ensure_clear(&self.call_guard)?;
         if self.module(dll)?.is_some() {
             return Ok(());
         }
@@ -305,6 +325,7 @@ impl Controller {
         Ok(())
     }
     pub fn control(&self, dll: &Path, block: &mut Control) -> Result<()> {
+        call_lease::ensure_clear(&self.call_guard)?;
         ensure!(self.module(dll)?.is_some(), "DLL not loaded");
         let name = dll.file_name().unwrap().to_string_lossy();
         let function = self.export(&name, "client_control")?;
@@ -325,6 +346,7 @@ impl Controller {
         Ok(())
     }
     pub fn unload(&self, dll: &Path) -> Result<()> {
+        call_lease::ensure_clear(&self.call_guard)?;
         let Some(module) = self.module(dll)? else {
             return Ok(());
         };
@@ -335,13 +357,9 @@ impl Controller {
             stop.status == 2,
             "stop did not confirm worker joined: {stopped:?}"
         );
-        let mut phase = api::EngineControl::new(api::UI_PUMP_STATUS);
-        if self.engine_control(dll, &mut phase).is_ok() {
-            ensure!(
-                phase.phase == 0,
-                "stop completed and pump import restored; observer pins DLL until process exit"
-            );
-        }
+        self.lifecycle(dll)?
+            .require_unload()
+            .map_err(anyhow::Error::msg)?;
         let function = self.export("kernel32.dll", "FreeLibrary")?;
         ensure!(
             self.call(function, &mut [], Some(module.base as usize))? != 0,
@@ -353,7 +371,15 @@ impl Controller {
         );
         Ok(())
     }
+    pub fn lifecycle(&self, dll: &Path) -> Result<crate::lifecycle::State> {
+        let mut block = Control::new(api::LIFECYCLE_STATUS);
+        self.control(dll, &mut block)
+            .context("lifecycle evidence unavailable; DLL retained")?;
+        serde_json::from_str(api::text(&block.message).map_err(anyhow::Error::msg)?)
+            .context("invalid lifecycle evidence; DLL retained")
+    }
     pub fn engine_control(&self, dll: &Path, block: &mut api::EngineControl) -> Result<()> {
+        call_lease::ensure_clear(&self.call_guard)?;
         ensure!(self.module(dll)?.is_some(), "DLL not loaded");
         let name = dll.file_name().unwrap().to_string_lossy();
         let function = self.export(&name, "client_engine_control")?;
@@ -387,5 +413,83 @@ impl Drop for Allocation {
                 VirtualFreeEx(self.process, pointer, 0, MEM_RELEASE);
             }
         }
+    }
+}
+
+#[cfg(all(test, target_arch = "x86"))]
+mod tests {
+    use super::*;
+    use std::{
+        io::{BufRead, BufReader, Write},
+        process::{Child, Command, Stdio},
+        time::Duration,
+    };
+    struct Host(Child);
+    impl Drop for Host {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+    #[test]
+    fn unresolved_call_stays_blocked_across_controllers_and_launchers_until_target_exit() {
+        let dll = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../target/i686-pc-windows-gnu/release/client_dll.dll")
+            .canonicalize()
+            .unwrap();
+        let mut host = Host(
+            Command::new(dll.with_file_name("engine_fixture.exe"))
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()
+                .unwrap(),
+        );
+        let mut output = BufReader::new(host.0.stdout.take().unwrap());
+        let mut line = String::new();
+        output.read_line(&mut line).unwrap();
+        let info: serde_json::Value = serde_json::from_str(&line).unwrap();
+        let c = Controller::open(host.0.id()).unwrap();
+        c.load(&dll).unwrap();
+        let mut attach = api::EngineControl::new(api::UI_ATTACH);
+        attach.window = info["window"].as_u64().unwrap() as u32;
+        c.engine_control(&dll, &mut attach).unwrap();
+        // Confirm normal calls leave no guard behind before inducing a delay.
+        call_lease::ensure_clear(&c.call_guard).unwrap();
+        writeln!(host.0.stdin.as_mut().unwrap(), "block").unwrap();
+        line.clear();
+        output.read_line(&mut line).unwrap();
+        assert_eq!(line.trim(), "blocked");
+        let function = c.export("client_dll.dll", "client_engine_control").unwrap();
+        let mut probe = api::EngineControl::new(api::UI_PROBE);
+        let bytes = unsafe {
+            std::slice::from_raw_parts_mut(
+                (&mut probe as *mut api::EngineControl).cast::<u8>(),
+                size_of_val(&probe),
+            )
+        };
+        let error = c
+            .call_wait(function, bytes, None, 10)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("payload retained"), "{error}");
+        assert!(c.control(&dll, &mut Control::new(api::STATUS)).is_err());
+        assert!(c.unload(&dll).is_err());
+        let guard = c.call_guard.clone();
+        drop(c);
+        assert!(Controller::open(host.0.id()).is_err());
+        let launcher = Command::new(dll.with_file_name("mp_launcher.exe"))
+            .args(["--pid", &host.0.id().to_string(), "--dll"])
+            .arg(&dll)
+            .args(["--fixture", "status"])
+            .output()
+            .unwrap();
+        assert!(!launcher.status.success());
+        assert!(String::from_utf8_lossy(&launcher.stderr).contains("remote call unresolved"));
+        // Completion after timeout does not retroactively prove a control result.
+        std::thread::sleep(Duration::from_millis(2400));
+        assert!(Controller::open(host.0.id()).is_err());
+        writeln!(host.0.stdin.as_mut().unwrap(), "quit").unwrap();
+        assert!(host.0.wait().unwrap().success());
+        call_lease::ensure_clear(&guard).unwrap();
     }
 }

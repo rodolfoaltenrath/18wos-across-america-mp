@@ -9,7 +9,7 @@ use std::{
     ffi::c_void,
     path::Path,
     ptr,
-    sync::atomic::{AtomicU32, AtomicUsize, Ordering},
+    sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering},
 };
 use windows_sys::Win32::{
     Foundation::{GetLastError, HWND, SetLastError},
@@ -30,6 +30,10 @@ static BASE: AtomicU32 = AtomicU32::new(0);
 static THREAD: AtomicU32 = AtomicU32::new(0);
 static FIXTURE: AtomicU32 = AtomicU32::new(0);
 static STATE: AtomicU32 = AtomicU32::new(0); // 0 unused, 1 installed, 2 restored/resident
+static PINNED: AtomicBool = AtomicBool::new(false);
+pub(super) fn pinned() -> bool {
+    PINNED.load(Ordering::Acquire)
+}
 static LAST_THREAD: AtomicU32 = AtomicU32::new(0);
 static LAST_SITE: AtomicU32 = AtomicU32::new(0);
 static HITS: AtomicU32 = AtomicU32::new(0);
@@ -185,6 +189,7 @@ pub fn install(thread: u32, fixture_slot: Option<u32>) -> Result<(), String> {
     {
         return Err("cannot pin observer module".into());
     }
+    PINNED.store(true, Ordering::Release);
     ORIGINAL.store(original, Ordering::Release);
     SLOT.store(slot, Ordering::Release);
     BASE.store(executable.base as u32, Ordering::Release);

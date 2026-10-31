@@ -1,5 +1,71 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Prioridade M2: ciclo de vida, falhas e descarga conservadora — 31/10/2026
+
+O proprietário pediu concluir etapas existentes antes de ampliar features.
+M2 tem oito de nove itens marcados. O item restante reúne inicialização
+incompleta, rede prolongadamente indisponível, saída do processo e referências
+introduzidas por M4. Não transformar contagem de caixas em percentual de entrega
+do multiplayer nem marcar a etapa inteira com testes de host próprio.
+
+Correções entregues neste bloco:
+
+- `LIFECYCLE_STATUS` (comando 9, Control v1/1536 bytes preservado) e
+  `mp_launcher lifecycle`: evidência tipada de worker aguardado, limpeza,
+  dispatcher, fixação da DLL, tarefas e visual retido. O launcher exige uma
+  resposta completa e conhecida antes de `FreeLibrary`. Foi removido o caminho
+  que continuava a descarga quando a consulta da sonda falhava. Launcher e DLL
+  devem ser atualizados juntos; uma DLL antiga sem esse comando é retida.
+- O pin do pump é registrado imediatamente após `GetModuleHandleExW`, inclusive
+  se a instalação posterior falhar. Remover hooks não desfaz esse pin. O helper
+  `client_probe` também confirma limpeza antes de descarregar seu módulo.
+- Start/stop serializados durante todo o teardown; parada incompleta bloqueia
+  novo start até concluir uma nova parada. O visual e suas referências continuam
+  sob o procedimento de liberação no loop; não são destruídos à força. A pose
+  local antiga é descartada na parada, sem inventar uma captura substituta.
+- Cada chamada remota possui um evento nomeado por PID/criação, com um handle
+  duplicado no alvo antes de iniciar a thread. Retorno confirmado remove o
+  handle; espera indeterminada conserva marcador e payload. Outro controlador/
+  launcher recusa comandos nesse mesmo processo, mesmo após fechar o primeiro.
+  A saída do alvo recolhe o marcador. Sem arquivos privados, threads terminadas
+  à força ou uso de um resultado tardio como confirmação retroativa.
+- Falhas UDP transitórias de LAN, incluindo rede/host inacessíveis e reset,
+  deixam o worker disponível para retry/parada. Erros de permissão/configuração
+  continuam fatais. A recepção permanece limitada por tick; não gira num loop
+  ilimitado se a rede estiver indisponível.
+- Status/parada e exportação sanitizada conservam a evidência de lifecycle.
+  Relatórios históricos sem o campo continuam aceitos e não ganham confirmação
+  fictícia. Limpeza concluída e DLL descarregável são conclusões distintas.
+
+Bancada cobre parâmetros incompletos/inválidos sem worker órfão, recuperação e
+reinício; saída normal/forçada **somente de fixtures próprias** com worker ativo;
+timeout de transporte enquanto a janela própria está bloqueada, recusa por
+outro launcher e recolhimento do marcador na saída; stop com visual referenciado,
+recusa de restart/unload, liberação segura e nova parada; interrupção UDP real
+por 30 s (15 leases de 2 s), remoção do estado antigo e readmissão;
+parada limitada durante join sem resposta e durante uma conexão aceita sem
+resposta do servidor, sem inventar leave confirmado, com reinício posterior.
+Sem ACK, o reinício com worker novo aguarda o lease antigo expirar: ele não
+recebe as credenciais efêmeras do worker encerrado. Reconexão automática do
+worker vivo é exercitada separadamente. A proteção IdentityInUse foi preservada.
+Classificação de erros de interface também tem fixtures; não representa um cabo
+físico removido. Nenhum jogo, save ou original foi alterado/aberto.
+
+Validação final Fedora: **211 testes x86 sob Proton e 279 nativos**, builds
+release x86/nativo atualizados, Clippy nos escopos padrão e rustfmt passaram.
+O comando `lifecycle` real do launcher também foi exercitado na fixture x86.
+Log privado final: `target/analysis/verify-fedora-20261031-m2-lifecycle-confirmed.log`.
+A primeira execução foi preservada em `...-first.log`: um teste novo tentava
+reutilizar o campo de pedido depois de a DLL substituí-lo pela resposta. O
+teste foi corrigido, e a verificação foi repetida por completo. `...-final.log`
+registra a rodada intermediária aprovada; a confirmada inclui o ajuste final
+da ordem de descarte da pose, CLI e espera explícita do lease sem ACK.
+Não houve novo Windows nativo, teste no motor ou LAN entre PCs. Config original
+com SHA-256 `dddbacf5...` preservado; nenhum kit instalado foi substituído.
+M2 continua **8/9** até G0 no jogo original. Próximo trabalho: completar essa
+prova agrupada num PC e então revisar M1/M3/M4 por dependências; sem ampliar
+carreira, tradução ou menus neste bloco. G0 não exige reunir os dois PCs.
+
 ## Overlays canônicos entre Fedora e Windows — 31/10/2026
 
 Após `4062626`, resolvida a falha concreta encontrada na checagem cruzada:
@@ -4243,9 +4309,14 @@ sem inventar posições e passa por toda a matriz de estados documentada.
 - [x] Expor estado, contadores e último erro de forma consultável. Logs locais
   devem indicar modo real/simulado e perfil selecionado.
 - [x] Encerrar worker antes de descarregar; tratar DLL já carregada e início
-  duplicado. Não há referências persistentes a entidades do motor nesta etapa.
+  duplicado. O modo básico não retém entidades; com o visual de M4, concluir a
+  liberação no loop e a remoção dos callbacks antes de confirmar a limpeza.
+  A DLL fixada pela sonda continua residente até a saída do processo.
 - [ ] Ampliar validação de saída do jogo, falha de rede prolongada e
   inicialização incompleta. Cobrir referências ao motor quando M4 as introduzir.
+  Bancada de 31/10 cobre as falhas, host próprio e visual retido, com guard de
+  chamadas indeterminadas e evidência obrigatória antes da descarga. A prova
+  agrupada da DLL revisada no jogo original está em G0; item permanece aberto.
 - [x] Separar falha de leitura temporária de uma versão realmente incompatível.
 - [x] Validar o ciclo em host Rust próprio e depois no processo original, com
   dados reais enviados e recebidos por outro cliente.

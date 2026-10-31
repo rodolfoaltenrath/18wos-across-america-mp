@@ -43,6 +43,12 @@ As pendências práticas estão agrupadas em
 [docs/GAME_VALIDATION.md](docs/GAME_VALIDATION.md), com preparação, ordem,
 critérios e distinção entre teste disponível e integração ainda não entregue.
 
+Prioridade de conclusão em 31/10: fechar M2 antes de ampliar funcionalidades.
+As proteções de inicialização/parada/descarga foram reforçadas e a bancada
+agora cobre falhas de preparo, interrupção UDP e saída do host próprio com o
+worker ativo. A pendência prática de M2 permanece aberta: fixtures não substituem
+a rodada agrupada no jogo, descrita em G0 do procedimento de validação.
+
 ## Telas do mod: prévia local
 
 As bases de nove telas estão em `mod_ui`: principal, Multiplayer, hospedar,
@@ -676,11 +682,32 @@ target/debug/proton_host --steam "$AA_STEAM" --compat "$AA_COMPAT" \
 
 `127.0.0.1` serve somente à bancada no mesmo computador. O objetivo do coop é
 LAN **entre computadores distintos**; configure o IP LAN do servidor nesses
-clientes. Essa matriz entre máquinas permanece pendente.
+clientes. O visual entre Windows e Fedora já passou na primeira LAN; as
+ampliações da matriz continuam em docs/GAME_VALIDATION.md.
 
 Na última linha do comando de controle, substitua `connect --server ...` por
 `status`, `watch --seconds 30`, `stop` ou `unload`. `unload` primeiro para e
 aguarda o worker. Faça `unload` antes de reconstruir/substituir a DLL em uso.
+`lifecycle` consulta separadamente se o worker foi aguardado, a limpeza terminou,
+o dispatcher foi removido, há tarefas/visual retidos e a DLL está fixada até
+a saída do processo. `session-status`/`session-stop` também salvam esses campos;
+o assistente conserva-os nos diagnósticos sanitizados. Relatórios antigos
+continuam legíveis, sem inventar uma confirmação de limpeza que não coletaram.
+`unload` exige evidência completa da API atual: consulta ausente/incompatível
+impede `FreeLibrary`. Atualizar launcher e DLL juntos, com o jogo fechado.
+
+Uma chamada remota sem retorno confirmado retém seu payload e um marcador
+Win32 no processo alvo. O marcador impede novos controles, mesmo após reabrir
+o launcher; só encerrar aquele processo o remove. Não termina threads nem
+tenta uma descarga tardia. Falhas normais já respondidas pela DLL não acionam
+esse bloqueio: uma parada recusada por visual retido permite liberar pelo
+procedimento da sessão e repetir a parada. Iniciar outra conexão fica bloqueado
+enquanto essa limpeza estiver incompleta. Uma sonda removida pode continuar
+com a DLL fixada; parada bem-sucedida não promete descarga nesse caso.
+Se a rede impediu confirmar a saída da sala, aguardar o lease antigo expirar
+antes de iniciar um worker novo com a mesma identidade; ele não herda as
+credenciais de retomada do worker encerrado. A reconexão do worker ainda ativo
+continua automática. Não desativar a recusa de identidade já em uso.
 O launcher valida alvo x86, caminho absoluto da DLL e o perfil
 `steam-aa-1.10-ccb327c2`; o worker verifica o arquivo do módulo carregado antes
 de transmitir. Carga usa `LoadLibraryW`, controle usa `client_control`, descarga
