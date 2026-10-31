@@ -33,6 +33,8 @@ impl Settings {
 }
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct Metrics {
+    pub stale_states: u64,
+    pub relays_superseded: u64,
     pub received: u64,
     pub invalid: u64,
     pub oversized: u64,
@@ -79,9 +81,10 @@ struct Member {
     player: u32,
     last_seen: u64,
     /// Recent event ids per client stream, deduplicating across reconnections.
-    streams: VecDeque<(u64, VecDeque<u64>)>,
+    streams: VecDeque<(u64, crate::event_window::Window<EVENT_WINDOW>)>,
     /// Latest state event (room sequence), replayed to players who join later.
-    state: Option<(u64, wire::PlayerState)>,
+    // Room sequence, body, sender stream and id: receipt order is not causality.
+    state: Option<(u64, wire::PlayerState, u64, u64)>,
 }
 #[derive(Clone, Copy)]
 struct Relay {
@@ -322,7 +325,7 @@ impl Hub {
                 .iter()
                 .filter(|(other, _)| **other != player)
                 .filter_map(|(other, p)| {
-                    let (event, state) = self.members.get(&p.identity)?.state?;
+                    let (event, state, _, _) = self.members.get(&p.identity)?.state?;
                     Some(Relay {
                         event,
                         origin: *other,
@@ -509,24 +512,27 @@ impl Hub {
                 let identity = self.peers[&player].identity.clone();
                 let member = self.members.get_mut(&identity).ok_or("member missing")?;
                 let duplicate = match member.streams.iter_mut().find(|(s, _)| *s == stream) {
-                    Some((_, ids)) if ids.contains(&id) => true,
-                    Some((_, ids)) => {
-                        if ids.len() == EVENT_WINDOW {
-                            ids.pop_front();
-                        }
-                        ids.push_back(id);
-                        false
-                    }
+                    Some((_, ids)) => !ids.admit(id),
                     None => {
                         if member.streams.len() == EVENT_STREAMS {
                             member.streams.pop_front();
                         }
-                        member.streams.push_back((stream, VecDeque::from([id])));
+                        let mut ids = crate::event_window::Window::default();
+                        ids.admit(id);
+                        member.streams.push_back((stream, ids));
                         false
                     }
                 };
+                let stale_state = matches!(body, wire::EventBody::State { .. })
+                    && member
+                        .state
+                        .is_some_and(|(_, _, previous_stream, previous_id)| {
+                            previous_stream == stream && id < previous_id
+                        });
                 if duplicate {
                     self.metrics.event_duplicates += 1;
+                } else if stale_state {
+                    self.metrics.stale_states += 1;
                 } else {
                     self.metrics.events += 1;
                     let event = self.next_event;
@@ -535,7 +541,7 @@ impl Hub {
                         .checked_add(1)
                         .ok_or("event ids exhausted")?;
                     if let wire::EventBody::State { state } = body {
-                        member.state = Some((event, state));
+                        member.state = Some((event, state, stream, id));
                     }
                     let relay = Relay {
                         event,
@@ -556,6 +562,17 @@ impl Hub {
                         } else {
                             continue;
                         };
+                        if matches!(body, wire::EventBody::State { .. }) {
+                            let before = peer.relays.len();
+                            peer.relays.retain(|r| {
+                                !(r.origin == origin
+                                    && matches!(r.body, wire::EventBody::State { .. }))
+                            });
+                            self.metrics.relays_superseded = self
+                                .metrics
+                                .relays_superseded
+                                .saturating_add((before - peer.relays.len()) as u64);
+                        }
                         if peer.relays.len() == RELAY_QUEUE {
                             peer.relays.pop_front();
                             self.metrics.relays_dropped += 1;

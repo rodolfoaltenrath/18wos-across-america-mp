@@ -82,9 +82,15 @@ const EVENT_RETRY_MS: u64 = 250;
 const EVENT_RETRY_MAX_MS: u64 = 1000;
 /// A ping without a pong after this long counts as lost (round trip).
 pub const PING_LOSS_MS: u64 = 2000;
+fn is_zero(value: &u64) -> bool {
+    *value == 0
+}
 /// Reliability counters, separate from `Status` to keep that report compact.
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Reliability {
+    /// Obsolete local states replaced in the queue. Markers are never coalesced.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub superseded: u64,
     pub queued: u64,
     pub sent: u64,
     pub retransmitted: u64,
@@ -138,7 +144,7 @@ pub struct Client {
     next_event: u64,
     outgoing: VecDeque<Outgoing>,
     relay_acks: VecDeque<u64>,
-    seen: VecDeque<u64>,
+    seen: crate::event_window::Window<RELAY_WINDOW>,
     seen_session: u64,
     reliability: Reliability,
 }
@@ -187,7 +193,7 @@ impl Client {
             next_event: 1,
             outgoing: VecDeque::new(),
             relay_acks: VecDeque::new(),
-            seen: VecDeque::new(),
+            seen: Default::default(),
             seen_session: 0,
             reliability: Reliability::default(),
         })
@@ -216,13 +222,23 @@ impl Client {
         ) {
             return Err(EventError::Closed);
         }
+        let next_event = self.next_event.checked_add(1).ok_or(EventError::Full)?;
+        if matches!(body, EventBody::State { .. }) {
+            let before = self.outgoing.len();
+            self.outgoing
+                .retain(|e| !matches!(e.body, EventBody::State { .. }));
+            self.reliability.superseded = self
+                .reliability
+                .superseded
+                .saturating_add((before - self.outgoing.len()) as u64);
+        }
         if self.outgoing.len() == EVENT_QUEUE {
             self.reliability.refused += 1;
             return Err(EventError::Full);
         }
         self.now = self.now.max(now);
         let id = self.next_event;
-        self.next_event = self.next_event.checked_add(1).ok_or(EventError::Full)?;
+        self.next_event = next_event;
         self.outgoing.push_back(Outgoing {
             id,
             body,
@@ -418,7 +434,7 @@ impl Client {
                 self.reset();
                 if credentials.session != self.seen_session {
                     // A new room session restarts relay sequences.
-                    self.seen.clear();
+                    self.seen = Default::default();
                     self.relay_acks.clear();
                     self.seen_session = credentials.session;
                 }
@@ -588,14 +604,10 @@ impl Client {
                     self.relay_acks.pop_front();
                 }
                 self.relay_acks.push_back(event);
-                if self.seen.contains(&event) {
+                if !self.seen.admit(event) {
                     self.reliability.relay_duplicates += 1;
                     return Vec::new();
                 }
-                if self.seen.len() == RELAY_WINDOW {
-                    self.seen.pop_front();
-                }
-                self.seen.push_back(event);
                 self.reliability.relays += 1;
                 vec![Event::Relay {
                     origin,

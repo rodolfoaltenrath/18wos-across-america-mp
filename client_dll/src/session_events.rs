@@ -11,6 +11,8 @@ use std::collections::{BTreeMap, VecDeque};
 /// A state must hold this long before it is published (menus flicker).
 pub const STATE_DEBOUNCE_MS: u64 = 300;
 pub const STATE_TTL_MS: u64 = 10_000;
+/// Refresh inside the TTL so expired updates recover even in the same room.
+pub const STATE_REFRESH_MS: u64 = 3000;
 pub const MARKER_TTL_MS: u64 = 30_000;
 /// Markers waiting for the worker; the Control call refuses beyond this.
 pub const MARKER_QUEUE: usize = 16;
@@ -18,10 +20,11 @@ const RECENT_MARKERS: usize = 8;
 /// Control v1 message buffer minus the terminator.
 pub const REPORT_BYTES: usize = 511;
 /// Counters are saturated here in the report so the JSON always fits.
-pub const REPORT_MAX: u64 = 999_999_999_999;
+pub const REPORT_MAX: u64 = 999_999_999;
 fn saturated(r: Reliability) -> Reliability {
     let c = |v: u64| v.min(REPORT_MAX);
     Reliability {
+        superseded: c(r.superseded),
         queued: c(r.queued),
         sent: c(r.sent),
         retransmitted: c(r.retransmitted),
@@ -64,7 +67,7 @@ pub fn local_state(loading: bool, sample_available: bool) -> PlayerState {
 #[derive(Default)]
 pub struct Publisher {
     candidate: Option<(PlayerState, u64)>,
-    published: Option<(PlayerState, u64)>,
+    published: Option<(PlayerState, u64, u64)>,
 }
 impl Publisher {
     pub fn observe(&mut self, state: PlayerState, now: u64, session: u64) -> Option<PlayerState> {
@@ -76,12 +79,13 @@ impl Publisher {
             _ => self.candidate = Some((state, now)),
         }
         let (current, since) = self.candidate?;
-        if self.published == Some((current, session))
-            || now.saturating_sub(since) < STATE_DEBOUNCE_MS
+        if self.published.is_some_and(|(s, epoch, at)| {
+            s == current && epoch == session && now.saturating_sub(at) < STATE_REFRESH_MS
+        }) || now.saturating_sub(since) < STATE_DEBOUNCE_MS
         {
             return None;
         }
-        self.published = Some((current, session));
+        self.published = Some((current, session, now));
         Some(current)
     }
     /// The queue refused the event: try again on a later observation.
@@ -89,7 +93,7 @@ impl Publisher {
         self.published = None;
     }
     pub fn published(&self) -> Option<PlayerState> {
-        self.published.map(|(s, _)| s)
+        self.published.map(|(s, _, _)| s)
     }
 }
 
@@ -233,6 +237,28 @@ impl Board {
 mod tests {
     use super::*;
     #[test]
+    fn periodic_state_refresh_recovers_after_expiry_or_a_same_room_reconnection() {
+        let mut p = Publisher::default();
+        assert_eq!(p.observe(PlayerState::Loading, 0, 7), None);
+        assert_eq!(
+            p.observe(PlayerState::Loading, 300, 7),
+            Some(PlayerState::Loading)
+        );
+        assert_eq!(
+            p.observe(PlayerState::Loading, 300 + STATE_REFRESH_MS - 1, 7),
+            None
+        );
+        assert_eq!(
+            p.observe(PlayerState::Loading, 300 + STATE_REFRESH_MS, 7),
+            Some(PlayerState::Loading)
+        );
+        assert_eq!(p.observe(PlayerState::Loading, 30_000, 0), None);
+        assert_eq!(
+            p.observe(PlayerState::Loading, 30_001, 7),
+            Some(PlayerState::Loading)
+        );
+    }
+    #[test]
     fn local_state_prefers_loading_and_publishes_only_stable_changes_per_session() {
         assert_eq!(local_state(true, true), PlayerState::Loading);
         assert_eq!(local_state(false, true), PlayerState::Driving);
@@ -315,6 +341,7 @@ mod tests {
             );
         }
         b.reliability = Reliability {
+            superseded: u64::MAX,
             queued: u64::MAX,
             sent: u64::MAX,
             retransmitted: u64::MAX,

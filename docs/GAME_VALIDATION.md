@@ -664,6 +664,13 @@ montagem/abertura feita. Dublagem é etapa própria (T3), fora desta rodada.
 
 ### G12 — Roteiro único da rodada agrupada (revisão `18b3bb4`, 31/10)
 
+Revisão posterior dos estados: em 2 PCs, após carga/retomada observar se o
+remoto volta e permanece coerente. `superseded`/`relays_superseded` contam
+substituição de estados pendentes, não perda de marcadores; `stale_states`
+conta estado antigo recusado. Renovação periódica pode aumentar queued/acked
+sem uma ação humana. Não exigir um aviso por cada tick nem interpretar os
+contadores como economia sincronizada. Não repetir LAN básica só para contá-los.
+
 Uma abertura do jogo no Fedora cobre os incrementos offline de 31/10. O
 segundo PC é opcional: só os passos marcados "(2 PCs)" precisam dele. Usar
 SEMPRE binários desta revisão nos dois lados; o kit novo está em

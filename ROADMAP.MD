@@ -1,5 +1,36 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Continuação M3/M5: ordenação, deduplicação e recuperação de estado — 31/10
+
+Revisão dos incrementos recentes encontrou dois defeitos: a fila de ids recebidos
+esquecia um id retirado e podia entregar sua repetição como nova; o servidor
+atribuía ordem de estado pela recepção, permitindo que `loading` antigo atrasado
+substituísse `driving` recente. Agora janelas fixas (128 remetente/256 destinatário)
+mantêm horizonte monotônico; atrasos dentro dele entram uma vez, abaixo dele
+são confirmados sem readmissão. Cache mantém quatro streams por identidade;
+saída desse cache/reinício da sala não prometem deduplicação eterna.
+
+Estado é comparado pelo stream/id do remetente antes de receber sequência da
+sala. Estados obsoletos são confirmados e contados (`stale_states`). Remetente
+e filas dos destinatários substituem somente estados antigos da mesma origem,
+preservando marcadores e contabilizando `superseded`/`relays_superseded`, sem
+inventar ACK. Publisher renova estado estável a cada 3 s, dentro do prazo10s:
+expiração/interrupção com reconexão à mesma sala não deixa aviso velho para sempre.
+Contadores de relatório limitados a 999.999.999 sinalizam `truncated` ao reduzir.
+Wire v2 e ABIs preservados; usar builds juntos e manter chegada como timebase
+padrão. Não é autoridade econômica nem mundo sincronizado.
+
+Testes novos de janela/extremos, replay antigo após 300 relays, readmissão após
+resume, estado invertido/late join, substituição sem perder marcador e renovação.
+Bancada nativa inicial: 123 unitários cliente, oito de eventos e 57 servidor.
+Primeira rodada detectou expectativa antiga de drops no teste de sala cheia:
+estados agora são substituídos, não acumulados; asserts cobrem ambos os contadores.
+Prova entre PCs e percepção visual seguem em G12, sem nova partida neste bloco.
+
+Verify integral: **255 x86 Proton / 323 nativos**, releases, Clippy nos três
+escopos e fmt. Log privado `verify-fedora-20261031-reliable-ordering.log`.
+Nenhum jogo aberto, nenhuma atualização do kit instalado ou de saves.
+
 ## Lote offline M1/M5: estado do jogador aplicado ao render e à amostragem — 31/10/2026
 
 Liga os eventos `state` ao comportamento. **Remoto:** `session_events::hide_remote`

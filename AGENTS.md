@@ -1,5 +1,14 @@
 # Orientações para continuar o projeto
 
+ContinuaçãoM3/M5 31/10: event_window fixa horizonte128/256; antigos abaixo dele
+recebem ACK sem readmissão, inclusive após resume; cache4streams continua limite.
+Hub ordena state por id do remetente no stream, não chegada; stale_states conta
+antigo. Coalescing só de states (superseded/relays_superseded), nunca markers ou
+ACK inventado. Publisher renova estável3s dentro TTL10s, recupera mesma sala.
+Relatório cap999.999.999 com truncated quando reduz; campo superseded ausente0
+aceita logs antigos. Verify255x86Proton/323nativos, releases/Clippy/fmt; log
+verify-fedora-20261031-reliable-ordering.log. Sem jogo; G12 ainda para render/LAN.
+
 Retomada após Claude31/10: bloco pendente liga state ao render (quieto150ms,
 loading/unavailable, try_lock com fallback antigo1s) e suspende amostras no gate.
 Conclusão acrescenta guard antes/depois da leitura, descarta transição observada

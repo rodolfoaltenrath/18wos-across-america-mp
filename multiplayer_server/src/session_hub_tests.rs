@@ -346,9 +346,10 @@ fn full_room_with_reliable_events_keeps_the_tick_batch_bounded() {
                 assert!(matches!(ack[0].1.message, S::EventAck { .. }));
             }
         }
-        // Every recipient queue is capped; the oldest relays were dropped.
+        // Obsolete state updates are coalesced instead of occupying the queue.
         assert_eq!(h.metrics.events, 64 * 3);
-        assert!(h.metrics.relays_dropped > 0);
+        assert!(h.metrics.relays_superseded > 0);
+        assert_eq!(h.metrics.relays_dropped, 0);
         let frames = h.tick(100);
         let limit = 64 * (16 + 1 + RELAYS_PER_TICK);
         assert!(frames.len() <= limit, "{} > {limit}", frames.len());
@@ -358,4 +359,76 @@ fn full_room_with_reliable_events_keeps_the_tick_batch_bounded() {
             assert!(w::decode_server(&bytes).is_some());
         }
     }
+}
+
+#[test]
+fn delayed_state_cannot_replace_newer_state_or_its_late_join_replay() {
+    let mut h = hub(3, false);
+    let (_, a) = credentials(&ingest(&mut h, 1, &join(1, 1, None), 0));
+    ingest(&mut h, 2, &join(2, 2, None), 0);
+    for (id, state) in [(2, w::PlayerState::Driving), (1, w::PlayerState::Loading)] {
+        let reply = ingest(
+            &mut h,
+            1,
+            &ClientFrame::new(C::Event {
+                credentials: a.clone(),
+                stream: 1,
+                id,
+                ttl_ms: 5000,
+                body: w::EventBody::State { state },
+            }),
+            1,
+        );
+        assert!(matches!(reply[0].1.message, S::EventAck { .. }));
+    }
+    assert_eq!(h.metrics.stale_states, 1);
+    ingest(&mut h, 3, &join(3, 3, None), 2);
+    let states: Vec<_> = h
+        .tick(3)
+        .into_iter()
+        .filter_map(|(_, f)| match f.message {
+            S::Relay {
+                body: w::EventBody::State { state },
+                ..
+            } => Some(state),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(states, [w::PlayerState::Driving, w::PlayerState::Driving]);
+}
+
+#[test]
+fn duplicate_older_than_the_horizon_is_acknowledged_without_readmission_after_resume() {
+    let mut h = hub(1, false);
+    let (_, mut cred) = credentials(&ingest(&mut h, 1, &join(1, 1, None), 0));
+    for id in 1..=140 {
+        ingest(
+            &mut h,
+            1,
+            &ClientFrame::new(C::Event {
+                credentials: cred.clone(),
+                stream: 1,
+                id,
+                ttl_ms: 5000,
+                body: w::EventBody::Marker { code: id as u32 },
+            }),
+            1,
+        );
+    }
+    (_, cred) = credentials(&ingest(&mut h, 1, &join(1, 2, Some(cred)), 2));
+    let ack = ingest(
+        &mut h,
+        1,
+        &ClientFrame::new(C::Event {
+            credentials: cred,
+            stream: 1,
+            id: 1,
+            ttl_ms: 5000,
+            body: w::EventBody::Marker { code: 1 },
+        }),
+        3,
+    );
+    assert!(matches!(ack[0].1.message, S::EventAck { .. }));
+    assert_eq!(h.metrics.events, 140);
+    assert_eq!(h.metrics.event_duplicates, 1);
 }

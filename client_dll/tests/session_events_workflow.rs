@@ -14,6 +14,83 @@ use std::collections::BTreeMap;
 fn addr(port: u16) -> std::net::SocketAddr {
     ([127, 0, 0, 1], port).into()
 }
+
+#[test]
+fn old_relays_never_reappear_after_more_than_a_window_of_unique_events() {
+    let (mut h, mut clients) = (hub(1, false), [client(1)]);
+    step(&mut h, &mut clients, 0);
+    let session = clients[0].status().session;
+    let relay = |event| {
+        w::encode_server(&w::ServerFrame::new(S::Relay {
+            session,
+            event,
+            origin: 2,
+            server_ms: event,
+            body: EventBody::Marker { code: event as u32 },
+        }))
+        .unwrap()
+    };
+    for id in 1..=300 {
+        assert_eq!(clients[0].ingest(&relay(id), id).len(), 1);
+    }
+    assert!(clients[0].ingest(&relay(1), 301).is_empty());
+    assert_eq!(clients[0].reliability().relays, 300);
+    assert_eq!(clients[0].reliability().relay_duplicates, 1);
+    assert!(
+        clients[0]
+            .poll(302)
+            .0
+            .iter()
+            .any(|f| matches!(f.message, C::RelayAck { event: 1, .. }))
+    );
+}
+
+#[test]
+fn replacing_pending_states_keeps_markers_and_does_not_fake_acknowledgements() {
+    let (mut h, mut clients) = (hub(1, false), [client(1)]);
+    step(&mut h, &mut clients, 0);
+    clients[0]
+        .event(EventBody::Marker { code: 7 }, 5000, 1)
+        .unwrap();
+    clients[0]
+        .event(
+            EventBody::State {
+                state: PlayerState::Loading,
+            },
+            5000,
+            1,
+        )
+        .unwrap();
+    clients[0]
+        .event(
+            EventBody::State {
+                state: PlayerState::Driving,
+            },
+            5000,
+            2,
+        )
+        .unwrap();
+    let r = clients[0].reliability();
+    assert_eq!((r.pending, r.superseded, r.acked), (2, 1, 0));
+    let events: Vec<_> = clients[0]
+        .poll(3)
+        .0
+        .into_iter()
+        .filter_map(|f| match f.message {
+            C::Event { body, .. } => Some(body),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        events,
+        [
+            EventBody::Marker { code: 7 },
+            EventBody::State {
+                state: PlayerState::Driving
+            }
+        ]
+    );
+}
 fn hub(max_clients: usize, echo: bool) -> Hub {
     Hub::new(
         Settings {

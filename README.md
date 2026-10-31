@@ -64,6 +64,12 @@ O padrão continua `drawn`. Não houve prova dessa fonte nova no jogo; leituras
 iguais não garantem um tick atômico, nem a disponibilidade durante todo menu/
 carregamento. A lista G12 agrupa foco/câmeras/recarga e limpeza dessa revisão.
 
+A revisão dos estados remotos também protege a recuperação: avisos atrasados
+não devem substituir estados mais recentes, repetições antigas não voltam a
+ser entregues por saírem da janela e o estado estável é renovado a cada 3 s.
+Estados pendentes obsoletos podem ser substituídos; marcadores são preservados.
+Isso passou na bancada; aparência e retomada entre PCs continuam no roteiro G12.
+
 ## Telas do mod: prévia local
 
 As bases de nove telas estão em `mod_ui`: principal, Multiplayer, hospedar,

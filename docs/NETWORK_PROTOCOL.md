@@ -126,30 +126,46 @@ pagamentos futuros (M6) devem usar este canal com corpos próprios, sem
 reaproveitar `marker`; o canal não autentica economia nem portadores.
 
 Remetente: `stream` aleatório por processo (o nonce do join) e `id` crescente.
-Até 16 eventos pendentes; acima disso, recusa local (`refused`), nunca descarte
-silencioso. Reenvio em 250 ms com backoff até 1 s, até `event_ack` ou até o
+Até 16 eventos pendentes; acima disso, recusa local (`refused`). Um `state`
+novo substitui somente estados locais pendentes antigos, contando `superseded`;
+marcadores permanecem individuais. Substituição não é ACK. Reenvio em 250 ms
+com backoff até 1 s, até `event_ack` ou até o
 prazo (`ttl_ms` 1–30000). Pendentes sobrevivem a reconexões e são reenviados
 com as credenciais novas e o mesmo `stream`/`id`.
 
 Servidor: deduplica por identidade + `stream` (quatro streams, 128 ids
-recentes cada), também entre reconexões e enquanto a identidade estiver no
-cache. Cada evento novo recebe sequência da sala e vai para a fila de cada
+por horizonte monotônico cada), também entre reconexões e enquanto a identidade
+estiver no cache. ID abaixo do horizonte é velho mesmo se nunca observado;
+é confirmado sem nova entrega. Trocar/evictar o stream ou a identidade termina
+essa memória: não é deduplicação econômica persistente. Cada evento novo
+recebe sequência da sala e vai para a fila de cada
 jogador conectado NAQUELE instante (com `--echo`, também ao remetente, como
 `1000000000 + id`). Fila de 64 por destinatário, descartando o mais antigo
 (`relays_dropped`); no máximo dois relays por destinatário por tick, com reenvio
 em 250 ms → 1 s até `relay_ack` ou prazo (`relays_expired`). Uma retomada
-herda a fila pendente. O último `state` de cada identidade é reenviado a quem
+herda a fila pendente. Estados são ordenados pelo id do REMETENTE no mesmo
+stream antes de ganhar sequência da sala: `loading` velho recebido depois de
+`driving` novo é confirmado sem reverter/retransmitir o estado (`stale_states`).
+Na fila de cada destinatário, novo estado da mesma origem substitui os estados
+pendentes anteriores (`relays_superseded`); não remove marcadores. O último
+`state` de cada identidade é reenviado a quem
 entra depois (prazo 5 s). Quem entrar depois não recebe `marker` antigo.
 
-Destinatário: deduplica por sessão da sala + `event` (janela de 256), entrega
-uma vez e confirma toda cópia. Estado é último-ganha pela sequência da sala;
+Destinatário: deduplica por sessão da sala + `event` (horizonte monotônico de
+256 ids), entrega uma vez e confirma toda cópia. Abaixo do horizonte, só confirma:
+retirar um registro não reabre sua entrega. Reordenação dentro do horizonte
+continua admitida uma vez. Estado é último-ganha pela sequência da sala;
 reinício da sala zera a janela. Entrega não é garantida após timeout/remoção
 da conexão, após o prazo ou com fila cheia: os contadores registram cada caso.
+`event_duplicates`/`relay_duplicates` incluem ids abaixo do horizonte, mesmo
+quando aquela cópia específica não tinha sido observada; não estimam perda.
 
 Compatibilidade: as quatro mensagens exigem servidor e clientes desta revisão.
 Um par antigo rejeita-as como inválidas (contadas), sem afetar poses; atualize
 kit/DLL/servidor juntos. A DLL publica `state` em toda sessão v2 (debounce de
-300 ms, prazo 10 s, republicado a cada nova sessão da sala).
+300 ms, prazo 10 s, republicado a cada nova sessão da sala e a cada 3 s estáveis).
+Renovação recupera um estado expirado/perdido na mesma sala sem depender de
+outra mudança de estado. Ainda não é garantia de entrega sob perda ilimitada.
 
 Estimativas de perda, sem campos novos nas poses:
 
