@@ -636,6 +636,21 @@ montagem/abertura feita. Dublagem é etapa própria (T3), fora desta rodada.
 
 ### G12 — Rodada agrupada dos incrementos offline de 31/10
 
+Sequência de uma abertura local, preparada somente quando o proprietário for
+testar: jogo fechado, ferramentas novas juntas, backup/preflight; opcionalmente
+montar fontes/menus locais de G10/G11 antes da abertura. Iniciar a partida e a
+sessão com captura experimental, coletar automaticamente, percorrer/curvar,
+alternar câmeras/foco, recarregar pelo caminho map já observado, conferir fonte/
+layout se instalados, terminar coleta e limpar/parar/conferir saída. A prova
+básica de M2 e primeira LAN não precisa ser refeita como etapas separadas.
+Para observar continuidade e suavidade entre computadores, usar o par quando
+disponível; um único PC cobre apenas captura/eco. Novos teardowns, física e
+economia compartilhadas não entram como implementações já testáveis.
+
+CI não depende dessa rodada: seis testes de auditoria do YAML passaram, e
+build/Clippy/testes locais estão no verify do lote. O primeiro job real do
+GitHub depende de envio posterior; não marcar execução hospedada por esse plano.
+
 Coleta nova, entregue na bancada: após `session-start`, executar em outro
 terminal `session-record --output PASTA-NOVA --seconds 600 --interval-ms 5000`
 com o mesmo PID/DLL/prefixo. Não inicia nem para a sessão. Guardar a pasta

@@ -1,0 +1,62 @@
+name: Rust sem assets comerciais
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  native:
+    name: Linux — formato, testes e auditoria
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      # Pinned release: https://github.com/actions/checkout/releases/tag/v6.0.3
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0
+        with:
+          persist-credentials: false
+      - name: Toolchain fixada no repositório
+        run: rustup show active-toolchain
+      - name: Formatação
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Testes com dados próprios
+        run: cargo test --workspace --all-targets --locked
+      - name: Release nativa
+        run: cargo build --workspace --release --locked
+      - name: Auditoria exata do commit
+        run: target/release/asset_tools audit-source . --scope head
+
+  windows-x86:
+    name: Windows x86 — compilação cruzada GNU
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CARGO_TARGET_I686_PC_WINDOWS_GNU_LINKER: i686-w64-mingw32-gcc
+    steps:
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0
+        with:
+          persist-credentials: false
+      - name: Ferramentas GNU x86
+        run: sudo apt-get update
+      - run: sudo apt-get install --yes gcc-mingw-w64-i686
+      - name: Toolchain fixada no repositório
+        run: rustup show active-toolchain
+      - name: Clippy x86
+        run: cargo clippy -p client_dll -p multiplayer_server --all-targets --target i686-pc-windows-gnu --locked -- -D warnings
+      - name: Release x86
+        run: cargo build -p client_dll -p multiplayer_server --release --target i686-pc-windows-gnu --locked
+      - name: Compilar testes x86, sem executá-los
+        run: cargo test -p client_dll -p multiplayer_server --all-targets --target i686-pc-windows-gnu --locked --no-run

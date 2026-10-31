@@ -59,6 +59,7 @@ fn forced_game_and_private_paths_fail_even_with_ignore_rules() {
     assert!(allowed("docs/UI_DESIGN.md").is_ok());
     assert!(allowed("mod_ui/Cargo.toml").is_ok());
     assert!(allowed("mod_ui/src/locale.rs").is_ok());
+    assert!(allowed(".github/workflows/ci.yml").is_ok());
     let temp = repository();
     write(temp.path(), ".gitignore", b"*.scs\n");
     write(temp.path(), "base.scs", b"own dummy, not a game file");
@@ -72,6 +73,9 @@ fn forced_game_and_private_paths_fail_even_with_ignore_rules() {
         "client_dll/src/generated/x.rs",
         "client_dll/src/own.rs/",
         "docs/private.json",
+        ".github/workflows/other.yml",
+        ".github/workflows/ci.yml.exe",
+        ".github/private.json",
         "translations/pt-BR/literal-inventory.json",
         "translations/en/local_def.json",
         "docs/GAME_VALIDATION.scs",

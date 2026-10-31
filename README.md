@@ -2723,6 +2723,15 @@ teste foram encerrados ao final; o processo do jogo permaneceu aberto.
 
 ## Verificação
 
+O workflow [.github/workflows/ci.yml](.github/workflows/ci.yml) configura dois
+jobs sem jogo/assets: Linux (fmt, Clippy, testes próprios, release e auditoria
+do commit) e compilação GNU Windows x86 de cliente/servidor (Clippy, release,
+testes compilados). Usa a toolchain fixada e `--locked`. Não publica binários,
+releases ou resultados de integração; o job x86 não executa os testes Windows.
+A execução real x86 sob Proton e a partida continuam locais. Workflow
+configurado e comandos validados localmente não significam que o GitHub já
+executou esse commit; o resultado hospedado precisa ser conferido separadamente.
+
 ```powershell
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
@@ -2768,6 +2777,7 @@ O pacote reempacotado ainda precisa de teste dentro do jogo. A integração inic
 da DLL foi validada posteriormente no Fedora/Proton: 12 testes nativos e 11 testes
 Windows x86 passaram, além de leitura/envio/recepção reais no jogo, movimento,
 menu/outra partida, parada e descarga. O envio suspendeu durante a cadeia
-indisponível e retomou automaticamente nos novos endereços. Caminhões remotos
-e teste LAN entre computadores continuam pendentes; consulte o roadmap para
-evidência e limitações.
+indisponível e retomou automaticamente nos novos endereços. Esse é o registro
+inicial: depois houve visual com textura, primeira LAN Windows↔Fedora em 29/10
+e conclusão de M2 em 31/10. Consultar os registros atuais do roadmap e G12 para
+o que ainda depende de prova, sem tratar esse histórico como ausência de LAN.

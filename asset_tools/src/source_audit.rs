@@ -95,6 +95,7 @@ fn allowed(path: &str) -> Result<()> {
             | "AGENTS.md"
             | "LICENSE"
             | "rust-toolchain.toml"
+            | ".github/workflows/ci.yml"
             | "docs/NETWORK_PROTOCOL.md"
             | "docs/GAME_VALIDATION.md"
             | "docs/UI_DESIGN.md"

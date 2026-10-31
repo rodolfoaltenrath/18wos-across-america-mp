@@ -1,5 +1,59 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Varredura do roadmap e integração contínua — 31/10/2026
+
+Pedido do proprietário: concluir blocos existentes sem abrir jogo a cada passo,
+com uma rodada prática agrupada posterior. Este lote entregou captura optativa
+sem draw (M1), limites/medição do relay (M3) e coleta automática conferível
+(M8/M9). M2 permanece 9/9 com provas anteriores preservadas. Não há novo mundo,
+economia, trânsito, horário ou física sincronizados, nem novas chamadas do motor
+por hipótese. Uma sessão humana pode reunir vários critérios, sem validar
+automaticamente todos os itens ou caminhos que não foram exercitados.
+
+CI configurada em `.github/workflows/ci.yml`: Linux nativo com fmt/Clippy/testes/
+release/auditoria HEAD e build/testes compilados/Clippy GNU x86 do cliente e
+servidor. Toolchain fixa, lockfile, checkout fixado, credenciais não persistidas,
+permissão somente leitura; sem assets comerciais, jogo, deploy ou publicação.
+Allowlist libera somente esse YAML, sem abrir outros caminhos de `.github`.
+Seis testes de auditoria passaram. Configurar não comprova que um job já rodou
+no runner do GitHub; o resultado hospedado não foi verificado neste bloco.
+
+Verify integral Fedora: **224 x86 sob Proton / 291 nativos**, releases
+atualizados, Clippy nos três escopos e fmt. Log privado
+`target/analysis/verify-fedora-20261031-offline-roadmap-final.log`. Cinco logs
+reais de G0/reteste visual foram reanalisados pelo binário novo: análise
+idêntica byte a byte à preservada, sem nova partida. Config original conserva
+SHA dddbacf5…7774; nenhum jogo foi aberto ou kit instalado alterado.
+
+Revisão dos critérios (contagem de caixas, não porcentagem ponderada da entrega):
+
+| Etapa | Critérios fechados | Resultado da varredura / dependência real |
+| --- | --- | --- |
+| M0 | 6/9 | Diagnóstico/preparo parciais; clone limpo/runtime e licenças de release ainda exigem fechamento. |
+| M1 | 3/7 | Pose agrupada/cadeia conferida implementadas; fonte nova e matriz real em G12, sem inventar velocidade/modelo. |
+| M2 | 9/9 | G0 e reteste visual comprovados; não repetir a mesma LAN básica para preencher caixa. |
+| M3 | 7/11 | Dois critérios novos: limites v1/v2 e custo medido; física/modelo, eventos de gameplay e timing LAN ainda pendentes. |
+| M4 | 12/18 | Visual e gate map reais; demais teardowns/inserção física dependem de contrato e prova específica. |
+| M5 | 2/7 | Buffer/interpolação/snap já implementados; suavidade/rotações/reboque/sinais/custo no motor exigem observação. |
+| M6 | 0/13 | Carreira/ledger/tickets próprios têm bancada; faltam leitura/autoridade/adaptadores do mundo real. Não criar nova camada desconectada. |
+| M7 | 4/10 | Instalador restrito menu/PT-BR já entregue e agora reconhecido; visual/layout e tradução integral continuam parciais. |
+| M8 | 3/7 | Rede simulada, logs/coleta e CI configurada; endurance/matriz no jogo e primeiro job hospedado continuam pendentes. |
+| M9 | 1/6 | Kit/assistente existentes; novo coletor reduz interrupções, sem anunciar instalação universal/release. |
+| M10 | 1/7 | Base Linux/proton real preservada; escala/Internet/novos perfis não são prioridade LAN atual. |
+
+Notas antigas corrigidas, sem nova prova: assistente de carreira/kit já foram
+ligados ao plano em 31/10; T1 teve relato humano positivo (a revisão de fonte
+nova/T2 permanece G11); montagem/restauração restrita já existia desde 30/10,
+com ciclo real de arquivos no Windows, jogo fechado, e testes posteriores
+Fedora/x86. Reconhecer o instalador não fecha o teste de pacote no motor nem
+transforma `mod-stage` em ativador genérico. Demais contagens mantidas.
+
+G12 reúne fonte/câmeras/foco, percurso curto, carga via map, coleta e limpeza.
+Se for incluir fonte/menus, preparar e instalar o pacote local com backup e jogo
+fechado ANTES dessa única abertura, seguindo G10/G11. Sem instalar neste lote.
+Dois PCs são necessários só para os critérios que observam o par real; efeitos
+de mundo/economia ainda não entregues não serão “validados” por essa sessão.
+
 ## Lote offline M8/M9: diagnósticos e gravação finita — 31/10/2026
 
 `RUNTIME_INFO` (comando10, Control v1/1536 e engine v3/664 preservados) retorna
@@ -4692,8 +4746,9 @@ suave, e perda temporária de pacotes não produz movimentos indefinidos.
   remotos; impedir entrada em mundos incompatíveis com mensagem útil.
   O controle TCP de carreira já compara perfil/mapa/mods e fixa o manifesto
   pelo convite; host com tickets e preflight do launcher entregues na bancada
-  em 30/10. Assistente e confirmação de qual mundo o motor carrega permanecem
-  pendentes; esta negociação não fecha o critério amplo de mundos compatíveis.
+  em 30/10; assistente/plano/kit ligados em 31/10. Uso interativo (G9) e
+  confirmação de qual mundo o motor carrega permanecem pendentes; esta
+  negociação não fecha o critério amplo de mundos compatíveis.
 - [ ] Definir relógio, clima, pausa e carregamento durante a sessão.
 - [ ] Definir spawn que evite sobreposição e respeite a disponibilidade do mapa.
 - [ ] Escolher dono e ciclo de anexar/desanexar reboques; eventos devem ser idempotentes.
@@ -4729,10 +4784,12 @@ Colisão e economia compartilhadas podem ser marcos posteriores ao MVP visual.
 - [ ] Tradução integral PT-BR: inventário de conteúdo de idioma,
   catálogo próprio, fontes/acentos, layout e validação na partida; registrar
   cobertura e lacunas, incluindo textos embutidos em imagens e eventual áudio.
-  Progresso (30/10): textos e dublagem em etapas separadas. T1 (`local.def`,
-  484/484 chaves + 21 glifos em 13 fontes) gerada e verificada offline, sem
-  teste no jogo (G11). T2 (texto fora da tabela) e T3 (dublagem) pendentes;
-  ver docs/LOCALIZATION.md.
+  Progresso (30–31/10): textos e dublagem em etapas separadas. T1 (`local.def`,
+  484/484 chaves + 21 glifos em 13 fontes) recebeu relato humano geral positivo;
+  proprietário pediu fonte menos quadrada. Fontes suavizadas/Carlito e T2
+  parcial (208 textos, 207 definições) preparados offline, sem nova prova
+  tipográfica. PML auditado; ESC/ajuda/imagens/áudio e G11 ainda parciais.
+  Ver docs/LOCALIZATION.md.
 - [ ] Moeda R$ (futura): definir manutenção/rebalanceamento dos valores, aplicar
   apresentação brasileira em todas as telas e conferir persistência/cálculos.
   Não apenas trocar um símbolo isolado nem depender de cotação cambial real.
@@ -4750,10 +4807,13 @@ Colisão e economia compartilhadas podem ser marcos posteriores ao MVP visual.
   codecs/mipmaps apenas quando um asset real exigir e houver validação visual.
   Progresso: fixtures de cópia/flip/resize, RGBA, TGA/BMP e PNG 16-bit; sem prova
   nova no motor, sem ICC/EXIF/mipmaps ou codificação proprietária automática.
-- [ ] Definir sobreposição de pacotes e um instalador/restaurador em Rust que
+- [x] Definir sobreposição de pacotes e um instalador/restaurador em Rust que
   não sobrescreva silenciosamente originais ou alterações do usuário.
-  Progresso: stage/backup/remoção/restauração offline em pastas novas, com
-  recusa de alterações/extras; montagem e instalador integrado ainda pendentes.
+  Entregue: stage/backup/remoção/restauração e `ui_tools install/status/restore`
+  para menu próprio (p4) e PT-BR local (p5), jogo fechado/backup sincronizado,
+  perfis/pacotes exatos e recusa de links, alterações e extras. Ciclo real de
+  arquivos no Windows e fixtures Fedora/x86; preflight sem escrita. Ativador
+  genérico e resultado visual dos pacotes atuais continuam fora dessa prova.
 - [ ] Testar um pacote mínimo no jogo, registrar o resultado e testar sua remoção.
 - [ ] Distribuir código, assets próprios e manifestos; reconstruir localmente o
   que depende de conteúdo comercial. Não publicar o `base.scs` reempacotado.
@@ -4793,8 +4853,10 @@ verificada e removida em outra instalação original sem distribuir o jogo.
   custo do desenho/intervalo de frame, versão/ABIs/fonte/perfil declarado em
   `runtime` e coleta finita `session-record` com análise/verificador offline.
   Bancada x86 passou; uso agrupado na partida continua em G12.
-- [ ] Configurar CI de formatação, Clippy, testes e build x86. Builds de integração
+- [x] Configurar CI de formatação, Clippy, testes e build x86. Builds de integração
   com o jogo continuam locais; CI não deve baixar assets comerciais.
+  Workflow de 31/10 configurado; comandos equivalentes e auditoria locais.
+  Resultado no GitHub não verificado neste bloco, sem publicação de release.
 - [ ] Auditar parsers e caminhos de arquivo/extração; limitar origem de pacotes,
   filas e mensagens. Downloads/executáveis recebidos da rede não fazem parte do protocolo.
 - [ ] Criar uma matriz de compatibilidade: Windows, toolchain, hash do jogo,
@@ -4849,13 +4911,15 @@ M6 amplia gameplay; M7 melhora o pipeline; M8 acompanha cada mudança de risco;
 M9 depende de resultados estáveis. Isso expressa dependências técnicas, não uma
 instrução para criar agentes paralelos.
 
-Prioridade imediata: testar o visual já implementado com eco no jogo (skin,
-recarga automática, suavização e custo) e depois com dois PCs na LAN. Não
-refazer a descoberta do primeiro visual já comprovado. Após essa prova, seguir
-com identidade/reconexão e um contrato econômico completo, expandir empresas
-e a carreira de meta configurável. PT-BR/R$ e hospedagem externa são futuras;
-não é preciso concluir toda a economia ou sincronizar todo o trânsito para
-testar dois caminhões visuais na LAN.
+Prioridade atual (31/10): G12 agrupa as mudanças offline existentes, sobretudo
+captura sem draw, câmeras/foco/carga e coleta. Eco com textura, gate map e a
+primeira LAN entre PCs já passaram; não são descobertas a refazer. Depois,
+ampliar suavidade/reconexão/duração e demais teardowns comprovando cada caminho.
+Identidade, tickets, assistente e ledger próprios já existem; próximo avanço
+econômico exige leitura/adaptador de entrega no motor, antes de expandir empresas.
+PT-BR T1 tem teste geral positivo e T2/fontes estão parciais; revisar G11.
+R$ e hospedagem externa continuam futuras. Não é preciso sincronizar todo o
+trânsito ou concluir a economia para validar o escopo visual LAN.
 
 | Risco/questão | Como reduzir e verificar |
 | --- | --- |
@@ -5099,6 +5163,14 @@ Referências oficiais: [publicar código local no GitHub](https://docs.github.co
 e [seleção de toolchain com rustup](https://rust-lang.github.io/rustup/overrides.html).
 
 ## 9. Registro de passagem para a próxima etapa
+
+**Atualização 31/10 (varredura offline):** consultar primeiro os registros do
+topo e G12. M2 foi concluída e sumiço/retorno confirmados pelo proprietário no
+eco; a primeira LAN de 29/10 continua válida. Fonte experimental game-pose,
+limites/custo do relay, runtime/coletor e CI foram preparados sem abrir jogo.
+Próxima rodada deve agrupar critérios testáveis, conservando como pendente
+o que exige contratos do motor e não foi implementado. Os marcos 28–29/10
+abaixo são históricos e não anulam os resultados posteriores.
 
 **Atualização 29/10 (sessão Windows v2):** eco texturizado, servidor reiniciado
 com reconexão, duas recargas pelo gate e parada com leave confirmado passaram.

@@ -1,5 +1,18 @@
 # Orientações para continuar o projeto
 
+Varredura31/10: README/roadmap reconciliados; M2já9/9, M3agora7/11, M8agora3/7.
+M7instalador restrito p4/p5 reconhecido (4/10) pelas entregas/provas históricas
+de arquivos, não por novo jogo ou ativador genérico. T1 tem relato humano
+positivo; fonte nova/T2/G11 seguem parciais. Assistente carreira entregue no
+plano, uso motor/G9 pendente. Workflow .github/workflows/ci.yml configura nativo
+e cross GNU x86 client/server, sem assets/jogo/publicação, checkout fixado e
+conteúdo somente leitura. Allowlist abre só esse YAML; seis testes passaram.
+Não confundir configuração/comandos locais com resultado GitHub não verificado
+neste bloco. Verify224x86Proton/291nativos, releases/Clippy/fmt; cinco logs G0
+reanalisados byte a byte iguais. Configoriginal SHA preservado, sem jogo.
+G12 reúne uma abertura para critérios testáveis e coleta; física/
+economia/outros teardowns sem contrato não ficam provados por resultado global.
+
 Lote M8/M9 em31/10: RUNTIME_INFO10 (ABI v1/v3 preservadas), runtime em status
 com versão Cargo/ABIs/fonte/perfil declarado/protocolo; sem caminhos/tokens.
 Não confundir declaração com hash/save carregado ou versão com SHA do build.
