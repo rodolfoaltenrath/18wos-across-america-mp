@@ -1,5 +1,43 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Overlays canônicos entre Fedora e Windows — 31/10/2026
+
+Após `4062626`, resolvida a falha concreta encontrada na checagem cruzada:
+zip 9 escolhia metadados de criador Unix no Linux e DOS no Windows. O validador
+reconstruía o arquivo com a escolha do próprio host e recusava o pacote do
+outro. `archive` agora fixa Unix em todos os hosts. O leitor aceita também o
+envelope DOS legado por comparação integral com reconstrução explícita; não
+normaliza ZIP de entrada nem aceita comentários/extras/bytes ocultos. Schemas
+1/2 e hashes/proveniência/origem derivados permanecem conferidos. Saída antiga
+é preservada: reconstruir com envelope novo exige destino novo; stage/backup/
+restore de legado conservam exatamente seus bytes.
+
+Teste novo de regressão exercita envelope fixo, legado Windows, stage/backup/
+remoção, recusa de sobrescrita e de dados anexados mesmo com SHA-256 externo
+atualizado. Os 33 testes de mod_package/recipes passaram nativo e x86/Proton;
+seis de montagem x86 foram repetidos com o writer final. Workspace nativo final:
+276 testes passaram. Suíte padrão anterior neste lote: 204 x86/275 nativos,
+releases/Clippy/fmt; a correção final só tocou assets, sem rebuild/injeção no
+jogo ou mudança no código do cliente/servidor. Clippy nativo e x86 assets/fmt
+finais passaram; builders/CLI assets nativos e x86 atualizados.
+
+CLI Windows verificou o pacote Fedora 0.3.0, reconstruiu o projeto de 263
+entradas e gerou overlay.scs/manifest.json idênticos byte a byte. SHA-256 do
+payload continua `e3468f9fc810a70e1b3d2d5bf5d662eb222e36b23cbccd99377d107e5854d61e`,
+3.776.468 bytes. Preflight x86 aprovou as cópias dos originais/pacote em C:,
+inclusive raiz com `aa/..`, e gerou o mesmo relatório que o nativo na instalação
+real. Sem backup, temporário ou montagem. Drive Z: do Wine continua recusado
+como link; não houve exceção no guard. Fedora deve usar helpers nativos para
+instalação real. A cópia C: é privada e parcial, sem executável do jogo.
+
+Logs em target/analysis: `package-cross-host-*20261031*`,
+`ui-preflight-copy-c-x86-fixed-20261031.*`, `ui-preflight-parity-fixed-20261031.log`
+e `batch-native-final-tests-20261031.log`. Falhas Z:/canonicalização anteriores
+preservadas para auditoria. Pacote não distribuível, dados comerciais/TTF/
+previews fora do Git. Originais/saves intactos, nenhum jogo iniciado ou nova LAN.
+Próxima rodada G9/G11 continua agrupada; Multiplayer nativo do menu segue
+inativo e o sumiço por foco/captura por draw permanece como antes.
+
 ## Carreira no assistente, recuperação local e kit schema 2 — 31/10/2026
 
 Após `fbdfb24`, entregue contrato `career_entry::assistant::Plan` compartilhado,

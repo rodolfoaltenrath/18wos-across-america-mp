@@ -328,8 +328,12 @@ fn data_only(path: &str, bytes: &[u8]) -> Result<()> {
 }
 
 fn archive(files: &BTreeMap<String, Vec<u8>>) -> Result<Vec<u8>> {
+    archive_for_system(files, zip::System::Unix)
+}
+fn archive_for_system(files: &BTreeMap<String, Vec<u8>>, system: zip::System) -> Result<Vec<u8>> {
     let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
     let options = SimpleFileOptions::default()
+        .system(system)
         .compression_method(CompressionMethod::Stored)
         .last_modified_time(zip::DateTime::default())
         .unix_permissions(0o644);
@@ -424,8 +428,13 @@ fn validate(json: &[u8], payload: &[u8], distributable: bool) -> Result<Manifest
         files.insert(name.clone(), bytes);
     }
     // Reject appended data, comments, extra fields and hidden/unlisted entries.
-    // Canonical Stored output is independent of source mtimes and host paths.
-    ensure!(archive(&files)? == payload, "noncanonical overlay archive");
+    // New writers pin Unix creator metadata on every host. Accept the exact
+    // old DOS envelope too, preserving existing Windows packages/backups.
+    // Both comparisons include EVERY byte; no normalization of untrusted ZIPs.
+    ensure!(
+        archive(&files)? == payload || archive_for_system(&files, zip::System::Dos)? == payload,
+        "noncanonical overlay archive"
+    );
     Ok(manifest)
 }
 

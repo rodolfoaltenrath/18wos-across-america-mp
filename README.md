@@ -100,6 +100,12 @@ próprio e recusa alterações desconhecidas. Não abre o jogo. Aparência, prio
 de montagem e ações antigas ainda exigem a rodada local G10; restaure com o
 jogo fechado antes de voltar a outras validações.
 
+Os overlays novos usam o mesmo envelope ZIP canônico no Fedora e Windows.
+Pacotes Windows antigos continuam verificáveis/restauráveis; reconstruções com
+o formato novo exigem destino novo. No Fedora, usar os helpers nativos para a
+instalação real. A versão Windows sob Proton mantém a recusa de links/junctions,
+incluindo o drive virtual Z:; sua bancada foi executada com cópias privadas em C:.
+
 A tradução integral do jogo vem **depois das telas**. A UI própria já separa
 PT-BR/inglês; isso não traduz os menus/HUD/textos existentes. O inventário
 privado pode ser gerado sem extração:

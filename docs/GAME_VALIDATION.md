@@ -529,6 +529,9 @@ montagem/abertura feita. Dublagem é etapa própria (T3), fora desta rodada.
   Opcionalmente, usar `ui_tools preflight --kind ptbr-text` antes da instalação:
   o pacote real 0.3.0 passou nessa checagem em 31/10, sem montagem/escrita. Esse
   resultado não fecha o item de aceitação/render da montagem no jogo.
+  O preflight x86/Proton também passou sobre cópias privadas dos originais em
+  C: após corrigir o envelope ZIP entre hosts; Z: permaneceu recusado pelo guard
+  de links. Nenhum desses testes instalou o overlay ou validou o render.
 - [ ] Acentos: conferir à, â, ã, ç, ê, õ, maiúsculas acentuadas e ú nas fontes
   pequena (dicas/HUD), média (menus) e grande (títulos/placas). Registrar se
   algum glifo some, sai deslocado ou aparece como outro caractere: isso

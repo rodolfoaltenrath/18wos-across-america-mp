@@ -82,6 +82,58 @@ fn deterministic_across_roots_order_and_reuse_preserves_output() {
 }
 
 #[test]
+fn cross_host_envelope_is_fixed_and_legacy_windows_packages_remain_strictly_verifiable() {
+    let f = Fixture::new();
+    f.build();
+    let (json, canonical) = contents(&f.package).unwrap();
+    let mut m: Manifest = serde_json::from_slice(&json).unwrap();
+    let files: BTreeMap<_, _> = m
+        .files
+        .iter()
+        .map(|e| {
+            (
+                e.input.path.clone(),
+                fs::read(f.project.parent().unwrap().join(&e.input.source)).unwrap(),
+            )
+        })
+        .collect();
+    let central = canonical
+        .windows(4)
+        .position(|p| p == b"PK\x01\x02")
+        .unwrap();
+    assert_eq!(
+        canonical[central + 5],
+        3,
+        "ZIP creator must be Unix on every host"
+    );
+    let legacy = archive_for_system(&files, zip::System::Dos).unwrap();
+    assert_ne!(canonical, legacy);
+    m.payload_sha256 = hash(&legacy);
+    let legacy_json = serde_json::to_vec_pretty(&m).unwrap();
+    validate(&legacy_json, &legacy, true).unwrap();
+    fs::write(f.package.join(MANIFEST), &legacy_json).unwrap();
+    fs::write(f.package.join(PAYLOAD), &legacy).unwrap();
+    let staged = f.path("legacy-staged");
+    stage(&f.package, &staged, true).unwrap();
+    assert_eq!(
+        contents(&staged).unwrap(),
+        (legacy_json.clone(), legacy.clone())
+    );
+    unstage(&staged, &f.path("legacy-backup")).unwrap();
+    assert_eq!(
+        contents(&f.path("legacy-backup")).unwrap(),
+        (legacy_json.clone(), legacy.clone())
+    );
+    assert!(build(&f.project, &f.package, true).is_err());
+    assert_eq!(contents(&f.package).unwrap(), (legacy_json, legacy.clone()));
+    // A valid manifest hash must not make appended/hidden ZIP bytes canonical.
+    let mut appended = legacy;
+    appended.extend_from_slice(b"own hidden trailer");
+    m.payload_sha256 = hash(&appended);
+    assert!(validate(&serde_json::to_vec_pretty(&m).unwrap(), &appended, true).is_err());
+}
+
+#[test]
 fn source_bytes_and_png_alpha_are_preserved_without_conversion() {
     let f = Fixture::new();
     f.build();

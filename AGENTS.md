@@ -1,5 +1,17 @@
 # Orientações para continuar o projeto
 
+ZIP entre hosts em 31/10 após `4062626`: writer de mod_package fixa criador
+Unix; leitor compara bytes integrais Unix ou DOS legado. Pacotes Windows
+antigos verificam/stage/restore; rebuild novo exige destino novo. Não afrouxar
+canonicidade/guard de links. Pacote PT-BR 0.3.0/263 entradas agora idêntico
+Fedora/Windows, SHA e3468f9f... preservado. Preflight x86 passou em cópias privadas
+em C: (sem executável do jogo), sem escrita/montagem; Z: Wine segue recusado.
+Fedora usa helpers nativos para instalar. 33 testes de pacote/recipes por alvo
+e seis montagem x86 finais passaram; workspace nativo final 276, verify padrão
+204 x86/275 nativos anterior, releases/Clippy/fmt. Assets-only nessa correção;
+sem nova injeção/jogo/LAN. Artefatos privados package-cross-host-* e
+ui-preflight-copy-c-x86-fixed-* em target/analysis. G9/G11 permanecem parciais.
+
 Carreira/kit em 31/10 após `fbdfb24`: plano privado de paths com schema estrito,
 `mp_career prepare-launch --assistant-plan`, `plan-launch` de recuperação e
 `check-plan` local. `mp_lan --career-plan` usa sala/servidor/identidade do plano,

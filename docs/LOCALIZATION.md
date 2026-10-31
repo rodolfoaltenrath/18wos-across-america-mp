@@ -240,6 +240,19 @@ o pacote 0.3.0/263 entradas desta instalação, sem escrita; seis fixtures de
 montagem e a proteção Unix de link também passaram. Ramo de junction Windows
 continua sujeito à execução/privilégios desse ambiente.
 
+Na checagem cruzada posterior de 31/10 foi corrigido o envelope ZIP dependente
+do host: o criador agora fixa metadados Unix tanto no Fedora como no Windows,
+e o leitor aceita também o envelope DOS antigo somente quando todos os bytes
+batem com sua reconstrução canônica. Continua recusando extras/bytes anexados,
+mesmo com hash externo recalculado. Pacotes Windows antigos não são reescritos;
+rebuilds usam destino novo. Manifestos e pacote 0.3.0 de 263 entradas gerados no
+Windows e Fedora ficaram idênticos; hash do pacote Fedora anterior preservado.
+
+Preflight x86 também passou com cópia privada dos originais e pacote em C: no
+prefixo de bancada, sem backup/montagem. O acesso via Z: foi recusado pelo guard
+de links, que foi mantido. Isso não é instalação/render no motor ou execução
+nativa Windows. No Fedora, usar `target/release/ui_tools` para a instalação real.
+
 ### Restante de T2
 
 Auditoria PML entregue em 31/10, somente de leitura:
