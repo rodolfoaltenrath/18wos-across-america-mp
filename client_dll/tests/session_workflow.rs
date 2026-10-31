@@ -212,6 +212,31 @@ fn session_commands_compose_start_status_and_safe_stop() {
     let paused: serde_json::Value = serde_json::from_slice(&paused.stdout).unwrap();
     assert_eq!(paused["visual"]["state"], 0);
     assert_eq!(paused["client"]["status"], 1);
+    assert_eq!(paused["runtime"]["source"], "drawn");
+    assert_eq!(paused["runtime"]["wire_protocol"], 1);
+    assert_eq!(paused["runtime"]["physics_tick_atomic"], false);
+    let recording = directory.path().join("recording");
+    let recorded = launcher(&[
+        "session-record",
+        "--output",
+        recording.to_str().unwrap(),
+        "--seconds",
+        "1",
+        "--interval-ms",
+        "1000",
+    ]);
+    assert!(recorded.status.success(), "{recorded:?}");
+    let verified_recording = client_dll::recording::verify(&recording).unwrap();
+    assert_eq!(
+        verified_recording.end,
+        client_dll::recording::End::DurationReached
+    );
+    assert!(!verified_recording.samples.is_empty());
+    let checked = Command::new(env!("CARGO_BIN_EXE_mp_doctor"))
+        .args(["--recording", recording.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(checked.status.success(), "{checked:?}");
     // Simulate loading only after proving that no visual resource is retained.
     writeln!(host.0.stdin.as_mut().unwrap(), "draw-respawn").unwrap();
     line.clear();

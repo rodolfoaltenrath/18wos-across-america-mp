@@ -145,6 +145,17 @@ impl Controller {
     pub fn executable(&self) -> PathBuf {
         PathBuf::from(&self.process.identity.executable)
     }
+    pub fn identity(&self) -> &crate::inspection::process::Identity {
+        &self.process.identity
+    }
+    pub fn runtime_info(&self, dll: &Path) -> Result<crate::runtime_info::Info> {
+        let mut control = Control::new(api::RUNTIME_INFO);
+        self.control(dll, &mut control)?;
+        let info: crate::runtime_info::Info =
+            serde_json::from_str(api::text(&control.message).map_err(anyhow::Error::msg)?)?;
+        info.validate().map_err(anyhow::Error::msg)?;
+        Ok(info)
+    }
     fn module(&self, dll: &Path) -> Result<Option<Module>> {
         let name = dll
             .file_name()

@@ -55,6 +55,8 @@ pub struct Snapshot {
     pub remotes: Vec<Remote>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lifecycle: Option<crate::lifecycle::State>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime: Option<crate::runtime_info::Info>,
 }
 impl Snapshot {
     pub fn validate(&self) -> Result<()> {
@@ -75,6 +77,9 @@ impl Snapshot {
         }
         if let Some(s) = &self.lifecycle {
             ensure!(s.schema == 1, "unsupported lifecycle schema");
+        }
+        if let Some(info) = &self.runtime {
+            info.validate().map_err(anyhow::Error::msg)?;
         }
         Ok(())
     }
@@ -440,6 +445,21 @@ mod tests {
         let exported = sanitize(&serde_json::to_vec(&snapshot).unwrap()).unwrap();
         assert!(!String::from_utf8_lossy(&exported).contains("private"));
         assert!(String::from_utf8_lossy(&exported).contains("process_pinned"));
+    }
+    #[test]
+    fn runtime_metadata_is_optional_for_history_and_strict_when_present() {
+        let mut snapshot = own_snapshot(1);
+        let legacy = sanitize(&serde_json::to_vec(&snapshot).unwrap()).unwrap();
+        assert!(!String::from_utf8_lossy(&legacy).contains("runtime"));
+        snapshot["runtime"] = serde_json::to_value(crate::runtime_info::Info::selected(
+            crate::api::GAME_POSE,
+            2,
+        ))
+        .unwrap();
+        let exported = sanitize(&serde_json::to_vec(&snapshot).unwrap()).unwrap();
+        assert!(String::from_utf8_lossy(&exported).contains("game_pose"));
+        snapshot["runtime"]["private_path"] = "private".into();
+        assert!(sanitize(&serde_json::to_vec(&snapshot).unwrap()).is_err());
     }
     #[test]
     fn rejects_unrelated_oversized_truncated_and_out_of_range_reports() {

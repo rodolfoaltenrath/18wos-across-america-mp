@@ -50,6 +50,8 @@ fn main() -> anyhow::Result<()> {
         Status,
         /// Explain worker, cleanup, callbacks and process-pinned DLL ownership.
         Lifecycle,
+        /// Read version, selected source and declared profile without private configuration.
+        RuntimeInfo,
         /// Query RTT/arrival timing for the accepted v2 connection (null for v1).
         NetworkTiming,
         /// Read/change local interpolation; never calls a game API.
@@ -107,6 +109,15 @@ fn main() -> anyhow::Result<()> {
         },
         /// Client, visual, draw and relayed players in one JSON report.
         SessionStatus,
+        /// Collect bounded sanitized status/analysis in a NEW folder; does not start/stop a session.
+        SessionRecord {
+            #[arg(long)]
+            output: PathBuf,
+            #[arg(long, default_value_t=600, value_parser=clap::value_parser!(u64).range(1..=1800))]
+            seconds: u64,
+            #[arg(long, default_value_t=5000, value_parser=clap::value_parser!(u64).range(1000..=60000))]
+            interval_ms: u64,
+        },
         /// Read-only backup/hash snapshot without loading the DLL or creating a visual.
         SessionBackup {
             #[arg(long)]
@@ -344,6 +355,31 @@ fn main() -> anyhow::Result<()> {
             .is_some_and(|s| s.eq_ignore_ascii_case("client_dll.dll")),
         "select this project's client_dll.dll"
     );
+    if let Task::SessionRecord {
+        output,
+        seconds,
+        interval_ms,
+    } = &args.command
+    {
+        let summary = launcher_session::record::run(
+            args.pid,
+            &dll,
+            args.fixture,
+            output,
+            client_dll::recording::Plan {
+                seconds: *seconds,
+                interval_ms: *interval_ms,
+            },
+        )?;
+        let failed = summary.end == client_dll::recording::End::CollectionFailed
+            || summary.end == client_dll::recording::End::TargetChanged;
+        println!("{}", serde_json::to_string_pretty(&summary)?);
+        ensure!(
+            !failed,
+            "recording ended early; inspect the saved summary and use explicit session-stop"
+        );
+        return Ok(());
+    }
     let controller = Controller::open(args.pid)?;
     let executable = controller.executable();
     let name = executable.file_name().unwrap_or_default().to_string_lossy();
@@ -360,6 +396,13 @@ fn main() -> anyhow::Result<()> {
         );
     }
     match &args.command {
+        Task::RuntimeInfo => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&controller.runtime_info(&dll)?)?
+            );
+            return Ok(());
+        }
         Task::Lifecycle => {
             println!(
                 "{}",
@@ -854,6 +897,8 @@ fn main() -> anyhow::Result<()> {
             return Ok(());
         }
         Task::SessionStart { .. }
+        | Task::RuntimeInfo
+        | Task::SessionRecord { .. }
         | Task::Lifecycle
         | Task::NetworkTiming
         | Task::Presentation { .. }

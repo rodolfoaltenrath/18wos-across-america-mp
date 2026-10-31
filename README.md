@@ -256,6 +256,42 @@ ambientes e recuperação ao reabrir o assistente seguem pendentes.
 
 ### Analisar a sessão gravada sem abrir os jogos
 
+Para a próxima rodada, a coleta pode ser automática em um terminal separado,
+depois de iniciar a sessão normalmente:
+
+```text
+mp_launcher --pid PID --dll CAMINHO_DLL runtime-info
+mp_launcher --pid PID --dll CAMINHO_DLL session-record --output PASTA-NOVA --seconds 600 --interval-ms 5000
+mp_doctor --recording PASTA-NOVA
+```
+
+No Fedora, executar o launcher x86 pelo `proton_host` do prefixo da partida;
+`mp_doctor --recording` pode rodar nativamente, sem prefixo ou jogo. O coletor
+não carrega DLL, inicia rede ou encerra a sessão. Libera o controlador entre
+amostras e verifica a identidade de criação do processo a cada abertura, para
+não seguir um PID reutilizado. Ctrl+C finaliza após a chamada em andamento;
+fechar/forçar o terminal pode deixar `.INCOMPLETE`. Falha de coleta encerra
+novas consultas e registra motivo genérico; parada/limpeza continuam explícitas.
+
+Saída: snapshots filtrados, `analysis.json` e `summary.json` com tempos locais,
+hashes e motivo do fim. Duração de 1–1800 s, intervalo de 1–60 s, até 256
+amostras de 64 KiB; aumentar o intervalo para uma janela mais longa. Atrasos
+não criam uma fila de consultas atrasadas. Diretório deve ser novo; conteúdo
+prévio nunca é substituído. O verificador offline recusa marker, arquivos
+extras, hashes/nomes/ordem/análise divergentes. Hash não autentica um registro
+forjado. `requested_window_complete` só informa o término da coleta;
+`validation_claimed=false` continua obrigatório. Gaps entre amostras e estados
+consultados sequencialmente não comprovam tudo que aconteceu nesse intervalo.
+
+`session-status` inclui `runtime`: versão Cargo da DLL, ABI, fonte selecionada,
+perfil declarado e protocolo, sem caminhos/tickets/configuração privada. Perfil
+declarado não comprova hashes do jogo ou o save carregado; versão não substitui
+o SHA dos binários do kit. Física continua sem tick atômico comprovado. Fonte e
+protocolo selecionados permanecem no diagnóstico após stop; estado do worker
+fica separado. Launcher e DLL novos devem ser usados juntos, com jogo fechado
+para atualizar os binários; o kit já instalado não é atualizado automaticamente.
+Relatórios antigos sem `runtime` continuam legíveis e sem campos inventados.
+
 `session_report` é nativo no Fedora e também possui binário Windows x86.
 Recebe relatórios JSON de `session-status`/`session-stop`, inclusive os antigos
 `command-....log`, ou os novos JSONs de `diagnosticos`. Fornecer os arquivos

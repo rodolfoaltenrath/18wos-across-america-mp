@@ -15,6 +15,8 @@ pub const PRESENTATION_STATUS: u32 = 7;
 pub const NETWORK_TIMING: u32 = 8;
 /// Lifecycle State JSON: mandatory evidence before unloading. Layout unchanged.
 pub const LIFECYCLE_STATUS: u32 = 9;
+/// Version/source/declaration JSON, without paths, credentials or pose values.
+pub const RUNTIME_INFO: u32 = 10;
 pub const SIMULATED: u32 = 1;
 pub const GAME: u32 = 2;
 pub const MEMORY: u32 = 3;

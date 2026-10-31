@@ -1,6 +1,7 @@
 //! One-command session: probes, Drawn network source and the remote visual,
 //! then an ordered teardown that waits for safe release and verifies slots.
 //! Only composes already validated commands; stops at the first failed step.
+pub mod record;
 use anyhow::{Context, Result, bail};
 use client_dll::{
     api::{self, Control, EngineControl},
@@ -223,11 +224,13 @@ pub fn status(c: &Controller, dll: &Path) -> Result<Value> {
         serde_json::from_str(api::text(&timing.message).map_err(anyhow::Error::msg)?)?;
     Ok(json!({
         "client": {"status": client.status, "sample_state": client.sample_state, "sent": client.sent,
+            "read_failures": client.read_failures,
             "received": client.received, "diagnostic": api::text(&client.message).unwrap_or("")},
         "visual": visual, "draw": draw, "load_gate": gate, "remotes": remotes, "network_session":session,
         "presentation": presentation,
         "network_timing": timing,
         "lifecycle": c.lifecycle(dll)?,
+        "runtime": c.runtime_info(dll)?,
     }))
 }
 

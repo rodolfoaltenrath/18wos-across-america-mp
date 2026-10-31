@@ -1,5 +1,43 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Lote offline M8/M9: diagnósticos e gravação finita — 31/10/2026
+
+`RUNTIME_INFO` (comando10, Control v1/1536 e engine v3/664 preservados) retorna
+versão Cargo, ABIs, fonte/protocolo selecionados e perfil declarado. Seleção
+fonte/protocolo é publicada junta, conservada após stop; o estado do worker
+é consultado separadamente. Não contém PID/caminhos/identidade/tickets/poses.
+Perfil é declaração do preset, sem atestar hashes ou o mundo carregado. Não
+afirmar atomicidade da física, nem usar versão Cargo como hash do build.
+`mp_launcher runtime-info` e `session-status` expõem o contrato; este último
+inclui read_failures (indisponibilidades de amostra, não só falhas de memória).
+`session_evidence` aceita logs antigos sem inventar `runtime`; objeto novo é
+estrito e validado, evitando propagação de campos privados desconhecidos.
+
+`mp_launcher session-record` acompanha uma sessão já iniciada: janela finita,
+amostras filtradas e numeradas, análise derivada e resumo com hashes/tempos/motivo.
+Sem iniciar rede, injetar DLL, instalar sondas, tocar saves ou possuir a limpeza.
+Abre/libera controlador por amostra, confere criação do processo e não mantém
+mutex durante esperas. Perdeu o processo/controle, encerra consultas; não força
+threads nem desfaz sessão alheia. Ctrl+C pede finalização após a chamada atual;
+saída forçada/escrita interrompida deixa marker. Até 1800 s/256 amostras/64KiB
+por amostra; sem catch-up ilimitado nem sobrescrita. Análise limitada a 16MiB.
+`mp_doctor --recording` confere nomes/ordem/tipos, hashes, análise reproduzida,
+extras e marker offline. Não autentica logs deliberadamente forjados.
+
+Resumos distinguem duração atingida, interrupção, erro ou troca de alvo;
+`validation_claimed=false` sempre. Coleta finalizada não é prova visual,
+endurance, cada menu, FPS ou equivalência de estados consultados sequencialmente.
+Procedimento G12 agrupa observações humanas numa janela, com horários aproximados
+e stop/hashes separados. Launcher/DLL devem ser atualizados juntos; kit instalado
+permanece intocado. Nenhum jogo ou original/save foi aberto/alterado neste bloco.
+
+Validação proporcional: 125 testes x86 Proton (120 unitários, sessão CLI real,
+três controles e pose independente), Clippy nativo/x86 e fmt; testes puros de
+privacidade, logs históricos, limites, escrita interrompida/colisão e adulteração.
+Fixture executou o coletor e o verificador CLI com DLL real, antes de parada
+segura/hash. Logs privados `target/analysis/offline-batch-recording-*20261031*`.
+Verify integral será registrado ao finalizar o lote; teste no jogo permanece G12.
+
 ## Lote offline M3: limites e custo do relay — 31/10/2026
 
 O protocolo legado v1 agora limita ingressos antes do parsing: 240 datagramas/s
@@ -4749,10 +4787,12 @@ verificada e removida em outra instalação original sem distribuir o jogo.
   verificações de vazamento e remoção de entidades.
   Progresso offline: endurance UDP de 16/5 min e 32/1 min, churn e reinícios,
   recuperação/limpeza e CPU/RSS do processo. Não mede entidades/heap/FPS do jogo.
-- [ ] Ter logs com versão/perfil/estado e coleta opcional de métricas, sem dumps
+- [x] Ter logs com versão/perfil/estado e coleta opcional de métricas, sem dumps
   completos ou conteúdo do jogo nos relatórios públicos.
   Progresso: `session-status` (cliente, visual, draw, remotos) e métricas de
-  custo do desenho/intervalo de frame; logs com versão/perfil pendentes.
+  custo do desenho/intervalo de frame, versão/ABIs/fonte/perfil declarado em
+  `runtime` e coleta finita `session-record` com análise/verificador offline.
+  Bancada x86 passou; uso agrupado na partida continua em G12.
 - [ ] Configurar CI de formatação, Clippy, testes e build x86. Builds de integração
   com o jogo continuam locais; CI não deve baixar assets comerciais.
 - [ ] Auditar parsers e caminhos de arquivo/extração; limitar origem de pacotes,

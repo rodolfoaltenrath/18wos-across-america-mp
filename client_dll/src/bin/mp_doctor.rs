@@ -6,6 +6,9 @@ use std::{fs::File, io::Write, path::PathBuf};
 #[derive(Parser)]
 #[command(about = "Read-only static installation report; never loads DLLs or starts the game")]
 struct Args {
+    /// Verify a completed session-record directory offline; no process/game access.
+    #[arg(long, conflicts_with_all=["game", "client_dir", "native_dir", "check_server", "proton_prefix", "include_paths"])]
+    recording: Option<PathBuf>,
     /// Explicit installation; otherwise AA_GAME_DIR or current-directory ancestors.
     #[arg(long)]
     game: Option<PathBuf>,
@@ -29,6 +32,17 @@ struct Args {
 }
 fn main() -> Result<()> {
     let args = Args::parse();
+    if let Some(directory) = args.recording {
+        let summary = client_dll::recording::verify(&directory)?;
+        let bytes = serde_json::to_vec_pretty(&summary)?;
+        if let Some(path) = args.output {
+            let mut file = File::create_new(path)?;
+            file.write_all(&bytes)?;
+            file.sync_all()?;
+        }
+        println!("{}", String::from_utf8(bytes)?);
+        return Ok(());
+    }
     let executable = std::env::current_exe()?;
     let parent = executable.parent().unwrap().to_owned();
     let options = Options {

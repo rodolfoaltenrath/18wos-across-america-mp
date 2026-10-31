@@ -1,5 +1,17 @@
 # Orientações para continuar o projeto
 
+Lote M8/M9 em31/10: RUNTIME_INFO10 (ABI v1/v3 preservadas), runtime em status
+com versão Cargo/ABIs/fonte/perfil declarado/protocolo; sem caminhos/tokens.
+Não confundir declaração com hash/save carregado ou versão com SHA do build.
+session-record coleta já-conectado em pasta nova, até1800s/256 amostras64KiB;
+filtra, gera análise/resumo/hashes, libera controller entre amostras e confere
+identidade de criação. Ctrl+C finaliza após chamada; falha para consultas, sem
+forçar threads/assumir limpeza. .INCOMPLETE em escrita interrompida. mp_doctor
+--recording verifica tudo offline. Nunca marca validation_claimed true.
+125 x86 Proton (120unit+sessãoCLI+3controles+pose), Clippy/fmt; sem jogo,
+instalação ou kit atualizado. G12 agrupa teste do coletor com nova captura;
+preservar logs históricos sem runtime. Ver registro/doc novos para limites.
+
 Lote M3 em 31/10: v1 aplica orçamento antes de JSON (240/s conhecido, 1024/s
 compartilhado desconhecido), 1200 bytes, send não bloqueante e relatório novo.
 V1/v2 reportam versão/custo de broadcast, tentativas/picos/tempo de parede;

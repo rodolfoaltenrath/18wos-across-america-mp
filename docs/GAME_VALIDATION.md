@@ -636,6 +636,21 @@ montagem/abertura feita. Dublagem é etapa própria (T3), fora desta rodada.
 
 ### G12 — Rodada agrupada dos incrementos offline de 31/10
 
+Coleta nova, entregue na bancada: após `session-start`, executar em outro
+terminal `session-record --output PASTA-NOVA --seconds 600 --interval-ms 5000`
+com o mesmo PID/DLL/prefixo. Não inicia nem para a sessão. Guardar a pasta
+inteira e conferir com `mp_doctor --recording PASTA`; `analysis.json` já resume
+os snapshots filtrados. `runtime` identifica versão/fonte/perfil declarado,
+sem confirmar que o motor carregou um save compatível. A cada ação abaixo,
+anotar o minuto aproximado e o resultado visual percebido. Não é preciso
+parar para capturar manualmente cada status. Eventos menores que o intervalo
+podem não aparecer; não preencher lacunas como resultados positivos. Encerrar
+a coleta antes da limpeza, preservando também o relatório de stop/pós-saída.
+
+- [ ] G12/coleta: no jogo real, completar a janela, conferir hashes/análise
+  offline e relacionar as observações aos tempos locais. `validation_claimed`
+  deve permanecer false: a conclusão pertence a cada critério observado.
+
 M3 recebeu limites de ingresso/envio v1 e medição de broadcast v1/v2. Limites
 da sala cheia e carga UDP 16/32 passaram offline (roadmap); não precisam ser
 repetidos manualmente. Na próxima sessão, guardar o `--report` do servidor

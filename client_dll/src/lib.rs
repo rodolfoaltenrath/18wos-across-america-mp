@@ -69,9 +69,11 @@ mod phase_queue;
 pub mod pose_capture;
 pub mod presentation;
 pub mod profile;
+pub mod recording;
 pub mod release_policy;
 pub mod render_observation;
 pub mod resource_bindings;
+pub mod runtime_info;
 pub mod session_evidence;
 pub mod transition_analysis;
 pub mod transition_observation;
@@ -87,6 +89,8 @@ static SENT: AtomicU64 = AtomicU64::new(0);
 static RECEIVED: AtomicU64 = AtomicU64::new(0);
 static SAMPLE_STATE: AtomicU32 = AtomicU32::new(0);
 static READ_FAILURES: AtomicU64 = AtomicU64::new(0);
+// Source and wire are published together. Retained after stop for diagnostics.
+static RUNTIME_SELECTION: AtomicU32 = AtomicU32::new(0);
 static MESSAGE: Mutex<String> = Mutex::new(String::new());
 static SESSION: Mutex<Option<multiplayer_server::session_client::Status>> = Mutex::new(None);
 static NETWORK_TIMING: Mutex<Option<multiplayer_server::session_timing::Timing>> = Mutex::new(None);
@@ -154,6 +158,16 @@ fn diagnostic(message: &str) {
 }
 
 impl Source {
+    fn mode(&self) -> u32 {
+        match self {
+            Self::Simulated { .. } => api::SIMULATED,
+            Self::Memory { .. } => api::MEMORY,
+            Self::Game { .. } => api::GAME,
+            Self::GamePose { .. } => api::GAME_POSE,
+            Self::PoseFixture { .. } => api::POSE_FIXTURE,
+            Self::Drawn => api::DRAWN,
+        }
+    }
     fn sample(&mut self, elapsed: f32) -> Result<(Position, Option<Rotation>), SampleError> {
         match self {
             Self::Simulated { phase } => Ok((
@@ -581,6 +595,10 @@ fn start_source_session(
         .lock()
         .map_err(|_| "network timing mutex poisoned")? = None;
     diagnostic("starting client");
+    RUNTIME_SELECTION.store(
+        source.mode() | (if options.is_some() { 2 } else { 1 } << 8),
+        Ordering::Release,
+    );
     STATUS.store(1, Ordering::Release);
     *worker = Some(
         thread::Builder::new()
@@ -726,6 +744,7 @@ pub unsafe extern "system" fn client_control(block: *mut api::Control) -> u32 {
             api::SESSION_STATUS => Ok(()),
             api::NETWORK_TIMING => Ok(()),
             api::LIFECYCLE_STATUS => Ok(()),
+            api::RUNTIME_INFO => Ok(()),
             api::PRESENTATION_SET => serde_json::from_str::<interpolation::Config>(
                 api::text(&block.message).unwrap_or(""),
             )
@@ -754,7 +773,17 @@ pub unsafe extern "system" fn client_control(block: *mut api::Control) -> u32 {
         block.sent = client_packets_sent();
         block.received = client_packets_received();
         block.read_failures = READ_FAILURES.load(Ordering::Relaxed);
-        if block.command == api::LIFECYCLE_STATUS {
+        if block.command == api::RUNTIME_INFO {
+            let selection = RUNTIME_SELECTION.load(Ordering::Acquire);
+            let info = runtime_info::Info::selected(selection & 0xff, (selection >> 8) as u8);
+            if serde_json::to_string(&info)
+                .map_err(|e| e.to_string())
+                .and_then(|json| api::put(&mut block.message, &json))
+                .is_err()
+            {
+                block.result = 1;
+            }
+        } else if block.command == api::LIFECYCLE_STATUS {
             if lifecycle_state()
                 .and_then(|state| serde_json::to_string(&state).map_err(|e| e.to_string()))
                 .and_then(|json| api::put(&mut block.message, &json))
