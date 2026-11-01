@@ -1,5 +1,28 @@
 # Roadmap — Across America multiplayer em Rust
 
+## W3 offline: composição por peças e materiais por peça — 01/11
+
+Catálogo schema2 estende o contrato existente com até32 peças adicionais,
+pai explícito/ID/recurso/dependências e posicionamento tipado: unresolved,
+definition_offset sem unidades/eixos confirmados, attachment nominal ou
+local_pose declarada. Não converter offset de definição em pose real por
+hipótese. Hierarquia cíclica, pai desconhecido e alias root são recusados.
+Pinturas schema2 têm até256 vínculos (peça,slot0..63), separados por parte;
+schema1 mantém32 e rejeita peças novas. Serialização/hashes legados preservados
+por campos opcionais omitidos: CLI schema1 deu resultado byteigual ao anterior.
+
+`mp_career appearance-plan` gera ordem pai→filho, materiais por peça e conjunto
+de recursos vencedores hash/tamanho/camada declarada. Não cria instâncias nem
+desativa guard do modeloIA; não prova partes PSM/ossos/cor/completude/ABI/matrizes.
+all_placements_declared_local é declaração, engine/worldfalse. Sem wire/ABIs/
+captura/draw novo ou instalação. Seis regressões novas (inclui6kmutações)
+e89 testes nativos do servidor passaram; CLI de catálogo próprio multipart
+gerou root/cabine/encaixe. Primeiro mutador mantinha seletor antigo após mudar
+ID válido: corrigida a fixture para consultar IDs decodificados e mantida
+recusa de seletor desconhecido. Clippy pediu apenas colapso de if, corrigido.
+Logs privados assembly-*20261101*. W3 segue parcial, total51/104 intacto;
+aplicação/ownership por instância ainda requerem prova do motor.
+
 ## W5 base offline: barreira de entrada e gerações removidas — 01/11
 
 `world_join` prepara sidecar existente + aparências declaradas; escopo explícito

@@ -1,5 +1,17 @@
 # Orientações para continuar o projeto
 
+W3composição01/11: catálogo schema2 peças até32, hierarquia pai explícita sem
+ciclos/rootaliases; placement unresolved/definition_offset(unidade/eixosnão
+comprovados)/attachment/local_pose declaração. Materiais (peça,slot) até256
+por pintura, slot0..63. Schema1hash/serialização preservados sem campos extras;
+CLI comparada byteigual anterior. mp_career appearance-plan ordena pai→filho,
+reúne refs vencedores hash/tamanho/camada. Não matrizes/ABI/ossos/formatos/
+completude/cor/instâncias/motor; all_placements_declared_local não evidência,
+flags engine/worldfalse. 6novos testes/6kmutações+89servidor nativos passaram,
+CLI multipart e Clippy/fmt; mutador fixture corrigido para IDdecodificado,
+Clippy ifcolapsado. Logs assembly-*20261101*. Sem captura/draw/wire/ABIs/kit/
+instalação, W3parcial/51de104 intactos. Próximo investigar refs com hash pin.
+
 W5base01/11 world_join: snapshot1MiB de sidecar EXISTENTE+aparências/aposentados,
 scope sidecar_appearance_only; hashcarreira/content/catalogue/epoch/authority.
 Fila128/evento3KiB/array512KiB, corte APENAS aparências, não tick/revisãoledger.

@@ -4,6 +4,7 @@
 use crate::{career, session_protocol::identity_valid, world_content::Manifest};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+pub mod assembly;
 
 pub const MAX_CATALOGUE_JSON: usize = 4 * 1024 * 1024;
 pub const MAX_DESCRIPTION_JSON: usize = 2048;
@@ -23,6 +24,14 @@ fn id_valid(id: &str) -> bool {
 pub struct Material {
     pub slot: u16,
     pub resource: String,
+    /// Absent is the root model. Extra part IDs are supported only in schema 2.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub part: Option<String>,
+}
+impl Material {
+    fn target(&self) -> (&str, u16) {
+        (self.part.as_deref().unwrap_or("root"), self.slot)
+    }
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -33,15 +42,17 @@ pub struct Paint {
     /// Declared additional resources, such as textures; not discovered by engine.
     pub dependencies: Vec<String>,
 }
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Model {
     pub id: String,
     pub resource: String,
     pub dependencies: Vec<String>,
     pub paints: Vec<Paint>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub parts: Vec<assembly::Part>,
 }
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Catalogue {
     pub schema: u32,
@@ -60,7 +71,7 @@ impl Catalogue {
         Ok(value)
     }
     pub fn validate(&self, content: &Manifest) -> Result<(), String> {
-        if self.schema != 1
+        if !matches!(self.schema, 1 | 2)
             || self.content_sha256 != content.fingerprint()?
             || self.models.is_empty()
             || self.models.len() > 64
@@ -95,6 +106,17 @@ impl Catalogue {
                 return Err("invalid model/paint IDs or bounds".into());
             }
             resource(&model.resource)?;
+            if self.schema == 1 && !model.parts.is_empty() {
+                return Err("extra model parts require catalogue schema 2".into());
+            }
+            assembly::ordered(model)?;
+            for part in &model.parts {
+                resource(&part.resource)?;
+                dependencies(&part.dependencies)?;
+                for key in &part.dependencies {
+                    resource(key)?;
+                }
+            }
             dependencies(&model.dependencies)?;
             for key in &model.dependencies {
                 resource(key)?;
@@ -102,9 +124,12 @@ impl Catalogue {
             for paint in &model.paints {
                 if !id_valid(&paint.id)
                     || paint.materials.is_empty()
-                    || paint.materials.len() > 32
+                    || paint.materials.len() > if self.schema == 1 { 32 } else { 256 }
                     || paint.materials.iter().any(|m| m.slot >= 64)
-                    || paint.materials.windows(2).any(|w| w[0].slot >= w[1].slot)
+                    || paint
+                        .materials
+                        .windows(2)
+                        .any(|w| w[0].target() >= w[1].target())
                 {
                     return Err("invalid paint ID/material slots".into());
                 }
@@ -113,6 +138,11 @@ impl Catalogue {
                     resource(key)?;
                 }
                 for m in &paint.materials {
+                    if let Some(part) = &m.part
+                        && (self.schema == 1 || !model.parts.iter().any(|p| &p.id == part))
+                    {
+                        return Err("paint targets unknown/unsupported model part".into());
+                    }
                     resource(&m.resource)?;
                 }
             }

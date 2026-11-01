@@ -17,6 +17,10 @@ Preparo W3 offline: catálogo e descritor validam referências/revisões, mas o
 draw/relay continuam sem aparência por jogador. Quando houver adaptadores,
 agrupar troca de modelo/pintura, dois jogadores diferentes e liberação/reload
 no lote visual B/D do plano. Não pedir jogo para validar apenas esses parsers.
+Plano offline de peças schema2 já ordena pais e materiais separados; futuras
+provas devem confirmar composição real e ownership por instância, além de
+offsets/ossos. O plano não comprova formato/matrizes e não libera outro PSM
+no guard atual por hipótese. Agrupar com a mesma futura rodada W3.
 
 Preparo W5 offline: snapshot/fluxo de aparência e sidecar preparados sem motor
 por `mp_career join-check`. Não confundir fase prepared com entrada no jogo.

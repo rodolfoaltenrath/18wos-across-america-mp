@@ -475,6 +475,10 @@ Seis testes nativos e CLI com arquivos próprios passaram (aceite e modelo
 desconhecido recusado). Ainda faltam descoberta do modelo/material local,
 tipo/ABI dos recursos, captura, transporte real e integração de desenho.
 Nenhum item amplo de W3 foi encerrado por esse contrato de bancada.
+Catálogo schema2 de composição (01/11) acrescenta peças, pais e materiais
+por peça, com plano pai→filho e resolução de recursos. Posição desconhecida ou
+offset bruto continuam identificados; declaração local não comprova o motor.
+Schema1/hash anterior preservados, sem alteração da aparência real no jogo.
 Leitura estática local adicional identificou composição por acessórios com
 cabine/base em modelos separados, listas de shader e variantes de pintura.
 São candidatos, não captura/aplicação comprovada. O catálogo inicial é de

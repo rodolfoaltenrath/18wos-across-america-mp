@@ -34,9 +34,14 @@ fn fixture() -> (
             dependencies: vec![],
             paints: vec![Paint {
                 id: "own-paint".into(),
-                materials: vec![Material { slot: 0, resource }],
+                materials: vec![Material {
+                    slot: 0,
+                    resource,
+                    part: None,
+                }],
                 dependencies: vec![],
             }],
+            parts: vec![],
         }],
     };
     let manifest = career::Manifest::new(

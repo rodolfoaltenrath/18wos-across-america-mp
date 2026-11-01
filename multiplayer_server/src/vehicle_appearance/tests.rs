@@ -21,6 +21,7 @@ pub fn fixture() -> (Manifest, Catalogue, Description) {
         materials: vec![Material {
             slot: 0,
             resource: key.clone(),
+            part: None,
         }],
         dependencies: vec![],
     };
@@ -32,6 +33,7 @@ pub fn fixture() -> (Manifest, Catalogue, Description) {
             resource: key.clone(),
             dependencies: vec![],
             paints: vec![paint("blue"), paint("red")],
+            parts: vec![],
         }],
     };
     let d = Description {

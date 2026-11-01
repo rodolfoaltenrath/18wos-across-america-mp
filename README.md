@@ -92,6 +92,24 @@ fixo. Existência de recursos não verifica seu formato, tipo, ABI, completude
 de dependências ou cor renderizada; catálogo/slots são declarações locais.
 Ambos os comandos mantêm `engine_verified=false`/`world_synchronized=false`.
 
+O catálogo **schema 2** também descreve até32 peças adicionais por modelo,
+com pai explícito, recurso, dependências e posicionamento: desconhecido,
+offset de definição sem unidade/eixos comprovados, encaixe nominal ou pose local
+declarada. Pintura pode apontar slots por peça (até256 vínculos por pintura,
+slot0..63); IDs e pais inválidos/ciclos/slots duplicados são recusados.
+Schema1 e sua serialização/hash anterior continuam preservados quando não há
+peças/vínculos extras. Não há upgrade automático de catálogo ou descritor.
+
+```text
+mp_career appearance-plan --content CONTEUDO.json --catalogue CATALOGO.json --model ID-MODELO --paint ID-PINTURA
+```
+
+O plano ordena pai antes de filho e reúne os recursos vencedores da ordem
+declarada, com hashes e materiais separados por peça. Não cria instâncias,
+não calcula matrizes do motor e não atesta formato, ossos ou completude dos
+materiais. `all_placements_declared_local=true` só descreve declarações do
+catálogo; `engine_verified`/`world_synchronized` continuam false.
+
 Base offline W5: `mp_career join-check --data CARREIRA --content CONTEUDO.json
 --catalogue CATALOGO.json --snapshot SNAPSHOT.json --events EVENTOS.json
 --world-epoch 1 --authority-generation 1` prepara o estado existente do sidecar

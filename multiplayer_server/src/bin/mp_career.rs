@@ -36,6 +36,17 @@ impl Content {
 }
 #[derive(Subcommand)]
 enum Command {
+    /// Prepare a declared multipart/material plan offline, without engine calls.
+    AppearancePlan {
+        #[arg(long)]
+        content: PathBuf,
+        #[arg(long)]
+        catalogue: PathBuf,
+        #[arg(long)]
+        model: String,
+        #[arg(long)]
+        paint: String,
+    },
     /// Offline sidecar/appearance snapshot barrier. Never marks the game ready.
     JoinCheck {
         #[arg(long)]
@@ -224,6 +235,19 @@ enum Command {
 #[tokio::main]
 async fn main() -> Result<()> {
     match Cli::parse().command {
+        Command::AppearancePlan {
+            content,
+            catalogue,
+            model,
+            paint,
+        } => {
+            let (content, catalogue) = load_catalogue(&content, &catalogue)?;
+            let plan = multiplayer_server::vehicle_appearance::assembly::plan(
+                &content, &catalogue, &model, &paint,
+            )
+            .map_err(anyhow::Error::msg)?;
+            println!("{}", serde_json::to_string_pretty(&plan)?);
+        }
         Command::JoinCheck {
             data,
             content,
