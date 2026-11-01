@@ -36,6 +36,24 @@ impl Content {
 }
 #[derive(Subcommand)]
 enum Command {
+    /// Offline sidecar/appearance snapshot barrier. Never marks the game ready.
+    JoinCheck {
+        #[arg(long)]
+        data: PathBuf,
+        #[arg(long)]
+        content: PathBuf,
+        #[arg(long)]
+        catalogue: PathBuf,
+        #[arg(long)]
+        snapshot: PathBuf,
+        /// Optional bounded JSON array of ordered appearance deltas.
+        #[arg(long)]
+        events: Option<PathBuf>,
+        #[arg(long,value_parser=clap::value_parser!(u64).range(1..))]
+        world_epoch: u64,
+        #[arg(long,value_parser=clap::value_parser!(u64).range(1..))]
+        authority_generation: u64,
+    },
     /// Verify a declared appearance catalogue against content, without the game.
     CatalogueCheck {
         #[arg(long)]
@@ -206,6 +224,50 @@ enum Command {
 #[tokio::main]
 async fn main() -> Result<()> {
     match Cli::parse().command {
+        Command::JoinCheck {
+            data,
+            content,
+            catalogue,
+            snapshot,
+            events,
+            world_epoch,
+            authority_generation,
+        } => {
+            use multiplayer_server::world_join as join;
+            let (career, _) = store::load(&data).map_err(anyhow::Error::msg)?;
+            let (content, catalogue) = load_catalogue(&content, &catalogue)?;
+            let snapshot = join::Snapshot::parse(
+                &store::read_bounded(&snapshot, join::MAX_SNAPSHOT_JSON)
+                    .map_err(anyhow::Error::msg)?,
+            )
+            .map_err(anyhow::Error::msg)?;
+            let mut receiver = join::Receiver::new(
+                join::Context {
+                    career: &career,
+                    content: &content,
+                    catalogue: &catalogue,
+                },
+                world_epoch,
+                authority_generation,
+            )
+            .map_err(anyhow::Error::msg)?;
+            receiver.begin(snapshot).map_err(anyhow::Error::msg)?;
+            if let Some(events) = events {
+                let bytes = store::read_bounded(&events, join::MAX_EVENT_FILE)
+                    .map_err(anyhow::Error::msg)?;
+                let events: Vec<join::Delta> = serde_json::from_slice(&bytes)
+                    .map_err(|_| anyhow::anyhow!("invalid bounded appearance event array"))?;
+                ensure!(
+                    events.len() <= join::MAX_PENDING,
+                    "too many appearance events"
+                );
+                for event in events {
+                    receiver.receive(event).map_err(anyhow::Error::msg)?;
+                }
+            }
+            let prepared = receiver.prepare().map_err(anyhow::Error::msg)?;
+            println!("{}", serde_json::to_string_pretty(prepared.report())?);
+        }
         Command::CatalogueCheck { content, catalogue } => {
             let (content, catalogue) = load_catalogue(&content, &catalogue)?;
             println!(

@@ -1,5 +1,37 @@
 # Orientações para continuar o projeto
 
+W5base01/11 world_join: snapshot1MiB de sidecar EXISTENTE+aparências/aposentados,
+scope sidecar_appearance_only; hashcarreira/content/catalogue/epoch/authority.
+Fila128/evento3KiB/array512KiB, corte APENAS aparências, não tick/revisãoledger.
+Gap/overflow/conflito exigem snapshot cobrindo sequências vistas; retrocesso
+corte/checkpoint/clock e mudança no mesmo corte/checkpoint recusados. Preparo
+temporário não aplica motor e não retorna quadro parcial. Nova empresa exige
+sidecar atualizado. Board64ativos/128aposentados preservados em snapshot;
+removido não ressuscita por evento novo, overflow explícito. remove retorna
+Result agora; sem uso live. Snapshot ledger parser recusa contratos duplicados/
+excessivos sem mudar serialização. CLI mp_career join-check bounded/sem resumo
+de identidades/poses; prepared NÃO significa jogo pronto, flagsfalse.
+9testsbarreira/7appearance/83servidor nativos+12kmutações/CLI corte10-event11
+e epoch2recusado/Clippy/fmt passaram; logs world-join-*20261101*. Verify integral
+no fechamento do roadmap. Sem transporte/aplicação/clock/trânsito/física/save
+vivo/motor; W2/W5/W10parciais,total51/104 intacto. W1scanreal somente leitura
+3arquivos/7597recursos/7314vencedores/283sobrepostos, ordem DECLARADAconfig,
+sem observar montagem/extração; world-content-local-* privado. Nenhum kit/jogo
+aberto/instalação/config alterados. Próximo exige descoberta aparência, não G13.
+Leitura W3 adicional: veículo jogador composto por acessórios/cabine/base em
+modelos separados; definição de cabine lista6shaders/offset, variantespaint.
+Não prova partes PSM/unidades/eixos/resolução herdada/seleção na memória.
+Não liberar só outro modelo no guardIA. Fonte original só privada em
+world-appearance-original-*; próximo confirmar composição/material/ownership.
+Verify completo321x86Proton/389nativos/releases/3Clippy/fmt passou sem exclusões,
+log verify-fedora-20261101-world-content-appearance-join.log. Assets x86 CLI
+scanner própria3arquivos produziu manifesto byteigual nativo/compare recusou
+ordem; mp_career x86 catalogue-check/join-check passaram com flagsfalse.
+Não confundir com todos assetsWindows/motor/LAN. Prefixopartida8iguais ao
+backupG13/init.cfg dddbacf5…7774 intacto; enumWindows/nativa sem jogo/fixtures/
+controllers/probe/server. Runtime exclusivo de teste parado pós-complemento,
+logs world-batch-*20261101*. Binários só target, kit/instalação intocados.
+
 W3base01/11: vehicle_appearance catálogo4MiB ligado contenthash, descritor2KiB
 ligado cataloguehash; modelos/pinturas IDs, slots/depkeys existentes. Não prova
 formato/ABI/cor/completude; declarações locais. Estado puro64veículos rejeita

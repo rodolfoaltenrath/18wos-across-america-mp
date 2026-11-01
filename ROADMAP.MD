@@ -1,5 +1,74 @@
 # Roadmap — Across America multiplayer em Rust
 
+## W5 base offline: barreira de entrada e gerações removidas — 01/11
+
+`world_join` prepara sidecar existente + aparências declaradas; escopo explícito
+`sidecar_appearance_only`, sem estado de trânsito/física/relógio do motor/save
+vivo. Reutiliza `career_world::Snapshot`, valida manifesto/compatibilidade legada,
+fingerprints completos de conteúdo/catálogo e epoch/geração de autoridade.
+Admissão e autenticação continuam fora deste contrato puro; não muda wire v2,
+ticket, bootstrap ou ABI. O modo visual/modelo fixo da partida continua igual.
+
+Snapshot1MiB/evento3KiB/arquivo eventos512KiB, fila128. Corte e sequência são
+EXCLUSIVOS do fluxo de aparências, separados da revisão do ledger. Duplicatas
+não reaplicam; falta/overflow/conflito exigem nova cópia cobrindo a sequência
+observada. Rejeita retrocesso de corte/checkpoint/clock e estado diferente na
+mesma revisão já observada. Preparo em quadro temporário não expõe aplicação
+parcial. Empresa desconhecida exige sidecar atualizado; não clona dados do host.
+Estado de aparência conserva até128 gerações aposentadas no snapshot; mesmo
+um evento com sequência nova não ressuscita uma geração removida. Histórico
+cheio falha explicitamente, sem evicção silenciosa. `prepared` não é mundo pronto.
+
+`mp_career join-check` valida arquivos próprios offline e gera resumo sem
+identidades/poses/paths; engine/worldfalse. Parser de `career_world::Snapshot`
+agora recusa contratos duplicados/excessivos durante decode (wire antigo não
+muda; serialização igual). Nove testes de barreira + sete de aparência passaram;
+suíte nativa do servidor83 passou, incluindo12k mutações próprias. CLI real
+aceitou corte10+evento11, recusou epoch2; Clippy workspace/all-targets/fmt.
+Logs privados `world-join-*20261101*`. Prova integral do lote no fechamento abaixo.
+W2/W5/W10 continuam parciais, contagens gerais51/104 intactas. Sem jogo,
+instalação/kit/saves normais alterados. Próxima integração exige descoberta
+de leitura/aplicação de aparência, não repetir G12/G13 para validar os parsers.
+
+Reuso W1 com a instalação real, somente leitura: três arquivos explicitamente
+ordenados segundo prioridades DECLARADAS no config produziram7597 recursos,
+7314 vencedores/283 recursos sobrescritos. Scanner não observa montagem no
+motor e não fez extração; manifesto/hash privado em `world-content-local-*`.
+O config não foi alterado; isso não é prova de aparência/render/LAN.
+
+Investigação W3 adicional somente leitura: nomes de recursos e três definições
+locais mostram que o caminhão de jogador é composto por acessórios, incluindo
+cabine e base com modelos separados. A definição da cabine consultada lista
+seis referências de shader e offset; a base tem modelo/referência próprios,
+e pinturas estão em variantes de acessórios. Isso não prova seis partes no PSM,
+unidade/eixos do offset, seleção da pintura na memória ou resolução completa
+das referências herdadas/compartilhadas. Não basta liberar outro arquivo no
+guard atual de um único modelo de IA. A próxima integração precisa observar
+composição e materiais efetivos, confirmar ownership por instância e ampliar
+o descritor conforme essa prova. Fontes originais ficaram somente em arquivos
+privados `world-appearance-original-*`, sem copiar definições para o Git.
+
+Fechamento do lote completo: **321 testes x86 sob Proton e 389 nativos**,
+releases cliente/servidor/nativo, três escopos Clippy e rustfmt passaram sem
+exclusões. Log `target/analysis/verify-fedora-20261101-world-content-appearance-join.log`.
+Complemento x86: `asset_tools.exe` compilado pelo toolchain preparado;
+scanner CLI com três arquivos próprios gerou manifesto byte a byte igual ao
+nativo, e compare recusou a ordem divergente. `mp_career.exe catalogue-check`
+e `join-check` passaram nos arquivos próprios, com flagsfalse. Esses comandos
+não são prova dos demais testes de assets Windows nem teste no jogo.
+Logs `world-batch-{assets-x86-build,content-cli-x86,content-compare-cli-x86,catalogue-cli-x86,join-cli-x86}-20261101.log`.
+
+No prefixo da partida, `session-verify` conferiu oito arquivos iguais ao backup
+G13; `init.cfg` SHA `dddbacf5…7774` intacto. Enumeração Windows e nativa sem
+jogo/fixtures/controladores/probe/servidor. Runtime exclusivo da bancada parado
+após o complemento. Logs privados `world-batch-originals/processes-*`,
+`world-batch-native-processes-final-*`, `world-batch-config-*.sha256`,
+`world-batch-builds-*.sha256` e `world-batch-test-runtime-stop-*`, de01/11.
+Binários recompilados somente em target; instalação/kit do usuário intocados.
+Próximo avanço visual depende de observar modelo/acessórios/pintura efetivos
+no motor e comprovar aplicação/liberação por instância; deixar essa prova
+para rodada agrupada, sem reabrir o jogo neste lote.
+
 ## W3 base offline: catálogo e revisões de aparência — 01/11
 
 `vehicle_appearance` liga catálogo ao fingerprint do conteúdo e descritor ao

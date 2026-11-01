@@ -446,9 +446,39 @@ pub struct Snapshot {
     pub clock: Clock,
     pub clock_checkpoint_world_ms: u64,
     pub ranking: Vec<CompanyView>,
+    #[serde(deserialize_with = "unique_snapshot_contracts")]
     pub contracts: BTreeMap<String, Contract>,
     pub engine_adapters: bool,
     pub original_save_updated: bool,
+}
+// Map decoding normally keeps the last duplicate key. A snapshot must never
+// silently replace one contract with another under the same durable identity.
+fn unique_snapshot_contracts<'de, D: serde::Deserializer<'de>>(
+    decoder: D,
+) -> Result<BTreeMap<String, Contract>, D::Error> {
+    struct Contracts;
+    impl<'de> serde::de::Visitor<'de> for Contracts {
+        type Value = BTreeMap<String, Contract>;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("unique bounded contract map")
+        }
+        fn visit_map<A: serde::de::MapAccess<'de>>(
+            self,
+            mut input: A,
+        ) -> Result<Self::Value, A::Error> {
+            let mut contracts = BTreeMap::new();
+            while let Some(key) = input.next_key::<String>()? {
+                if contracts.len() >= MAX_CONTRACTS || contracts.contains_key(&key) {
+                    return Err(serde::de::Error::custom(
+                        "duplicate/excessive snapshot contracts",
+                    ));
+                }
+                contracts.insert(key, input.next_value::<Contract>()?);
+            }
+            Ok(contracts)
+        }
+    }
+    decoder.deserialize_map(Contracts)
 }
 impl Snapshot {
     pub fn validate(&self, manifest: &Manifest) -> Result<(), String> {

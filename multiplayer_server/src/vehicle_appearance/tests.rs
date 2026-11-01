@@ -127,9 +127,9 @@ fn pose_waits_for_exact_appearance_and_old_leave_cannot_delete_new_generation() 
     d.generation = 2;
     d.vehicle = "d".repeat(32);
     b.apply(d.clone()).unwrap();
-    assert!(!b.remove(&d.player, 1));
+    assert!(!b.remove(&d.player, 1).unwrap());
     assert!(b.get(&d.player).is_some());
-    assert!(b.remove(&d.player, 2));
+    assert!(b.remove(&d.player, 2).unwrap());
 }
 #[test]
 fn two_players_cannot_claim_one_vehicle_and_capacity_is_bounded() {
@@ -169,4 +169,23 @@ fn bounded_decoders_reject_unknown_or_duplicate_fields_and_do_not_leak_identity(
     assert!(Catalogue::parse(&serde_json::to_vec(&json).unwrap(), &content).is_err());
     let report = serde_json::to_string(&check(&content, &catalogue, &d).unwrap()).unwrap();
     assert!(!report.contains(&d.player) && !report.contains(&d.vehicle));
+}
+#[test]
+fn removed_generation_stays_retired_across_snapshot_and_history_overflow_is_explicit() {
+    let (content, catalogue, mut d) = fixture();
+    let mut b = Board::new(1, catalogue.clone(), &content).unwrap();
+    b.apply(d.clone()).unwrap();
+    b.remove(&d.player, 1).unwrap();
+    assert_eq!(b.apply(d.clone()).unwrap(), Applied::Stale);
+    let (vehicles, retired) = b.snapshot();
+    let mut restored =
+        Board::from_records(1, catalogue.clone(), &content, &vehicles, &retired).unwrap();
+    assert_eq!(restored.apply(d.clone()).unwrap(), Applied::Stale);
+    assert!(Board::from_records(1, catalogue, &content, &[d.clone()], &retired).is_err());
+    d.generation = 2;
+    assert_eq!(restored.apply(d).unwrap(), Applied::Updated);
+    for i in 1..MAX_RETIRED {
+        b.remove(&format!("{i:032x}"), 1).unwrap();
+    }
+    assert!(b.remove(&"f".repeat(32), 1).is_err());
 }

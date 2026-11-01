@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 pub const MAX_CATALOGUE_JSON: usize = 4 * 1024 * 1024;
 pub const MAX_DESCRIPTION_JSON: usize = 2048;
 pub const MAX_VEHICLES: usize = 64;
+pub const MAX_RETIRED: usize = 128;
 const MAX_REFERENCES: usize = 8192;
 
 fn id_valid(id: &str) -> bool {
@@ -183,6 +184,12 @@ pub enum Applied {
     Duplicate,
     Stale,
 }
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Retired {
+    pub player: String,
+    pub generation: u64,
+}
 
 /// Caller owns admission/authorization. Pure board never authenticates peers or
 /// applies anything to the engine. A world change requires a NEW validated board.
@@ -191,6 +198,7 @@ pub struct Board {
     catalogue: Catalogue,
     catalogue_sha256: String,
     vehicles: BTreeMap<String, Description>,
+    retired: BTreeMap<String, u64>,
 }
 impl Board {
     pub fn new(epoch: u64, catalogue: Catalogue, content: &Manifest) -> Result<Self, String> {
@@ -203,12 +211,20 @@ impl Board {
             catalogue,
             catalogue_sha256,
             vehicles: BTreeMap::new(),
+            retired: BTreeMap::new(),
         })
     }
     pub fn apply(&mut self, next: Description) -> Result<Applied, String> {
         next.validate(&self.catalogue, &self.catalogue_sha256)?;
         if next.world_epoch != self.epoch {
             return Err("appearance belongs to another world epoch".into());
+        }
+        if self
+            .retired
+            .get(&next.player)
+            .is_some_and(|generation| next.generation <= *generation)
+        {
+            return Ok(Applied::Stale);
         }
         if let Some(old) = self.vehicles.get(&next.player) {
             if next.generation < old.generation {
@@ -245,17 +261,63 @@ impl Board {
     pub fn get(&self, player: &str) -> Option<&Description> {
         self.vehicles.get(player)
     }
-    pub fn remove(&mut self, player: &str, generation: u64) -> bool {
+    pub fn remove(&mut self, player: &str, generation: u64) -> Result<bool, String> {
+        if !identity_valid(player) || generation == 0 {
+            return Err("invalid retirement identity/generation".into());
+        }
         if self
             .vehicles
             .get(player)
-            .is_some_and(|v| v.generation == generation)
+            .is_some_and(|v| v.generation > generation)
+            || self
+                .retired
+                .get(player)
+                .is_some_and(|old| *old >= generation)
         {
-            self.vehicles.remove(player);
-            true
-        } else {
-            false
+            return Ok(false);
         }
+        if !self.retired.contains_key(player) && self.retired.len() >= MAX_RETIRED {
+            return Err("retirement history full; new snapshot required".into());
+        }
+        self.retired.insert(player.into(), generation);
+        Ok(self.vehicles.remove(player).is_some())
+    }
+    pub fn snapshot(&self) -> (Vec<Description>, Vec<Retired>) {
+        (
+            self.vehicles.values().cloned().collect(),
+            self.retired
+                .iter()
+                .map(|(player, generation)| Retired {
+                    player: player.clone(),
+                    generation: *generation,
+                })
+                .collect(),
+        )
+    }
+    pub fn from_records(
+        epoch: u64,
+        catalogue: Catalogue,
+        content: &Manifest,
+        vehicles: &[Description],
+        retired: &[Retired],
+    ) -> Result<Self, String> {
+        if vehicles.len() > MAX_VEHICLES
+            || retired.len() > MAX_RETIRED
+            || vehicles.windows(2).any(|w| w[0].player >= w[1].player)
+            || retired.windows(2).any(|w| w[0].player >= w[1].player)
+        {
+            return Err("invalid appearance snapshot order/count".into());
+        }
+        let mut board = Self::new(epoch, catalogue, content)?;
+        for r in retired {
+            board.remove(&r.player, r.generation)?;
+        }
+        for v in vehicles {
+            if board.apply(v.clone())? != Applied::Updated {
+                return Err("appearance snapshot resurrects retired generation".into());
+            }
+        }
+        Ok(board)
     }
     pub fn pose_ready(
         &self,

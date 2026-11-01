@@ -22,6 +22,7 @@ pub mod session_timing;
 pub mod traffic;
 pub mod vehicle_appearance;
 pub mod world_content;
+pub mod world_join;
 
 #[cfg(feature = "server")]
 pub mod resources;

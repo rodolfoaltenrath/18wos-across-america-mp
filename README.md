@@ -92,6 +92,27 @@ fixo. Existência de recursos não verifica seu formato, tipo, ABI, completude
 de dependências ou cor renderizada; catálogo/slots são declarações locais.
 Ambos os comandos mantêm `engine_verified=false`/`world_synchronized=false`.
 
+Base offline W5: `mp_career join-check --data CARREIRA --content CONTEUDO.json
+--catalogue CATALOGO.json --snapshot SNAPSHOT.json --events EVENTOS.json
+--world-epoch 1 --authority-generation 1` prepara o estado existente do sidecar
+e as aparências declaradas após um corte do fluxo de eventos de aparência.
+`--events` é opcional; quando presente, é um array JSON em ordem explícita.
+O save-base congelado da pasta de carreira é conferido, sem instalar/carregar
+o jogo ou alterar o journal. Snapshot1MiB/evento3KiB/arquivo de eventos512KiB,
+até128 mudanças pendentes; lacuna/overflow/conflito exigem snapshot novo que
+cubra a sequência observada. Mundo/autoridade/carreira/conteúdo/catálogo precisam
+coincidir; retrocesso de corte/checkpoint/relógio é recusado, assim como conteúdo
+diferente no mesmo corte/checkpoint já observado. A revisão econômica permanece
+separada da sequência de aparências; esse canal não aplica operações econômicas.
+Remoções deixam até128 registros de gerações aposentadas, preservados no snapshot,
+para impedir reaparição de gerações antigas. Histórico cheio falha explicitamente.
+Nova empresa exige snapshot do sidecar atualizado; identidade não é clonada do host.
+**`prepared` indica preparação de dados offline, não jogo pronto.** Escopo
+fixo `sidecar_appearance_only`, sem trânsito/física/clock do motor/save vivo,
+sem transporte ou aplicação ao renderer; flags engine/world continuam false.
+O chamador futuro precisa autenticar/ordenar os eventos e confirmar a aplicação
+no motor. Este formato não muda o wire v2 nem o bootstrap de carreira existente.
+
 Prioridade de conclusão em 31/10: fechar M2 antes de ampliar funcionalidades.
 As proteções de inicialização/parada/descarga foram reforçadas e a bancada
 agora cobre falhas de preparo, interrupção UDP e saída do host próprio com o

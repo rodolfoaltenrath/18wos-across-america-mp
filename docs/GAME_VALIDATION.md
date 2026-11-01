@@ -18,6 +18,12 @@ draw/relay continuam sem aparência por jogador. Quando houver adaptadores,
 agrupar troca de modelo/pintura, dois jogadores diferentes e liberação/reload
 no lote visual B/D do plano. Não pedir jogo para validar apenas esses parsers.
 
+Preparo W5 offline: snapshot/fluxo de aparência e sidecar preparados sem motor
+por `mp_career join-check`. Não confundir fase prepared com entrada no jogo.
+Lotes C/D/E só exercitarão entrada tardia/recuperação real após transporte,
+admissão e aplicação comprovados; por enquanto fixtures cobrem corte, replay,
+lacuna, overflow e gerações removidas, sem exigir outro percurso humano.
+
 Atualizado em 31/10/2026. O proprietário pediu blocos maiores e validação prática
 agrupada. A primeira rodada LAN entre Windows e Fedora/Proton foi realizada e
 está registrada abaixo. A matriz restante continua sendo roteiro de pendências;

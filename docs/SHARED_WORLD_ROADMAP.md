@@ -475,6 +475,33 @@ Seis testes nativos e CLI com arquivos próprios passaram (aceite e modelo
 desconhecido recusado). Ainda faltam descoberta do modelo/material local,
 tipo/ABI dos recursos, captura, transporte real e integração de desenho.
 Nenhum item amplo de W3 foi encerrado por esse contrato de bancada.
+Leitura estática local adicional identificou composição por acessórios com
+cabine/base em modelos separados, listas de shader e variantes de pintura.
+São candidatos, não captura/aplicação comprovada. O catálogo inicial é de
+referências declaradas; montagem de múltiplas partes e relação material/parte
+precisam ser ampliadas após confirmar o contrato efetivo do motor.
+
+Base W5 offline: `world_join` prepara um snapshot tipado do sidecar existente
+e aparências declaradas, com corte/fluxo exclusivo de aparência, sem duplicar
+o formato do ledger. Vincula carreira/conteúdo/catálogo/mundo/autoridade;
+rejeita retrocesso e mudança de conteúdo no mesmo corte/checkpoint observado.
+Buffer128/evento3KiB/snapshot1MiB; lacuna/overflow/conflito invalidam preparo
+e exigem nova cópia cobrindo a sequência observada. Preparação constrói estado
+temporário completo; uma falha não retorna quadro parcialmente pronto.
+Gerações removidas ficam aposentadas em até128 registros preservados no snapshot.
+Isso não é snapshot completo do mundo: trânsito, física, relógio do motor,
+estado desconhecido do save e aplicação real continuam ausentes. O escopo é
+`sidecar_appearance_only` e as flags engine/world permanecem false.
+
+Nove testes W5, sete do estado de aparência (inclui aposentadoria) e a suíte
+nativa do servidor com83 testes passaram; o mutador exerceu12.000 entradas
+próprias nos dois decoders. CLI própria aceitou corte10+evento11 e recusou epoch
+incorreto. O parser do snapshot econômico agora recusa contratos duplicados
+antes de substituir silenciosamente uma entrada. Verificação integral do lote
+é registrada no ROADMAP; nenhum item amplo W2/W5/W10 foi encerrado.
+Fechamento conjunto:321 testes x86 Proton/389nativos/releases/Clippy/fmt;
+CLI x86 de catálogo/preparo/scanner próprio passou e manifesto foi idêntico
+ao nativo. Sem nova partida/LAN; detalhes e limites no registro do ROADMAP.
 
 1. **W0 + base W1, offline:** catálogo tipado de estado/capacidades e manifesto
    de conteúdo efetivo planejado, incluindo ordem/conflitos, migração dos
