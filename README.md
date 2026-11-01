@@ -75,6 +75,23 @@ As pendências práticas estão agrupadas em
 [docs/GAME_VALIDATION.md](docs/GAME_VALIDATION.md), com preparação, ordem,
 critérios e distinção entre teste disponível e integração ainda não entregue.
 
+Base offline de aparência (W3): `mp_career catalogue-check --content CONTEUDO.json
+--catalogue CATALOGO.json` verifica IDs de modelos/pinturas, slots e dependências
+por chaves de recurso presentes no manifesto. `mp_career appearance-check
+--content CONTEUDO.json --catalogue CATALOGO.json --appearance APARENCIA.json`
+verifica um descritor vinculado ao hash desse catálogo, jogador/veículo,
+geração e revisão. Catálogo4MiB/64modelos/32pinturas por modelo/32slots por
+pintura/8.192referências; descritor2KiB. Campos desconhecidos/IDs inválidos e
+referências ausentes são recusados. O resumo omite identidades/caminhos.
+Os arquivos de entrada continuam privados; esses comandos não autenticam
+remetentes. O estado puro limita64veículos, rejeita dono duplicado/revisão
+conflitante e não deixa revisão antiga desfazer pintura nova. Poses só ficam
+compatíveis com a revisão/geração exata conhecida desse estado de bancada.
+**Não há ligação ao relay/draw neste incremento:** o modelo do jogo permanece
+fixo. Existência de recursos não verifica seu formato, tipo, ABI, completude
+de dependências ou cor renderizada; catálogo/slots são declarações locais.
+Ambos os comandos mantêm `engine_verified=false`/`world_synchronized=false`.
+
 Prioridade de conclusão em 31/10: fechar M2 antes de ampliar funcionalidades.
 As proteções de inicialização/parada/descarga foram reforçadas e a bancada
 agora cobre falhas de preparo, interrupção UDP e saída do host próprio com o

@@ -20,6 +20,7 @@ mod session_hub_tests;
 pub mod session_protocol;
 pub mod session_timing;
 pub mod traffic;
+pub mod vehicle_appearance;
 pub mod world_content;
 
 #[cfg(feature = "server")]

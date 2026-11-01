@@ -36,6 +36,22 @@ impl Content {
 }
 #[derive(Subcommand)]
 enum Command {
+    /// Verify a declared appearance catalogue against content, without the game.
+    CatalogueCheck {
+        #[arg(long)]
+        content: PathBuf,
+        #[arg(long)]
+        catalogue: PathBuf,
+    },
+    /// Offline catalogue/appearance check. Does not read or change the game.
+    AppearanceCheck {
+        #[arg(long)]
+        content: PathBuf,
+        #[arg(long)]
+        catalogue: PathBuf,
+        #[arg(long)]
+        appearance: PathBuf,
+    },
     /// Write a NEW private assistant plan from an existing ticket, offline.
     PlanLaunch {
         #[arg(long)]
@@ -190,6 +206,36 @@ enum Command {
 #[tokio::main]
 async fn main() -> Result<()> {
     match Cli::parse().command {
+        Command::CatalogueCheck { content, catalogue } => {
+            let (content, catalogue) = load_catalogue(&content, &catalogue)?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(
+                    &multiplayer_server::vehicle_appearance::inspect(&content, &catalogue)
+                        .map_err(anyhow::Error::msg)?
+                )?
+            );
+        }
+        Command::AppearanceCheck {
+            content,
+            catalogue,
+            appearance,
+        } => {
+            use multiplayer_server::vehicle_appearance as va;
+            let (content, catalogue) = load_catalogue(&content, &catalogue)?;
+            let description = va::Description::parse(
+                &store::read_bounded(&appearance, va::MAX_DESCRIPTION_JSON)
+                    .map_err(anyhow::Error::msg)?,
+                &catalogue,
+            )
+            .map_err(anyhow::Error::msg)?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(
+                    &va::check(&content, &catalogue, &description).map_err(anyhow::Error::msg)?
+                )?
+            );
+        }
         Command::PlanLaunch {
             launch,
             import,
@@ -395,6 +441,25 @@ async fn main() -> Result<()> {
         }
     }
     Ok(())
+}
+fn load_catalogue(
+    content: &std::path::Path,
+    catalogue: &std::path::Path,
+) -> Result<(
+    multiplayer_server::world_content::Manifest,
+    multiplayer_server::vehicle_appearance::Catalogue,
+)> {
+    use multiplayer_server::{vehicle_appearance as va, world_content as wc};
+    let content = wc::Manifest::parse(
+        &store::read_bounded(content, wc::MAX_JSON).map_err(anyhow::Error::msg)?,
+    )
+    .map_err(anyhow::Error::msg)?;
+    let catalogue = va::Catalogue::parse(
+        &store::read_bounded(catalogue, va::MAX_CATALOGUE_JSON).map_err(anyhow::Error::msg)?,
+        &content,
+    )
+    .map_err(anyhow::Error::msg)?;
+    Ok((content, catalogue))
 }
 fn write_assistant_plan(
     output: &std::path::Path,

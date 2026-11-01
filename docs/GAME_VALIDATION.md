@@ -13,6 +13,11 @@ o teste de conflito já automatizado. Quando houver adaptador de montagem,
 agrupar prova de mapa/ordem/recursos efetivamente carregados com W3; comparação
 de disco ainda não comprova isso nem altera o fluxo atual de admissão.
 
+Preparo W3 offline: catálogo e descritor validam referências/revisões, mas o
+draw/relay continuam sem aparência por jogador. Quando houver adaptadores,
+agrupar troca de modelo/pintura, dois jogadores diferentes e liberação/reload
+no lote visual B/D do plano. Não pedir jogo para validar apenas esses parsers.
+
 Atualizado em 31/10/2026. O proprietário pediu blocos maiores e validação prática
 agrupada. A primeira rodada LAN entre Windows e Fedora/Proton foi realizada e
 está registrada abaixo. A matriz restante continua sendo roteiro de pendências;

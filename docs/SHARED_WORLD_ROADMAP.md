@@ -466,6 +466,16 @@ verificação de montagem no motor continuam pendentes.
 
 ### Sequência de implementação
 
+Base W3 offline de01/11: catálogo/descritor versionados vinculam modelo/pintura
+e slots declarados aos recursos conhecidos do manifesto. Estado puro limitado
+recusa dono duplicado, geração/revisão antiga e conflito na mesma revisão;
+pose exige revisão exata. `mp_career catalogue-check`/`appearance-check` fazem
+o preflight offline, sem aplicar o resultado no motor ou usar o relay.
+Seis testes nativos e CLI com arquivos próprios passaram (aceite e modelo
+desconhecido recusado). Ainda faltam descoberta do modelo/material local,
+tipo/ABI dos recursos, captura, transporte real e integração de desenho.
+Nenhum item amplo de W3 foi encerrado por esse contrato de bancada.
+
 1. **W0 + base W1, offline:** catálogo tipado de estado/capacidades e manifesto
    de conteúdo efetivo planejado, incluindo ordem/conflitos, migração dos
    fingerprints existentes e comparação com fixtures próprias. Campos não
@@ -478,5 +488,5 @@ verificação de montagem no motor continuam pendentes.
    reutilizando bootstrap/ledger/journal, sem outro formato paralelo de carreira.
    Compatibilidade e ciclo de vida vêm antes de ampliar trânsito e colisões.
 
-Estes passos são o plano de implementação seguinte. Este commit entrega a
-organização do objetivo, sem modificar o motor, saves, instalação ou kits.
+Os incrementos acima preparam esse plano sem modificar motor, saves,
+instalação ou kits. Os critérios amplos exigem as provas indicadas por etapa.

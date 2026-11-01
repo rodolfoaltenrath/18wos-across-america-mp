@@ -1,5 +1,16 @@
 # Orientações para continuar o projeto
 
+W3base01/11: vehicle_appearance catálogo4MiB ligado contenthash, descritor2KiB
+ligado cataloguehash; modelos/pinturas IDs, slots/depkeys existentes. Não prova
+formato/ABI/cor/completude; declarações locais. Estado puro64veículos rejeita
+posse duplicada/conflito mesma revisão; stale idempotente/geração/epoch, pose
+exige revisão exata, leave antigo não remove novo. Não autentica remetente.
+CLI mp_career catalogue-check/appearance-check bounded e resumo sem identidade.
+6testes nativos/CLI própria aceite/recusa/Clippy workspace/fmt passaram; erro
+inicial só fixture move key corrigido clone, logs appearance-*20261101*.
+Sem captura/transporte/draw novo: modelo/shader permanecem fixos, flagsfalse.
+W3 parcial/51de104 intactos; nenhuma partida/instalação/kit. Próximo base W5.
+
 W1base01/11 offline: world_content schema1+asset_tools world-content/compare.
 Camadas low→high DECLARADAS pelo operador, não ordem observada no motor.
 Inventaria ZIP/SCS sem extração/paths na saída, nomes ASCII normalizados e

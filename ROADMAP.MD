@@ -1,5 +1,25 @@
 # Roadmap — Across America multiplayer em Rust
 
+## W3 base offline: catálogo e revisões de aparência — 01/11
+
+`vehicle_appearance` liga catálogo ao fingerprint do conteúdo e descritor ao
+fingerprint do catálogo. Modelos/pinturas por IDs locais, material/slot e
+dependências por chaves hasheadas existentes; não paths. Limites catálogo4MiB,
+64modelos/32pinturas/32slots/8192refs, descritor2KiB. Estado puro64veículos
+com mundo/geração/revisão, posse exclusiva, duplicata idempotente, stale sem
+substituir novo e conflito mesma revisão recusado. Troca de veículo exige nova
+geração; leave antigo não remove geração atual. Consulta de pose requer revisão
+exata. Autorização de remetente continua responsabilidade do futuro chamador.
+
+`mp_career catalogue-check` e `appearance-check` verificam arquivos limitados
+sem jogo/rede, relatam hashes/contagens/IDs declarados e omitem jogador/veículo.
+Não prova formato/ABI/cor/dependência completa dos recursos, não faz captura,
+não muda relay/draw/modelo fixo/ABIs nem admissão. Flags engine/worldfalse.
+Seis testes nativos e CLI própria (modelo conhecido/recusa desconhecido) passaram;
+Clippy workspace/all-targets e fmt. Primeiro build falhou move de chave emprestada
+na fixture, corrigido clone; logs privados `appearance-*20261101*` preservados.
+W3 parcial, total51/104 intacto; teste visual só após adaptador concreto.
+
 ## W1 inicial offline: conteúdo em ordem e conflito de recursos — 01/11
 
 Contrato `world_content` compartilhado e scanner/CLI `asset_tools world-content`
