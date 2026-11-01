@@ -1972,7 +1972,8 @@ melhora do offset é igualado ao mais recente (`push_monotonic`), sem descartar
 a pose. O tremor da subida (remetente→servidor) continua. `presentation` conta
 `server_timed`/`arrival_timed`. JSON antigo sem o campo seleciona `arrival`.
 
-`network_lab` (schema 3) aceita `--timebase` e `--offset-error-ms` (−200..200,
+`network_lab` (schema 4; base de tempo introduzida no schema 3) aceita
+`--timebase` e `--offset-error-ms` (−200..200,
 erro simulado da estimativa) e mede `mean_error_step_milli_cm`, a variação
 do erro entre quadros (tremor), independente do atraso constante. Lote de
 31/10 (36.000 poses, perda 5%/duplicação 10%/atraso 40 ms): com jitter 80 ms, o tremor
@@ -1985,7 +1986,7 @@ Trajetória artificial, sem física real: o padrão continua `arrival` até a
 comparação na partida (G2).
 
 `network_lab` aceita os mesmos orçamentos por `--interpolation-ms` e
-`--extrapolation-ms`. Seu relatório **schema 2** acrescenta modos de avaliação,
+`--extrapolation-ms`. Desde o **schema 2**, o relatório acrescenta modos de avaliação,
 maior previsão e erro médio/máximo contra a trajetória artificial selecionada,
 em milésimos de centímetro (`mean_error_milli_cm`/`max_error_milli_cm`). O erro
 inclui o atraso intencional do buffer; não é precisão da física real. `--delay-ms`
@@ -1995,6 +1996,30 @@ continuam históricos, sem promessa de igualdade com o formato novo.
 adiciona duas paradas e mudanças de direção num percurso contínuo de 8 s.
 Comparar apenas a linha favorece a previsão; o segundo percurso serve para
 observar erros nas frenagens e mudanças bruscas. Não reproduz física de caminhão.
+
+Em 01/11, o histórico de recepção passou a iniciar um trecho novo quando o
+remoto retorna após pelo menos 1 s sem pose aceita, o mesmo limite usado para
+ocultá-lo. Assim, a primeira pose do retorno não usa a posição anterior ao
+silêncio para interpolar ou estimar velocidade. A troca entre carimbos reais
+de chegada/servidor também inicia outro trecho, inclusive ao perder/obter uma
+estimativa utilizável. Selecionar `server` em v1 continua usando chegada e não
+reinicia a cada pacote. Melhorias do offset dentro da mesma referência mantêm
+o ajuste monotônico existente. Isso não sincroniza a física nem detecta toda
+mudança de cena do outro computador; a geração da conexão segue independente.
+Horários inválidos são recusados antes do ajuste, preservando a pose válida.
+Não houve alteração dos padrões 100/200 ms, da interpolação de quaternion ou
+da rotação retida durante previsão; ABIs e protocolo continuam iguais.
+
+O schema 4 acrescenta `--trajectory circular`, com orientação variável e
+sinais alternados de quaternions equivalentes no pacote. Mede erro angular
+médio/máximo em milésimos de grau e desvio da norma em partes por milhão,
+além dos erros de posição. A comparação angular usa o arco curto contra a
+trajetória atual e inclui o atraso intencional. Não comprova eixos do jogo,
+pitch/roll, FPS ou qualidade na LAN. Relatórios antigos não são reescritos.
+
+```text
+cargo run -p client_dll --bin network_lab --locked -- --trajectory circular --packets 36000 --timebase server --output target/analysis/curvas-01.json
+```
 
 Os comandos 6/7 usam o payload JSON da Control v1 existente, sem mudar seus
 1536 bytes ou a Engine v3/664. Transfira launcher e DLL da mesma revisão;

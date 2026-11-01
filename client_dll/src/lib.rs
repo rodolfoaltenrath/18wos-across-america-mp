@@ -115,7 +115,7 @@ pub(crate) struct RemoteEntry {
     pub(crate) seen: Instant,
     /// Recent samples for delayed interpolation, newest last.
     #[cfg_attr(not(all(windows, target_arch = "x86")), allow(dead_code))]
-    pub(crate) history: interpolation::History,
+    pub(crate) history: interpolation::ReceiveHistory,
 }
 
 /// C ABI result layout. Coordinates are the most recent relayed samples;
@@ -271,7 +271,7 @@ fn publish_remote(
     if is_new && (remotes.contains_key(&update.player_id) || remotes.len() < 64) {
         let previous = remotes.remove(&update.player_id);
         let mut history = if reset_history {
-            interpolation::History::default()
+            interpolation::ReceiveHistory::default()
         } else {
             previous.map(|entry| entry.history).unwrap_or_default()
         };
@@ -289,11 +289,19 @@ fn publish_remote(
                 interpolation::server_sample_time(arrival, now, received, offset)
             });
         presentation::timed(stamped.is_some());
-        history.push_monotonic(interpolation::Sample {
-            at: stamped.unwrap_or(arrival),
-            position: [update.position.x, update.position.y, update.position.z],
-            rotation: [r.x, r.y, r.z, r.w],
-        });
+        history.receive(
+            interpolation::Sample {
+                at: stamped.unwrap_or(arrival),
+                position: [update.position.x, update.position.y, update.position.z],
+                rotation: [r.x, r.y, r.z, r.w],
+            },
+            arrival,
+            if stamped.is_some() {
+                interpolation::Timebase::Server
+            } else {
+                interpolation::Timebase::Arrival
+            },
+        );
         remotes.insert(
             update.player_id,
             RemoteEntry {

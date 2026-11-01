@@ -1,5 +1,66 @@
 # Roadmap — Across America multiplayer em Rust
 
+## M5: separar trechos de movimento e exercitar curvas — 01/11
+
+Lote offline, sem abrir o jogo ou atualizar instalação/kit. As provas reais
+G12/G13 abaixo são preservadas, com seus limites; não se atribui a esta revisão
+uma nova validação de motor/LAN. M1 continua em 4/7, M5 em 2/7, total 51/104.
+
+**Correções entregues:**
+
+- `ReceiveHistory` é usado pelo recebimento real da DLL e por `network_lab`.
+  Retorno após pelo menos 1 s sem pose aceita reinicia o histórico, em vez de
+  interpolar o intervalo desaparecido ou calcular velocidade entre seus lados.
+  A idade usa chegada monotônica, independente do carimbo futuro do servidor;
+  o limite é compartilhado com a expiração usada no render.
+- A troca da referência efetiva chegada/servidor também reinicia o trecho,
+  incluindo fallback por estimativa ausente/implausível. Pedir server em v1
+  continua chegada, sem reinícios falsos. Ajuste monotônico dentro da mesma
+  referência e reset por geração/conexão continuam preservados.
+- `History::push_monotonic` agora valida antes de aplicar `f64::max`: NaN,
+  infinito negativo e tempo negativo não podem virar o horário anterior válido
+  e substituir uma pose. Dados inválidos também não renovam o último horário
+  de chegada nem mudam a referência de `ReceiveHistory`.
+
+**Bancada ampliada:**
+
+- Seis regressões puras cobrem silêncio, limite exato de 1 s, referências em
+  ambas as direções, carimbo futuro, entradas inválidas, limite de 16 e teleporte.
+- Novo teste da DLL x86 em processo próprio, UDP real sem sondas: duas poses,
+  silêncio de 1,2 s, retorno com uma amostra, pacote antigo recusado e retomada;
+  seleção server em v1 conserva o fallback chegada. Não executa o jogo.
+- `network_lab` schema 4 acrescenta trajetória circular e orientação variável,
+  alternando q/-q no pacote. Usa o decoder e o histórico de produção; mede
+  erro angular médio/máximo em milésimos de grau e norma em ppm. Os dois modos
+  de tempo são exercitados com perda/duplicação/reordenação e blackout.
+  Angular é arco curto contra a trajetória atual, incluindo o atraso do
+  buffer; não é confirmação dos eixos do jogo ou extrapolação de rotação.
+
+Padrões 100/200 ms, nlerp, retenção da rotação durante previsão, ABI v1/v3 e wire
+foram preservados. Não se adiciona velocidade física/modelo por hipótese.
+G2 agrupa a próxima observação de retorno e troca de base, sem repetir G12/G13
+por filtros/counters. Rampa, antecipação do primeiro loading e LAN ampliada
+continuam pendentes.
+
+Três execuções CLI de 36.000 poses por cenário (limpo/condicionado/blackout),
+schema 4/game_tested=false/lan_tested=false: seed 42 com chegada e servidor,
+perda 5%/duplicação 10%/atraso 40 ms/jitter 80 ms; seed 741 também com jitter
+150 ms e erro de offset −100 ms. Todas terminaram com filas vazias/poses finitas
+e retorno do blackout. Erro angular médio condicionado 2,561°/2,286° no seed 42,
+contra 2,284° limpo; atraso intencional incluído. Offset −100 ms deu 4,576°
+condicionado (4,575° limpo). Esses valores caracterizam o caminho artificial;
+não aprovam mudança do padrão arrival ou medem física/latência do jogo.
+Desvio de norma arredondado em ppm foi 0, sem afirmar norma matematicamente
+exata. Logs próprios `target/analysis/motion-circle-*-20261101*.json`.
+Verificação integral passou: **277 testes x86 sob Proton e 345 nativos**,
+releases cliente/servidor/nativo, três escopos Clippy e rustfmt. Log privado
+`target/analysis/verify-fedora-20261101-motion-segments.log`, sem exclusões.
+Conferência final no prefixo da partida: oito arquivos iguais ao backup G13,
+`init.cfg` com SHA `dddbacf5…7774` intacto. Enumeração sem jogo e sem fixtures,
+controladores, probe ou servidor ativos. Logs privados `motion-originals-*`,
+`motion-processes-*` e `motion-builds-*.sha256` de 01/11. Nenhuma instalação
+ou kit atualizado; somente os builds de desenvolvimento foram recompilados.
+
 ## G13 acompanhada: jogador automático e motivos da captura — 31/10
 
 Build `c908255`, um Fedora/Proton, servidor v2 loopback sem eco, perfil Steam e

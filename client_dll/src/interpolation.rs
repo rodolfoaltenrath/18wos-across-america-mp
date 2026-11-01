@@ -21,6 +21,9 @@ pub const MAX_EXTRAPOLATION: f64 = 0.2;
 pub const TELEPORT_SPEED: f32 = 20_000.0;
 /// A receive burst cannot measure velocity faster than the nominal source tick.
 pub const MIN_SAMPLE_INTERVAL: f64 = 1.0 / multiplayer_server::protocol::TICK_HZ as f64;
+/// A remote hidden by receive age starts a new movement segment on return.
+/// This is a presentation timeout, not a measurement of network packet loss.
+pub const STALE_AFTER_MS: u64 = 1000;
 
 /// Clock that stamps each received sample.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -162,6 +165,11 @@ impl History {
     /// Like `push`, but a sample older than the newest (a clock estimate that
     /// moved backwards) is re-stamped to the newest time instead of dropped.
     pub fn push_monotonic(&mut self, mut sample: Sample) {
+        // f64::max would replace NaN with the previous valid time. Reject first,
+        // otherwise an invalid timestamp could replace the newest valid pose.
+        if !sample.valid() {
+            return;
+        }
         if let Some(last) = self.0.back() {
             sample.at = sample.at.max(last.at);
         }
@@ -187,6 +195,55 @@ impl History {
             now - f64::from(config.delay_ms) / 1000.0,
             f64::from(config.extrapolation_ms) / 1000.0,
         )
+    }
+}
+
+/// Receive-side history with explicit timestamp provenance. Server receipt and
+/// local arrival are different timelines even though both are mapped to local
+/// seconds. Never infer velocity between them, or across a stale receive gap.
+/// Connection/pose-generation changes still require the caller to replace this
+/// value; packet sequence validation remains the receiver's responsibility.
+#[derive(Clone, Debug, Default)]
+pub struct ReceiveHistory {
+    history: History,
+    arrival: Option<f64>,
+    timebase: Option<Timebase>,
+}
+impl ReceiveHistory {
+    /// Insert a validated, ordered packet. `arrival` is the monotonic receive
+    /// time, independent of the possibly future server stamp in `sample.at`.
+    /// Return false without changing anything for malformed/backwards arrivals.
+    pub fn receive(&mut self, sample: Sample, arrival: f64, timebase: Timebase) -> bool {
+        if !sample.valid()
+            || !arrival.is_finite()
+            || arrival < 0.0
+            || self.arrival.is_some_and(|last| arrival < last)
+        {
+            return false;
+        }
+        if self.timebase.is_some_and(|last| last != timebase)
+            || self
+                .arrival
+                .is_some_and(|last| arrival - last >= STALE_AFTER_MS as f64 / 1000.0)
+        {
+            self.history = History::default();
+        }
+        self.history.push_monotonic(sample);
+        self.arrival = Some(arrival);
+        self.timebase = Some(timebase);
+        true
+    }
+    pub fn len(&self) -> usize {
+        self.history.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.history.is_empty()
+    }
+    pub fn newest(&self) -> Option<&Sample> {
+        self.history.newest()
+    }
+    pub fn evaluate(&self, now: f64, config: Config) -> Option<Evaluation> {
+        self.history.evaluate(now, config)
     }
 }
 

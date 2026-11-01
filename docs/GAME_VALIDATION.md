@@ -365,6 +365,21 @@ posterior, não somente pelas fixtures.
 
 ### G2 — Suavização e métricas
 
+**Incremento offline de 01/11:** o histórico agora separa retorno após silêncio
+de pelo menos 1 s e troca da referência real de horário (servidor/chegada).
+Fixtures conferem que a primeira pose do retorno começa um novo trecho, sem
+estimar velocidade com dados anteriores ao silêncio; não é nova prova no motor.
+`network_lab` schema 4 inclui curvas com orientação variável, sinais q/-q,
+perda/reordenação e erros angulares. O render mantém nlerp e rotação retida na
+previsão, com os padrões 100/200 ms. G12/G13 e suas limitações permanecem válidos.
+Agrupar os dois itens abaixo com a próxima rodada significativa, sem repetir
+todo o percurso de G12/G13 apenas por estes testes de bancada.
+
+- [ ] Após silêncio de pelo menos 1 s, conferir retorno na pose nova sem
+  percorrer o intervalo antigo; observar textura/curvas e ausência de travamento.
+- [ ] Alternar arrival/server com transmissão ativa e conferir retomada normal;
+  não concluir melhoria de suavidade ou latência somente pela troca funcionar.
+
 - [ ] Medir primeiro os padrões 100 ms de atraso / 200 ms de extrapolação,
   repetindo percurso curto com paradas e curvas. Registrar percepção e FPS.
 - [ ] Repetir com 50/100 e 0/50 usando `presentation --delay-ms N

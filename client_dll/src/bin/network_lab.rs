@@ -3,7 +3,9 @@
 use anyhow::{Result, ensure};
 use clap::{Parser, ValueEnum};
 use client_dll::{
-    interpolation::{Config, History, Mode, Sample, Timebase, server_sample_time},
+    interpolation::{
+        Config, Mode, ReceiveHistory, STALE_AFTER_MS, Sample, Timebase, server_sample_time,
+    },
     network_conditions::{Conditions, Counters, Link},
 };
 use multiplayer_server::protocol::{self, Position, Rotation, ServerUpdate, TICK_HZ, VERSION};
@@ -47,6 +49,7 @@ enum TimebaseArg {
 enum Trajectory {
     Linear,
     StopTurn,
+    Circular,
 }
 
 /// Own piecewise path, with two stops and changes of direction every 8 s.
@@ -68,12 +71,43 @@ fn truth(kind: Trajectory, milliseconds: f64) -> Position {
                 [1200.0 - (t - 7000.0) * 1.2, 1300.0 - (t - 7000.0) * 1.2]
             }
         }
+        Trajectory::Circular => {
+            let angle = milliseconds * 0.0004;
+            [1500.0 * angle.sin(), 100.0 + 1500.0 * (1.0 - angle.cos())]
+        }
     };
     Position {
         x: x as f32,
         y: 0.0,
         z: z as f32,
     }
+}
+
+/// Own synthetic Y-axis turn, unrelated to the game's axis convention. Alternate
+/// quaternion signs on the wire to exercise equivalent q/-q under packet loss.
+fn rotation(kind: Trajectory, milliseconds: f64) -> [f32; 4] {
+    let half = if matches!(kind, Trajectory::Circular) {
+        milliseconds * 0.0002
+    } else {
+        0.0
+    };
+    [0.0, half.sin() as f32, 0.0, half.cos() as f32]
+}
+fn angular_error(a: [f32; 4], b: [f32; 4]) -> u64 {
+    let norm = |q: [f32; 4]| {
+        q.into_iter()
+            .map(|v| f64::from(v).powi(2))
+            .sum::<f64>()
+            .sqrt()
+    };
+    let dot = a
+        .into_iter()
+        .zip(b)
+        .map(|(a, b)| f64::from(a) * f64::from(b))
+        .sum::<f64>();
+    (2.0 * (dot.abs() / (norm(a) * norm(b))).clamp(0.0, 1.0).acos() * 180_000.0
+        / std::f64::consts::PI)
+        .round() as u64
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize)]
@@ -102,6 +136,11 @@ struct Scenario {
     /// Mean |error(frame) - error(previous frame)|: wobble independent of a
     /// constant presentation lag. Synthetic path only.
     mean_error_step_milli_cm: u64,
+    /// Shortest orientation difference against the current synthetic trajectory.
+    /// Includes intentional presentation delay; it is not an engine-axis proof.
+    mean_rotation_error_millideg: u64,
+    max_rotation_error_millideg: u64,
+    max_rotation_norm_error_ppm: u64,
 }
 
 #[derive(Default, Debug, PartialEq, Eq, Serialize)]
@@ -161,6 +200,9 @@ fn simulate(name: &'static str, parameters: &Parameters, blackout: bool) -> Resu
         mean_error_milli_cm: 0,
         max_error_milli_cm: 0,
         mean_error_step_milli_cm: 0,
+        mean_rotation_error_millideg: 0,
+        max_rotation_error_millideg: 0,
+        max_rotation_norm_error_ppm: 0,
     };
     let config = Config {
         delay_ms: parameters.interpolation_ms,
@@ -172,8 +214,9 @@ fn simulate(name: &'static str, parameters: &Parameters, blackout: bool) -> Resu
     };
     config.validate().map_err(anyhow::Error::msg)?;
     let mut total_error = 0u64;
+    let mut total_rotation_error = 0u64;
     let (mut previous_error, mut total_step, mut steps) = (None::<u64>, 0u64, 0u64);
-    let mut history = History::default();
+    let mut history = ReceiveHistory::default();
     let mut seen = None;
     let mut sequence = 0;
     for now in 0..=end {
@@ -181,6 +224,17 @@ fn simulate(name: &'static str, parameters: &Parameters, blackout: bool) -> Resu
             if blackout && (outage_start..outage_end).contains(&now) {
                 report.blackout_loss += 1;
             } else {
+                let q = rotation(
+                    parameters.trajectory,
+                    f64::from(sequence) * 1000.0 / f64::from(TICK_HZ),
+                );
+                let sign = if matches!(parameters.trajectory, Trajectory::Circular)
+                    && (sequence / 30) % 2 == 1
+                {
+                    -1.0
+                } else {
+                    1.0
+                };
                 let bytes = protocol::encode(&ServerUpdate {
                     version: VERSION,
                     player_id: 1,
@@ -190,10 +244,10 @@ fn simulate(name: &'static str, parameters: &Parameters, blackout: bool) -> Resu
                         f64::from(sequence) * 1000.0 / f64::from(TICK_HZ),
                     ),
                     rotation: Some(Rotation {
-                        x: 0.0,
-                        y: 0.0,
-                        z: 0.0,
-                        w: 1.0,
+                        x: q[0] * sign,
+                        y: q[1] * sign,
+                        z: q[2] * sign,
+                        w: q[3] * sign,
                     }),
                 })
                 .map_err(anyhow::Error::msg)?;
@@ -216,21 +270,32 @@ fn simulate(name: &'static str, parameters: &Parameters, blackout: bool) -> Resu
             // Production stamping: the lab server sends at generation time on the
             // same virtual clock, so the true offset is zero plus the configured error.
             let arrival = now as f64 / 1000.0;
-            let at = match config.timebase {
-                Timebase::Arrival => arrival,
+            let stamped = match config.timebase {
+                Timebase::Arrival => None,
                 Timebase::Server => server_sample_time(
                     arrival,
                     now,
                     update.sequence * 1000 / u64::from(TICK_HZ),
                     i64::from(parameters.offset_error_ms),
-                )
-                .unwrap_or(arrival),
+                ),
             };
-            history.push_monotonic(Sample {
-                at,
-                position: [update.position.x, update.position.y, update.position.z],
-                rotation: [0.0, 0.0, 0.0, 1.0],
-            });
+            let q = update.rotation.expect("own packets include rotation");
+            ensure!(
+                history.receive(
+                    Sample {
+                        at: stamped.unwrap_or(arrival),
+                        position: [update.position.x, update.position.y, update.position.z],
+                        rotation: [q.x, q.y, q.z, q.w],
+                    },
+                    arrival,
+                    if stamped.is_some() {
+                        Timebase::Server
+                    } else {
+                        Timebase::Arrival
+                    }
+                ),
+                "valid packet refused by receive history"
+            );
             seen = Some(now);
             report.last_sequence = Some(update.sequence);
             report.accepted += 1;
@@ -246,7 +311,7 @@ fn simulate(name: &'static str, parameters: &Parameters, blackout: bool) -> Resu
         }
         if let Some(age) = seen.map(|seen| now - seen) {
             report.max_sample_age_ms = report.max_sample_age_ms.max(age);
-            if age >= 1000 {
+            if age >= STALE_AFTER_MS {
                 report.stale_hidden_frames += 1;
                 continue;
             }
@@ -258,6 +323,19 @@ fn simulate(name: &'static str, parameters: &Parameters, blackout: bool) -> Resu
                     .all(f32::is_finite);
                 report.modes.add(pose.mode);
                 report.max_prediction_ms = report.max_prediction_ms.max(pose.prediction_ms);
+                let angle =
+                    angular_error(pose.rotation, rotation(parameters.trajectory, now as f64));
+                total_rotation_error += angle;
+                report.max_rotation_error_millideg = report.max_rotation_error_millideg.max(angle);
+                let norm = pose
+                    .rotation
+                    .into_iter()
+                    .map(|v| f64::from(v).powi(2))
+                    .sum::<f64>()
+                    .sqrt();
+                report.max_rotation_norm_error_ppm = report
+                    .max_rotation_norm_error_ppm
+                    .max(((norm - 1.0).abs() * 1_000_000.0).round() as u64);
                 let actual = truth(parameters.trajectory, now as f64);
                 let error = (pose
                     .position
@@ -281,6 +359,9 @@ fn simulate(name: &'static str, parameters: &Parameters, blackout: bool) -> Resu
     }
     report.network = link.counters();
     report.mean_error_milli_cm = total_error.checked_div(report.rendered_frames).unwrap_or(0);
+    report.mean_rotation_error_millideg = total_rotation_error
+        .checked_div(report.rendered_frames)
+        .unwrap_or(0);
     report.mean_error_step_milli_cm = total_step.checked_div(steps).unwrap_or(0);
     ensure!(
         report.modes.total() == report.rendered_frames,
@@ -327,7 +408,7 @@ fn report(parameters: &Parameters) -> Result<Report<'_>> {
     clean.conditions.delay_ms = 0;
     clean.conditions.jitter_ms = 0;
     Ok(Report {
-        schema: 3,
+        schema: 4,
         virtual_clock: true,
         game_tested: false,
         lan_tested: false,
@@ -354,6 +435,43 @@ mod tests {
     use super::*;
     fn parameters() -> Parameters {
         Parameters::try_parse_from(["network_lab", "--packets", "600"]).unwrap()
+    }
+    #[test]
+    fn angular_measurement_uses_short_arc_and_ignores_quaternion_sign() {
+        let q = rotation(Trajectory::Circular, 1234.0);
+        assert_eq!(angular_error(q, q.map(|v| -v)), 0);
+        assert_eq!(
+            angular_error([0.0, 0.0, 0.0, 1.0], [0.0, 1.0, 0.0, 0.0]),
+            180_000
+        );
+        // 0.4 rad/s for one second, independent of packet sign or norm noise.
+        assert_eq!(
+            angular_error(
+                rotation(Trajectory::Circular, 0.0),
+                rotation(Trajectory::Circular, 1000.0)
+            ),
+            22_918
+        );
+    }
+    #[test]
+    fn circular_rotation_survives_sign_changes_loss_and_stale_return_without_long_spins() {
+        let mut p = parameters();
+        p.trajectory = Trajectory::Circular;
+        for timebase in [TimebaseArg::Arrival, TimebaseArg::Server] {
+            p.timebase = timebase;
+            let r = report(&p).unwrap();
+            for scenario in [&r.clean, &r.impaired, &r.blackout] {
+                assert!(scenario.finite_poses);
+                assert!(scenario.max_rotation_norm_error_ppm <= 2);
+                assert!(
+                    scenario.max_rotation_error_millideg < 30_000,
+                    "{scenario:?}"
+                );
+                assert!(scenario.mean_rotation_error_millideg > 0);
+                assert!(scenario.max_prediction_ms <= p.extrapolation_ms);
+            }
+            assert!(r.blackout.stale_hidden_frames > 0 && r.blackout.resumed_after_blackout);
+        }
     }
     #[test]
     fn repeatable_loss_jitter_duplication_and_reordering_use_real_codec_and_interpolation() {

@@ -77,7 +77,8 @@ static CREATION: std::sync::Mutex<Option<EngineControl>> = std::sync::Mutex::new
 /// 0 = local player plus offset; otherwise the relayed player id.
 static TARGET: AtomicU32 = AtomicU32::new(0);
 /// Older relayed samples are not drawn, even after limited extrapolation.
-const REMOTE_FRESH: std::time::Duration = std::time::Duration::from_secs(1);
+const REMOTE_FRESH: std::time::Duration =
+    std::time::Duration::from_millis(crate::interpolation::STALE_AFTER_MS);
 fn word(at: u32) -> Result<u32, ()> {
     let mut b = [0; 4];
     read(at, &mut b)?;

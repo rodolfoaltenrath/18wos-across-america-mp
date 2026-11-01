@@ -1,5 +1,25 @@
 # Orientações para continuar o projeto
 
+Lote M5 offline01/11: ReceiveHistory em DLL/lab separa silêncio>=1s pela
+chegada monotônica e troca da referência efetiva arrival/server (inclui
+fallback); geração/conexão seguem reset externo. v1 com pedido server segue
+arrival sem reset falso. History valida antes de max, impedindo reparar NaN/
+tempo negativo em amostra válida. Limite1s compartilhado com render; defaults
+100/200, nlerp/rotação retida na previsão/ABIs/wire preservados. Não é tick
+atômico, velocidade física ou detecção universal de cena. Seis regressões e
+DLL x86 própria/UDP com1,2s silêncio/retorno/rejeição antigo passaram.
+network_lab schema4 adiciona circular/q ou -q/erro angular/norma; demais
+trajetórias/CLIs preservadas, game_tested/lan_testedfalse. TrêsCLI36000poses
+por cenário passaram finitas/fila0/retorno; normas arredondadas ppm0 não são
+norma exata. Erro inclui atraso; não aprovar server por isso. Verify integral
+277x86Proton/345nativos/releases/Clippy/fmt em
+target/analysis/verify-fedora-20261101-motion-segments.log. G2 agrupa prova
+do retorno/troca de base; não repetir G12/G13 por filtros/counters. M1 4/7,
+M5 2/7,total51/104 preservados; sem jogo/instalação/novo kit neste lote.
+Conferência pós-lote:8hashes iguais ao backupG13 no prefixo da partida;
+init.cfg dddbacf5…7774 intacto. Enumeração sem jogo/fixtures/controladores/
+probe/servidor. Logs motion-originals/processes/builds-*20261101* privados.
+
 G13real31/10 acompanhada, buildc908255, umFedora/Proton v2/loopback SEMeco,
 game-pose/offset0 no jogo, probe offset400. Humano confirmou ciclo cinco fases
 e percurso conforme pedido; rampa não explícita, pitch/roll pendentes. Probe170s
