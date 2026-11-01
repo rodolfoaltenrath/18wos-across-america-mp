@@ -2041,12 +2041,15 @@ mp_launcher ... session-start ... --timebase server
 ```
 
 Sem estimativa (antes do primeiro pong), em v1 ou com idade implausível (fora
-de −250..1000 ms), a amostra usa a chegada. Um carimbo que recuaria por
-melhora do offset é igualado ao mais recente (`push_monotonic`), sem descartar
-a pose. O tremor da subida (remetente→servidor) continua. `presentation` conta
+de −250..1000 ms), a amostra usa a chegada. Com carimbos válidos do servidor,
+uma correção do offset desloca os horários de todo o histórico para a mesma
+referência, preservando os intervalos originais de `received_ms`. Assim, o
+reajuste não comprime/estica esses intervalos ao estimar o movimento. Isso não
+garante uma correção visualmente imperceptível: a posição consultada no buffer
+pode mudar. O tremor da subida (remetente→servidor) continua. `presentation` conta
 `server_timed`/`arrival_timed`. JSON antigo sem o campo seleciona `arrival`.
 
-`network_lab` (schema 4; base de tempo introduzida no schema 3) aceita
+`network_lab` (schema 5; base de tempo introduzida no schema 3) aceita
 `--timebase` e `--offset-error-ms` (−200..200,
 erro simulado da estimativa) e mede `mean_error_step_milli_cm`, a variação
 do erro entre quadros (tremor), independente do atraso constante. Lote de
@@ -2077,9 +2080,13 @@ ocultá-lo. Assim, a primeira pose do retorno não usa a posição anterior ao
 silêncio para interpolar ou estimar velocidade. A troca entre carimbos reais
 de chegada/servidor também inicia outro trecho, inclusive ao perder/obter uma
 estimativa utilizável. Selecionar `server` em v1 continua usando chegada e não
-reinicia a cada pacote. Melhorias do offset dentro da mesma referência mantêm
-o ajuste monotônico existente. Isso não sincroniza a física nem detecta toda
-mudança de cena do outro computador; a geração da conexão segue independente.
+reinicia a cada pacote. Na referência servidor, o reajuste uniforme descrito
+acima usa o intervalo bruto entre carimbos. Recuo do relógio do servidor,
+troca da disponibilidade desses metadados ou um deslocamento que levaria
+amostras antes da origem local também iniciam outro trecho. Arredondamento
+numérico pequeno não reinicia o histórico. Chamadores sem carimbos brutos
+mantêm o ajuste monotônico genérico. Isso não sincroniza a física nem detecta
+toda mudança de cena do outro computador; a geração da conexão segue independente.
 Horários inválidos são recusados antes do ajuste, preservando a pose válida.
 Não houve alteração dos padrões 100/200 ms, da interpolação de quaternion ou
 da rotação retida durante previsão; ABIs e protocolo continuam iguais.
@@ -2093,6 +2100,29 @@ pitch/roll, FPS ou qualidade na LAN. Relatórios antigos não são reescritos.
 
 ```text
 cargo run -p client_dll --bin network_lab --locked -- --trajectory circular --packets 36000 --timebase server --output target/analysis/curvas-01.json
+```
+
+O schema 5 acrescenta `--offset-step-ms` (−200..200, padrão 0) e
+`--offset-step-at-ms` (padrão 5000, mínimo 1). O primeiro é somado ao erro
+inicial a partir desse instante virtual; uma soma implausível pode acionar o
+fallback existente para chegada. `clock_step_observed` indica que uma pose
+realmente usou o erro alterado com carimbo utilizável. Com passo não zero e
+base servidor, `clock_step_reference` repete o cenário degradado com a regra
+anterior de ajuste individual dos carimbos, só como referência do relatório;
+não há um modo legado novo na DLL.
+
+Na trajetória linear, `prediction_probe50_max_error_milli_cm` mede o maior
+erro de uma previsão auxiliar de 50 ms, com atraso zero, contra os 30 cm
+esperados nessa linha artificial de 600 cm/s. Independe dos orçamentos de
+render escolhidos; `prediction_probe50_samples` informa a quantidade de
+consultas. O erro é null sem duas amostras ou nas outras trajetórias. Em
+01/11, três cenários de 36.000 poses por execução com passos ±100 ms deram
+erro máximo de 0,594 cm, contra 22,481 cm (−100) e 60 cm (+100) na referência.
+Não é medição dentro do jogo, latência de ponta a ponta ou precisão física.
+O padrão continua arrival; `game_tested`/`lan_tested` ficam false.
+
+```text
+cargo run -p client_dll --bin network_lab --locked -- --timebase server --packets 36000 --offset-step-ms -100 --output target/analysis/reajuste-01.json
 ```
 
 Os comandos 6/7 usam o payload JSON da Control v1 existente, sem mudar seus

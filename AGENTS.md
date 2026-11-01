@@ -1,5 +1,30 @@
 # Orientações para continuar o projeto
 
+M5 offline01/11 relógio: ReceiveHistory::receive_server usa received_ms bruto
+para reajustar horários retidos uniformemente quando offset muda; preserva
+intervalos antes de inferir movimento. Recuo bruto/metadados ausentes-presentes/
+pré-origem resetam trecho; silêncio1s/timebase/geração/conexão preservados.
+ULP pequeno ignorado: primeira bancada detectou reset indevido no zero,
+algoritmo corrigido sem relaxar teste antigo; regressão startup nova.
+Sem velocidade física/tick atômico/callback/ABI/wire/default novos; arrival
+100/200 mantido. Reajuste pode mudar posição consultada, não invisibilidade
+garantida nem estimativa exata. Seis regressões puras+dois testes lab+uma
+integração DLL x86 própria/UDP: geração/recuo bruto/arrival-server. Não provoca
+passo de melhor RTT no motor. Fixture u64 corrigida após erro de compilação.
+network_lab schema5: --offset-step-ms -200..200 e --offset-step-at-ms>=1;
+referência anterior só no relatório, sem modo legado DLL. Consulta auxiliar
+50ms/linha600cm/s independente de render, erro máximo milli_cm/null fora da
+linha/sem duas poses. CLI36000poses: passos±100 erro0,594cm em clean/impaired/
+blackout contra22,481cm(-100)/60cm(+100) na referência impaired, finitas/fila0/
+retorno. Circular-200/jitter150/seed741 também finita/retorno/fila0/norma ppm0
+arredondada. Não medir física/FPS/LAN/latência por isso, flagsfalse.
+Verify integral301x86Proton/365nativos/releases/3Clippy/fmt passou, sem exclusões,
+log verify-fedora-20261101-server-clock-history.log. Prefixo da partida8iguais
+ao backupG13/init.cfg dddbacf5…7774 intacto; logs server-clock-*20261101*.
+Enumeração final sem jogo/fixtures/controladores/probe/servidor.
+Sem jogo/instalação/kit usuário novo; M1 4/7,M2 9/9,M5 2/7,
+total51/104. Próxima G2 agrupa regressão/perfis/menusM9, sem repetir G12/G13.
+
 Lote M9/M8 offline01/11: mp_lan opção5 persiste player-settings.json separado
 de prefs servidor/carreira: Drawn100/200 default, GamePose optativo e presets
 100/200,50/100,100/0 arrival. Arquivo ausente mantém padrão; inválido não

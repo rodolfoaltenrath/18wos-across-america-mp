@@ -293,19 +293,16 @@ fn publish_remote(
                 interpolation::server_sample_time(arrival, now, received, offset)
             });
         presentation::timed(stamped.is_some());
-        history.receive(
-            interpolation::Sample {
-                at: stamped.unwrap_or(arrival),
-                position: [update.position.x, update.position.y, update.position.z],
-                rotation: [r.x, r.y, r.z, r.w],
-            },
-            arrival,
-            if stamped.is_some() {
-                interpolation::Timebase::Server
-            } else {
-                interpolation::Timebase::Arrival
-            },
-        );
+        let sample = interpolation::Sample {
+            at: stamped.unwrap_or(arrival),
+            position: [update.position.x, update.position.y, update.position.z],
+            rotation: [r.x, r.y, r.z, r.w],
+        };
+        if let Some((_, received, _)) = server_time.filter(|_| stamped.is_some()) {
+            history.receive_server(sample, arrival, received);
+        } else {
+            history.receive(sample, arrival, interpolation::Timebase::Arrival);
+        }
         remotes.insert(
             update.player_id,
             RemoteEntry {

@@ -400,9 +400,15 @@ posterior, não somente pelas fixtures.
 de pelo menos 1 s e troca da referência real de horário (servidor/chegada).
 Fixtures conferem que a primeira pose do retorno começa um novo trecho, sem
 estimar velocidade com dados anteriores ao silêncio; não é nova prova no motor.
-`network_lab` schema 4 inclui curvas com orientação variável, sinais q/-q,
-perda/reordenação e erros angulares. O render mantém nlerp e rotação retida na
-previsão, com os padrões 100/200 ms. G12/G13 e suas limitações permanecem válidos.
+`network_lab` schema 5 conserva as curvas com orientação variável, sinais q/-q,
+perda/reordenação e erros angulares do schema 4, e acrescenta passos no erro
+estimado de horário. A DLL preserva os intervalos brutos do servidor ao
+reajustar o histórico; regressão desses carimbos começa outro trecho. Bancada
+compara o cálculo anterior e exercita a ligação real na DLL x86 própria,
+sem motor. A previsão auxiliar de 50 ms na linha artificial não mede precisão
+no jogo nem garante reajuste visualmente imperceptível. Não alterar o relógio
+do sistema para testar. O render mantém nlerp e rotação retida na previsão,
+com os padrões 100/200 ms. G12/G13 e suas limitações permanecem válidos.
 Agrupar os dois itens abaixo com a próxima rodada significativa, sem repetir
 todo o percurso de G12/G13 apenas por estes testes de bancada.
 

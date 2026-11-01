@@ -1,5 +1,68 @@
 # Roadmap — Across America multiplayer em Rust
 
+## M5 offline: preservar intervalos durante correções de horário — 01/11
+
+O modo experimental `server` convertia cada carimbo separadamente usando a
+estimativa atual de offset. Uma melhora dessa estimativa podia esticar um
+intervalo ou igualar horários que recuassem, alterando a velocidade inferida
+da posição. `ReceiveHistory::receive_server` agora usa os intervalos brutos
+de `received_ms` para deslocar uniformemente o histórico para a referência
+atual antes da interpolação/previsão. Recuo do carimbo, troca da disponibilidade
+desses metadados ou deslocamento antes da origem local começam outro trecho.
+Silêncio de pelo menos 1 s e troca arrival/server mantêm os resets existentes;
+geração/conexão continuam tratadas pelo receptor. Dados inválidos não renovam
+a idade nem alteram a referência. Arredondamento numérico pequeno é ignorado.
+
+Não há velocidade física nova, tick atômico, alteração de protocolo/ABIs,
+callback, configuração do motor ou padrão: arrival e 100/200 ms permanecem.
+O deslocamento do histórico pode mudar a posição consultada; não se promete
+uma correção visualmente imperceptível nem estimativa de relógio exata.
+
+`network_lab` schema 5 acrescenta passos limitados no erro de offset e uma
+referência com a regra anterior, usando os mesmos dados da rede simulada
+degradada. A previsão auxiliar fixa de 50 ms na linha de 600 cm/s mede o erro
+em relação aos 30 cm esperados, separada dos orçamentos de render. Três CLIs
+de 36.000 poses por cenário deram os seguintes máximos nessa consulta:
+
+| Passo simulado | Histórico corrigido (limpo/degradado/blackout) | Regra anterior (degradado) |
+| --- | --- | --- |
+| −100 ms | 0,594 cm nos três | 22,481 cm |
+| +100 ms | 0,594 cm nos três | 60 cm |
+
+Nos dois passos, poses finitas, fila final zero, passo observado e retorno do
+blackout passaram. A terceira CLI, circular/−200 ms/jitter150/seed741, também
+terminou finita, com retorno e fila zero; desvio de norma ppm0 é arredondado,
+não norma matematicamente exata. A consulta auxiliar fica null no círculo.
+São trajetórias virtuais, sem motor, FPS ou latência de ponta a ponta;
+`game_tested` e `lan_tested` permanecem false. Logs privados
+`target/analysis/server-clock-{minus100,plus100,circle}-20261101*.json`.
+
+Seis novas regressões puras cobrem passos positivos/negativos, 2.000 reajustes,
+início em zero, carimbo repetido/regressivo, valores extremos, invalidez e
+troca de referência/silêncio; dois testes do lab cobrem comparação/fallback/
+perda total/argumentos. Uma integração x86 usa a DLL real em processo próprio
+e autoridade UDP própria: gerações, carimbo regressivo e arrival/server
+reiniciam o histórico esperado. Não instala hooks nem abre o jogo, e não
+provoca passos de melhor RTT no motor. Teste suplementar passou em
+`server-clock-dll-targeted-20261101.log`; não substitui o verify integral.
+
+A primeira comparação com a linha limpa detectou um ULP negativo junto à
+origem local que zerava o histórico; corrigido o cálculo sem relaxar o teste
+antigo, acrescentando regressão de início. A compilação x86 inicial encontrou
+um inteiro sem tipo na fixture; corrigido para u64. Tentativas preservadas
+nos logs `server-clock-lab-*` e `server-clock-cross-20261101.log`.
+Verify integral passou: **301 testes x86 sob Proton e 365 nativos**, releases,
+três escopos Clippy e rustfmt, sem exclusões. Log privado
+`target/analysis/verify-fedora-20261101-server-clock-history.log`.
+Conferência no prefixo da partida retornou oito arquivos iguais ao backup G13;
+`init.cfg` SHA `dddbacf5…7774` intacto. Logs `server-clock-originals-*`,
+`server-clock-original-config-*.sha256` e `server-clock-builds-*.sha256` de01/11.
+Enumeração sem jogo/fixtures/controladores/probe/servidor; logs privados
+`server-clock-processes-20261101.log` e `server-clock-native-processes-final-20261101.log`.
+Não há jogo, instalação ou kit do usuário novo/atualizado.
+M1 continua 4/7, M2 9/9, M5 2/7 e total 51/104. G2 agrupa observação futura
+com perfis/menus M9; não repetir LAN básica nem G12/G13 por estes cálculos.
+
 ## Lote offline M9/M8: escolhas do jogador e diagnóstico compartilhável — 01/11
 
 Três mudanças agrupadas, sem abrir o jogo, atualizar instalação ou substituir

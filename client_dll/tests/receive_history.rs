@@ -95,6 +95,117 @@ fn regular_jitter_keeps_bounded_history_and_existing_teleport_guard() {
     assert_eq!(pose.mode, client_dll::interpolation::Mode::Snapped);
 }
 
+#[test]
+fn correcting_clock_mapping_keeps_server_intervals_and_prediction_speed() {
+    let config = Config {
+        delay_ms: 0,
+        ..Config::DEFAULT
+    };
+    for correction in [-0.2, -0.1, 0.1, 0.2] {
+        let mut h = ReceiveHistory::default();
+        h.receive_server(sample(10.0, 0.0), 10.0, 1000);
+        h.receive_server(sample(10.1, 100.0), 10.1, 1100);
+        h.receive_server(sample(10.2 + correction, 200.0), 10.2, 1200);
+        assert_eq!(
+            h.len(),
+            3,
+            "clock correction {correction} must not merge valid intervals"
+        );
+        let result = h.evaluate(10.25 + correction, config).unwrap();
+        assert!(
+            (result.position[0] - 250.0).abs() < 0.01,
+            "{correction}: {result:?}"
+        );
+        assert_eq!(result.prediction_ms, 50);
+        assert_eq!(result.mode, client_dll::interpolation::Mode::Predicted);
+    }
+}
+#[test]
+fn many_clock_corrections_do_not_create_teleports_or_unbounded_history() {
+    let mut h = ReceiveHistory::default();
+    let config = Config {
+        delay_ms: 0,
+        ..Config::DEFAULT
+    };
+    for i in 0..2000 {
+        let correction = [-0.2, 0.1, -0.1, 0.2][i % 4];
+        let arrival = 10.0 + i as f64 * 0.02;
+        let at = arrival + correction;
+        assert!(h.receive_server(sample(at, i as f32 * 20.0), arrival, i as u64 * 20));
+        assert!(h.len() <= HISTORY);
+        if i > 0 {
+            let result = h.evaluate(at + 0.05, config).unwrap();
+            assert!(
+                (result.position[0] - (i as f32 * 20.0 + 50.0)).abs() < 0.02,
+                "{i}: {result:?}"
+            );
+            assert_eq!(result.mode, client_dll::interpolation::Mode::Predicted);
+        }
+    }
+}
+#[test]
+fn missing_provenance_stale_arrival_and_regressing_server_time_start_a_new_segment() {
+    let mut h = ReceiveHistory::default();
+    h.receive_server(sample(10.0, 0.0), 10.0, 1000);
+    h.receive_server(sample(10.1, 100.0), 10.1, 1100);
+    h.receive_server(sample(10.2, 200.0), 10.2, 1099);
+    assert_eq!(h.len(), 1);
+    h.receive(sample(10.3, 300.0), 10.3, Timebase::Server);
+    assert_eq!(
+        h.len(),
+        1,
+        "no interval across callers without server metadata"
+    );
+    h.receive_server(sample(10.4, 400.0), 10.4, 1300);
+    assert_eq!(h.len(), 1);
+    h.receive_server(sample(11.5, 500.0), 11.5, 2400);
+    assert_eq!(h.len(), 1, "receive silence still restarts history");
+}
+#[test]
+fn repeated_server_millisecond_and_extreme_corrections_never_invent_velocity() {
+    let mut h = ReceiveHistory::default();
+    h.receive_server(sample(1.0, 10.0), 1.0, 1000);
+    h.receive_server(sample(1.1, 20.0), 1.1, 1000);
+    assert_eq!(h.len(), 1);
+    assert_eq!(h.evaluate(1.3, Config::DEFAULT).unwrap().position[0], 20.0);
+    // Corrected samples before local epoch cannot remain in the history.
+    h.receive_server(sample(0.01, 30.0), 1.2, 1100);
+    assert_eq!(h.len(), 1);
+    h.receive_server(sample(1.3, 40.0), 1.3, u64::MAX);
+    assert_eq!(h.len(), 1);
+    assert!(
+        h.evaluate(1.4, Config::DEFAULT)
+            .unwrap()
+            .position
+            .into_iter()
+            .all(f32::is_finite)
+    );
+}
+#[test]
+fn invalid_server_sample_does_not_move_mapping_or_renew_receive_age() {
+    let mut h = ReceiveHistory::default();
+    h.receive_server(sample(1.0, 10.0), 1.0, 1000);
+    assert!(!h.receive_server(sample(f64::NAN, 99.0), 1.8, 9999));
+    h.receive_server(sample(2.0, 20.0), 2.0, 1100);
+    assert_eq!(
+        h.len(),
+        1,
+        "invalid packet did not postpone the stale boundary"
+    );
+    h.receive_server(sample(2.1, 30.0), 2.1, 1200);
+    assert_eq!(h.len(), 2);
+}
+#[test]
+fn clean_millisecond_stamps_do_not_erase_startup_history_from_roundoff() {
+    let mut h = ReceiveHistory::default();
+    for i in 0..60u64 {
+        let stamp = i * 1000 / 60;
+        let at = stamp as f64 / 1000.0;
+        h.receive_server(sample(at, i as f32 * 10.0), at, stamp);
+        assert_eq!(h.len(), (i as usize + 1).min(HISTORY));
+    }
+}
+
 #[cfg(all(windows, target_arch = "x86"))]
 mod dll {
     use client_dll::{

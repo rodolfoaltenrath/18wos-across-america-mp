@@ -32,6 +32,11 @@ struct Parameters {
     /// Error of the simulated server-minus-local offset estimate (server timebase).
     #[arg(long, default_value_t = 0, allow_hyphen_values = true, value_parser = clap::value_parser!(i16).range(-200..=200))]
     offset_error_ms: i16,
+    /// Add this error to the clock estimate at offset-step-at-ms (server mode).
+    #[arg(long, default_value_t = 0, allow_hyphen_values = true, value_parser = clap::value_parser!(i16).range(-200..=200))]
+    offset_step_ms: i16,
+    #[arg(long, default_value_t = 5000, value_parser = clap::value_parser!(u32).range(1..))]
+    offset_step_at_ms: u32,
     /// A new report file; its parent directory must already exist.
     #[arg(long)]
     #[serde(skip)]
@@ -141,6 +146,12 @@ struct Scenario {
     mean_rotation_error_millideg: u64,
     max_rotation_error_millideg: u64,
     max_rotation_norm_error_ppm: u64,
+    clock_step_observed: bool,
+    /// Auxiliary forecast of the constant linear path 50 ms after each newest
+    /// sample, with delay 0/extrapolation 50 independent of rendering budgets.
+    /// None for nonlinear paths or before two samples; not game physics error.
+    prediction_probe50_max_error_milli_cm: Option<u64>,
+    prediction_probe50_samples: u64,
 }
 
 #[derive(Default, Debug, PartialEq, Eq, Serialize)]
@@ -169,6 +180,14 @@ impl Modes {
 }
 
 fn simulate(name: &'static str, parameters: &Parameters, blackout: bool) -> Result<Scenario> {
+    simulate_clock(name, parameters, blackout, true)
+}
+fn simulate_clock(
+    name: &'static str,
+    parameters: &Parameters,
+    blackout: bool,
+    align_clock: bool,
+) -> Result<Scenario> {
     let mut link = Link::new(parameters.conditions.clone()).map_err(anyhow::Error::msg)?;
     let duration = u64::from(parameters.packets - 1) * 1000 / u64::from(TICK_HZ);
     // Keep enough poses on both sides of the outage, including the short lab.
@@ -203,6 +222,9 @@ fn simulate(name: &'static str, parameters: &Parameters, blackout: bool) -> Resu
         mean_rotation_error_millideg: 0,
         max_rotation_error_millideg: 0,
         max_rotation_norm_error_ppm: 0,
+        clock_step_observed: false,
+        prediction_probe50_max_error_milli_cm: None,
+        prediction_probe50_samples: 0,
     };
     let config = Config {
         delay_ms: parameters.interpolation_ms,
@@ -270,32 +292,64 @@ fn simulate(name: &'static str, parameters: &Parameters, blackout: bool) -> Resu
             // Production stamping: the lab server sends at generation time on the
             // same virtual clock, so the true offset is zero plus the configured error.
             let arrival = now as f64 / 1000.0;
+            let stepped =
+                parameters.offset_step_ms != 0 && now >= u64::from(parameters.offset_step_at_ms);
+            let offset = i64::from(parameters.offset_error_ms)
+                + if stepped {
+                    i64::from(parameters.offset_step_ms)
+                } else {
+                    0
+                };
+            let received_ms = update.sequence * 1000 / u64::from(TICK_HZ);
             let stamped = match config.timebase {
                 Timebase::Arrival => None,
-                Timebase::Server => server_sample_time(
-                    arrival,
-                    now,
-                    update.sequence * 1000 / u64::from(TICK_HZ),
-                    i64::from(parameters.offset_error_ms),
-                ),
+                Timebase::Server => server_sample_time(arrival, now, received_ms, offset),
             };
             let q = update.rotation.expect("own packets include rotation");
-            ensure!(
+            report.clock_step_observed |= stepped && stamped.is_some();
+            let sample = Sample {
+                at: stamped.unwrap_or(arrival),
+                position: [update.position.x, update.position.y, update.position.z],
+                rotation: [q.x, q.y, q.z, q.w],
+            };
+            let accepted = if stamped.is_some() && align_clock {
+                history.receive_server(sample, arrival, received_ms)
+            } else {
                 history.receive(
-                    Sample {
-                        at: stamped.unwrap_or(arrival),
-                        position: [update.position.x, update.position.y, update.position.z],
-                        rotation: [q.x, q.y, q.z, q.w],
-                    },
+                    sample,
                     arrival,
                     if stamped.is_some() {
                         Timebase::Server
                     } else {
                         Timebase::Arrival
-                    }
-                ),
-                "valid packet refused by receive history"
-            );
+                    },
+                )
+            };
+            ensure!(accepted, "valid packet refused by receive history");
+            if matches!(parameters.trajectory, Trajectory::Linear) && history.len() >= 2 {
+                let newest = history.newest().unwrap();
+                let probe = history
+                    .evaluate(
+                        newest.at + 0.05,
+                        Config {
+                            delay_ms: 0,
+                            extrapolation_ms: 50,
+                            ..config
+                        },
+                    )
+                    .unwrap();
+                let error = ((f64::from(probe.position[0]) - f64::from(newest.position[0]) - 30.0)
+                    .abs()
+                    * 1000.0)
+                    .round() as u64;
+                report.prediction_probe50_max_error_milli_cm = Some(
+                    report
+                        .prediction_probe50_max_error_milli_cm
+                        .unwrap_or(0)
+                        .max(error),
+                );
+                report.prediction_probe50_samples += 1;
+            }
             seen = Some(now);
             report.last_sequence = Some(update.sequence);
             report.accepted += 1;
@@ -400,6 +454,10 @@ struct Report<'a> {
     clean: Scenario,
     impaired: Scenario,
     blackout: Scenario,
+    /// Same synthetic network/step with the previous per-sample clock clamping.
+    /// Reference only, never a selectable mode in the actual DLL.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    clock_step_reference: Option<Scenario>,
 }
 fn report(parameters: &Parameters) -> Result<Report<'_>> {
     let mut clean = parameters.clone();
@@ -408,7 +466,7 @@ fn report(parameters: &Parameters) -> Result<Report<'_>> {
     clean.conditions.delay_ms = 0;
     clean.conditions.jitter_ms = 0;
     Ok(Report {
-        schema: 4,
+        schema: 5,
         virtual_clock: true,
         game_tested: false,
         lan_tested: false,
@@ -417,6 +475,10 @@ fn report(parameters: &Parameters) -> Result<Report<'_>> {
         clean: simulate("clean", &clean, false)?,
         impaired: simulate("impaired", parameters, false)?,
         blackout: simulate("blackout", parameters, true)?,
+        clock_step_reference: (matches!(parameters.timebase, TimebaseArg::Server)
+            && parameters.offset_step_ms != 0)
+            .then(|| simulate_clock("unaligned_clock_reference", parameters, false, false))
+            .transpose()?,
     })
 }
 fn main() -> Result<()> {
@@ -613,5 +675,47 @@ mod timebase_tests {
             }
         }
         assert!(Parameters::try_parse_from(["network_lab", "--offset-error-ms", "201"]).is_err());
+    }
+    #[test]
+    fn clock_steps_do_not_turn_clock_correction_into_linear_speed() {
+        for step in [-100, 100] {
+            let mut p = Parameters::try_parse_from(["network_lab", "--packets", "1200"]).unwrap();
+            p.timebase = TimebaseArg::Server;
+            p.offset_step_ms = step;
+            let r = report(&p).unwrap();
+            let old = r.clock_step_reference.as_ref().unwrap();
+            assert!(old.clock_step_observed);
+            for s in [&r.clean, &r.impaired, &r.blackout] {
+                assert!(s.clock_step_observed && s.finite_poses && s.final_queue == 0);
+                assert!(s.prediction_probe50_samples > 0);
+                // Source millisecond rounding gives up to ~1.25 cm error in
+                // this fixed forecast; a clock step must not add a speed spike.
+                assert!(
+                    s.prediction_probe50_max_error_milli_cm.unwrap() < 1400,
+                    "{s:?}"
+                );
+            }
+            assert!(
+                old.prediction_probe50_max_error_milli_cm.unwrap() > 10_000,
+                "{old:?}"
+            );
+        }
+    }
+    #[test]
+    fn clock_step_fallback_total_loss_and_invalid_arguments_keep_their_guards() {
+        let mut p = Parameters::try_parse_from(["network_lab", "--packets", "600"]).unwrap();
+        p.timebase = TimebaseArg::Server;
+        p.offset_error_ms = 200;
+        p.offset_step_ms = 200; // Future stamp becomes implausible: arrival fallback.
+        p.offset_step_at_ms = 1000;
+        let r = report(&p).unwrap();
+        assert!(r.impaired.finite_poses && r.impaired.final_queue == 0);
+        p.conditions.loss_permille = 1000;
+        let lost = simulate("lost", &p, false).unwrap();
+        assert_eq!(lost.prediction_probe50_max_error_milli_cm, None);
+        assert_eq!(lost.prediction_probe50_samples, 0);
+        for args in [["--offset-step-ms", "201"], ["--offset-step-at-ms", "0"]] {
+            assert!(Parameters::try_parse_from(["network_lab", args[0], args[1]]).is_err());
+        }
     }
 }

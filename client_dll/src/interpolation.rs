@@ -208,12 +208,29 @@ pub struct ReceiveHistory {
     history: History,
     arrival: Option<f64>,
     timebase: Option<Timebase>,
+    server_ms: Option<u64>,
 }
 impl ReceiveHistory {
     /// Insert a validated, ordered packet. `arrival` is the monotonic receive
     /// time, independent of the possibly future server stamp in `sample.at`.
     /// Return false without changing anything for malformed/backwards arrivals.
     pub fn receive(&mut self, sample: Sample, arrival: f64, timebase: Timebase) -> bool {
+        self.receive_stamped(sample, arrival, timebase, None)
+    }
+    /// Keep server intervals intact while its mapping to the local clock is
+    /// corrected. `sample.at` already uses the NEW mapping. Rebase the retained
+    /// samples to that same mapping before deriving interpolation or velocity.
+    /// This is presentation time, never a physics tick or velocity measurement.
+    pub fn receive_server(&mut self, sample: Sample, arrival: f64, received_ms: u64) -> bool {
+        self.receive_stamped(sample, arrival, Timebase::Server, Some(received_ms))
+    }
+    fn receive_stamped(
+        &mut self,
+        sample: Sample,
+        arrival: f64,
+        timebase: Timebase,
+        server_ms: Option<u64>,
+    ) -> bool {
         if !sample.valid()
             || !arrival.is_finite()
             || arrival < 0.0
@@ -222,15 +239,47 @@ impl ReceiveHistory {
             return false;
         }
         if self.timebase.is_some_and(|last| last != timebase)
+            || self.server_ms.is_some() != server_ms.is_some()
             || self
                 .arrival
                 .is_some_and(|last| arrival - last >= STALE_AFTER_MS as f64 / 1000.0)
         {
             self.history = History::default();
+        } else if let (Some(old), Some(new), Some(last)) =
+            (self.server_ms, server_ms, self.history.newest())
+        {
+            if let Some(elapsed) = new.checked_sub(old) {
+                let correction = sample.at - last.at - elapsed as f64 / 1000.0;
+                let roundoff = 8.0 * f64::EPSILON * sample.at.abs().max(last.at.abs()).max(1.0);
+                // At process startup a correction can move old samples before
+                // the local epoch. Restart rather than clamp times/derive a
+                // velocity across an impossible interval. Same for overflow.
+                // Ignore arithmetic roundoff: a negative ULP at an exact zero
+                // must not erase history in an otherwise clean connection.
+                if correction.abs() > roundoff {
+                    if self
+                        .history
+                        .0
+                        .iter()
+                        .all(|s| (s.at + correction).is_finite() && s.at + correction >= 0.0)
+                    {
+                        for s in &mut self.history.0 {
+                            s.at += correction;
+                        }
+                    } else {
+                        self.history = History::default();
+                    }
+                }
+            } else {
+                // A regressing server stamp cannot measure a forward interval.
+                // Sequence/generation ordering remains the session receiver's job.
+                self.history = History::default();
+            }
         }
         self.history.push_monotonic(sample);
         self.arrival = Some(arrival);
         self.timebase = Some(timebase);
+        self.server_ms = server_ms;
         true
     }
     pub fn len(&self) -> usize {
