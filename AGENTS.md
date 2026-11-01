@@ -1,5 +1,15 @@
 # Orientações para continuar o projeto
 
+W3fluxo01/11: appearance_stream Authority sequence/hashcontext, history128/
+page32/seed128KiB. Copy de registros + Arc catálogo imutável, publica atômico
+no estado puro; retrydup/stale sem sequência, falha/overflow sem mudar estado.
+Principal precisa empresa no seed, só altera si; autenticação é externa.
+Cursor anterior histórico recebe snapshot, futuro recusado. Reply valida pins,
+schema/flags/contiguidade/tipos/limites com Receiver existente. SidecarSEED
+CONGELADO, não ledger/clock vivo/save/motor. Flagsfalse, W3/W5parciais51/104.
+6tests nativos passaram (appearance-stream-tests-20261101.log); transporte
+carreira TCP é próximo bloco, sem jogo/kit/instalação/UDP/draw.
+
 W3refs01/11 offline: Pinned mantém handles/hash/tamanho do inventário, lê
 recurso com hash/budget e finish rehash antes de publicar. Não snapshotatômico/
 sandbox de ancestrais ou escritores concorrentes. Diralias a// agora recusado.

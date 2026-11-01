@@ -4,7 +4,7 @@ use crate::{
     vehicle_appearance::{Material, Model, Paint},
     world_content::{Layer, Resource, Role},
 };
-fn fixture() -> (
+pub(crate) fn fixture() -> (
     career::Manifest,
     world_content::Manifest,
     Catalogue,

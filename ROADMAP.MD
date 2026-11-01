@@ -1,5 +1,23 @@
 # Roadmap — Across America multiplayer em Rust
 
+## W3/W5 offline: autoridade do fluxo de aparência — 01/11
+
+`appearance_stream` ordena publicações e mantém128 eventos, páginas de32 e
+snapshot atual até128KiB para o transporte de carreira existente. Contexto fixa
+carreira/conteúdo/catálogo/epoch/geração de autoridade; o chamador autentica
+principal e só pode publicar/remover sua própria aparência. Repetição idêntica
+não avança sequência; revisão antiga não desfaz remoção. Conflito, limite,
+snapshot grande ou sequência esgotada deixam estado anterior intacto. Alterações
+são preparadas sobre cópia dos registros com catálogo imutável compartilhado.
+Cursor fora do histórico recebe snapshot; cursor à frente é recusado.
+
+O sidecar fornecido no seed fica CONGELADO: não segue o ledger/relógio correntes
+do serviço de carreira, não cria empresas novas e não representa save vivo.
+Flags engine/worldfalse; sem aplicação no motor/draw/UDP ou conta autenticada.
+Seis regressões próprias passaram, incluindo páginas/retry/reconexão, contexto,
+conflitos, remoção, limite e overflow; transporte TCP vem no próximo bloco.
+W3/W5 continuam parciais, total51/104 preservado. Logs appearance-stream-*.
+
 ## W3 offline: investigação de referências ligada ao conteúdo — 01/11
 
 `asset_tools vehicle-references` lê definições contra o manifesto de conteúdo

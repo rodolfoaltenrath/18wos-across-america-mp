@@ -223,9 +223,10 @@ pub struct Retired {
 
 /// Caller owns admission/authorization. Pure board never authenticates peers or
 /// applies anything to the engine. A world change requires a NEW validated board.
+#[derive(Clone)]
 pub struct Board {
     epoch: u64,
-    catalogue: Catalogue,
+    catalogue: std::sync::Arc<Catalogue>,
     catalogue_sha256: String,
     vehicles: BTreeMap<String, Description>,
     retired: BTreeMap<String, u64>,
@@ -238,7 +239,7 @@ impl Board {
         let catalogue_sha256 = catalogue.fingerprint(content)?;
         Ok(Self {
             epoch,
-            catalogue,
+            catalogue: std::sync::Arc::new(catalogue),
             catalogue_sha256,
             vehicles: BTreeMap::new(),
             retired: BTreeMap::new(),

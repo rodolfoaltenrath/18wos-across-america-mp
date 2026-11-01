@@ -1,4 +1,5 @@
 //! Shared wire protocol. The DLL uses this library without the `server` feature.
+pub mod appearance_stream;
 pub mod career;
 pub mod career_entry;
 #[cfg(feature = "server")]

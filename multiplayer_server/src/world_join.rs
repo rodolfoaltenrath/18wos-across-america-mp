@@ -243,7 +243,8 @@ impl<'a> Receiver<'a> {
         self.initial = None;
         self.phase = Phase::NeedsSnapshot;
     }
-    fn validate_delta(&self, delta: &Delta) -> Result<(), String> {
+    /// Checks syntax/context only; does not authenticate, queue or apply an event.
+    pub fn validate_delta(&self, delta: &Delta) -> Result<(), String> {
         if delta.schema != 1
             || delta.world_epoch != self.epoch
             || delta.authority_generation != self.authority
@@ -398,4 +399,4 @@ fn hash_checkpoint(s: &career_world::Snapshot) -> Result<String, String> {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
