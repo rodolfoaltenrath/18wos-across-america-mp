@@ -17,9 +17,17 @@ struct Args {
     /// NEW file; raw input paths, messages, poses and unknown fields are omitted.
     #[arg(long)]
     output: Option<PathBuf>,
+    /// NEW shareable folder with re-filtered reports, analysis and SHA-256 manifest.
+    #[arg(long, conflicts_with = "output")]
+    bundle: Option<PathBuf>,
 }
 fn main() -> Result<()> {
     let args = Args::parse();
+    if let Some(output) = args.bundle {
+        let manifest = client_dll::diagnostic_bundle::from_reports(&args.reports, &output)?;
+        println!("{}", serde_json::to_string_pretty(&manifest)?);
+        return Ok(());
+    }
     ensure!(
         args.reports.len() <= session_evidence::MAX_INPUTS,
         "too many inputs"

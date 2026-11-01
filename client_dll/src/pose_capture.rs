@@ -2,7 +2,18 @@
 //! reject observed changes; this is not an atomic physics tick or an ABA proof.
 use multiplayer_server::protocol::{Position, Rotation};
 
-#[derive(Clone, Copy, Debug, Default, clap::ValueEnum)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    clap::ValueEnum,
+)]
+#[serde(rename_all = "kebab-case")]
 pub enum Selection {
     #[default]
     Drawn,

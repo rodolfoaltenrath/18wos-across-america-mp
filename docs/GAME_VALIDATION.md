@@ -308,6 +308,23 @@ G0. Na próxima instalação de kit completo no segundo PC, agrupar:
 - [ ] Com o jogo de teste já aberto, confirmar a mensagem de componentes na
   opção 1 e concluir a rodada LAN prevista, preservando os critérios anteriores.
 
+**Lote agrupado de configurações/exportação, 01/11:** implementar/testar na
+bancada não marca estas observações do assistente como realizadas. Não abrir
+outra sessão só para filtros/hashes: os passos abaixo entram na próxima rodada
+de G2/G5 e no seu encerramento normal.
+
+- [ ] Antes de conectar, usar 5 para salvar captura e movimento; cancelar uma
+  edição, fechar/reabrir o assistente e confirmar as escolhas lembradas.
+- [ ] Iniciar com as escolhas salvas e conferir `runtime`/`presentation` no
+  status e os registros privados da execução. A captura por linha de comando
+  prevalece temporariamente; não altera a escolha salva. Comparar o perfil de
+  movimento no percurso já previsto em G2, sem nova matriz inteira de G12/G13.
+- [ ] Editar uma escolha com sessão ativa e confirmar que só afeta o próximo
+  início. Parada e conferência de arquivos seguem os passos normais.
+- [ ] Depois de parar, usar 6 e conferir a pasta indicada com
+  `mp_doctor --diagnostics PASTA`. Compartilhar somente essa pasta; confirmar
+  que a interface indicou a exportação correta, sem enviar backups/identidade.
+
 ### G0 — Concluir M2 numa rodada local
 
 **Passou em 31/10/2026**, DLL `07ec04e`, Fedora/Proton, save de teste e um PC.

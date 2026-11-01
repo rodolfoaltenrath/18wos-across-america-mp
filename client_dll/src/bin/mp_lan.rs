@@ -23,8 +23,8 @@ struct Args {
     #[arg(long, conflicts_with = "check_saves")]
     career_plan: Option<PathBuf>,
     /// Experimental pose reading independent of draw; current source remains default.
-    #[arg(long, value_enum, default_value = "drawn")]
-    capture: client_dll::pose_capture::Selection,
+    #[arg(long, value_enum)]
+    capture: Option<client_dll::pose_capture::Selection>,
 }
 fn main() -> Result<()> {
     let args = Args::parse();
@@ -94,6 +94,7 @@ mod windows {
     use anyhow::{Context, Result, ensure};
     use client_dll::{
         assistant_paths::{self, Preferences},
+        assistant_settings,
         inspection::process::{Identity, Process, processes},
         lan_kit::{self, Settings},
         session_evidence::{self, Capture},
@@ -138,7 +139,7 @@ mod windows {
             Err(e) => Err(e.into()),
         }
     }
-    fn save_new(path: &Path, session: &Session) -> Result<()> {
+    fn save_new(path: &Path, session: &impl Serialize) -> Result<()> {
         let mut file = File::create_new(path)?;
         file.write_all(&serde_json::to_vec_pretty(session)?)?;
         file.sync_all()?;
@@ -315,17 +316,54 @@ mod windows {
             );
         }
     }
+    fn configure(
+        path: &Path,
+        mut selected: assistant_settings::Settings,
+    ) -> Result<Option<assistant_settings::Settings>> {
+        use client_dll::pose_capture::Selection;
+        println!("Configuracao para a PROXIMA conexao. 0 cancela sem alterar nada.");
+        println!("Captura: 1 Padrao | 2 Independente da camera (experimental)");
+        let default = if selected.capture == Selection::Drawn {
+            "1"
+        } else {
+            "2"
+        };
+        selected.capture = match prompt("Captura", default)?.as_str() {
+            "0" => return Ok(None),
+            "1" => Selection::Drawn,
+            "2" => Selection::GamePose,
+            _ => anyhow::bail!("Escolha 1, 2 ou 0."),
+        };
+        println!("Movimento: 1 Padrao | 2 Menor atraso | 3 Sem previsao de movimento");
+        println!(
+            "Menor atraso pode aumentar tremores; sem previsao pode congelar durante falhas de rede."
+        );
+        let default = match (
+            selected.presentation.delay_ms,
+            selected.presentation.extrapolation_ms,
+        ) {
+            (50, 100) => "2",
+            (100, 0) => "3",
+            _ => "1",
+        };
+        let choice = prompt("Movimento", default)?;
+        if choice == "0" {
+            return Ok(None);
+        }
+        selected.preset(choice.parse()?)?;
+        assistant_settings::save(path, selected)?;
+        println!("Configuracao salva para a proxima conexao. A sessao atual nao foi alterada.");
+        Ok(Some(selected))
+    }
 
     pub fn interactive(
         kit: &Path,
         root: &Path,
         career_plan: Option<&Path>,
-        capture: client_dll::pose_capture::Selection,
+        capture: Option<client_dll::pose_capture::Selection>,
     ) -> Result<()> {
         let _ = HELPER_CLOCK.set(Instant::now());
-        let bytes = fs::read(kit.join(lan_kit::CONFIG)).context("mp-lan.json ausente")?;
-        let defaults: Settings = serde_json::from_slice(&bytes)?;
-        defaults.validate()?;
+        let defaults = lan_kit::settings(kit)?;
         let appdata = PathBuf::from(std::env::var_os("LOCALAPPDATA").context("LOCALAPPDATA")?);
         let digest = format!("{:x}", Sha256::digest(root.to_string_lossy().as_bytes()));
         let data = appdata.join("18wos-mp").join(&digest[..16]);
@@ -333,6 +371,11 @@ mod windows {
         let pending = data.join("pending.json");
         let last = data.join("last.json");
         let preferences_path = data.join("preferences.json");
+        let player_path = data.join("player-settings.json");
+        let mut player = assistant_settings::load(&player_path).unwrap_or_else(|e| {
+            eprintln!("Configuracao do jogador invalida: {e}; usando padrao. Opcoes de parada continuam disponiveis.");
+            assistant_settings::Settings::default()
+        });
         let mut preferences: Option<Preferences> = match fs::read(&preferences_path) {
             Ok(bytes) => match serde_json::from_slice::<Preferences>(&bytes)
                 .and_then(|p| p.validate().map(|_| p).map_err(serde::de::Error::custom))
@@ -352,7 +395,7 @@ mod windows {
             }
         };
         println!(
-            "\nDados locais: {}\n1 Iniciar multiplayer | 2 Consultar conexao | 3 Parar multiplayer (antes de fechar jogo) | 4 Conferir arquivos apos saida | 0 Fechar assistente",
+            "\nDados locais: {}\n1 Iniciar multiplayer | 2 Consultar conexao | 3 Parar multiplayer (antes de fechar jogo) | 4 Conferir arquivos apos saida | 5 Configurar proxima conexao | 6 Preparar diagnostico para compartilhar | 0 Fechar assistente",
             data.display()
         );
         println!(
@@ -370,7 +413,7 @@ mod windows {
                             !pending.exists(),
                             "ja existe uma sessao pendente; use 2/3 ou, se o jogo encerrou, 4"
                         );
-                        client_dll::runtime_check::run(kit).context("Nao foi possivel carregar os componentes do mod; confira o erro abaixo e mantenha o kit completo")?;
+                        let runtime = client_dll::runtime_check::run(kit).context("Nao foi possivel carregar os componentes do mod; confira o erro abaixo e mantenha o kit completo")?;
                         println!(
                             "Componentes do mod carregaram corretamente. Nenhuma conexao iniciada ainda."
                         );
@@ -446,10 +489,11 @@ mod windows {
                                 &data.join("identity.json"),
                             )?
                         };
-                        start_arguments.extend([
-                            OsString::from("--capture"),
-                            OsString::from(capture.argument()),
-                        ]);
+                        let effective = assistant_settings::Settings {
+                            capture: capture.unwrap_or(player.capture),
+                            ..player
+                        };
+                        start_arguments.extend(effective.arguments(None)?);
                         lan_kit::verify(kit)?;
                         let tick = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
                         let run = data.join(format!("run-{tick}"));
@@ -459,6 +503,8 @@ mod windows {
                             backup: run.join("backup"),
                             run,
                         };
+                        save_new(&session.run.join("player-settings.json"), &effective)?;
+                        save_new(&session.run.join("runtime-check.json"), &runtime)?;
                         save_new(&session.run.join("session.json"), &session)?;
                         command(
                             kit,
@@ -561,6 +607,33 @@ mod windows {
                             "Hashes conferidos; isto nao comprova restauracao de hooks antes de um crash."
                         );
                     }
+                    "5" => {
+                        if capture.is_some() {
+                            println!(
+                                "A captura informada ao abrir o programa prevalece nesta abertura; a escolha salva sera usada sem essa opcao."
+                            );
+                        }
+                        if let Some(selected) = configure(&player_path, player)? {
+                            player = selected;
+                        }
+                    }
+                    "6" => {
+                        let session = match load(&pending)? {
+                            Some(s) => s,
+                            None => load(&last)?.context("nenhuma sessao registrada")?,
+                        };
+                        let tick = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+                        let out = data.join(format!("diagnostico-{tick}"));
+                        let manifest = client_dll::diagnostic_bundle::create(&session.run, &out)?;
+                        println!(
+                            "Diagnostico conferido: {} arquivos. Envie SOMENTE esta pasta: {}",
+                            manifest.files.len() + 1,
+                            out.display()
+                        );
+                        println!(
+                            "Backups, saves, identidade e logs brutos ficaram fora da exportacao."
+                        );
+                    }
                     "0" => {
                         ensure!(
                             !pending.exists(),
@@ -568,7 +641,7 @@ mod windows {
                         );
                         return Ok(true);
                     }
-                    _ => println!("Escolha 1, 2, 3, 4 ou 0."),
+                    _ => println!("Escolha 1, 2, 3, 4, 5, 6 ou 0."),
                 }
                 Ok(false)
             })();

@@ -6,6 +6,9 @@ use std::{fs::File, io::Write, path::PathBuf};
 #[derive(Parser)]
 #[command(about = "Read-only static installation report; never loads DLLs or starts the game")]
 struct Args {
+    /// Verify a shareable diagnostic folder offline; never opens game or raw backups.
+    #[arg(long, conflicts_with_all=["recording", "game", "client_dir", "native_dir", "check_server", "proton_prefix", "include_paths"])]
+    diagnostics: Option<PathBuf>,
     /// Verify a completed session-record directory offline; no process/game access.
     #[arg(long, conflicts_with_all=["game", "client_dir", "native_dir", "check_server", "proton_prefix", "include_paths"])]
     recording: Option<PathBuf>,
@@ -32,6 +35,17 @@ struct Args {
 }
 fn main() -> Result<()> {
     let args = Args::parse();
+    if let Some(directory) = args.diagnostics {
+        let manifest = client_dll::diagnostic_bundle::verify(&directory)?;
+        let bytes = serde_json::to_vec_pretty(&manifest)?;
+        if let Some(path) = args.output {
+            let mut file = File::create_new(path)?;
+            file.write_all(&bytes)?;
+            file.sync_all()?;
+        }
+        println!("{}", String::from_utf8(bytes)?);
+        return Ok(());
+    }
     if let Some(directory) = args.recording {
         let summary = client_dll::recording::verify(&directory)?;
         let bytes = serde_json::to_vec_pretty(&summary)?;

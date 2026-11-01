@@ -134,6 +134,49 @@ Os hashes identificam os arquivos observados, sem assinatura de publicação ou
 garantia de atomicidade contra substituição concorrente. Não exige Rust no PC
 do jogador; a validação numa instalação Windows limpa continua pendente.
 
+## Configurações e diagnóstico no assistente
+
+O assistente de console `mp_lan.exe` tem duas opções novas para o próximo kit:
+
+- **5 — Configurar próxima conexão:** lembra a captura padrão ou independente
+  da câmera (experimental) e o perfil de movimento. Padrão usa 100/200 ms;
+  menor atraso usa 50/100; sem previsão usa 100/0. Os três selecionam a base
+  de chegada. Menor atraso não é aprovação de maior suavidade na LAN.
+- **6 — Preparar diagnóstico para compartilhar:** usa os relatórios da sessão
+  pendente ou da última encerrada e cria uma pasta nova, com relatórios filtrados,
+  análise e manifesto SHA-256. Compartilhe somente essa pasta. Backups, saves,
+  identidade, caminhos originais e logs brutos não são copiados.
+
+Configurações do jogador ficam no arquivo privado `player-settings.json`,
+separado das preferências de servidor e dos tickets de carreira. Só entram em
+vigor na próxima conexão; status/parada e sessão ativa não são reconfigurados.
+Ausência do arquivo conserva o padrão `drawn` e 100/200; arquivo inválido não
+bloqueia a limpeza. `--capture game-pose`/`--capture drawn` prevalece somente
+naquela abertura, sem sobrescrever a escolha salva. Cada execução nova registra
+as escolhas efetivas e a checagem do loader na pasta privada da sessão.
+
+O pacote de diagnóstico pode ser conferido offline, também no Fedora:
+
+```text
+mp_doctor --diagnostics PASTA-COMPARTILHAVEL
+session_report STATUS-INICIAL.json STATUS-FINAL.json STOP.json --bundle PASTA-NOVA
+```
+
+O segundo comando recebe a ordem explícita dos relatórios de **um só PC**.
+A opção 6 usa a ordem nominal dos arquivos gerados pelo assistente, sem supor
+relógios sincronizados ou continuidade entre computadores. Todos os relatórios
+são filtrados novamente; o verificador confere membros, hashes e análise
+regenerada. `validation_claimed=false` é preservado. Uma pasta com extras ou
+`.INCOMPLETE` não passa na conferência. Até 256 relatórios de 64 KiB, análise
+de até 8 MiB; saída nova e sem sobrescrita. Não exporta a coleta inteira do
+`session-record`: ela mantém seu verificador próprio (`--recording`).
+
+O kit agora limita a leitura de manifesto (64 KiB), configuração (4 KiB),
+avisos (4 MiB) e cada binário (64 MiB), recusando links/reparse no arquivo
+lido e conferindo tamanho depois da leitura. Schemas 1 e 2 continuam aceitos;
+isso não transforma o manifesto em assinatura nem em sandbox contra troca
+concorrente de caminhos. Kits instalados anteriormente não foram substituídos.
+
 ## Telas do mod: prévia local
 
 As bases de nove telas estão em `mod_ui`: principal, Multiplayer, hospedar,

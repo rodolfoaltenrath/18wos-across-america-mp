@@ -19,11 +19,13 @@ pub mod addresses;
 pub mod api;
 pub mod assistant_career;
 pub mod assistant_paths;
+pub mod assistant_settings;
 pub mod capture_diagnostics;
 pub mod command_registry;
 #[cfg(windows)]
 pub mod controller;
 pub mod deferred_load;
+pub mod diagnostic_bundle;
 pub mod doctor;
 pub mod draw_observation;
 #[cfg(windows)]
@@ -61,6 +63,7 @@ pub mod interpolation;
 pub mod lan_kit;
 pub mod lifecycle;
 pub mod load_gate;
+mod local_files;
 mod memory;
 pub mod network_conditions;
 mod network_io;

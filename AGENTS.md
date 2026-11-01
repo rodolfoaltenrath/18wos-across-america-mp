@@ -1,5 +1,37 @@
 # Orientações para continuar o projeto
 
+Lote M9/M8 offline01/11: mp_lan opção5 persiste player-settings.json separado
+de prefs servidor/carreira: Drawn100/200 default, GamePose optativo e presets
+100/200,50/100,100/0 arrival. Arquivo ausente mantém padrão; inválido não
+bloqueia stop. Tempnovo/sync/rename, não promessa de durabilidade/concorrência.
+--capture explícito é override desta abertura; menu muda só próximo start.
+Run guarda escolhas efetivas + runtime-check. Opção6 exporta SOMENTE relatórios
+start/status/stop de pendente/última sessão, re-sanitize, análise e manifesto;
+sem backups/saves/identidade/tokens/poses/paths de origem/rawlogs. Pasta nova,
+ordem nominal local não relógio global,256x64KiB/analysis8MiB; verifier recusa
+extras/.INCOMPLETE/hash/análise alterada e não declara validação. mp_doctor
+--diagnostics e session_report ... --bundle dão fluxo nativo/offline; ordem
+explícita de UM PC. Não inclui coleta recorder inteira: --recording separado.
+Kit lê manifesto64KiB/config4KiB/notices4MiB/bin64MiB, finalfile link/reparse
+recusado/size conferido; schemas1/2 e revisão legada com espaços preservados.
+Não é sandbox contra troca concorrente de caminhos nem assinatura de release.
+Verify integral292x86Proton/357nativos/releases/3Clippy/fmt passou em
+verify-fedora-20261101-assistant-batch-final.log. Primeiro integral falhou tipo
+save_new Session ao gravar novos metadados; genericSerialize corrigiu sem
+mudar SessionJSON, logs preservados. Fixture de diagnóstico antes omitia
+presentation obrigatório, corrigida sem afrouxar parser. Após verify só texto
+LEIA-ME/contagem incluindo manifesto ajustados, builds x86/nativos/Clippy x86/
+fmt rechecados em assistant-batch-release-text-final-20261101.log.
+G13 baseline/after-cycle/stop exportados/verificados, três hashes raw intactos;
+assistant-batch-g13-share-20261101 tem3relatórios+analysis+manifest, flagsfalse.
+Não repetir percurso G13 por filtros. PreparoM9 agrupa menus5/6 com próximaG2,
+Windows destinatário/G5 continua pendente. Sem jogo/instalação/novo kit usuário;
+M1 4/7,M2 9/9,M5 2/7,total51/104 intactos. Config do motor não foi alterada.
+Final prefixo da partida:8iguais ao backupG13/init.cfg dddbacf5…7774 intacto;
+sem jogo/fixtures/controladores/probe/servidor na enumeração. Logs privados
+assistant-batch-originals/processes/builds-*20261101*. Próximo teste é agrupado
+dos menus5/6/perfis com roteiro M9/G2 existente; não refazer LAN básica ou G13.
+
 M9 loader01/11 offline: mp_lan --check-runtime confere kit/hash e executa
 launcher --pid0 runtime-check em NOVO filho; opção1 checa antes de PID/join.
 Opções2/3/4 e check-only/mp_doctor estáticos preservados. DLL PE32/export/

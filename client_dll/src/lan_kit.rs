@@ -22,6 +22,9 @@ pub const PAYLOAD: [&str; 6] = [
 pub const CONFIG: &str = "mp-lan.json";
 pub const MANIFEST: &str = "mp-kit-manifest.json";
 pub const NOTICES: &str = "THIRD_PARTY.txt";
+const MAX_BINARY: usize = 64 * 1024 * 1024;
+const MAX_NOTICE: usize = 4 * 1024 * 1024;
+const MAX_MANIFEST: usize = 64 * 1024;
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -65,12 +68,7 @@ pub struct Manifest {
 }
 
 fn binary(path: &Path) -> Result<Vec<u8>> {
-    let meta = fs::metadata(path).with_context(|| path.display().to_string())?;
-    ensure!(
-        meta.is_file() && meta.len() <= 64 * 1024 * 1024,
-        "invalid binary size/type"
-    );
-    let bytes = fs::read(path)?;
+    let bytes = crate::local_files::read(path, MAX_BINARY)?;
     ensure!(
         bytes.get(..2) == Some(b"MZ"),
         "missing MZ: {}",
@@ -102,13 +100,17 @@ fn entry(name: &str, bytes: &[u8]) -> Entry {
 }
 
 pub fn verify(root: &Path) -> Result<Manifest> {
-    let manifest: Manifest = serde_json::from_slice(&fs::read(root.join(MANIFEST))?)?;
+    let manifest: Manifest = serde_json::from_slice(&crate::local_files::read(
+        &root.join(MANIFEST),
+        MAX_MANIFEST,
+    )?)?;
     ensure!(
         matches!(manifest.schema, 1 | 2)
             && manifest.target == "i686-pc-windows-gnu"
             && manifest.game_profile == crate::profile::ID,
         "unsupported kit manifest"
     );
+    revision(&manifest.source_revision)?;
     let payload: &[&str] = if manifest.schema == 1 {
         &LEGACY_PAYLOAD
     } else {
@@ -121,6 +123,10 @@ pub fn verify(root: &Path) -> Result<Manifest> {
     for &name in payload {
         let matches: Vec<_> = manifest.files.iter().filter(|e| e.name == name).collect();
         ensure!(matches.len() == 1, "missing/duplicate kit file: {name}");
+        ensure!(
+            matches[0].bytes <= MAX_BINARY as u64 && hash_valid(&matches[0].sha256),
+            "invalid kit size/hash"
+        );
         let actual = entry(name, &binary(&root.join(name))?);
         ensure!(
             matches[0].bytes == actual.bytes && matches[0].sha256 == actual.sha256,
@@ -129,14 +135,44 @@ pub fn verify(root: &Path) -> Result<Manifest> {
     }
     if let Some(expected) = &manifest.notices {
         ensure!(expected.name == NOTICES, "unexpected notice file name");
-        let bytes = fs::read(root.join(NOTICES)).context("third-party notice missing")?;
+        ensure!(
+            expected.bytes <= MAX_NOTICE as u64 && hash_valid(&expected.sha256),
+            "invalid notice size/hash"
+        );
+        let bytes = crate::local_files::read(&root.join(NOTICES), MAX_NOTICE)
+            .context("third-party notice missing/oversized")?;
+        ensure!(std::str::from_utf8(&bytes).is_ok(), "notice must be UTF-8");
         let actual = entry(NOTICES, &bytes);
         ensure!(
             expected.bytes == actual.bytes && expected.sha256 == actual.sha256,
             "third-party notice differs; recopy the entire kit"
         );
     }
+    settings(root)?;
     Ok(manifest)
+}
+fn hash_valid(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+fn revision(value: &str) -> Result<()> {
+    ensure!(
+        !value.is_empty()
+            && value.len() <= 128
+            && value
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b" ._-+".contains(&b)),
+        "invalid source revision"
+    );
+    Ok(())
+}
+pub fn settings(root: &Path) -> Result<Settings> {
+    let result: Settings =
+        serde_json::from_slice(&crate::local_files::read(&root.join(CONFIG), 4096)?)?;
+    result.validate()?;
+    Ok(result)
 }
 
 /// `notices`: optional text produced by `license_audit --notice` (NEW file).
@@ -148,10 +184,7 @@ pub fn create(
     notices: Option<&Path>,
 ) -> Result<Manifest> {
     settings.validate()?;
-    ensure!(
-        !revision.is_empty() && revision.len() <= 128,
-        "missing source revision"
-    );
+    self::revision(revision)?;
     // Validate all inputs BEFORE creating a new output directory. Never overwrite.
     let binaries = PAYLOAD
         .iter()
@@ -159,7 +192,7 @@ pub fn create(
         .collect::<Result<Vec<_>>>()?;
     let notice = notices
         .map(|path| -> Result<Vec<u8>> {
-            let bytes = fs::read(path).context("third-party notice")?;
+            let bytes = crate::local_files::read(path, MAX_NOTICE).context("third-party notice")?;
             ensure!(
                 bytes.len() <= 4 * 1024 * 1024 && std::str::from_utf8(&bytes).is_ok(),
                 "notice must be UTF-8 text up to 4 MiB"
@@ -215,7 +248,13 @@ fn instructions(settings: &Settings) -> String {
    Nao use Alt+F4/menu de saida durante a sessao deste primeiro teste.\r\n\
 7. A opcao 2 salva status; 4 confere os hashes do ultimo backup, inclusive\r\n\
    depois que o jogo fechar. Se o assistente fechar, reabra para recuperar\r\n\
-   a parada pendente. Nao substitua a DLL com o jogo/mod ainda aberto.\r\n\r\n\
+   a parada pendente. Nao substitua a DLL com o jogo/mod ainda aberto.\r\n\
+8. Opcao 5: escolha captura e movimento para a PROXIMA conexao. O padrao\r\n\
+   continua o anterior; mudar as escolhas nao altera uma sessao ativa.\r\n\
+9. Opcao 6: prepare o diagnostico para compartilhar, inclusive apos parar.\r\n\
+   Envie SOMENTE a pasta nova indicada: ela tem relatorios filtrados, analise\r\n\
+   e manifesto. Nao envie a pasta de dados inteira, saves ou backups.\r\n\
+   Confira a pasta com mp_doctor.exe --diagnostics PASTA-INDICADA.\r\n\r\n\
 Dados privados, backups e logs: %LOCALAPPDATA%\\18wos-mp\\<instalacao>\\\r\n\
 Saves padrao: %USERPROFILE%\\Documents\\18 WoS Across America\\saves\r\n\
 Se estiverem no OneDrive/outra pasta, informe o caminho real no assistente.\r\n\
@@ -399,6 +438,59 @@ mod tests {
         fs::write(out.join(MANIFEST), serde_json::to_vec(&manifest).unwrap()).unwrap();
         assert!(verify(&out).is_err());
         manifest.files[0].name = "mp_lan.exe".into();
+        fs::write(out.join(MANIFEST), serde_json::to_vec(&manifest).unwrap()).unwrap();
+        assert!(verify(&out).is_err());
+    }
+    #[test]
+    fn bounded_manifest_settings_and_notice_fail_without_new_output() {
+        let t = tempfile::tempdir().unwrap();
+        fixtures(t.path());
+        let out = t.path().join("kit");
+        create(t.path(), &out, "own revision", &settings(), None).unwrap();
+        let manifest = fs::read(out.join(MANIFEST)).unwrap();
+        fs::write(out.join(MANIFEST), vec![b' '; MAX_MANIFEST + 1]).unwrap();
+        assert!(verify(&out).is_err());
+        fs::write(out.join(MANIFEST), manifest).unwrap();
+        fs::write(out.join(CONFIG), vec![b' '; 4097]).unwrap();
+        assert!(verify(&out).is_err());
+        fs::write(out.join(CONFIG), serde_json::to_vec(&settings()).unwrap()).unwrap();
+        verify(&out).unwrap();
+        let notice = t.path().join("notice.txt");
+        let file = fs::File::create(&notice).unwrap();
+        file.set_len(MAX_NOTICE as u64 + 1).unwrap();
+        drop(file);
+        let refused = t.path().join("refused");
+        assert!(create(t.path(), &refused, "own", &settings(), Some(&notice)).is_err());
+        assert!(!refused.exists());
+    }
+    #[test]
+    fn malformed_revision_sizes_and_mutated_member_names_never_escape_allowlist() {
+        let t = tempfile::tempdir().unwrap();
+        fixtures(t.path());
+        let out = t.path().join("kit");
+        let mut manifest =
+            create(t.path(), &out, "legacy spaces allowed", &settings(), None).unwrap();
+        for invalid in [
+            "../outside.dll",
+            "/outside.dll",
+            "C:\\outside.dll",
+            "CON",
+            "client_dll.dll/..",
+            "mp_launcher.exe:stream",
+            "客户端.dll",
+            "client_dll.dll\0",
+            "client_dll.dll ",
+        ] {
+            manifest.files[0].name = invalid.into();
+            fs::write(out.join(MANIFEST), serde_json::to_vec(&manifest).unwrap()).unwrap();
+            assert!(verify(&out).is_err());
+        }
+        manifest.files[0].name = PAYLOAD[0].into();
+        manifest.files[0].bytes = u64::MAX;
+        fs::write(out.join(MANIFEST), serde_json::to_vec(&manifest).unwrap()).unwrap();
+        assert!(verify(&out).is_err());
+        manifest.files[0].bytes = binary(&out.join(PAYLOAD[0])).unwrap().len() as u64;
+        manifest.source_revision = "own\nprivate text".into();
         fs::write(out.join(MANIFEST), serde_json::to_vec(&manifest).unwrap()).unwrap();
         assert!(verify(&out).is_err());
     }

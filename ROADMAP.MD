@@ -1,5 +1,67 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Lote offline M9/M8: escolhas do jogador e diagnóstico compartilhável — 01/11
+
+Três mudanças agrupadas, sem abrir o jogo, atualizar instalação ou substituir
+kits do usuário. A prova do uso interativo fica no preparo M9 de
+`docs/GAME_VALIDATION.md`, junto da próxima rodada G2/G5. M2 continua 9/9 e as
+provas de G12/G13 são preservadas. Contagens gerais continuam 51/104: estes
+avanços não encerram instalação limpa, apresentação na LAN ou auditoria ampla.
+
+1. **Opção 5 do assistente:** captura padrão/independente da câmera e três
+   perfis de movimento (100/200, 50/100, 100/0 ms; base arrival). Persistência
+   privada em `player-settings.json`, separada de servidor/saves/carreira.
+   Ausência mantém drawn/100/200. Configuração inválida usa padrões sem impedir
+   parada; gravação usa arquivo temporário novo/sincronizado e rename, não uma
+   promessa de durabilidade sob queda de energia ou concorrência de editores.
+   Cancelamento não grava; mudanças só no próximo início. `--capture` explícito
+   prevalece nesta abertura sem substituir a escolha salva. Argumentos tipados
+   preservam os contratos existentes do launcher, sem comandos do motor novos.
+   Cada execução grava também escolhas efetivas e o diagnóstico do loader.
+2. **Opção 6:** exporta relatórios start/status/stop da execução pendente ou
+   última encerrada para pasta NOVA. Filtra cada JSON de novo, inclui análise
+   regenerável e manifesto SHA-256, usa nomes próprios e não copia backups,
+   saves, identidade, tokens, poses, caminhos de origem ou logs brutos. Ordem
+   nominal dos arquivos locais, não relógio global; até 256 relatórios de64KiB,
+   análise8MiB. `mp_doctor --diagnostics` verifica membros/hashes/canonicalidade/
+   análise e recusa extras/`.INCOMPLETE`. `validation_claimed=false` sempre.
+   `session_report ... --bundle PASTA-NOVA` oferece o mesmo exportador com ordem
+   explícita de um único PC, inclusive para logs históricos. Coletas completas
+   do recorder continuam com seu verificador separado, sem mistura implícita.
+3. **Leituras do kit:** manifesto64KiB, configuração4KiB, notices4MiB e binário
+   64MiB antes/durante a leitura; arquivos finais com link/reparse recusados,
+   tamanho conferido após abrir/ler. Tipos/tamanhos/hashes e revisão limitada
+   são validados. Schemas1/2 e revisão legada com espaços seguem testados; não
+   é assinatura nem sandbox contra mudanças concorrentes de ancestrais.
+
+Bancada própria cobre configurações/persistência/override, filtros com
+sentinelas privadas, arquivos enormes/malformados, membros alterados/extras,
+ordem numérica dos registros e CLI real de exportação/verificação. A primeira
+fixture de diagnóstico omitia `presentation` obrigatório; corrigida a fixture,
+138 unitários nativos passaram. Clippy retirou uma expressão unitária redundante.
+A primeira compilação Windows do lote integral encontrou o helper de gravação
+restrito a Session; generalizado para Serialize sem mudar o JSON anterior.
+Essas tentativas ficam preservadas nos logs `assistant-batch-*` e
+`verify-fedora-20261101-assistant-batch.log`; a rodada final integral usa
+`verify-fedora-20261101-assistant-batch-final.log`.
+
+Rodada integral passou: **292 testes x86 sob Proton e 357 nativos**, releases,
+três escopos Clippy e rustfmt. Depois, somente o texto do LEIA-ME e a contagem
+mostrada na exportação (inclui o manifesto) foram ajustados; build x86/nativo,
+Clippy x86 e fmt rechecados no log `assistant-batch-release-text-final-20261101.log`.
+Não foi necessária outra prova no motor para essas mensagens.
+
+Reuso real offline: baseline/after-cycle/stop de G13 exportados por
+`session_report --bundle`, conferidos por `mp_doctor --diagnostics`; os três
+inputs mantiveram os hashes. Pasta privada `assistant-batch-g13-share-20261101`
+contém três relatórios filtrados, análise e manifesto, sem copiar dados da
+sessão inteira. Flags de validação continuam false. Logs e SHA de origem
+`target/analysis/assistant-batch-g13-*`, sem reclassificar os resultados de G13.
+Conferência final: oito arquivos iguais ao backup G13 no prefixo da partida,
+`init.cfg` SHA `dddbacf5…7774` intacto e enumeração sem jogo/fixtures/
+controladores/probe/servidor. Logs `assistant-batch-originals-*`,
+`assistant-batch-processes-*` e `assistant-batch-builds-*.sha256`, de01/11.
+
 ## M9: verificar o carregador antes de conectar — 01/11
 
 Lote offline: `mp_lan --check-runtime` confere o kit por hash e executa o
@@ -5156,7 +5218,8 @@ Não houve alteração/extração aplicada aos arquivos do jogo.
   sem depender de um script de outra linguagem nem sobrescrever configuração
   Cargo existente sem mesclagem explícita.
   Progresso: mp_doctor estático com perfil/hash/arquitetura/exports, paths
-  configuráveis e prefixo/presença de dependências; preparo/runtime pendentes.
+  configuráveis e prefixo/presença de dependências; preparo/runtime gráfico
+  pendentes. Checagem isolada de launcher/DLL entregue em 01/11 no assistente.
 - [ ] Tornar o desenvolvimento fora da pasta Steam o fluxo principal: caminho
   do jogo configurável e saídas de build no repositório de fontes.
 - [x] Inicializar Git e vincular o remoto indicado pelo proprietário, preservando
@@ -5535,6 +5598,8 @@ relevantes podem ser repetidos a partir de instruções e dados próprios.
   mp_lan acrescenta console com PID da instalação, endpoint/sala, backup,
   identidade privada e recuperação de parada; instalador/GUI e prova no
   destinatário ainda pendentes.
+  Em 01/11: opções de captura/movimento persistidas, exportação filtrada em
+  pasta compartilhável e checagem do loader; uso interativo agrupado em M9.
 - [ ] Verificar dependências do ambiente sem exigir o toolchain Rust do jogador.
   Progresso 01/11: o assistente executa launcher/DLL em helper isolado, consulta
   metadados e confirma liberação antes de iniciar a conexão; diagnóstico optativo
