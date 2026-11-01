@@ -52,6 +52,8 @@ fn main() -> anyhow::Result<()> {
         Lifecycle,
         /// Read version, selected source and declared profile without private configuration.
         RuntimeInfo,
+        /// Load/query/release own DLL only inside this NEW launcher, without game access.
+        RuntimeCheck,
         /// Query RTT/arrival timing for the accepted v2 connection (null for v1).
         NetworkTiming,
         /// Read/change local interpolation; never calls a game API.
@@ -307,6 +309,25 @@ fn main() -> anyhow::Result<()> {
         Drawn,
     }
     let args = Args::parse();
+    if matches!(args.command, Task::RuntimeCheck) {
+        ensure!(
+            args.pid == 0 && !args.fixture,
+            "runtime-check requires --pid 0 and no fixture/game target"
+        );
+        let report = match client_dll::runtime_check::local(&args.dll) {
+            Ok(report) => report,
+            Err(error) => {
+                if let Some(failure) =
+                    error.downcast_ref::<client_dll::runtime_check::LoaderFailure>()
+                {
+                    println!("{}", serde_json::to_string(failure)?);
+                }
+                return Err(error);
+            }
+        };
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(());
+    }
     // Complete local career checks before process access, backups, injection or hooks.
     let career_options = if let Task::SessionStart {
         career,
@@ -940,6 +961,7 @@ fn main() -> anyhow::Result<()> {
             return Ok(());
         }
         Task::SessionStart { .. }
+        | Task::RuntimeCheck
         | Task::RuntimeInfo
         | Task::SessionRecord { .. }
         | Task::Lifecycle

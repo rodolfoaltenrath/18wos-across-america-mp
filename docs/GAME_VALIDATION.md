@@ -294,6 +294,20 @@ preparo técnico antes da ação humana; não são instruções para experimenta
 comandos desconhecidos ou editar originais agora. Pode ser necessário usar
 processos novos entre grupos; rodada agrupada não significa uma única injeção.
 
+### Preparo do kit — checagem local de M9
+
+**Preparo de M9, 01/11:** `mp_lan --check-runtime` executa uma nova cópia do
+launcher, carrega/consulta/libera a DLL somente nela e termina sem jogo ou rede.
+O modo estático `--check-only` permanece sem execução do loader. A opção 1 do
+assistente faz o teste antes de consultar o alvo/iniciar uma sessão; opções de
+status/parada/recuperação não dependem dele. Isso não reabre M2 nem pede outra
+G0. Na próxima instalação de kit completo no segundo PC, agrupar:
+
+- [ ] Executar `mp_lan --check-runtime` sem jogo aberto e confirmar o relatório,
+  sem instalar Rust. O teste isolado não aprova DirectX, rede ou renderizador.
+- [ ] Com o jogo de teste já aberto, confirmar a mensagem de componentes na
+  opção 1 e concluir a rodada LAN prevista, preservando os critérios anteriores.
+
 ### G0 — Concluir M2 numa rodada local
 
 **Passou em 31/10/2026**, DLL `07ec04e`, Fedora/Proton, save de teste e um PC.

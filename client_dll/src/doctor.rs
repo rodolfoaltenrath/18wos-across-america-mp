@@ -1,6 +1,6 @@
 //! Static installation checks. Never opens a process, maps a DLL, executes a
 //! dependency, installs a runtime, changes game files or reads saves/identities.
-mod binary;
+pub(crate) mod binary;
 use crate::profile;
 use serde::Serialize;
 use sha2::{Digest, Sha256};

@@ -103,6 +103,37 @@ recuperação. state_hidden93 comprovou ocultação por unavailable; a antecipa�
 do primeiro loading e rampa não ficaram isoladas. Ver G13 para escopo e logs;
 não repetir a rodada inteira para validar os mesmos filtros/contadores.
 
+## Checagem dos componentes antes de conectar
+
+Antes de conectar, `mp_lan` agora executa uma checagem do launcher e da DLL
+em um processo próprio novo. Também pode ser solicitada, sem abrir o jogo:
+
+```text
+mp_lan.exe --check-runtime
+```
+
+O kit é conferido por hash; o launcher x86 carrega a DLL, consulta sua versão
+e confirma que está parada e pode ser liberada. Nenhum worker, conexão, sonda
+ou acesso a saves é iniciado. O helper tem prazo de 10 s, com saída limitada
+a 8 KiB; falha/timeout encerra somente esse processo recém-criado. Falhas
+do carregador preservam etapa e código Windows, sem exportar caminhos.
+`mp_lan --check-only` e `mp_doctor` continuam estáticos e não carregam a DLL.
+Status/parada/recuperação do assistente não dependem de passar no teste novo.
+
+O comando manual equivalente, para diagnóstico da cópia de desenvolvimento, é
+`mp_launcher.exe --pid 0 --dll CAMINHO_DLL runtime-check`. Qualquer PID diferente
+de zero ou `--fixture` é recusado antes de abrir um processo alvo. No Fedora,
+use esse executável Windows pelo `proton_host`; a checagem não inicia Proton
+automaticamente. Launcher e DLL da mesma revisão devem ser transferidos juntos,
+com o jogo fechado; kits anteriores não foram atualizados por este lote.
+
+Este teste confirma carregamento e consultas da ABI Control; a versão Engine
+é apenas declarada. Não testa DirectX/renderizador, firewall, saves, rede ou
+compatibilidade do mundo. `game_tested`/`lan_tested`/`worker_started` ficam false.
+Os hashes identificam os arquivos observados, sem assinatura de publicação ou
+garantia de atomicidade contra substituição concorrente. Não exige Rust no PC
+do jogador; a validação numa instalação Windows limpa continua pendente.
+
 ## Telas do mod: prévia local
 
 As bases de nove telas estão em `mod_ui`: principal, Multiplayer, hospedar,

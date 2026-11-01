@@ -2,7 +2,7 @@
 use std::collections::BTreeSet;
 
 #[derive(Debug)]
-pub(super) struct Binary {
+pub(crate) struct Binary {
     pub format: &'static str,
     pub machine: &'static str,
     pub imports: Vec<String>,
@@ -81,7 +81,7 @@ impl Pe<'_> {
     }
 }
 
-pub(super) fn inspect(bytes: &[u8], want_exports: bool) -> Result<Binary, &'static str> {
+pub(crate) fn inspect(bytes: &[u8], want_exports: bool) -> Result<Binary, &'static str> {
     if bytes.starts_with(b"\x7fELF") {
         if bytes.len() < 64
             || bytes[5] != 1

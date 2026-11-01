@@ -9,6 +9,9 @@ struct Args {
     /// Static checks only: never opens the game, injects or creates private data.
     #[arg(long)]
     check_only: bool,
+    /// Execute own launcher/DLL loader check in a NEW helper; no game/network/save access.
+    #[arg(long, conflicts_with_all=["check_only", "check_saves", "career_plan"])]
+    check_runtime: bool,
     /// Installation root; defaults to the folder containing this executable.
     #[arg(long)]
     game: Option<PathBuf>,
@@ -25,7 +28,7 @@ struct Args {
 }
 fn main() -> Result<()> {
     let args = Args::parse();
-    let interactive = !args.check_only && args.check_saves.is_none();
+    let interactive = !args.check_only && !args.check_runtime && args.check_saves.is_none();
     let result = run(args);
     if interactive && let Err(error) = &result {
         eprintln!("\nFalha: {error:#}\nPressione Enter para fechar.");
@@ -41,6 +44,18 @@ fn run(args: Args) -> Result<()> {
     }
     let kit = std::env::current_exe()?.parent().unwrap().to_path_buf();
     let manifest = client_dll::lan_kit::verify(&kit)?;
+    if args.check_runtime {
+        #[cfg(windows)]
+        {
+            let report = client_dll::runtime_check::run(&kit)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            return Ok(());
+        }
+        #[cfg(not(windows))]
+        anyhow::bail!(
+            "A checagem do carregador exige os binarios Windows x86, via Proton no Fedora"
+        );
+    }
     let root = args.game.unwrap_or_else(|| kit.clone()).canonicalize()?;
     let report = client_dll::doctor::inspect(&client_dll::doctor::Options {
         game: root.clone(),
@@ -58,7 +73,7 @@ fn run(args: Args) -> Result<()> {
         "instalacao incompativel; confira o diagnostico acima"
     );
     println!(
-        "Kit {}: hashes e perfil conferidos. LAN/runtime ainda precisam do teste.",
+        "Kit {}: hashes e perfil conferidos. A partida e a LAN desta revisao ainda precisam do teste.",
         manifest.source_revision
     );
     if args.check_only {
@@ -355,6 +370,10 @@ mod windows {
                             !pending.exists(),
                             "ja existe uma sessao pendente; use 2/3 ou, se o jogo encerrou, 4"
                         );
+                        client_dll::runtime_check::run(kit).context("Nao foi possivel carregar os componentes do mod; confira o erro abaixo e mantenha o kit completo")?;
+                        println!(
+                            "Componentes do mod carregaram corretamente. Nenhuma conexao iniciada ainda."
+                        );
                         let career = career_plan
                             .map(client_dll::assistant_career::Career::load)
                             .transpose()?;
@@ -580,5 +599,18 @@ mod tests {
             ])
             .is_err()
         );
+    }
+    #[test]
+    fn runtime_check_is_explicit_and_does_not_change_static_or_career_checks() {
+        assert!(Args::try_parse_from(["mp_lan", "--check-runtime"]).is_ok());
+        for other in [
+            vec!["--check-only"],
+            vec!["--check-saves", "own-dir"],
+            vec!["--career-plan", "own.json"],
+        ] {
+            let mut args = vec!["mp_lan", "--check-runtime"];
+            args.extend(other);
+            assert!(Args::try_parse_from(args).is_err());
+        }
     }
 }

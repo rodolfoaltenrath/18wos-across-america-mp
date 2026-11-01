@@ -226,7 +226,13 @@ aguarda a rodada agrupada. A janela sem foco pode pausar render/envio.\r\n\
 Comecem na mesma cidade/local proximo; o kit nao sincroniza saves/teleporta.\r\n\r\n\
 Diagnostico manual (terminal na raiz do jogo):\r\n\
   .\\mp_doctor.exe --game . --client-dir .\r\n\
+  .\\mp_lan.exe --check-runtime\r\n\
   .\\memory_tool.exe processes\r\n\
+--check-runtime executa o launcher e carrega/consulta/libera a DLL apenas\r\n\
+num processo proprio novo. Nao abre jogo, conecta rede ou acessa saves.\r\n\
+Nao exige Rust e nao testa DirectX, graficos, firewall ou a partida.\r\n\
+A opcao 1 tambem faz essa checagem antes de iniciar uma sessao nova.\r\n\
+--check-only e mp_doctor continuam somente estaticos, sem carregar a DLL.\r\n\
 O manifesto schema 2 identifica seis binarios por SHA-256, inclusive mp_career.\r\n\
 Ele verifica integridade local, nao e assinatura de publicacao.\r\n\
 Para o modo de carreira por arquivo, leia CARREIRA.txt.\r\n\

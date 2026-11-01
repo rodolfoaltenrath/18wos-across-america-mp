@@ -75,6 +75,7 @@ pub mod recording;
 pub mod release_policy;
 pub mod render_observation;
 pub mod resource_bindings;
+pub mod runtime_check;
 pub mod runtime_info;
 pub mod sampling;
 pub mod session_events;

@@ -1,5 +1,29 @@
 # Orientações para continuar o projeto
 
+M9 loader01/11 offline: mp_lan --check-runtime confere kit/hash e executa
+launcher --pid0 runtime-check em NOVO filho; opção1 checa antes de PID/join.
+Opções2/3/4 e check-only/mp_doctor estáticos preservados. DLL PE32/export/
+hash<=64MiB, LoadLibraryEx busca restrita, queries runtime/lifecycle pristine,
+sem START/STOP/sockets/hooks/motor. Require_unload, uma FreeLibrary e ausência
+do módulo. Erro pós-carga retém até saída do próprio helper. Supervisor10s/
+stdout8KiB mata/aguarda somente filho criado; nunca PID/thread do jogo.
+JSON tipado sem paths/stderr, falha loader tem etapa/código Windows; Control
+consultada/Engine apenas declarada, flags game/LAN/workerfalse. Hash não é
+assinatura nem atomicidade contra troca concorrente; gráficos/rede/save não
+testados. Três integrações x86 novas: par real duas vezes, dependência própria
+adulterada/código do loader/malformado, assistente em kit temporário sem jogo.
+Fixtures timeout/flood próprias passaram. Verify integral284x86Proton/349nativos,
+releases/Clippy/fmt, log verify-fedora-20261101-loader-check.log. Código usa
+toolchain cruzado por dev_env; cargo --target direto não seleciona o sysroot
+preparado neste Fedora. G0 tem preparo M9 separado, sem reabrir M2/G12/G13.
+Windows destinatário/ambiente gráfico limpo pendentes, contagens51/104 intactas.
+Sem jogo aberto, instalação ou kit existente atualizado; kit de teste é só
+fixture temporária própria. Originais conferidos no fechamento do lote abaixo.
+Final no prefixo da partida:8iguais ao backupG13/init.cfg dddbacf5…7774 intacto,
+enumeração sem jogo/fixtures/controladores/probe/servidor; logs privados
+loader-check-originals/processes/builds-*20261101*. Não atualizar kit instalado
+sem jogo fechado; launcher/DLL/assistente deste bloco vão juntos.
+
 Lote M5 offline01/11: ReceiveHistory em DLL/lab separa silêncio>=1s pela
 chegada monotônica e troca da referência efetiva arrival/server (inclui
 fallback); geração/conexão seguem reset externo. v1 com pedido server segue

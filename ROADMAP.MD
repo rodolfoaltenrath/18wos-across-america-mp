@@ -1,5 +1,48 @@
 # Roadmap — Across America multiplayer em Rust
 
+## M9: verificar o carregador antes de conectar — 01/11
+
+Lote offline: `mp_lan --check-runtime` confere o kit por hash e executa o
+launcher x86 em um processo próprio novo. A opção 1 também usa a checagem antes
+de procurar o PID do jogo e iniciar a sessão; status/parada/recuperação não
+dependem dela. Não abre o jogo, servidor ou sockets nem lê saves/identidades.
+`mp_lan --check-only` e `mp_doctor` continuam estritamente estáticos.
+
+O launcher ganhou `runtime-check`, permitido somente com `--pid 0`, sem
+`--fixture`, antes de qualquer acesso a um alvo. Confere arquivo PE32 DLL,
+export, limite de 64 MiB e hash, carrega com busca de dependências limitada à
+pasta da DLL/diretórios padrão do loader, consulta RUNTIME_INFO e LIFECYCLE_STATUS,
+valida fonte None/sem worker e exige a evidência de descarga. Libera uma vez e
+confirma ausência do módulo. Falha posterior à carga mantém a referência até
+a saída desse helper; nenhum START/STOP, hook ou chamada do motor é usado.
+
+O assistente limita a execução a 10 s e stdout a 8 KiB. Tempo excedido/saída
+excessiva mata e aguarda somente o filho recém-criado, nunca um PID de jogo ou
+thread remota. Saída é JSON tipado/limitado, com versão/ABIs/hash, sem paths ou
+stderr bruto; falhas do loader preservam etapa e código Windows. Campos
+`game_tested`, `lan_tested` e `worker_started` ficam false. Control é consultada
+de fato; Engine é apenas declarada. Não testa renderizador/DirectX, firewall,
+rede, mapa, saves ou atomicidade contra substituição concorrente de arquivos.
+Hash local não é assinatura de publicação; não se baixa/instala dependência.
+
+Testes próprios incluem timeout/flood com encerramento do filho, metadados
+recusados, repetição em helpers novos, import KERNEL32 alterado somente numa
+cópia da DLL própria (dependência inexistente), DLL malformada e execução do
+assistente em kit temporário sem executável/assets do jogo. Instruções do kit
+agora explicam a checagem optativa, sem atualizar kits/instalação existentes.
+Verificação integral: **284 testes x86 sob Proton e 349 nativos**, releases
+cliente/servidor/nativo, três escopos Clippy e rustfmt passaram, sem exclusões.
+Log privado `target/analysis/verify-fedora-20261101-loader-check.log`.
+Conferência pós-lote no prefixo da partida: oito arquivos iguais ao backup G13,
+`init.cfg` com SHA `dddbacf5…7774` intacto e enumeração sem jogo/fixtures/
+controladores/probe/servidor. Logs privados `loader-check-originals-*`,
+`loader-check-processes-*` e `loader-check-builds-*.sha256` de 01/11.
+
+Pendência de M9/G0: observar o fluxo no Windows destinatário, incluindo a
+instalação sem árvore de desenvolvimento. Não exige outra prova de M2/G12/G13
+no Fedora. O item amplo de ambiente mantém gráficos/instalação limpa pendentes;
+contagens do roadmap permanecem 51/104, M2 9/9, M1 4/7 e M5 2/7.
+
 ## M5: separar trechos de movimento e exercitar curvas — 01/11
 
 Lote offline, sem abrir o jogo ou atualizar instalação/kit. As provas reais
@@ -5493,6 +5536,9 @@ relevantes podem ser repetidos a partir de instruções e dados próprios.
   identidade privada e recuperação de parada; instalador/GUI e prova no
   destinatário ainda pendentes.
 - [ ] Verificar dependências do ambiente sem exigir o toolchain Rust do jogador.
+  Progresso 01/11: o assistente executa launcher/DLL em helper isolado, consulta
+  metadados e confirma liberação antes de iniciar a conexão; diagnóstico optativo
+  sem jogo/Rust. Renderizador/DirectX e instalação limpa no Windows ainda pendentes.
 - [x] Empacotar somente os binários próprios, configuração de exemplo e avisos
   necessários; disponibilizar fonte e instruções de construção.
   Kit local sob solicitação; não é publicação de release nem teste LAN.
