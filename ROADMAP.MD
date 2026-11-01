@@ -1,5 +1,28 @@
 # Roadmap — Across America multiplayer em Rust
 
+## W1 inicial offline: conteúdo em ordem e conflito de recursos — 01/11
+
+Contrato `world_content` compartilhado e scanner/CLI `asset_tools world-content`
+entregues. Camadas low→high declaradas, schema1, hashes e recursos classificados
+por nome ASCII normalizado/hasheado, resolução/contagem de sobreposições,
+comparação estrita com amostra de16 chaves de divergência. Mesmo conjunto legado
+de mods não garante mesmo vencedor; projeção legada não altera carreira/wire.
+64camadas/100krecursos/4GiBarquivo/64MiBrecurso/8GiBexpansão/32MiBJSON;
+recusa ambiguidades, links/reparse finais e membros especiais. Sem extração
+ou path local na saída. Duas hashes do mesmo handle detectam mudanças comuns,
+não sandbox de ancestrais/troca concorrente. Todo conteúdo é tratado como mundo;
+não há exceção silenciosa para mod supostamente cosmético.
+
+Quatro testes nativos do contrato e quatro do scanner passaram; primeiro
+contrato falhou borrow na fixture duplicada, corrigido com clone local. Clippy
+workspace/all-targets e fmt passaram. CLI real de arquivos próprios aceita
+igualdade e recusa ordem red/blue invertida com um recurso divergente, mantendo
+`engine_verified=false`/`world_synchronized=false`. Logs privados
+`target/analysis/world-content-*20261101*`. Não é prova nova x86/motor/LAN nem
+ordem montada observada. Sem alteração de DLL/protocolo/save/instalação/kit.
+W0/W1 seguem parciais; M0–M10,total51/104 preservados. Próximo: descritor de
+aparência por catálogo validado, sem liberar modelo/shader desconhecidos no jogo.
+
 ## Direção de produto: mundo e save compartilhados — 01/11
 
 O proprietário pediu um roadmap completo para os participantes verem o mesmo

@@ -1,5 +1,19 @@
 # Orientações para continuar o projeto
 
+W1base01/11 offline: world_content schema1+asset_tools world-content/compare.
+Camadas low→high DECLARADAS pelo operador, não ordem observada no motor.
+Inventaria ZIP/SCS sem extração/paths na saída, nomes ASCII normalizados e
+hasheados; recurso vencedor/conflitos, strict compare e sample16 divergências.
+Legado conjunto mods não representa ordem, projeção só comparativa; admissão
+carreira/wire intocados. Limites64camadas/100krecursos/arquivo4GiB/recurso64MiB/
+expansão8GiB/JSON32MiB. Links/reparse finais/membros especiais/aliases recusados,
+hash antes/depois mesmohandle não é sandbox/atomicidade contra escritor malicioso.
+4testes contrato+4scanner nativos/CLI própria red-blue e igual/Clippy workspace/
+fmt passaram. Primeiro borrow inválido só fixture duplicada, clone corrigiu.
+Logs world-content-*20261101*; sem prova nova x86/motor/LAN. engine_verified/
+world_synchronized false, sem instalação/kit/save/DLL/protocolo alterados.
+W0/W1 parciais,51/104 intactos. Continuar catálogo/aparência sem callbacks novos.
+
 Direção01/11: proprietário pediu roadmap COMPLETO de mundo/save compartilhados,
 mesmos mapa/texturas/caminhões/pinturas/reboques/trânsito/ambiente/consequências.
 Ler docs/SHARED_WORLD_ROADMAP.md junto de ROADMAP/README antes de implementar.

@@ -11,6 +11,18 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Hash ZIP/SCS resources in declared LOW-to-HIGH priority; never mount/load.
+    WorldContent {
+        #[arg(long, default_value = "steam-aa-1.10-ccb327c2")]
+        profile: String,
+        /// Repeat base=FILE, map=FILE or mod=FILE in increasing declared priority.
+        #[arg(long = "layer", required = true)]
+        layers: Vec<asset_tools::world_content::Input>,
+        #[arg(long)]
+        output: PathBuf,
+    },
+    /// Compare content inventories offline; mismatches return an unsuccessful exit.
+    WorldContentCompare { host: PathBuf, peer: PathBuf },
     /// Audit own sources; never traverse ignored game assets or print contents.
     AuditSource {
         #[arg(default_value = ".")]
@@ -139,6 +151,28 @@ enum Command {
 
 fn main() -> Result<()> {
     match Cli::parse().command {
+        Command::WorldContent {
+            profile,
+            layers,
+            output,
+        } => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&asset_tools::world_content::create(
+                    &profile, &layers, &output
+                )?)?
+            );
+            Ok(())
+        }
+        Command::WorldContentCompare { host, peer } => {
+            let report = asset_tools::world_content::compare(&host, &peer)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            anyhow::ensure!(
+                report.content_equal,
+                "declared content differs; engine not checked"
+            );
+            Ok(())
+        }
         Command::AuditSource { root, scope } => {
             let report = asset_tools::source_audit::audit(&root, scope)?;
             println!("{}", serde_json::to_string_pretty(&report)?);

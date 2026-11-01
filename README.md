@@ -47,6 +47,30 @@ Ele diferencia a cópia inicial do save da sincronização durante a partida,
 define etapas e critérios de aceite e registra as descobertas ainda necessárias.
 É planejamento: o visual remoto atual continua usando modelo/textura de teste
 fixos; transferir um save ainda não sincroniza o mundo no motor.
+Primeira base offline do plano: `asset_tools world-content` inventaria camadas
+ZIP/SCS na prioridade explicitamente informada (menor → maior), sem extração:
+
+```text
+asset_tools world-content --layer map=MAPA.scs --layer mod=PINTURA-A.scs --layer mod=PINTURA-B.scs --output CONTEUDO-NOVO.json
+asset_tools world-content-compare CONTEUDO-HOST.json CONTEUDO-CONVIDADO.json
+```
+
+Use também `--layer base=ARQUIVO` para bases adicionais; exatamente uma camada
+tem papel map. O papel é declarado pelo operador, não descoberto no motor.
+As camadas preservam ordem, hashes de arquivo e inventário de recursos; a
+comparação relata diferenças e retorna falha quando divergem. Nomes de recursos
+ASCII são normalizados para minúsculas e representados por hash; nomes ambíguos,
+duplicatas e membros especiais são recusados. Saídas não copiam conteúdo nem
+paths locais. Arquivo de saída deve ser novo. O manifesto pode revelar
+fingerprints do conteúdo instalado; não é relatório público anônimo.
+Limites: 64 camadas, 100.000 recursos no conjunto, arquivo4GiB/recurso64MiB,
+expansão8GiB e JSON32MiB. Hash antes/depois detecta mudanças comuns, não ataque
+concorrente; arquivo final link/reparse recusado, ancestrais não são sandbox.
+**A ordem é declarada, não observada no jogo.** Não instala/monta pacotes,
+não muda a admissão da carreira existente nem prova mundo sincronizado;
+`engine_verified`/`world_synchronized` são false. O hash do manifesto é de sua
+serialização canônica tipada, não dos bytes de indentação do JSON de saída.
+
 As pendências práticas estão agrupadas em
 [docs/GAME_VALIDATION.md](docs/GAME_VALIDATION.md), com preparação, ordem,
 critérios e distinção entre teste disponível e integração ainda não entregue.

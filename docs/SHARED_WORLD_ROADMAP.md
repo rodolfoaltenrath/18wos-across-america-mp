@@ -42,7 +42,7 @@ temporária é informada como tal; não encerra o objetivo final.
 | Visual remoto | Modelo e shader de teste fixos; textura e iluminação confirmadas | Modelo/cabine/pintura/reboque próprios; materiais independentes |
 | Movimento | Buffer, interpolação/previsão, limites e bancada de rede | Medição ampla no jogo/LAN, rodas/articulações e física comum |
 | Save inicial | `mp_career` transfere cópia congelada com manifesto, hashes e recibo | Instalação/carregamento confirmado no motor e entrada no mundo atual |
-| Compatibilidade | Comparação declarada de perfil/mapa/conjunto de mods | Conteúdo efetivamente montado, ordem e versão efetivamente carregados |
+| Compatibilidade | Comparação declarada de perfil/mapa/mods; novo inventário offline de camadas/recursos em ordem declarada | Conteúdo/ordem efetivamente montados e versão efetivamente carregada |
 | Carreira | Ledger, relógio, checkpoints e recuperação próprios, fora do motor | Aplicação ao horário, veículos, contratos e economia reais do jogo |
 | Trânsito/ambiente | Cada jogo mantém sua simulação | Autoridade única e aplicação remota comprovadas |
 | Proteção | Backup, limpeza e verificações já entregues; M2 9/9 | Ampliar proteção aos novos adaptadores e ao salvamento conjunto |
@@ -97,7 +97,7 @@ não equivalem a trânsito sincronizado ou nova prova entre computadores.
 ## 4. Ordem e dependências
 
 Os identificadores W abaixo acompanham este objetivo; não são marcos M novos.
-Todos começam pendentes. As peças já existentes da seção 2 serão reutilizadas,
+Os critérios amplos continuam pendentes. As peças já existentes da seção 2 serão reutilizadas,
 sem marcar uma etapa inteira por uma entrega parcial anterior.
 
 | Etapa | Entrega | Depende de | Relação com o roadmap principal |
@@ -444,6 +444,27 @@ o bloqueio. Internet, migração automática de host e suporte universal a mods
 não são requisitos escondidos para a primeira entrega LAN deste plano.
 
 ## 8. Próximo bloco concreto
+
+### Entrega offline W1 inicial — 01/11
+
+`world_content` fornece schema1 de camadas, recursos por hash, resolução
+de conflitos por prioridade declarada e comparação estrita. `asset_tools
+world-content` lê ZIP/SCS locais, sem extrair, grava manifesto novo e omite
+nomes/paths; `world-content-compare` retorna falha em divergência. Mesmo conjunto
+legado de mods pode ter vencedores diferentes se a ordem muda. Projeção para
+`career::Compatibility` serve só à comparação legada, sem transformar a
+admissão existente em prova de ordem/conteúdo carregado.
+
+Quatro testes do contrato e quatro do scanner nativo passaram, incluindo
+reordenação, relatório limitado, aliases, link e entrada comprimida acima do
+limite recusada antes da expansão. CLI real com três arquivos próprios
+detectou o conflito de uma pintura e aceitou conteúdo idêntico. Sem assets do
+jogo, prova x86 nova ou montagem observada nesta entrega. Comandos/limites
+estão no README; o arquivo de fingerprints é privado por padrão.
+W0/W1 não ficam completos: inventário do estado de save, capacidades e
+verificação de montagem no motor continuam pendentes.
+
+### Sequência de implementação
 
 1. **W0 + base W1, offline:** catálogo tipado de estado/capacidades e manifesto
    de conteúdo efetivo planejado, incluindo ordem/conflitos, migração dos

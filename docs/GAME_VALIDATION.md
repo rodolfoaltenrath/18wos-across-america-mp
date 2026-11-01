@@ -7,6 +7,12 @@ disponíveis para testar. Registrar integrações concretas neste roteiro quando
 entregues; não abrir outra LAN para validar apenas a escrita do plano.
 G0/G12/G13 e a primeira LAN abaixo mantêm os resultados/limites históricos.
 
+Preparo W1 offline de01/11: `world-content`/`world-content-compare` conferem
+recursos na ordem DECLARADA em arquivos locais. Não abrir jogo para repetir
+o teste de conflito já automatizado. Quando houver adaptador de montagem,
+agrupar prova de mapa/ordem/recursos efetivamente carregados com W3; comparação
+de disco ainda não comprova isso nem altera o fluxo atual de admissão.
+
 Atualizado em 31/10/2026. O proprietário pediu blocos maiores e validação prática
 agrupada. A primeira rodada LAN entre Windows e Fedora/Proton foi realizada e
 está registrada abaixo. A matriz restante continua sendo roteiro de pendências;
