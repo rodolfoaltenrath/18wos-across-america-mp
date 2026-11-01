@@ -40,6 +40,13 @@ roadmap; o fallback é `--no-load-gate` com `session-prepare-load` antes de carr
 O plano completo, os critérios de conclusão e o procedimento para continuar em
 outro computador estão em [ROADMAP.MD](ROADMAP.MD). As orientações de autonomia
 e continuidade do desenvolvimento estão em [AGENTS.md](AGENTS.md).
+O objetivo de jogar a mesma carreira com mapa/texturas, caminhões/pinturas,
+trânsito, ambiente e progresso comuns tem um plano próprio em
+[Roadmap de mundo e save compartilhados](docs/SHARED_WORLD_ROADMAP.md).
+Ele diferencia a cópia inicial do save da sincronização durante a partida,
+define etapas e critérios de aceite e registra as descobertas ainda necessárias.
+É planejamento: o visual remoto atual continua usando modelo/textura de teste
+fixos; transferir um save ainda não sincroniza o mundo no motor.
 As pendências práticas estão agrupadas em
 [docs/GAME_VALIDATION.md](docs/GAME_VALIDATION.md), com preparação, ordem,
 critérios e distinção entre teste disponível e integração ainda não entregue.

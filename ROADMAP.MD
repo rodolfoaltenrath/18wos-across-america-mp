@@ -1,5 +1,40 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Direção de produto: mundo e save compartilhados — 01/11
+
+O proprietário pediu um roadmap completo para os participantes verem o mesmo
+mundo: mapa, texturas, modelo/pintura de cada caminhão, reboques, trânsito,
+ambiente, consequências e continuidade da carreira. O detalhamento está em
+[docs/SHARED_WORLD_ROADMAP.md](docs/SHARED_WORLD_ROADMAP.md), etapas W0–W12,
+com dependências, autoridade, critérios de conclusão, riscos e validação em lotes.
+Complementa M0–M10: os itens W não somam novos checks ao progresso existente.
+
+Ordem de trabalho: inventário/capacidades e compatibilidade do conteúdo efetivo
+(incluindo ordem de montagem), aparência real por jogador, entrada e snapshot
+da carreira; depois ambiente/trânsito/interações e integração econômica,
+ampliando persistência e recuperação desde a base. O mesmo save é só o ponto
+de partida, não uma garantia de simulações iguais. Cada jogador tem identidade,
+veículo e progresso próprios dentro da carreira; não é clone do host.
+
+Um simulador designado inicialmente no jogo do anfitrião é a direção proposta
+para ambiente/trânsito; seu contrato ainda precisa ser descoberto. Servidor
+Rust permanece separado, sem física original presumida. Trânsito em regiões
+longe do host, colisões e checkpoint consistente são riscos explícitos; modo
+visual/proximidade pode ser entrega intermediária, não fechamento integral.
+Compatibilidade integral vale para versões/saves/mods suportados e verificados,
+com recusa explicada do restante e preservação dos originais.
+
+Este lote entrega documentação e libera somente esse documento próprio nas
+allowlists de Git/auditoria. Não altera protocolo, DLL, motor, save, instalação
+ou kit; não abre jogo nem reexecuta G0/G12/G13. Seis testes nativos existentes
+de auditoria passaram (86 unitários fora desse filtro); Clippy nativo de
+asset_tools com `--all-targets` e rustfmt passaram. A auditoria do worktree inclui o
+documento novo; a liberação é de um caminho exato, sem liberar docs arbitrários
+ou dados do jogo. Não foi rodada outra suíte x86/motor para documentação.
+Logs privados `target/analysis/shared-world-roadmap-{source-tests,clippy,fmt,audit-build}-20261101.log`
+e inventário `shared-world-roadmap-worktree-20261101.json`.
+M1 4/7, M2 9/9, M5 2/7 e total 51/104 preservados.
+
 ## M5 offline: preservar intervalos durante correções de horário — 01/11
 
 O modo experimental `server` convertia cada carimbo separadamente usando a
@@ -5160,6 +5195,12 @@ para validar o analisador nem republicar o teste LAN básico como pendente.
 
 ## 3. Primeira versão jogável e limites
 
+**Expansão confirmada em 01/11:** o MVP visual abaixo permanece uma entrega
+intermediária. O objetivo seguinte é a carreira/mundo compartilhados de
+[docs/SHARED_WORLD_ROADMAP.md](docs/SHARED_WORLD_ROADMAP.md): conteúdo efetivo,
+aparência real, ambiente/trânsito, interações e save conjunto. As limitações
+abaixo descrevem o estado atual e não retiram esses sistemas do objetivo final.
+
 O primeiro marco de produto é **dois jogadores em computadores distintos na LAN,
 na mesma versão/mapa, vendo os caminhões um do outro se moverem com posição e
 orientação coerentes**. Entrada, saída e reconexão devem funcionar sem deixar
@@ -5704,15 +5745,18 @@ M6 amplia gameplay; M7 melhora o pipeline; M8 acompanha cada mudança de risco;
 M9 depende de resultados estáveis. Isso expressa dependências técnicas, não uma
 instrução para criar agentes paralelos.
 
-Prioridade atual (31/10): G12 agrupa as mudanças offline existentes, sobretudo
-captura sem draw, câmeras/foco/carga e coleta. Eco com textura, gate map e a
-primeira LAN entre PCs já passaram; não são descobertas a refazer. Depois,
-ampliar suavidade/reconexão/duração e demais teardowns comprovando cada caminho.
-Identidade, tickets, assistente e ledger próprios já existem; próximo avanço
-econômico exige leitura/adaptador de entrega no motor, antes de expandir empresas.
-PT-BR T1 tem teste geral positivo e T2/fontes estão parciais; revisar G11.
-R$ e hospedagem externa continuam futuras. Não é preciso sincronizar todo o
-trânsito ou concluir a economia para validar o escopo visual LAN.
+Prioridade atual (01/11): seguir W0/W1 e W3 do plano de mundo compartilhado,
+reaproveitando bootstrap/identidade/tickets/ledger e preparando W2/W5/W10.
+Inventário e conferência do conteúdo precedem a aparência real por jogador;
+não ampliar chamadas do motor sem contratos comprovados. G12/G13 já tiveram
+rodadas reais, com seus escopos/limitações preservados; agrupar as próximas
+regressões concretas em G2 e preparo M9, sem repetir LAN básica ou essas rodadas
+inteiras. Demais teardowns e suavidade/reconexão/duração seguem pendentes.
+O avanço econômico exige leitura/adaptador de entrega no motor antes de expandir
+empresas. PT-BR T1 tem teste geral positivo e T2/fontes estão parciais; revisar
+G11. R$ e hospedagem externa continuam futuros. Trânsito/economia completos não
+são necessários para reconhecer o MVP visual já obtido, mas são parte do novo
+objetivo final e não ficam concluídos por esse MVP.
 
 | Risco/questão | Como reduzir e verificar |
 | --- | --- |

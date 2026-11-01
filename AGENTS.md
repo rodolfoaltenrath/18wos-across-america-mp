@@ -1,5 +1,26 @@
 # Orientações para continuar o projeto
 
+Direção01/11: proprietário pediu roadmap COMPLETO de mundo/save compartilhados,
+mesmos mapa/texturas/caminhões/pinturas/reboques/trânsito/ambiente/consequências.
+Ler docs/SHARED_WORLD_ROADMAP.md junto de ROADMAP/README antes de implementar.
+W0–W12 são plano pendente, não novos checks nem implementação;51/104 intactos.
+Próximo W0/W1(inventário/capacidades/ordem efetiva de conteúdo), depois W3
+aparência real por jogador, bases W2/W5/W10 reaproveitando carreira existente.
+Save-base não é mundo vivo; separar estado comum e jogador próprio, confirmar
+carregamento no motor. Catálogo IDs/hash, não paths/ponteiros remotos. Modelo/
+shader atual continuam fixos. Autoridade ambiente/trânsito proposta no jogo
+do host, serviçoRust separado/sem física presumida; host sair suspende/encerra,
+migração automática futura. Regiões longe do host/colliders/IA/checkpoint são
+gates, não omissões para declarar total. Suporte integral só no envelope
+verificado; recusas preservam originais. W não substitui M0–M10 nem reabre M2.
+Validação lotes Aoffline/Bumdesktop/Cmundo/D2PCs/Einterações-retomada; não
+prometer passeio único universal nem repetir G0/G12/G13 por documentação.
+Este lote só docs+allowlist exata do documento; sem DLL/jogo/instalação/kits.
+Seis testes nativos existentes source_audit passaram(86filtrados), Clippy
+asset_tools all-targets/fmt e auditoria worktree passaram; logs privados
+shared-world-roadmap-*20261101*. Sem nova suíte x86/motor. Helper asset_tools
+antigo não conhece o documento; recompilar o helper para auditar/exportar.
+
 M5 offline01/11 relógio: ReceiveHistory::receive_server usa received_ms bruto
 para reajustar horários retidos uniformemente quando offset muda; preserva
 intervalos antes de inferir movimento. Recuo bruto/metadados ausentes-presentes/

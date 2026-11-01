@@ -1,5 +1,12 @@
 # Rodada acumulada de validação na partida
 
+Plano de mundo/save compartilhados de 01/11 em
+[SHARED_WORLD_ROADMAP.md](SHARED_WORLD_ROADMAP.md): W0–W12 têm critérios
+próprios e lotes A–E. São pendências planejadas, não sistemas novos já
+disponíveis para testar. Registrar integrações concretas neste roteiro quando
+entregues; não abrir outra LAN para validar apenas a escrita do plano.
+G0/G12/G13 e a primeira LAN abaixo mantêm os resultados/limites históricos.
+
 Atualizado em 31/10/2026. O proprietário pediu blocos maiores e validação prática
 agrupada. A primeira rodada LAN entre Windows e Fedora/Proton foi realizada e
 está registrada abaixo. A matriz restante continua sendo roteiro de pendências;

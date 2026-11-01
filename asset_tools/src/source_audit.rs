@@ -100,6 +100,7 @@ fn allowed(path: &str) -> Result<()> {
             | "docs/GAME_VALIDATION.md"
             | "docs/UI_DESIGN.md"
             | "docs/LOCALIZATION.md"
+            | "docs/SHARED_WORLD_ROADMAP.md"
             | "translations/pt-BR/local_def.json"
             | "translations/pt-BR/literal_def.json"
             | "asset_tools/Cargo.toml"
