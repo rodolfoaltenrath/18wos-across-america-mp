@@ -281,6 +281,46 @@ pub fn parse(path: &str, bytes: &[u8], include_source: bool) -> Result<Vec<Liter
     }
     Ok(entries)
 }
+/// Narrow quoted-reference candidates for private geometry investigation.
+/// Reuses the bounded lexer, not the translation catalogue or an engine parser.
+/// Values must never be exported as display prose or treated as verified bindings.
+pub fn reference_fields(bytes: &[u8]) -> Result<BTreeMap<String, String>> {
+    let tokens = tokenize(bytes)?;
+    let mut fields = BTreeMap::new();
+    let mut add = |key: String, start: usize, end: usize| -> Result<()> {
+        let value = &bytes[start..end];
+        ensure!(
+            value.len() <= 1024
+                && value.is_ascii()
+                && !value.iter().any(|b| b.is_ascii_control() || *b == b'\\'),
+            "unsupported quoted reference"
+        );
+        let value = std::str::from_utf8(value)?.to_owned();
+        ensure!(
+            fields.len() < 128 && fields.insert(key, value).is_none(),
+            "duplicate/excessive reference fields"
+        );
+        Ok(())
+    };
+    for pair in tokens.windows(2) {
+        if let [Token::Word(key), Token::String(start, end)] = pair
+            && key == "extdefs"
+        {
+            add("extdefs".into(), *start, *end)?;
+        }
+    }
+    for triple in tokens.windows(3) {
+        if let [Token::Word(key), Token::Colon, Token::String(start, end)] = triple {
+            let access = key
+                .strip_prefix("access")
+                .is_some_and(|v| !v.is_empty() && v.bytes().all(|b| b.is_ascii_digit()));
+            if matches!(key.as_str(), "model" | "shader" | "type") || access {
+                add(key.clone(), *start, *end)?;
+            }
+        }
+    }
+    Ok(fields)
+}
 pub fn inventory(mounts: &Mounts, include_source: bool) -> Result<Inventory> {
     let files = mounts.read_matching(scan_path)?;
     let mut result = Inventory {

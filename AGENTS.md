@@ -1,5 +1,32 @@
 # Orientações para continuar o projeto
 
+W3refs01/11 offline: Pinned mantém handles/hash/tamanho do inventário, lê
+recurso com hash/budget e finish rehash antes de publicar. Não snapshotatômico/
+sandbox de ancestrais ou escritores concorrentes. Diralias a// agora recusado.
+asset_tools vehicle-references lê candidatos accessN/extdefs/model/shader/type,
+busca pasta definição/shared é HIPÓTESE não regra do motor. Dedup imports,
+sem herança/offset interpretado/catálogo automático. Relatório novo privado
+somente hashes/campos,128defs64KiB/128campos/64shaders/8MiB; recusas explícitas,
+engine/worldfalse. Mch613local20defs/96refs/1lexingrefused/3unsupported/0missing/
+0ambiguous não prova completude. 4tests+6kmutações/2pinned/focados/Clippy/fmt
+passaram; primeiro panic raizVFS real corrigido folder vazio, fixture mantida,
+log inicial preservado. Sem definição original reescrita/extração/jogo/kit/
+instalação/draw/captura/wire alterados; W3parcial/51de104 intactos. Logs privados
+vehicle-refs-*20261101*. Verify integral deste lote registrado no fechamento.
+Verify integral composição+refs327x86Proton/401nativos/releases/3Clippy/fmt
+passou sem exclusões, log verify-fedora-20261101-vehicle-assembly-references.log.
+Não motor/LAN; novos12tests no conjunto (6assembly+2pinned+4refs).
+CLI refs x86 real no conteúdo local e plano multipart próprio passaram;
+ambos JSONs byteiguais nativo. Não todos assetsWindows/motor/LAN validados.
+Prefixopartida8iguais backupG13/init.cfg dddbacf5…7774 intacto; enumWindows/
+nativa sem jogo/fixtures/controllers/probe/server. Runtimebench exclusivo
+parado após complemento, logs vehicle-refs-originals/processes/config/builds-*
+20261101* privados. Kit/instalação não atualizados, binários somente target.
+Próximo W3 precisa confirmar lookup/herança/slots/composição/ownership efetivos;
+não pedir G12/G13 ou LAN básica para provar os parsers/filtros deste lote.
+Pós-verify: diffcheck detectou espaço final em comentário de fixture raw;
+removido, teste lexer/6kmutações e fmt/diffcheck rechecados, produção intacta.
+
 W3composição01/11: catálogo schema2 peças até32, hierarquia pai explícita sem
 ciclos/rootaliases; placement unresolved/definition_offset(unidade/eixosnão
 comprovados)/attachment/local_pose declaração. Materiais (peça,slot) até256

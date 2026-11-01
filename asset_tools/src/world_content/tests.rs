@@ -157,3 +157,59 @@ fn final_symlink_cannot_be_used_as_archive_or_manifest() {
     assert!(regular(&link).is_err());
     assert!(load(&link).is_err());
 }
+#[test]
+fn pinned_reads_use_winning_content_and_refuse_forged_or_reordered_bindings() {
+    let t = tempfile::tempdir().unwrap();
+    let a = t.path().join("a.scs");
+    let b = t.path().join("b.scs");
+    archive(&a, &[("own.txt", b"old")]);
+    archive(&b, &[("OWN.txt", b"new")]);
+    let inputs = vec![
+        Input {
+            role: contract::Role::Map,
+            path: a,
+        },
+        Input {
+            role: contract::Role::Mod,
+            path: b,
+        },
+    ];
+    let content = inventory(multiplayer_server::session_protocol::PROFILE, &inputs).unwrap();
+    let key = resource_key("own.txt").unwrap();
+    let mut pins = Pinned::open(&content, &inputs).unwrap();
+    assert_eq!(pins.read(&key, 3).unwrap(), b"new");
+    assert!(pins.read(&key, 2).is_err());
+    pins.finish().unwrap();
+    let mut bad = content.clone();
+    bad.layers[1].resources[0].sha256 = career::hash(b"wrong");
+    let mut pins = Pinned::open(&bad, &inputs).unwrap();
+    assert!(pins.read(&key, 3).is_err());
+    let mut reversed = inputs;
+    reversed.swap(0, 1);
+    assert!(Pinned::open(&content, &reversed).is_err());
+    for name in ["a//", "/", "a/../", "a//b/"] {
+        assert!(entry_key(name, true).is_err());
+    }
+}
+#[test]
+fn pinned_finish_detects_change_after_a_successful_read() {
+    use std::io::{Seek, SeekFrom};
+    let t = tempfile::tempdir().unwrap();
+    let path = t.path().join("own.scs");
+    archive(&path, &[("own.txt", b"original")]);
+    let inputs = vec![Input {
+        role: contract::Role::Map,
+        path: path.clone(),
+    }];
+    let content = inventory(multiplayer_server::session_protocol::PROFILE, &inputs).unwrap();
+    let mut pins = Pinned::open(&content, &inputs).unwrap();
+    assert_eq!(
+        pins.read(&resource_key("own.txt").unwrap(), 16).unwrap(),
+        b"original"
+    );
+    let mut file = fs::OpenOptions::new().write(true).open(path).unwrap();
+    file.seek(SeekFrom::Start(0)).unwrap();
+    file.write_all(b"XX").unwrap();
+    file.sync_all().unwrap();
+    assert!(pins.finish().is_err());
+}

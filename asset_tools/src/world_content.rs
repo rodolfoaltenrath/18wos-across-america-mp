@@ -5,7 +5,7 @@ use multiplayer_server::{career, world_content as contract};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     fs::{self, File},
     io::{Read, Seek, SeekFrom},
     path::{Path, PathBuf},
@@ -93,13 +93,20 @@ fn digest(reader: &mut impl Read, max: u64) -> Result<(String, u64)> {
     }
     Ok((format!("{:x}", hash.finalize()), read))
 }
-fn resource_key(name: &str) -> Result<String> {
+pub fn resource_key(name: &str) -> Result<String> {
     ensure!(
-        !name.is_empty() && name.len() <= 240 && name.is_ascii(),
+        !name.is_empty() && !name.ends_with('/') && name.len() <= 240 && name.is_ascii(),
         "unsupported resource name"
     );
     super::safe_relative(name)?;
     Ok(career::hash(name.to_ascii_lowercase().as_bytes()))
+}
+fn entry_key(name: &str, is_dir: bool) -> Result<String> {
+    resource_key(if is_dir {
+        name.strip_suffix('/').unwrap_or(name)
+    } else {
+        name
+    })
 }
 pub fn inventory(profile: &str, inputs: &[Input]) -> Result<contract::Manifest> {
     ensure!(
@@ -132,7 +139,7 @@ pub fn inventory(profile: &str, inputs: &[Input]) -> Result<contract::Manifest> 
         for index in 0..zip.len() {
             let mut entry = zip.by_index(index)?;
             let name = entry.name()?;
-            let key = resource_key(name.trim_end_matches('/'))?;
+            let key = entry_key(&name, entry.is_dir())?;
             if let Some(mode) = entry.unix_mode() {
                 ensure!(
                     matches!(mode & 0o170000, 0 | 0o040000 | 0o100000),
@@ -232,6 +239,140 @@ pub fn compare(host: &Path, peer: &Path) -> Result<contract::Comparison> {
     load(host)?
         .compare(&load(peer)?)
         .map_err(anyhow::Error::msg)
+}
+
+struct PinnedLayer {
+    archive: ZipArchive<File>,
+    indices: BTreeMap<String, usize>,
+    bytes: u64,
+    sha256: String,
+    modified: std::time::SystemTime,
+}
+/// Keeps verified archive handles for a bounded batch of reads. Call finish
+/// BEFORE publishing output. Not a sandbox or atomic snapshot against writers.
+pub struct Pinned {
+    layers: Vec<PinnedLayer>,
+    resolved: BTreeMap<String, contract::Winner>,
+}
+impl Pinned {
+    pub fn open(manifest: &contract::Manifest, inputs: &[Input]) -> Result<Self> {
+        let resolved = manifest.resolve().map_err(anyhow::Error::msg)?;
+        ensure!(
+            inputs.len() == manifest.layers.len(),
+            "content layer bindings differ"
+        );
+        let mut layers = Vec::new();
+        for (input, expected) in inputs.iter().zip(&manifest.layers) {
+            ensure!(
+                input.role == expected.role,
+                "content layer roles/order differ"
+            );
+            let mut file = regular(&input.path)?;
+            let before = file.metadata()?;
+            ensure!(
+                before.len() == expected.bytes,
+                "archive length differs from manifest"
+            );
+            let (hash, bytes) = digest(&mut file, expected.bytes)?;
+            ensure!(
+                hash == expected.sha256 && bytes == expected.bytes,
+                "archive hash differs from manifest"
+            );
+            file.seek(SeekFrom::Start(0))?;
+            let mut archive = ZipArchive::new(file)?;
+            ensure!(
+                archive.len() <= contract::MAX_RESOURCES,
+                "archive entry count exceeds budget"
+            );
+            let mut indices = BTreeMap::new();
+            let mut seen = BTreeSet::new();
+            for index in 0..archive.len() {
+                let entry = archive.by_index(index)?;
+                let key = entry_key(&entry.name()?, entry.is_dir())?;
+                ensure!(seen.insert(key.clone()), "ambiguous archive resource");
+                if let Some(mode) = entry.unix_mode() {
+                    ensure!(
+                        matches!(mode & 0o170000, 0 | 0o040000 | 0o100000),
+                        "special archive member refused"
+                    );
+                }
+                if entry.is_dir() {
+                    continue;
+                }
+                let r = expected
+                    .resources
+                    .binary_search_by(|r| r.key.cmp(&key))
+                    .ok()
+                    .map(|i| &expected.resources[i])
+                    .context("resource absent from pinned inventory")?;
+                ensure!(
+                    entry.is_file() && entry.size() == r.bytes,
+                    "resource size/type differs from inventory"
+                );
+                indices.insert(key, index);
+            }
+            ensure!(
+                indices.len() == expected.resources.len(),
+                "resource inventory member count differs"
+            );
+            layers.push(PinnedLayer {
+                archive,
+                indices,
+                bytes: expected.bytes,
+                sha256: expected.sha256.clone(),
+                modified: before.modified()?,
+            });
+        }
+        Ok(Self { layers, resolved })
+    }
+    pub fn winner(&self, key: &str) -> Option<&contract::Winner> {
+        self.resolved.get(key)
+    }
+    pub fn read(&mut self, key: &str, limit: usize) -> Result<Vec<u8>> {
+        ensure!(
+            limit > 0 && limit <= contract::MAX_RESOURCE as usize,
+            "invalid pinned read budget"
+        );
+        let expected = self
+            .resolved
+            .get(key)
+            .context("resource absent from pinned content")?;
+        ensure!(
+            expected.bytes <= limit as u64,
+            "pinned resource exceeds read budget"
+        );
+        let layer = &mut self.layers[expected.layer];
+        let mut entry = layer.archive.by_index(layer.indices[key])?;
+        let mut bytes = Vec::new();
+        entry
+            .by_ref()
+            .take(limit as u64 + 1)
+            .read_to_end(&mut bytes)?;
+        ensure!(
+            bytes.len() <= limit
+                && bytes.len() as u64 == expected.bytes
+                && career::hash(&bytes) == expected.sha256,
+            "pinned resource hash/length differs"
+        );
+        Ok(bytes)
+    }
+    pub fn finish(self) -> Result<()> {
+        for layer in self.layers {
+            let mut file = layer.archive.into_inner();
+            let after = file.metadata()?;
+            ensure!(
+                after.len() == layer.bytes && after.modified()? == layer.modified,
+                "archive changed during pinned reads"
+            );
+            file.seek(SeekFrom::Start(0))?;
+            let (hash, bytes) = digest(&mut file, layer.bytes)?;
+            ensure!(
+                hash == layer.sha256 && bytes == layer.bytes,
+                "archive changed between pinned passes"
+            );
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]

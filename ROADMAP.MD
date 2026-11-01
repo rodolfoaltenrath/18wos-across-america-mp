@@ -1,5 +1,46 @@
 # Roadmap — Across America multiplayer em Rust
 
+## W3 offline: investigação de referências ligada ao conteúdo — 01/11
+
+`asset_tools vehicle-references` lê definições contra o manifesto de conteúdo
+existente. Abre os arquivos na ordem/roles declarados, confere hash/tamanho,
+retém os mesmos handles, valida cada recurso lido e refaz a conferência dos
+arquivos antes de publicar relatório novo. Diretórios com aliases de barra
+duplicada também são recusados. Não é snapshot atômico contra escritores,
+sandbox de paths ancestrais ou comprovação da ordem montada no motor.
+
+Lexer limitado identifica candidatos de acessórios/importações/modelo/shaders
+e rótulo type. Busca considera pasta da definição e compartilhada do veículo;
+essa hipótese não vira regra do motor. Importações únicas existentes são
+percorridas com deduplicação, sem aplicar herança ou converter offsets.
+Ambiguidades, referências não suportadas e definições não lexáveis ficam
+explícitas. Relatório só de chaves/hashes/campos, privado por padrão, sem
+texto original ou caminhos locais; máximo128 definições de64KiB,128campos,
+64referências de shader por definição e8MiB de saída. Não gera catálogo
+automaticamente ou muda o visual. Flags engine/world continuam false.
+
+Leitura local somente de mch613:20 definições/96referências, uma definição
+não lexável/três referências não suportadas, zero ausentes/ambíguas na busca
+estreita. Não declarar completude por esse resultado. Quatro testes novos
+do auditor (inclui6kmutações do lexer), dois novos do leitor fixado por hash,
+suíte focada de conteúdo e Clippy/fmt passaram. Primeiro teste encontrou
+panic real em importação na raiz VFS: corrigida composição de caminho vazio,
+mantida a fixture; log inicial preservado. Nenhuma definição foi corrigida
+ou reescrita. Logs privados vehicle-refs-*20261101*. W3 parcial/51de104 intactos.
+
+Verificação integral dos dois blocos (composição + referências):327 testes
+x86 sob Proton/401 nativos passaram, builds release/3 escopos Clippy/fmt
+também, sem exclusões no verify. Log privado
+`target/analysis/verify-fedora-20261101-vehicle-assembly-references.log`.
+Nenhuma partida ou nova LAN integra essa evidência; contagens gerais preservadas.
+Complemento x86 CLI: leitura de referências nos arquivos locais e plano próprio
+multipart passaram; os dois JSONs foram byteiguais aos nativos. Não equivale a
+todos assets Windows ou render/LAN comprovados. Conferência pós-lote no prefixo
+da partida: oito arquivos iguais ao backupG13 e init.cfg original intacto;
+enumerações sem jogo/fixtures/controladores/probe/servidor. Runtime exclusivo
+da bancada encerrado após complemento. Logs privados vehicle-refs-*20261101*;
+binários só em target, sem atualização de kit instalado, saves ou configuração.
+
 ## W3 offline: composição por peças e materiais por peça — 01/11
 
 Catálogo schema2 estende o contrato existente com até32 peças adicionais,

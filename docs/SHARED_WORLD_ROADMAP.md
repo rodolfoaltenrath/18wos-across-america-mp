@@ -485,6 +485,22 @@ São candidatos, não captura/aplicação comprovada. O catálogo inicial é de
 referências declaradas; montagem de múltiplas partes e relação material/parte
 precisam ser ampliadas após confirmar o contrato efetivo do motor.
 
+Auditor estático W3 de01/11: `asset_tools vehicle-references` vincula leitura
+de definições ao inventário por hashes de arquivos e recursos. Mantém handles
+abertos e confere arquivos novamente antes da saída; não é snapshot atômico
+nem sandbox contra escritores concorrentes. Percorre até128 definições de64KiB,
+sem extrair/copiar conteúdo original. Lista somente chaves/hashes, campos e
+candidatos; interpreta lexicalmente `accessN`, `extdefs`, `model`, `shader` e
+rótulo `type`, sem aplicar herança ou converter offsets. Busca relativa na
+pasta da definição/compartilhada do veículo é hipótese explícita, não regra
+observada do motor; ambiguidades e falhas de lexing ficam parciais. Relatório
+novo até8MiB, privado por padrão, flags engine/worldfalse. Não gera catálogo
+aplicável automaticamente. Leitura local de mch613 retornou20 definições,
+96 referências, uma definição não lexável e três referências não suportadas;
+zero candidatos ausentes/ambíguos nessa busca estreita não comprova completude.
+Casos próprios cobrem ambiguidades, importação cíclica deduplicada, raiz VFS,
+arquivo alterado/limites/aliases e6kmutações do lexer. W3 permanece parcial.
+
 Base W5 offline: `world_join` prepara um snapshot tipado do sidecar existente
 e aparências declaradas, com corte/fluxo exclusivo de aparência, sem duplicar
 o formato do ledger. Vincula carreira/conteúdo/catálogo/mundo/autoridade;

@@ -4,6 +4,7 @@ pub mod localization;
 pub mod mod_package;
 pub mod source_audit;
 pub mod ui_tools;
+pub mod vehicle_references;
 pub mod world_content;
 use anyhow::{Context, Result, ensure};
 use image::{ImageFormat, imageops::FilterType};

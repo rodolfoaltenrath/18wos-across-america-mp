@@ -11,6 +11,17 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Audit hashed truck definition references against a pinned local inventory.
+    VehicleReferences {
+        #[arg(long)]
+        content: PathBuf,
+        #[arg(long = "layer", required = true)]
+        layers: Vec<asset_tools::world_content::Input>,
+        #[arg(long)]
+        vehicle: String,
+        #[arg(long)]
+        output: PathBuf,
+    },
     /// Hash ZIP/SCS resources in declared LOW-to-HIGH priority; never mount/load.
     WorldContent {
         #[arg(long, default_value = "steam-aa-1.10-ccb327c2")]
@@ -151,6 +162,21 @@ enum Command {
 
 fn main() -> Result<()> {
     match Cli::parse().command {
+        Command::VehicleReferences {
+            content,
+            layers,
+            vehicle,
+            output,
+        } => {
+            let content = asset_tools::world_content::load(&content)?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&asset_tools::vehicle_references::create(
+                    &content, &layers, &vehicle, &output
+                )?)?
+            );
+            Ok(())
+        }
         Command::WorldContent {
             profile,
             layers,

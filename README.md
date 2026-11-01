@@ -110,6 +110,29 @@ não calcula matrizes do motor e não atesta formato, ossos ou completude dos
 materiais. `all_placements_declared_local=true` só descreve declarações do
 catálogo; `engine_verified`/`world_synchronized` continuam false.
 
+Para investigar referências de um caminhão nos arquivos locais, sem extração:
+
+```text
+asset_tools vehicle-references --content CONTEUDO.json --layer base=ARQUIVO --layer map=ARQUIVO --vehicle ID --output RELATORIO-NOVO.json
+```
+
+Repita todas as camadas na mesma ordem declarada no inventário. A ferramenta
+confere hashes dos arquivos, mantém os mesmos handles durante as leituras e
+confere novamente antes de publicar. Cada recurso lido também precisa coincidir
+com seu hash/tamanho. Isso detecta alterações comuns, sem fornecer snapshot
+atômico ou sandbox contra escritores concorrentes/troca de caminhos.
+
+O relatório privado guarda hashes e candidatos de `accessN`, `extdefs`, `model`
+e `shader`, sem copiar nomes de arquivos, caminhos locais ou textos originais.
+`type` fica apenas como rótulo hasheado. A busca relativa considera a pasta da
+definição e, para shaders, a pasta compartilhada do veículo; **essa regra é
+uma hipótese de investigação, não a resolução comprovada do motor**. Candidatos
+ambíguos permanecem ambíguos. Importações únicas existentes são percorridas com
+deduplicação, sem aplicar herança. Definições não decodificáveis/lexáveis ficam
+explicitamente parciais; offsets não são interpretados. Limites:128 definições,
+64KiB por definição,128 campos por definição,64 referências de shader e8MiB
+por relatório novo. Não gera catálogo automaticamente nem muda o visual no jogo.
+
 Base offline W5: `mp_career join-check --data CARREIRA --content CONTEUDO.json
 --catalogue CATALOGO.json --snapshot SNAPSHOT.json --events EVENTOS.json
 --world-epoch 1 --authority-generation 1` prepara o estado existente do sidecar

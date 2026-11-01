@@ -21,6 +21,10 @@ Plano offline de peças schema2 já ordena pais e materiais separados; futuras
 provas devem confirmar composição real e ownership por instância, além de
 offsets/ossos. O plano não comprova formato/matrizes e não libera outro PSM
 no guard atual por hipótese. Agrupar com a mesma futura rodada W3.
+O auditor `vehicle-references` lê definições contra arquivos conferidos por
+hash, mantém ambiguidades/recusas explícitas e não gera catálogo aplicado.
+Sua saída estática não exige nova partida nem substitui comprovar seleção,
+herança, slots e composição efetivamente usados pelo motor na rodada W3.
 
 Preparo W5 offline: snapshot/fluxo de aparência e sidecar preparados sem motor
 por `mp_career join-check`. Não confundir fase prepared com entrada no jogo.
