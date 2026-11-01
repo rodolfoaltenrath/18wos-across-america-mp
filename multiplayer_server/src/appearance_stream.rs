@@ -197,6 +197,12 @@ impl Authority {
     pub fn pin(&self) -> &Pin {
         &self.pin
     }
+    pub fn head(&self) -> u64 {
+        self.seed.appearance_cut
+    }
+    pub fn retained(&self) -> usize {
+        self.history.len()
+    }
     pub fn execute(
         &mut self,
         principal: &str,

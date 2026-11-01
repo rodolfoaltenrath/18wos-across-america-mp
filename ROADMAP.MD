@@ -1,5 +1,60 @@
 # Roadmap — Across America multiplayer em Rust
 
+## W3/W5: transporte optativo de aparência pelo TCP de carreira — 01/11
+
+`mp_career host` recebe opcionalmente os três arquivos appearance-content,
+appearance-catalogue e appearance-snapshot juntos; ausência mantém os fluxos
+anteriores. Action appearance nova preserva framing256KiB/30s/oito conexões.
+Usa segredo de convite vazio e proof do MESMO Registry da carreira/relay;
+actions antigas omitem o campo novo e conservam seu segredo de convite.
+Convite não substitui ticket; ticket/room/profile/carreira e contexto de
+conteúdo/catálogo/world/autoridade precisam coincidir. Cada principal só
+publica/remove a própria aparência e precisa empresa no seed. Não são contas.
+
+CLI appearance-pull/publish/remove verifica arquivos/contexto/resposta/EOF.
+Pull grava resposta privada em arquivo novo, stdout só contagens/cursor/flags;
+publish recebe descritor declarado de arquivo, sem captura do motor. Páginas
+contínuas32, histórico128, retry idempotente por geração/revisão, snapshot
+atual quando histórico acabou. Limites64requests/s global/8 por identidade
+por janela monotônica1s após proof válido; excesso recusa sem mudar estado.
+Relatório opcional de parada omite identidades/tickets/paths; counters limitados
+999999999/truncated, head sem truncar. Ver docs/NETWORK_PROTOCOL.md e README.
+
+Escopo: só transporte de aparências DECLARADAS, sem relay/draw/captura/ABIs
+novos, economia/relógio/trânsito/física/save vivo. Sidecar do seed CONGELADO,
+não o status vivo do host; novas empresas exigem seed/reinício. Geração/head
+não persistem; operador deve criar geração nova ao reiniciar, não há guard
+persistente contra reuso de seed antigo. Tickets antigos deixam de valer.
+Cliente stateless valida cada resposta, não mantém pisos de Receiver entre RPCs
+nem aplica páginas automaticamente. Aparência estrita recusa só este canal,
+não comprova assets montados nem amplia a admissão UDP legada. Flagsfalse.
+
+Bancada própria: duas identidades emitidas pela carreira via TCP real trocaram
+descritores, retry foi duplicate e tentativa de alterar o outro foi recusada;
+ticket errado/reinício sem opt-in/extra bytes/flags adulteradas foram recusados.
+Orçamento individual/shared64 comprovado, reset monotônico e relatório sem
+IDs; quatro testes TCP/serviço e dois CLI novos, seis da autoridade. Fuzz do
+decoder real12k mutações agora inclui4requests/5responses. Verificação final
+integral registrada no fechamento deste lote. Sem jogo/segunda LAN/instalação/
+novo kit; W3/W5 parciais e total51/104 preservados. Não repetir G12/G13.
+
+Fechamento integral:339 testes x86 sob Proton/413 nativos, releases/3Clippy/fmt
+passaram sem exclusões em verify-fedora-20261101-appearance-stream-tcp.log.
+CLI real própria adicional: servidor nativo, cliente nativo e cliente x86/Proton
+mesma máquina;9 conexões completas/0 falhas,7RPCs,2publicações (inclui remoção),
+1duplicate/1stale/2snapshots/1página, head12/history2. Snapshot final sem
+aparências ativas e geração removida retida; três arquivos de entrada próprios
+intactos. Host encerrado via Ctrl+C e relay aguardado/0ativos/0datagramas;
+não é nova LAN, render, FPS ou perda medida. Artefatos privados
+target/analysis/appearance-rpc-cli-20261101/. Sem ticket em argv/log público.
+Conferência final no prefixo da partida: oito arquivos iguais ao backupG13,
+init.cfg dddbacf5…7774 intacto, enumerações sem jogo/fixtures/controladores/
+probe/servidor; bancada Proton encerrada após complemento. Binários só target,
+kit/instalação intocados; logs appearance-tcp-originals/processes/config/builds-*
+privados. Próximo W3 é leitura local e aplicação por instância com contrato do
+motor, sem relaxar guardIA por hipótese. Transporte preparado não fecha o aceite
+de aparências diferentes entre dois PCs; agrupar com B/D após adaptadores.
+
 ## W3/W5 offline: autoridade do fluxo de aparência — 01/11
 
 `appearance_stream` ordena publicações e mantém128 eventos, páginas de32 e

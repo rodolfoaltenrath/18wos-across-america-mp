@@ -150,9 +150,47 @@ para impedir reaparição de gerações antigas. Histórico cheio falha explicit
 Nova empresa exige snapshot do sidecar atualizado; identidade não é clonada do host.
 **`prepared` indica preparação de dados offline, não jogo pronto.** Escopo
 fixo `sidecar_appearance_only`, sem trânsito/física/clock do motor/save vivo,
-sem transporte ou aplicação ao renderer; flags engine/world continuam false.
-O chamador futuro precisa autenticar/ordenar os eventos e confirmar a aplicação
-no motor. Este formato não muda o wire v2 nem o bootstrap de carreira existente.
+sem aplicação ao renderer; flags engine/world continuam false. O comando
+`join-check` continua offline. O transporte optativo abaixo reaproveita esses
+tipos; aplicação/confirmação no motor continuam pendentes. UDP v2 e bootstrap
+existentes permanecem com os mesmos fluxos.
+
+Transporte de aparências declaradas (ferramenta de desenvolvimento, sem captura
+ou mudança visual no jogo): o host só habilita o canal com os TRÊS arquivos.
+
+```text
+mp_career host --data CARREIRA --room SALA --advertise IP:39000 --appearance-content CONTEUDO.json --appearance-catalogue CATALOGO.json --appearance-snapshot SEED.json
+mp_career appearance-pull --server IP:39001 --data IMPORTACAO --launch TICKET-PRIVADO.json --content CONTEUDO.json --catalogue CATALOGO.json --world-epoch 1 --authority-generation 1 --output RESPOSTA-NOVA.json
+```
+
+O bind padrão do host é loopback; para LAN, configure também `--tcp-bind` e
+`--udp-bind` com interfaces apropriadas, como no fluxo de carreira existente.
+Obtenha a importação e o ticket com `join`/`prepare-launch` da mesma instância
+do host. O seed precisa conter as empresas/identidades participantes. Seu
+sidecar fica **congelado**, sem acompanhar o ledger/relógio correntes do host;
+novas empresas requerem seed novo e reinício, que invalida os tickets antigos.
+
+`appearance-publish` usa os mesmos parâmetros de contexto e `--appearance
+DESCRICAO.json`; `appearance-remove` usa `--vehicle ID --generation N`.
+Os dois dispensam `--output`. A identidade vem do ticket: ninguém publica
+ou remove em nome de outro participante. Repetir publicação deve conservar
+geração/revisão; uma resposta perdida não justifica inventar revisão nova.
+
+`appearance-pull` sem `--after` pede snapshot. Nas consultas seguintes,
+`--after N` usa o cursor retornado; páginas trazem até32 eventos, `through`
+e `head`. Se ainda não alcançou head, consulte outra página com through.
+O servidor retém128 eventos; atraso maior recebe snapshot atual. Cursor à
+frente é recusado. Cada resposta é verificada antes de retornar e o arquivo
+é sempre novo, privado: contém IDs/estado do seed, não é pacote de diagnóstico.
+O resumo no terminal contém apenas contagens/cursor/flags. Consultar/publicar
+não aplica aparências ao jogo nem marca o jogador pronto.
+
+Mesmo TCP da carreira,256KiB por frame/30s/oito conexões; seed canônico até128KiB,
+evento até3KiB. Orçamento de64 solicitações/s compartilhadas e8/s por identidade,
+por janela monotônica de1s, após conferir ticket válido. Não é renovação de
+lease/conta: continuam as regras de confiança e validade da carreira. Divergência
+de hashes recusa este canal; não transforma a entrada UDP legada em comprovação
+de assets montados. Serviço e histórico são voláteis; não persistem o save vivo.
 
 Prioridade de conclusão em 31/10: fechar M2 antes de ampliar funcionalidades.
 As proteções de inicialização/parada/descarga foram reforçadas e a bancada

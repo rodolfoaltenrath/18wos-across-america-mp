@@ -26,6 +26,8 @@ use tokio::{
 
 const MAX_FRAME: usize = 256 * 1024;
 const DEADLINE: Duration = Duration::from_secs(30);
+mod appearance;
+pub use appearance::exchange as appearance_exchange;
 pub fn inspect_import(path: &Path) -> Result<Receipt> {
     crate::career_entry::inspect_import(path).map_err(anyhow::Error::msg)
 }
@@ -79,6 +81,8 @@ struct Request {
     action: Action,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     admission: Option<AdmissionRequest>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    appearance: Option<appearance::Request>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -93,10 +97,14 @@ enum Action {
     Bootstrap,
     Status,
     Admit,
+    Appearance,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 enum Response {
+    Appearance {
+        reply: Box<crate::appearance_stream::Reply>,
+    },
     Admission {
         manifest: Manifest,
         launch: Box<Launch>,
@@ -152,10 +160,44 @@ async fn handle(
     save: &[u8],
     world: &RwLock<Snapshot>,
     admission: Option<&Registry>,
+    appearance: Option<&appearance::Service>,
 ) -> Result<()> {
     let request: Request = receive(&mut stream).await?;
+    if matches!(request.action, Action::Appearance) {
+        let result = if request.schema != 1
+            || request.career != manifest.career
+            || !request.secret.is_empty()
+            || request.admission.is_some()
+        {
+            Err("invalid appearance control envelope".into())
+        } else if let Err(reason) = manifest.compatibility.compare(&request.compatibility) {
+            Err(reason)
+        } else {
+            match (appearance, admission, request.appearance) {
+                (Some(service), Some(registry), Some(claim)) => {
+                    service.execute(registry, &manifest.compatibility.profile, claim)
+                }
+                _ => Err("appearance service unavailable".into()),
+            }
+        };
+        match result {
+            Ok(reply) => {
+                send(
+                    &mut stream,
+                    &Response::Appearance {
+                        reply: Box::new(reply),
+                    },
+                )
+                .await?
+            }
+            Err(reason) => send(&mut stream, &Response::Refused { reason }).await?,
+        }
+        stream.shutdown().await?;
+        return Ok(());
+    }
     let refusal = if request.schema != 1
         || request.career != invite.career
+        || request.appearance.is_some()
         || !secret_matches(&request.secret, &invite.secret)
     {
         Some("invalid career invitation".to_owned())
@@ -222,6 +264,8 @@ pub struct Report {
     pub failed_connections: u64,
     pub busy: u64,
     pub game_tested: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub appearance: Option<appearance::Summary>,
 }
 pub async fn serve(
     listener: TcpListener,
@@ -236,7 +280,15 @@ pub async fn serve_with_admission(
     admission: Option<Registry>,
     shutdown: impl Future<Output = ()>,
 ) -> Result<Report> {
-    let mut authority = WorldStore::open(data).map_err(anyhow::Error::msg)?;
+    serve_with_services(listener, data, admission, None, shutdown).await
+}
+async fn serve_with_services(
+    listener: TcpListener,
+    data: &Path,
+    admission: Option<Registry>,
+    appearance: Option<crate::appearance_stream::Authority>,
+    shutdown: impl Future<Output = ()>,
+) -> Result<Report> {
     let (manifest, save) = store::load(data).map_err(anyhow::Error::msg)?;
     let invite: Invite = store::read_json(&data.join("invite.json")).map_err(anyhow::Error::msg)?;
     invite.check(&manifest)?;
@@ -245,6 +297,16 @@ pub async fn serve_with_admission(
             .check_context(&manifest, None, None)
             .map_err(anyhow::Error::msg)?;
     }
+    if let Some(service) = &appearance {
+        ensure!(
+            admission.is_some()
+                && service.pin().career_manifest_sha256
+                    == crate::career_entry::manifest_hash(&manifest).map_err(anyhow::Error::msg)?,
+            "appearance service career/admission differs"
+        );
+    }
+    let mut authority = WorldStore::open(data).map_err(anyhow::Error::msg)?;
+    let appearance = appearance.map(|a| Arc::new(appearance::Service::new(a)));
     let manifest = Arc::new(manifest);
     let save = Arc::new(save);
     let invite = Arc::new(invite);
@@ -266,6 +328,7 @@ pub async fn serve_with_admission(
                 tasks.abort_all(); while tasks.join_next().await.is_some() {}
                 authority.advance(u64::try_from(advanced.elapsed().as_millis())?).map_err(anyhow::Error::msg)?;
                 authority.flush().map_err(anyhow::Error::msg)?;
+                report.appearance = appearance.as_ref().map(|a| a.summary()).transpose().map_err(anyhow::Error::msg)?;
                 return Ok(report);
             }
             _ = tick.tick() => {
@@ -284,7 +347,8 @@ pub async fn serve_with_admission(
                 let Ok(slot) = slots.clone().try_acquire_owned() else { report.busy += 1; continue; };
                 let invite = invite.clone(); let manifest = manifest.clone(); let save = save.clone(); let world = world.clone();
                 let admission = admission.clone();
-                tasks.spawn(async move { let _slot = slot; tokio::time::timeout(DEADLINE, handle(stream, &invite, &manifest, &save, &world, admission.as_ref())).await });
+                let appearance = appearance.clone();
+                tasks.spawn(async move { let _slot = slot; tokio::time::timeout(DEADLINE, handle(stream, &invite, &manifest, &save, &world, admission.as_ref(), appearance.as_deref())).await });
             }
         }
     }
@@ -309,12 +373,13 @@ pub async fn fetch(
     );
     tokio::time::timeout(DEADLINE, async {
         let mut stream = TcpStream::connect(endpoint).await?;
-        send(&mut stream, &Request { schema: 1, career: invite.career.clone(), secret: invite.secret.clone(), compatibility: compatibility.clone(), action: Action::Bootstrap, admission: None }).await?;
+        send(&mut stream, &Request { schema: 1, career: invite.career.clone(), secret: invite.secret.clone(), compatibility: compatibility.clone(), action: Action::Bootstrap, admission: None, appearance: None }).await?;
         let manifest = match receive(&mut stream).await? {
             Response::Bootstrap { manifest } => manifest,
             Response::Refused { reason } => bail!("host refused bootstrap: {reason}"),
             Response::World { .. } => bail!("unexpected world response to bootstrap"),
             Response::Admission { .. } => bail!("unexpected admission response to bootstrap"),
+            Response::Appearance { .. } => bail!("unexpected appearance response to bootstrap"),
         };
         invite.check(&manifest)?;
         manifest.compatibility.compare(&compatibility).map_err(anyhow::Error::msg)?;
@@ -357,6 +422,7 @@ pub async fn world_status(
                 compatibility: compatibility.clone(),
                 action: Action::Status,
                 admission: None,
+                appearance: None,
             },
         )
         .await?;
@@ -414,6 +480,7 @@ pub async fn prepare_launch(
                 secret: invite.secret.clone(),
                 compatibility: compatibility.clone(),
                 action: Action::Admit,
+                appearance: None,
                 admission: Some(AdmissionRequest {
                     identity: identity.into(),
                     receipt,
@@ -462,6 +529,18 @@ pub async fn serve_room(
     advertised: SocketAddr,
     shutdown: impl Future<Output = ()>,
 ) -> Result<RoomReport> {
+    serve_room_with_appearance(listener, socket, data, settings, advertised, None, shutdown).await
+}
+/// Opt-in appearance stream shares this registry/lifetime. UDP and engine are unchanged.
+pub async fn serve_room_with_appearance(
+    listener: TcpListener,
+    socket: tokio::net::UdpSocket,
+    data: &Path,
+    settings: crate::session_hub::Settings,
+    advertised: SocketAddr,
+    appearance: Option<crate::appearance_stream::Authority>,
+    shutdown: impl Future<Output = ()>,
+) -> Result<RoomReport> {
     ensure!(
         advertised.port() == socket.local_addr()?.port()
             && advertised.is_ipv4() == socket.local_addr()?.is_ipv4(),
@@ -476,7 +555,7 @@ pub async fn serve_room(
         .map_err(anyhow::Error::msg)?;
     let (tcp_stop, tcp_stopped) = tokio::sync::oneshot::channel();
     let (udp_stop, udp_stopped) = tokio::sync::oneshot::channel();
-    let tcp = serve_with_admission(listener, data, Some(registry.clone()), async {
+    let tcp = serve_with_services(listener, data, Some(registry.clone()), appearance, async {
         let _ = tcp_stopped.await;
     });
     let udp = crate::session_server::run_with_admission(socket, settings, Some(registry), async {

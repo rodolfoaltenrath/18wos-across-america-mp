@@ -42,6 +42,7 @@ fn request() -> Request {
         compatibility: compatibility(),
         action: Action::Bootstrap,
         admission: None,
+        appearance: None,
     }
 }
 fn requests() -> Vec<Request> {
@@ -62,10 +63,56 @@ fn requests() -> Vec<Request> {
             world_synchronized: false,
         },
     });
-    vec![request(), status, admit]
+    let (m, c, a, s) = crate::world_join::tests::fixture();
+    let mut appearance = request();
+    appearance.secret.clear();
+    appearance.career = m.career.clone();
+    appearance.compatibility = m.compatibility.clone();
+    appearance.action = Action::Appearance;
+    appearance.appearance = Some(appearance::Request {
+        identity: s.appearances[0].player.clone(),
+        room: "own".into(),
+        proof: crate::career_entry::Proof {
+            ticket: "c".repeat(32),
+        },
+        pin: crate::appearance_stream::Pin::new(
+            &crate::world_join::Context {
+                career: &m,
+                content: &c,
+                catalogue: &a,
+            },
+            1,
+            1,
+        )
+        .unwrap(),
+        operation: crate::appearance_stream::Operation::Pull { after: None },
+    });
+    vec![request(), status, admit, appearance]
 }
 fn responses() -> Vec<Response> {
+    let (m, c, a, s) = crate::world_join::tests::fixture();
+    let principal = s.appearances[0].player.clone();
+    let mut authority = crate::appearance_stream::Authority::new(
+        crate::world_join::Context {
+            career: &m,
+            content: &c,
+            catalogue: &a,
+        },
+        s,
+    )
+    .unwrap();
+    let pin = authority.pin().clone();
+    let reply = authority
+        .execute(
+            &principal,
+            &pin,
+            &crate::appearance_stream::Operation::Pull { after: None },
+        )
+        .unwrap();
     vec![
+        Response::Appearance {
+            reply: Box::new(reply),
+        },
         Response::Refused {
             reason: "own refusal".into(),
         },

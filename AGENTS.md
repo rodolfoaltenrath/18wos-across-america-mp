@@ -1,5 +1,37 @@
 # Orientações para continuar o projeto
 
+W3TCP01/11: host opt-in3arquivos content/catalogue/seed todos ou nenhum,
+actionappearance no careerTCP256KiB/30s/8conn, secret vazio+proof MESMORegistry.
+Actions antigas omitcampo novo e usamsecretconvite. Principal só altera si,
+empresa noSEED, hashpins/room/profile/career/ticket atuais; não contas.
+CLIappearance-pull/publish/remove contextoslocais/resposta/EOF, saída nova
+privada comIDs/seed, stdoutcontagens/cursor/flags. Declarações por arquivo,
+sem captura/draw/relay/ABI novos. Pág32/history128/seed128KiB/event3KiB, idem
+retrymesmageração/revisão. Budget64/s global8/s ID/janela1s apósproof, mapa≤64.
+Reportopcional sórequests comproofválido/recusasdessegrupo/snap/pages/pub/dup/
+stale/head/retained/flags; corte999999999/truncated, seqnão truncada.
+SEEDsidecarCONGELADO não statuslive/ledger/clock/save/motor, sem novasempresas.
+Geração/headnão persistem: operador deve escolher geração nova no restart;
+não há guardpersistente contra reuso de seed antigo. Tickets antigos inválidos.
+RPC/CLIstateless não mantém pisos deReceiver entre consultas nem aplica páginas.
+Recusa só canalaparência, não assetsmontados/admissãoUDP estrita. Flagsfalse,
+W3/W5parciais51/104 intactos. 4testsTCP/serviço+2CLI+6authority; decoder12kmutações
+inclui4requests/5responses. Logs appearance-stream/tcp-*20261101*. Verifyfinal
+registrado no fechamento. Sem jogo/kit/instalação; não pedir G12/G13/LANbásica.
+Verify integral339x86Proton/413nativos/releases/3Clippy/fmt passou semexclusões,
+log verify-fedora-20261101-appearance-stream-tcp.log. CLIreal fixtureprópria
+Linuxhost/nativeclient/x86clientProton umPC:9conn completas0falhas/7RPCs/
+2pub(inclremove)/1dup/1stale/2snap/1page/head12/history2. Snapshotfinal0aparências/
+retired1,3inputs próprios hashiguais. Ctrl+C aguardouhost+relay0ativos/0datagramas,
+logs appearance-rpc-cli-20261101/ privados. Não novaLAN/motor/FPS/perdamedida.
+Final prefixopartida8iguais backupG13/init.cfg dddbacf5…7774 intacto. EnumWindows/
+nativa sem jogo/fixtures/controladores/probe/servers/mp_careerhost/test_host.
+Runtimebench exclusivo parado após complemento; logs appearance-tcp-originals/
+processes/config/builds-final-*20261101* privados. Nenhum kit/instalação mudou.
+Próximo W3 precisa leitura de aparência local e ownership/aplicação no motor;
+canal já existe mas CLI usa declarações. Agrupar prova B/D quando adaptadores
+existirem; não pedir teste agora só para validar protocolo/limites/filtros.
+
 W3fluxo01/11: appearance_stream Authority sequence/hashcontext, history128/
 page32/seed128KiB. Copy de registros + Arc catálogo imutável, publica atômico
 no estado puro; retrydup/stale sem sequência, falha/overflow sem mudar estado.

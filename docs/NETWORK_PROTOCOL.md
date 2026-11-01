@@ -13,7 +13,8 @@ Sem TLS/contas; restrito a LAN confiável. Fingerprints declarados não provam
 assets carregados pelo jogo. A entrega do save não admite automaticamente o
 jogador no relay nem torna relógio/física/trânsito compartilhados.
 
-`action` opcional é `bootstrap` (padrão), `status` ou `admit` (host com relay).
+`action` opcional é `bootstrap` (padrão), `status`, `admit` (host com relay)
+ou `appearance` (extensão optativa descrita a seguir).
 `status` devolve manifesto
 e snapshot validado do sidecar, sem blob, seguido de EOF. Snapshot informa
 revisão persistente, clock/último checkpoint de clock, ranking e contratos;
@@ -23,6 +24,54 @@ não há operação de crédito/entrega neste wire. Identidades da carreira/empr
 e credenciais do relay permanecem contratos distintos; `admit` vincula uma
 declaração de identidade/importação ao ticket de entrada, sem registrar empresa
 nem autorizar operações econômicas.
+
+### Extensão TCP de aparência declarada — 01/11
+
+`host` habilita somente com content/catalogue/seed válidos fornecidos juntos.
+`appearance` preserva framing256KiB/deadline30s/conexões8. O envelope usa
+`secret:""`, sem `admission`, e um campo `appearance` com identity/room/proof,
+pin e operation. As outras actions omitem esse campo e mantêm o segredo do
+convite; objeto appearance nelas é recusado (ausente/null mantém o legado).
+Esta action confere o ticket atual
+no MESMO Registry da admissão/relay antes de acessar o fluxo; não aceita
+convite como substituto de ticket. Porta/endereço de origem não são identidade.
+Ticket de um jogador não permite alterar outro; convite ainda permite emitir
+declarações de identidade conforme a regra existente, sem contas/TLS.
+
+Pin: hash do manifesto da carreira, conteúdo completo na ordem declarada,
+catálogo, world_epoch e authority_generation. O seed só aceita empresas
+preexistentes e sidecar válido; este sidecar fica CONGELADO, não é o snapshot
+vivo de `status`. Mudanças novas são somente aparências/removals. Nenhum
+trânsito/física/clock do motor/operação econômica/UDP é alterado. Divergência
+recusa a RPC, sem tornar a admissão UDP legada uma prova dos assets carregados.
+
+`pull {after:null}` retorna snapshot; `pull {after:N}` retorna página contínua
+de até32 deltas, through/head, ou snapshot atual se N saiu do histórico128.
+N à frente é erro. `publish {change}` só afeta o principal do ticket. Servidor
+atribui sequência somente a mudança aceita; duplicate/stale não avançam.
+Ack perdido exige retry com a MESMA geração/revisão, não publicação nova.
+Remoção conserva piso de geração. Falha de validação/limite não publica parcial.
+O snapshot canônico deste transporte limita128KiB, evento3KiB, mantendo folga
+para envelope; `world_join` offline conserva seu limite próprio1MiB.
+
+Resposta `appearance {reply}` tem schema1/pin/payload/engine_verifiedfalse/
+world_synchronizedfalse. Cliente confere contexto, tipo, limites, contiguidade,
+snapshot via Receiver existente e EOF antes de devolver dados. Isso não aplica
+o estado no motor nem autentica o host por criptografia. Reinício perde fluxo,
+histórico/tickets; operador precisa nova geração/seed e novos tickets. O serviço
+não persiste geração/head nem impede reuso acidental do seed antigo com a mesma
+geração. Consumidores precisam conservar os pisos de Receiver; as RPCs/CLI são
+consultas independentes, não gerenciam esse estado do consumidor. Não há
+migração de autoridade automática.
+
+Limite após proof válido:64 requests/s global e8/s por identidade em janela
+monotônica de1s; excesso recusa sem mutação. Até64 IDs por janela pelo limite
+global; mapa zerado na janela seguinte. Relatório opcional de parada tem só
+contagens de requests com proof válido, recusas desse grupo, publicações,
+duplicates/stale, snapshots/páginas, head/retained e flags; sem tickets/IDs/paths.
+Contadores cortados em999999999 com truncated, sequências não são truncadas.
+Action indisponível no host padrão retorna recusa; clientes antigos continuam
+com seus três fluxos, e o novo campo opcional ausente não muda seus JSONs.
 
 Contrato próprio em Rust. O codec v1 continua separado e disponível para as
 provas anteriores. V2 é optativo: servidor com `--room NOME`; cliente com sala

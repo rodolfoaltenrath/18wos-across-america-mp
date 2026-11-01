@@ -34,8 +34,120 @@ impl Content {
             .map_err(anyhow::Error::msg)
     }
 }
+#[derive(Args)]
+struct AppearanceRpc {
+    #[arg(long)]
+    server: SocketAddr,
+    /// Private imported career/base directory; not the game's loaded save.
+    #[arg(long)]
+    data: PathBuf,
+    #[arg(long)]
+    content: PathBuf,
+    #[arg(long)]
+    catalogue: PathBuf,
+    /// PRIVATE existing launch capability. Never pass a ticket value in argv.
+    #[arg(long)]
+    launch: PathBuf,
+    #[arg(long,value_parser=clap::value_parser!(u64).range(1..))]
+    world_epoch: u64,
+    #[arg(long,value_parser=clap::value_parser!(u64).range(1..))]
+    authority_generation: u64,
+}
+struct AppearanceLocal {
+    career: multiplayer_server::career::Manifest,
+    content: multiplayer_server::world_content::Manifest,
+    catalogue: multiplayer_server::vehicle_appearance::Catalogue,
+    launch: career_entry::Launch,
+    pin: multiplayer_server::appearance_stream::Pin,
+}
+impl AppearanceLocal {
+    fn load(args: &AppearanceRpc) -> Result<Self> {
+        let (career, _) = store::load(&args.data).map_err(anyhow::Error::msg)?;
+        let (content, catalogue) = load_catalogue(&args.content, &args.catalogue)?;
+        let launch = store::read_json(&args.launch).map_err(anyhow::Error::msg)?;
+        let context = multiplayer_server::world_join::Context {
+            career: &career,
+            content: &content,
+            catalogue: &catalogue,
+        };
+        let pin = multiplayer_server::appearance_stream::Pin::new(
+            &context,
+            args.world_epoch,
+            args.authority_generation,
+        )
+        .map_err(anyhow::Error::msg)?;
+        Ok(Self {
+            career,
+            content,
+            catalogue,
+            launch,
+            pin,
+        })
+    }
+    fn context(&self) -> multiplayer_server::world_join::Context<'_> {
+        multiplayer_server::world_join::Context {
+            career: &self.career,
+            content: &self.content,
+            catalogue: &self.catalogue,
+        }
+    }
+    async fn exchange(
+        &self,
+        server: SocketAddr,
+        operation: multiplayer_server::appearance_stream::Operation,
+    ) -> Result<multiplayer_server::appearance_stream::Reply> {
+        career_net::appearance_exchange(server, &self.launch, self.context(), &self.pin, operation)
+            .await
+    }
+}
+fn print_appearance_reply(reply: &multiplayer_server::appearance_stream::Reply) -> Result<()> {
+    use multiplayer_server::appearance_stream::Payload;
+    let (kind, sequence, events, disposition) = match &reply.payload {
+        Payload::Snapshot { snapshot } => ("snapshot", snapshot.appearance_cut, 0, None),
+        Payload::Events {
+            through, deltas, ..
+        } => ("events", *through, deltas.len(), None),
+        Payload::Accepted {
+            sequence,
+            disposition,
+        } => ("accepted", *sequence, 0, Some(disposition)),
+    };
+    println!(
+        "{}",
+        serde_json::to_string_pretty(
+            &serde_json::json!({"schema":1,"response":kind,"through_sequence":sequence,"events":events,"disposition":disposition,"seed_sidecar_frozen":true,"engine_verified":false,"world_synchronized":false})
+        )?
+    );
+    Ok(())
+}
 #[derive(Subcommand)]
 enum Command {
+    /// Pull one private appearance snapshot/page; does not apply it to the game.
+    AppearancePull {
+        #[command(flatten)]
+        session: AppearanceRpc,
+        /// Omit for a fresh snapshot; use the returned cursor for following pages.
+        #[arg(long)]
+        after: Option<u64>,
+        #[arg(long)]
+        output: PathBuf,
+    },
+    /// Publish a declared appearance with this launch identity; no game capture.
+    AppearancePublish {
+        #[command(flatten)]
+        session: AppearanceRpc,
+        #[arg(long)]
+        appearance: PathBuf,
+    },
+    /// Retire this launch identity's declared vehicle generation.
+    AppearanceRemove {
+        #[command(flatten)]
+        session: AppearanceRpc,
+        #[arg(long)]
+        vehicle: String,
+        #[arg(long,value_parser=clap::value_parser!(u64).range(1..))]
+        generation: u64,
+    },
     /// Prepare a declared multipart/material plan offline, without engine calls.
     AppearancePlan {
         #[arg(long)]
@@ -131,6 +243,14 @@ enum Command {
         room: String,
         #[arg(long,value_parser=clap::value_parser!(u64).range(1..=86400))]
         run_for_secs: Option<u64>,
+        /// Enable the declared appearance stream only with ALL three files.
+        #[arg(long, requires_all=["appearance_catalogue","appearance_snapshot"])]
+        appearance_content: Option<PathBuf>,
+        #[arg(long, requires_all=["appearance_content","appearance_snapshot"])]
+        appearance_catalogue: Option<PathBuf>,
+        /// Frozen sidecar + appearance seed, <=128 KiB; not a live engine snapshot.
+        #[arg(long, requires_all=["appearance_content","appearance_catalogue"])]
+        appearance_snapshot: Option<PathBuf>,
     },
     /// Verify a staged import and obtain a PRIVATE one-hour launch ticket.
     PrepareLaunch {
@@ -235,6 +355,68 @@ enum Command {
 #[tokio::main]
 async fn main() -> Result<()> {
     match Cli::parse().command {
+        Command::AppearancePull {
+            session,
+            after,
+            output,
+        } => {
+            let output =
+                career_entry::assistant::new_destination(&output).map_err(anyhow::Error::msg)?;
+            let local = AppearanceLocal::load(&session)?;
+            let reply = local
+                .exchange(
+                    session.server,
+                    multiplayer_server::appearance_stream::Operation::Pull { after },
+                )
+                .await?;
+            store::write_new(&output, &store::json(&reply).map_err(anyhow::Error::msg)?)
+                .map_err(anyhow::Error::msg)?;
+            print_appearance_reply(&reply)?;
+        }
+        Command::AppearancePublish {
+            session,
+            appearance,
+        } => {
+            use multiplayer_server::{
+                appearance_stream::Operation, vehicle_appearance as va, world_join::Change,
+            };
+            let local = AppearanceLocal::load(&session)?;
+            let description = va::Description::parse(
+                &store::read_bounded(&appearance, va::MAX_DESCRIPTION_JSON)
+                    .map_err(anyhow::Error::msg)?,
+                &local.catalogue,
+            )
+            .map_err(anyhow::Error::msg)?;
+            let reply = local
+                .exchange(
+                    session.server,
+                    Operation::Publish {
+                        change: Change::Appearance { description },
+                    },
+                )
+                .await?;
+            print_appearance_reply(&reply)?;
+        }
+        Command::AppearanceRemove {
+            session,
+            vehicle,
+            generation,
+        } => {
+            let local = AppearanceLocal::load(&session)?;
+            let reply = local
+                .exchange(
+                    session.server,
+                    multiplayer_server::appearance_stream::Operation::Publish {
+                        change: multiplayer_server::world_join::Change::Remove {
+                            player: local.launch.identity.clone(),
+                            vehicle,
+                            generation,
+                        },
+                    },
+                )
+                .await?;
+            print_appearance_reply(&reply)?;
+        }
         Command::AppearancePlan {
             content,
             catalogue,
@@ -364,8 +546,39 @@ async fn main() -> Result<()> {
             advertise,
             room,
             run_for_secs,
+            appearance_content,
+            appearance_catalogue,
+            appearance_snapshot,
         } => {
             let (manifest, _) = store::load(&data).map_err(anyhow::Error::msg)?;
+            let appearance = if let (Some(content), Some(catalogue), Some(snapshot)) = (
+                appearance_content,
+                appearance_catalogue,
+                appearance_snapshot,
+            ) {
+                let (content, catalogue) = load_catalogue(&content, &catalogue)?;
+                let snapshot = multiplayer_server::world_join::Snapshot::parse(
+                    &store::read_bounded(
+                        &snapshot,
+                        multiplayer_server::appearance_stream::MAX_SEED_JSON,
+                    )
+                    .map_err(anyhow::Error::msg)?,
+                )
+                .map_err(anyhow::Error::msg)?;
+                Some(
+                    multiplayer_server::appearance_stream::Authority::new(
+                        multiplayer_server::world_join::Context {
+                            career: &manifest,
+                            content: &content,
+                            catalogue: &catalogue,
+                        },
+                        snapshot,
+                    )
+                    .map_err(anyhow::Error::msg)?,
+                )
+            } else {
+                None
+            };
             let settings = multiplayer_server::session_hub::Settings {
                 room,
                 profile: manifest.compatibility.profile,
@@ -380,7 +593,7 @@ async fn main() -> Result<()> {
                 listener.local_addr()?,
                 socket.local_addr()?
             );
-            let report=career_net::serve_room(listener,socket,&data,settings,advertise,async {
+            let report=career_net::serve_room_with_appearance(listener,socket,&data,settings,advertise,appearance,async {
                 if let Some(seconds)=run_for_secs { tokio::select! { _=tokio::time::sleep(Duration::from_secs(seconds))=>{}, _=tokio::signal::ctrl_c()=>{} } }
                 else { let _=tokio::signal::ctrl_c().await; }
             }).await?;
@@ -569,6 +782,70 @@ fn write_assistant_plan(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn appearance_host_is_opt_in_and_partial_configuration_is_refused() {
+        let base = vec![
+            "career",
+            "host",
+            "--data",
+            "own",
+            "--room",
+            "own",
+            "--advertise",
+            "127.0.0.1:39000",
+        ];
+        assert!(Cli::try_parse_from(base.clone()).is_ok());
+        for flag in [
+            "--appearance-content",
+            "--appearance-catalogue",
+            "--appearance-snapshot",
+        ] {
+            let mut args = base.clone();
+            args.extend([flag, "own.json"]);
+            assert!(Cli::try_parse_from(args).is_err());
+        }
+        let mut args = base;
+        args.extend([
+            "--appearance-content",
+            "c.json",
+            "--appearance-catalogue",
+            "a.json",
+            "--appearance-snapshot",
+            "s.json",
+        ]);
+        assert!(Cli::try_parse_from(args).is_ok());
+    }
+    #[test]
+    fn appearance_rpc_requires_context_and_existing_launch_file_not_ticket_argument() {
+        let base = vec![
+            "career",
+            "appearance-pull",
+            "--server",
+            "127.0.0.1:39001",
+            "--data",
+            "own",
+            "--content",
+            "c.json",
+            "--catalogue",
+            "a.json",
+            "--launch",
+            "private.json",
+            "--world-epoch",
+            "1",
+            "--authority-generation",
+            "1",
+            "--output",
+            "new.json",
+        ];
+        assert!(Cli::try_parse_from(base.clone()).is_ok());
+        let mut args = base.clone();
+        args.extend(["--ticket", "aabb"]);
+        assert!(Cli::try_parse_from(args).is_err());
+        let mut args = base;
+        let position = args.iter().position(|a| *a == "--world-epoch").unwrap();
+        args[position + 1] = "0";
+        assert!(Cli::try_parse_from(args).is_err());
+    }
     #[test]
     fn assistant_plan_commands_require_local_inputs_and_keep_offline_check_separate() {
         assert!(Cli::try_parse_from(["career", "check-plan", "--plan", "own.json"]).is_ok());

@@ -501,6 +501,19 @@ zero candidatos ausentes/ambíguos nessa busca estreita não comprova completude
 Casos próprios cobrem ambiguidades, importação cíclica deduplicada, raiz VFS,
 arquivo alterado/limites/aliases e6kmutações do lexer. W3 permanece parcial.
 
+Transporte W3/W5 optativo de01/11: o host da carreira pode habilitar fluxo de
+descritores declarados por três arquivos content/catalogue/seed. Reaproveita
+TCP e Registry de tickets; publicações só do principal, com hashpins/gerações,
+sequência, retry idempotente, páginas e snapshot para leitor atrasado. CLIs
+pull/publish/remove verificam respostas, sem aplicar no motor. Seed128KiB,
+history128/page32, budgets64/s global8/s ID. O sidecar do seed é CONGELADO,
+não o ledger/clock atuais. Reinício requer geração nova definida pelo operador,
+sem persistência/guard automático de geração/head; novo ticket obrigatório.
+Cliente RPC é stateless e não mantém pisos de Receiver entre chamadas.
+Scope continua sidecar_appearance_only/flagsfalse. Critérios amplos de W3/W5
+seguem abertos: falta captura, render por instância e readiness integrado.
+Bench TCP próprio/codec/CLI não substitui o aceite B/D entre dois PCs.
+
 Base W5 offline: `world_join` prepara um snapshot tipado do sidecar existente
 e aparências declaradas, com corte/fluxo exclusivo de aparência, sem duplicar
 o formato do ledger. Vincula carreira/conteúdo/catálogo/mundo/autoridade;

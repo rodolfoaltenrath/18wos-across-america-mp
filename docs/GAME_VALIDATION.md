@@ -25,6 +25,12 @@ O auditor `vehicle-references` lê definições contra arquivos conferidos por
 hash, mantém ambiguidades/recusas explícitas e não gera catálogo aplicado.
 Sua saída estática não exige nova partida nem substitui comprovar seleção,
 herança, slots e composição efetivamente usados pelo motor na rodada W3.
+Transporte TCP optativo de01/11 já troca descritores declarados em bancada com
+os tickets da carreira, incluindo retry/páginas/snapshot. Ainda não captura
+aparência nem a aplica no jogo; o sidecar do seed fica congelado. A futura
+rodada B/D deve ligar captura→transporte→aplicação e confirmar diferenças
+visuais/reload/reconexão nos dois PCs. Não repetir LAN básica/G12/G13 apenas
+para validar codec, orçamento ou os novos comandos de desenvolvimento.
 
 Preparo W5 offline: snapshot/fluxo de aparência e sidecar preparados sem motor
 por `mp_career join-check`. Não confundir fase prepared com entrada no jogo.
