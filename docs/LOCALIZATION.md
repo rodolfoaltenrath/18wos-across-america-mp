@@ -1,5 +1,20 @@
 # Tradução PT-BR — textos e dublagem
 
+Preparo portátil02/11: `player_setup` reúne catálogos próprios embutidos,
+reconstrução T1/T2/fontes no PC destinatário e o instalador/restaurador existentes.
+Preparo novo guarda fingerprints dos três SCS, game.dll e init.cfg, confere-os
+novamente após gerar o pacote e deixa `.INCOMPLETE` se falhar. Instalar exige
+que as entradas continuem iguais; backup precede a escrita do overlay/config.
+Restaurar usa o backup, mesmo se os fontes/pacote preparados mudarem depois.
+Menu experimental é componente separado; instalar antes da tradução, restaurar
+depois dela. Montagens desconhecidas/duplicadas são recusadas; não existe
+descoberta da ordem efetiva do motor. O preparo não instala nem abre o jogo.
+São hashes antes/depois e recusa de links locais, não snapshot atômico/sandbox
+contra escritores concorrentes. As saídas derivadas continuam privadas locais.
+Seis regressões próprias e115testes nativos da biblioteca de assets passaram,
+Clippy lib/fmt; primeiro compile do teste corrigiu iterador de mapa para values.
+Integração interativa e kit serão ligados no próximo bloco, sem nova prova G11.
+
 Decisão do proprietário em 30/10/2026: traduzir o jogo inteiro, **textos e
 dublagem em etapas separadas**. A primeira versão traduzida deve poder ser
 testada sem esperar pela produção das vozes. Moeda R$ continua requisito

@@ -4,6 +4,7 @@ pub mod bindings;
 pub mod licenses;
 pub mod localization;
 pub mod mod_package;
+pub mod player_setup;
 pub mod source_audit;
 pub mod ui_tools;
 pub mod vehicle_references;
