@@ -327,7 +327,13 @@ Escolha 1; servidor/sala/identidade sao os vinculados ao arquivo. Confirme a\r\n
 pasta dos saves. Use 3 antes de fechar o jogo e aguarde a limpeza, como no modo\r\n\
 visual. Opcoes 2/3/4 continuam disponiveis mesmo se o plano/ticket ficar invalido.\r\n\
 Os checks locais nao consultam validade no servidor nem comprovam qual save\r\n\
-esta carregado. Admissao efetiva e feita pelo launcher/relay no inicio.\r\n"
+esta carregado. Admissao efetiva e feita pelo launcher/relay no inicio.\r\n\r\n\
+Ferramentas de desenvolvimento adicionais: mp_career appearance-sync recebe\r\n\
+aparencias DECLARADAS e guarda progresso em arquivo privado NOVO; --state\r\n\
+retoma o arquivo anterior. appearance-state-check confere esse estado offline.\r\n\
+Consulte --help para os arquivos de contexto e ticket necessarios. Nao e\r\n\
+necessario usar esses comandos para a rodada visual pelo mp_lan. Eles ainda\r\n\
+nao mudam modelo/pintura no jogo nem sincronizam o mundo vivo.\r\n"
 }
 
 #[cfg(test)]

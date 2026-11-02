@@ -209,5 +209,70 @@ pub async fn exchange(
     .map_err(|_| anyhow::anyhow!("appearance request timed out; retry SAME generation/revision"))?
 }
 
+pub const MAX_SYNC_PAGES: u8 = 8;
+#[derive(Serialize)]
+pub struct SyncReport {
+    pub pages: u8,
+    pub snapshot_replies: u8,
+    pub events: usize,
+    #[serde(flatten)]
+    pub state: stream::replica::Report,
+}
+/// Incrementally stage a bounded number of pages. Work on a temporary replica:
+/// on transport/validation failure the caller's previous checkpoint is intact.
+/// A page limit may return a valid lagging checkpoint, explicitly reported.
+pub async fn synchronize<'a>(
+    endpoint: SocketAddr,
+    launch: &Launch,
+    context: Context<'a>,
+    pin: &stream::Pin,
+    previous: Option<stream::replica::Replica<'a>>,
+    max_pages: u8,
+) -> Result<(stream::replica::Replica<'a>, SyncReport)> {
+    ensure!(
+        (1..=MAX_SYNC_PAGES).contains(&max_pages),
+        "appearance page budget must be 1..8"
+    );
+    // Revalidate even an externally constructed replica against THIS context.
+    let mut replica = match previous {
+        Some(previous) => stream::replica::Replica::from_bytes(
+            context,
+            pin,
+            &previous.checkpoint_bytes().map_err(anyhow::Error::msg)?,
+        ),
+        None => stream::replica::Replica::new(context, pin),
+    }
+    .map_err(anyhow::Error::msg)?;
+    tokio::time::timeout(DEADLINE, async {
+        let mut pages = 0;
+        let mut snapshots = 0;
+        let mut events = 0;
+        for _ in 0..max_pages {
+            let reply = exchange(endpoint, launch, context, pin, replica.next_pull()).await?;
+            replica.apply(&reply).map_err(anyhow::Error::msg)?;
+            pages += 1;
+            match reply.payload {
+                stream::Payload::Snapshot { .. } => snapshots += 1,
+                stream::Payload::Events { deltas, .. } => events += deltas.len(),
+                stream::Payload::Accepted { .. } => unreachable!(),
+            }
+            if replica.report().at_observed_head {
+                break;
+            }
+        }
+        let report = SyncReport {
+            pages,
+            snapshot_replies: snapshots,
+            events,
+            state: replica.report(),
+        };
+        Ok((replica, report))
+    })
+    .await
+    .map_err(|_| {
+        anyhow::anyhow!("appearance synchronization timed out; previous checkpoint preserved")
+    })?
+}
+
 #[cfg(test)]
 mod tests;

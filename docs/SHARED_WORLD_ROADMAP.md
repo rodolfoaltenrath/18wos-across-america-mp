@@ -510,6 +510,12 @@ history128/page32, budgets64/s global8/s ID. O sidecar do seed é CONGELADO,
 não o ledger/clock atuais. Reinício requer geração nova definida pelo operador,
 sem persistência/guard automático de geração/head; novo ticket obrigatório.
 Cliente RPC é stateless e não mantém pisos de Receiver entre chamadas.
+Complemento02/11: `appearance-pull` conserva esse comportamento; o novo
+`appearance-sync` usa réplica com checkpoint privado e páginas automáticas,
+preservando pisos e aposentadorias entre consultas. Limites de páginas/prazo
+permitem progresso explicitamente incompleto; falha não substitui o arquivo
+anterior. Isso não resolve geração persistente do host, sidecar vivo ou aplicação
+no motor. `appearance-state-check` verifica esse arquivo offline, sem ticket.
 Scope continua sidecar_appearance_only/flagsfalse. Critérios amplos de W3/W5
 seguem abertos: falta captura, render por instância e readiness integrado.
 Bench TCP próprio/codec/CLI não substitui o aceite B/D entre dois PCs.

@@ -122,6 +122,34 @@ fn print_appearance_reply(reply: &multiplayer_server::appearance_stream::Reply) 
 }
 #[derive(Subcommand)]
 enum Command {
+    /// Stage appearance pages and publish a NEW private resumable checkpoint.
+    AppearanceSync {
+        #[command(flatten)]
+        session: AppearanceRpc,
+        /// Previous local checkpoint. Omit to request a fresh snapshot.
+        #[arg(long)]
+        state: Option<PathBuf>,
+        #[arg(long)]
+        output: PathBuf,
+        /// Bound this attempt; lagging state remains explicitly marked.
+        #[arg(long, default_value_t=5, value_parser=clap::value_parser!(u8).range(1..=8))]
+        max_pages: u8,
+    },
+    /// Inspect a private appearance checkpoint offline, without a ticket/server.
+    AppearanceStateCheck {
+        #[arg(long)]
+        data: PathBuf,
+        #[arg(long)]
+        content: PathBuf,
+        #[arg(long)]
+        catalogue: PathBuf,
+        #[arg(long)]
+        state: PathBuf,
+        #[arg(long,value_parser=clap::value_parser!(u64).range(1..))]
+        world_epoch: u64,
+        #[arg(long,value_parser=clap::value_parser!(u64).range(1..))]
+        authority_generation: u64,
+    },
     /// Pull one private appearance snapshot/page; does not apply it to the game.
     AppearancePull {
         #[command(flatten)]
@@ -355,6 +383,57 @@ enum Command {
 #[tokio::main]
 async fn main() -> Result<()> {
     match Cli::parse().command {
+        Command::AppearanceSync {
+            session,
+            state,
+            output,
+            max_pages,
+        } => {
+            use multiplayer_server::appearance_stream::replica::Replica;
+            let output =
+                career_entry::assistant::new_destination(&output).map_err(anyhow::Error::msg)?;
+            let local = AppearanceLocal::load(&session)?;
+            let previous = state
+                .as_ref()
+                .map(|path| Replica::load(local.context(), &local.pin, path))
+                .transpose()
+                .map_err(anyhow::Error::msg)?;
+            let (replica, report) = career_net::appearance_sync(
+                session.server,
+                &local.launch,
+                local.context(),
+                &local.pin,
+                previous,
+                max_pages,
+            )
+            .await?;
+            replica.save_new(&output).map_err(anyhow::Error::msg)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        }
+        Command::AppearanceStateCheck {
+            data,
+            content,
+            catalogue,
+            state,
+            world_epoch,
+            authority_generation,
+        } => {
+            use multiplayer_server::{
+                appearance_stream::{Pin, replica::Replica},
+                world_join::Context,
+            };
+            let (career, _) = store::load(&data).map_err(anyhow::Error::msg)?;
+            let (content, catalogue) = load_catalogue(&content, &catalogue)?;
+            let context = Context {
+                career: &career,
+                content: &content,
+                catalogue: &catalogue,
+            };
+            let pin = Pin::new(&context, world_epoch, authority_generation)
+                .map_err(anyhow::Error::msg)?;
+            let replica = Replica::load(context, &pin, &state).map_err(anyhow::Error::msg)?;
+            println!("{}", serde_json::to_string_pretty(&replica.report())?);
+        }
         Command::AppearancePull {
             session,
             after,
@@ -782,6 +861,58 @@ fn write_assistant_plan(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn appearance_sync_bounds_work_and_checkpoint_inspection_needs_no_network_capability() {
+        let base = [
+            "career",
+            "appearance-sync",
+            "--server",
+            "127.0.0.1:39001",
+            "--data",
+            "own",
+            "--content",
+            "c.json",
+            "--catalogue",
+            "a.json",
+            "--launch",
+            "private.json",
+            "--world-epoch",
+            "1",
+            "--authority-generation",
+            "1",
+            "--output",
+            "new.json",
+        ];
+        assert!(Cli::try_parse_from(base).is_ok());
+        for pages in ["0", "9", "256"] {
+            let mut args = base.to_vec();
+            args.extend(["--max-pages", pages]);
+            assert!(Cli::try_parse_from(args).is_err());
+        }
+        let mut args = base.to_vec();
+        args.extend(["--state", "old.json", "--max-pages", "1"]);
+        assert!(Cli::try_parse_from(args).is_ok());
+        let offline = [
+            "career",
+            "appearance-state-check",
+            "--data",
+            "own",
+            "--content",
+            "c.json",
+            "--catalogue",
+            "a.json",
+            "--state",
+            "old.json",
+            "--world-epoch",
+            "1",
+            "--authority-generation",
+            "1",
+        ];
+        assert!(Cli::try_parse_from(offline).is_ok());
+        let mut args = offline.to_vec();
+        args.extend(["--server", "127.0.0.1:39001"]);
+        assert!(Cli::try_parse_from(args).is_err());
+    }
     #[test]
     fn appearance_host_is_opt_in_and_partial_configuration_is_refused() {
         let base = vec![

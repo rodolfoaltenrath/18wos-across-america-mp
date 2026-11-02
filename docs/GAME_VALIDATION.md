@@ -54,6 +54,13 @@ por `mp_career join-check`. Não confundir fase prepared com entrada no jogo.
 Lotes C/D/E só exercitarão entrada tardia/recuperação real após transporte,
 admissão e aplicação comprovados; por enquanto fixtures cobrem corte, replay,
 lacuna, overflow e gerações removidas, sem exigir outro percurso humano.
+Leitor W5 de02/11 agora retoma checkpoint privado entre consultas e busca
+páginas automaticamente via `appearance-sync`; `appearance-state-check` verifica
+o estado sem rede. Bancada cobre paginação real/TCP, limite parcial, histórico
+vencido e falha após página válida, com arquivo anterior preservado. Isso não
+acrescenta passos à rodada abaixo: só testar recuperação visual quando o leitor
+estiver ligado ao adaptador do motor. Não pedir jogo para validar persistência
+do cursor/limites/CLI, nem confundir head observado com mundo pronto.
 
 ## Próxima sessão em dois PCs — preparo agrupado de 02/11
 

@@ -192,6 +192,35 @@ lease/conta: continuam as regras de confiança e validade da carreira. Divergên
 de hashes recusa este canal; não transforma a entrada UDP legada em comprovação
 de assets montados. Serviço e histórico são voláteis; não persistem o save vivo.
 
+Para retomar o leitor de aparências declaradas entre consultas, há também:
+
+```text
+mp_career appearance-sync --server IP:39001 --data IMPORTACAO --launch TICKET.json --content CONTEUDO.json --catalogue CATALOGO.json --world-epoch 1 --authority-generation 1 --output ESTADO-1.json
+mp_career appearance-sync --server IP:39001 --data IMPORTACAO --launch TICKET.json --content CONTEUDO.json --catalogue CATALOGO.json --world-epoch 1 --authority-generation 1 --state ESTADO-1.json --output ESTADO-2.json
+mp_career appearance-state-check --data IMPORTACAO --content CONTEUDO.json --catalogue CATALOGO.json --world-epoch 1 --authority-generation 1 --state ESTADO-2.json
+```
+
+`appearance-sync` busca até5 páginas por tentativa (`--max-pages 1..8`), com
+prazo total30s. Continua pelo cursor local; histórico vencido recebe snapshot.
+Prepara cada página inteira e recusa retrocesso do head observado, mudança de
+contexto ou conflito no mesmo corte/checkpoint. O arquivo novo inclui o snapshot
+materializado, gerações aposentadas e o head observado, com hash/limite192KiB.
+Grava temporário privado, sincroniza e publica sem substituir por hard-link;
+filesystem sem suporte recusa, sem fallback que sobrescreva o anterior. Uma
+interrupção pode deixar temporário, nunca escolhido automaticamente. Não é
+garantia universal de durabilidade nem sandbox contra trocas concorrentes de
+caminhos; links/reparse finais do checkpoint de entrada são recusados.
+
+Se o limite de páginas for atingido antes do head, salva progresso válido com
+`at_observed_head=false`; use-o na próxima tentativa. Falha de transporte ou
+validação não grava saída, preservando o arquivo anterior. O status só afirma
+alcançar a última resposta recebida; o servidor pode avançar depois. O hash
+detecta corrupção comum, não autentica o checkpoint nem impede escolher uma
+cópia antiga válida. Arquivos contêm identidades/estado privado, sem tickets;
+não são diagnósticos públicos. O check offline não usa rede, ticket ou jogo.
+Tudo continua limitado ao sidecar congelado e aparências declaradas, sem
+alterar o desenho, a admissão UDP ou marcar o mundo/jogo pronto.
+
 Prioridade de conclusão em 31/10: fechar M2 antes de ampliar funcionalidades.
 As proteções de inicialização/parada/descarga foram reforçadas e a bancada
 agora cobre falhas de preparo, interrupção UDP e saída do host próprio com o

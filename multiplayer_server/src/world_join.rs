@@ -74,6 +74,7 @@ impl Delta {
         serde_json::from_slice(bytes).map_err(|_| "invalid appearance delta JSON".into())
     }
 }
+#[derive(Clone, Copy)]
 pub struct Context<'a> {
     pub career: &'a career::Manifest,
     pub content: &'a world_content::Manifest,

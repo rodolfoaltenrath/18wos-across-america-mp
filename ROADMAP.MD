@@ -1,5 +1,28 @@
 # Roadmap — Across America multiplayer em Rust
 
+## W5/W10 offline: busca incremental e checkpoint novo — 02/11
+
+`mp_career appearance-sync` liga a réplica ao TCP autenticado existente. Até5
+páginas por tentativa, configurável1..8, prazo total30s. Limite pode retornar
+progresso válido e explicitamente atrasado; falha não publica saída. Sempre
+consulta ao menos uma vez, inclusive com checkpoint antes atualizado. Hashpins,
+gerações e pisos são conferidos novamente; `appearance-pull` continua preservado.
+
+Arquivo novo publicado após temporário sincronizado e hard-link sem substituição,
+como no journal; sem fallback para filesystem incompatível. Entrada recusa link/
+reparse final. Interrupção pode deixar temporário privado não selecionado; não
+promete durabilidade universal, proteção de ancestrais ou assinatura. O arquivo
+anterior permanece intacto. `appearance-state-check` é offline, sem ticket/rede.
+CARREIRA.txt explica que essas ferramentas opcionais não são necessárias à LAN
+visual. Escopo sidecar congelado/aparência declarada, engine/worldfalse.
+
+Suíte servidor nativa completa116tests passou:108lib+5CLI+1main+2probe. Inclui
+duas integrações TCP novas: ticket real/80eventos/três páginas/retomada parcial/
+snapshot fresco/poll vazio e falha na segunda página sem alterar arquivo anterior.
+Publicação/saída nova/permissões/temporário interrompido e argumentos/limites
+também cobertos. Clippy servidor all-targets/fmt passaram; integral x86/workspace
+será registrado ao fechar o lote. Sem jogo/instalação, W5/W10/51de104 intactos.
+
 ## W5 offline: retomada do leitor de aparência — 02/11
 
 `appearance_stream::replica` prepara páginas completas usando o Receiver

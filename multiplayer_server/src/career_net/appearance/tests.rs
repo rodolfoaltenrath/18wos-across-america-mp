@@ -1,8 +1,203 @@
 use super::*;
 use crate::{
+    appearance_stream::replica::Replica,
     career_store::tests::Temp,
     world_join::{self as join, Change, Context},
 };
+
+#[tokio::test]
+async fn sync_resumes_multiple_real_ticketed_pages_and_publishes_only_new_checkpoints() {
+    let dir = Temp::new();
+    let (m, c, a, seed) = join::tests::fixture();
+    let ctx = context(&m, &c, &a);
+    let who = seed.appearances[0].player.clone();
+    let mut authority = stream::Authority::new(ctx, seed.clone()).unwrap();
+    let pin = authority.pin().clone();
+    let mut previous = Replica::new(ctx, &pin).unwrap();
+    previous
+        .apply(
+            &authority
+                .execute(&who, &pin, &previous.next_pull())
+                .unwrap(),
+        )
+        .unwrap();
+    for revision in 2..=81 {
+        let mut d = seed.appearances[0].clone();
+        d.revision = revision;
+        authority
+            .execute(
+                &who,
+                &pin,
+                &stream::Operation::Publish {
+                    change: Change::Appearance { description: d },
+                },
+            )
+            .unwrap();
+    }
+    store::write_new(&dir.0.join("bootstrap.sav"), b"own save fixture").unwrap();
+    store::write_new(&dir.0.join("manifest.json"), &store::json(&m).unwrap()).unwrap();
+    let invite = Invite::new(&m).unwrap();
+    store::write_new(&dir.0.join("invite.json"), &store::json(&invite).unwrap()).unwrap();
+    let tcp = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = tcp.local_addr().unwrap();
+    let udp = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
+    let relay = udp.local_addr().unwrap();
+    let data = dir.0.clone();
+    let (stop, stopped) = tokio::sync::oneshot::channel();
+    let server = tokio::spawn(async move {
+        serve_room_with_appearance(
+            tcp,
+            udp,
+            &data,
+            crate::session_hub::Settings {
+                room: "own".into(),
+                profile: session_protocol::PROFILE.into(),
+                max_clients: 2,
+                timeout_ms: 2000,
+                echo: false,
+            },
+            relay,
+            Some(authority),
+            async {
+                let _ = stopped.await;
+            },
+        )
+        .await
+    });
+    let import = dir.0.join("guest");
+    fetch(endpoint, &invite, m.compatibility.clone(), &import)
+        .await
+        .unwrap();
+    let launch = prepare_launch(endpoint, &invite, m.compatibility.clone(), &import, &who)
+        .await
+        .unwrap();
+    let (partial, report) = synchronize(endpoint, &launch, ctx, &pin, Some(previous), 1)
+        .await
+        .unwrap();
+    assert_eq!(
+        (report.pages, report.snapshot_replies, report.events),
+        (1, 0, 32)
+    );
+    assert_eq!(report.state.through_sequence, Some(42));
+    assert_eq!(report.state.observed_head, Some(90));
+    assert!(!report.state.at_observed_head);
+    let old = dir.0.join("partial.json");
+    partial.save_new(&old).unwrap();
+    let before = std::fs::read(&old).unwrap();
+    let loaded = Replica::load(ctx, &pin, &old).unwrap();
+    let (complete, report) = synchronize(endpoint, &launch, ctx, &pin, Some(loaded), 8)
+        .await
+        .unwrap();
+    assert_eq!((report.pages, report.events), (2, 48));
+    assert!(report.state.at_observed_head);
+    assert_eq!(report.state.through_sequence, Some(90));
+    assert!(complete.save_new(&old).is_err());
+    complete.save_new(&dir.0.join("complete.json")).unwrap();
+    let (complete, empty) = synchronize(endpoint, &launch, ctx, &pin, Some(complete), 8)
+        .await
+        .unwrap();
+    assert_eq!((empty.pages, empty.events), (1, 0));
+    assert!(empty.state.at_observed_head);
+    let (_, fresh) = synchronize(endpoint, &launch, ctx, &pin, None, 8)
+        .await
+        .unwrap();
+    assert_eq!((fresh.pages, fresh.snapshot_replies), (1, 1));
+    for invalid in [0, 9] {
+        assert!(
+            synchronize(endpoint, &launch, ctx, &pin, None, invalid)
+                .await
+                .is_err()
+        );
+    }
+    let mut wrong = launch.clone();
+    wrong.proof.ticket = "0".repeat(32);
+    assert!(
+        synchronize(endpoint, &wrong, ctx, &pin, Some(complete), 8)
+            .await
+            .is_err()
+    );
+    assert_eq!(std::fs::read(&old).unwrap(), before);
+    stop.send(()).unwrap();
+    let report = server.await.unwrap().unwrap();
+    let summary = report.control.appearance.unwrap();
+    assert_eq!((summary.event_pages, summary.snapshot_replies), (4, 1));
+    assert!(!summary.engine_verified && !summary.world_synchronized && !report.game_tested);
+    assert_eq!(store::load(&dir.0).unwrap().1, b"own save fixture");
+}
+
+#[tokio::test]
+async fn failure_after_a_good_page_never_publishes_new_state_or_changes_previous_file() {
+    let dir = Temp::new();
+    let (m, c, a, seed) = join::tests::fixture();
+    let ctx = context(&m, &c, &a);
+    let who = seed.appearances[0].player.clone();
+    let registry = Registry::new(m.clone(), "own".into(), "127.0.0.1:1".parse().unwrap()).unwrap();
+    let launch = registry.issue(&who, &receipt(&m)).unwrap();
+    let mut authority = stream::Authority::new(ctx, seed.clone()).unwrap();
+    let pin = authority.pin().clone();
+    let mut previous = Replica::new(ctx, &pin).unwrap();
+    previous
+        .apply(
+            &authority
+                .execute(&who, &pin, &previous.next_pull())
+                .unwrap(),
+        )
+        .unwrap();
+    let file = dir.0.join("previous.json");
+    previous.save_new(&file).unwrap();
+    let before = std::fs::read(&file).unwrap();
+    for revision in 2..=70 {
+        let mut d = seed.appearances[0].clone();
+        d.revision = revision;
+        authority
+            .execute(
+                &who,
+                &pin,
+                &stream::Operation::Publish {
+                    change: Change::Appearance { description: d },
+                },
+            )
+            .unwrap();
+    }
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = listener.local_addr().unwrap();
+    let task = tokio::spawn(async move {
+        for index in 0..2 {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let request: super::super::Request = receive(&mut socket).await.unwrap();
+            let request = request.appearance.unwrap();
+            let mut reply = authority
+                .execute(&who, &request.pin, &request.operation)
+                .unwrap();
+            if index == 1 {
+                reply.world_synchronized = true;
+            }
+            send(
+                &mut socket,
+                &Response::Appearance {
+                    reply: Box::new(reply),
+                },
+            )
+            .await
+            .unwrap();
+        }
+    });
+    assert!(
+        synchronize(endpoint, &launch, ctx, &pin, Some(previous), 8)
+            .await
+            .is_err()
+    );
+    task.await.unwrap();
+    assert_eq!(std::fs::read(&file).unwrap(), before);
+    assert_eq!(
+        Replica::load(ctx, &pin, &file)
+            .unwrap()
+            .report()
+            .through_sequence,
+        Some(10)
+    );
+    assert_eq!(std::fs::read_dir(&dir.0).unwrap().count(), 1);
+}
 fn context<'a>(
     m: &'a Manifest,
     c: &'a crate::world_content::Manifest,

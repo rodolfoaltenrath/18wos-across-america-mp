@@ -256,3 +256,40 @@ fn mutated_checkpoints_and_replies_do_not_panic_or_damage_staged_state() {
         }
     }
 }
+
+#[test]
+fn checkpoint_publication_is_private_new_only_and_ignores_interrupted_temporaries() {
+    let t = crate::career_store::tests::Temp::new();
+    let (m, c, a, s) = join::tests::fixture();
+    let ctx = context(&m, &c, &a);
+    let pin = Pin::new(&ctx, 1, 1).unwrap();
+    let mut replica = Replica::new(ctx, &pin).unwrap();
+    replica.apply(&snapshot_reply(&pin, s)).unwrap();
+    let path = t.0.join("previous.json");
+    replica.save_new(&path).unwrap();
+    let before = fs::read(&path).unwrap();
+    assert!(replica.save_new(&path).is_err());
+    assert_eq!(fs::read(&path).unwrap(), before);
+    let pending = t.0.join(".appearance-owned-interruption.tmp");
+    fs::write(&pending, &before[..before.len() / 2]).unwrap();
+    assert!(Replica::load(ctx, &pin, &pending).is_err());
+    let loaded = Replica::load(ctx, &pin, &path).unwrap();
+    assert_eq!(loaded.checkpoint_bytes().unwrap(), before);
+    let next = t.0.join("next.json");
+    loaded.save_new(&next).unwrap();
+    assert_eq!(fs::read(&next).unwrap(), before);
+    assert!(pending.is_file()); // never sweep arbitrary pending files
+    assert!(replica.save_new(&t.0.join("missing/next.json")).is_err());
+    #[cfg(unix)]
+    {
+        use std::os::unix::{fs::PermissionsExt, fs::symlink};
+        assert_eq!(
+            fs::metadata(&next).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        let link = t.0.join("link.json");
+        symlink(&path, &link).unwrap();
+        assert!(Replica::load(ctx, &pin, &link).is_err());
+        assert!(replica.save_new(&link).is_err());
+    }
+}

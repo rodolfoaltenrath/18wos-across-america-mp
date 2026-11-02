@@ -6,6 +6,7 @@ use crate::{
     world_join::{Context, Receiver, Snapshot},
 };
 use serde::{Deserialize, Serialize};
+use std::{fs, path::Path};
 
 pub const MAX_CHECKPOINT_JSON: usize = 192 * 1024;
 
@@ -131,6 +132,38 @@ impl<'a> Replica<'a> {
                 .ok_or("appearance replica has no snapshot")?,
             self.observed_head,
         )
+    }
+    pub fn load(context: Context<'a>, pin: &Pin, path: &Path) -> Result<Self, String> {
+        let metadata = fs::symlink_metadata(path).map_err(|e| e.to_string())?;
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt;
+            if metadata.file_attributes() & 0x400 != 0 {
+                return Err("appearance checkpoint reparse point refused".into());
+            }
+        }
+        if !metadata.is_file() || metadata.file_type().is_symlink() {
+            return Err("appearance checkpoint must be a regular file".into());
+        }
+        Self::from_bytes(
+            context,
+            pin,
+            &crate::career_store::read_bounded(path, MAX_CHECKPOINT_JSON)?,
+        )
+    }
+    /// Same-directory synced temporary + no-replace hard-link publication, as
+    /// in the career journal. Unsupported filesystems fail without replacing.
+    /// An interrupted temporary is never selected as a checkpoint automatically.
+    pub fn save_new(&self, path: &Path) -> Result<(), String> {
+        let destination = crate::career_entry::assistant::new_destination(path)?;
+        let parent = destination.parent().ok_or("checkpoint parent missing")?;
+        let bytes = self.checkpoint_bytes()?;
+        let temporary = parent.join(format!(".appearance-{}.tmp", crate::identity::random_id()?));
+        crate::career_store::write_new(&temporary, &bytes)?;
+        fs::hard_link(&temporary, &destination).map_err(|e| e.to_string())?;
+        crate::career_store::sync_dir(parent)?;
+        fs::remove_file(temporary).map_err(|e| e.to_string())?;
+        Ok(())
     }
     pub fn next_pull(&self) -> Operation {
         Operation::Pull {

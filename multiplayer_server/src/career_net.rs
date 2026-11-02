@@ -28,6 +28,10 @@ const MAX_FRAME: usize = 256 * 1024;
 const DEADLINE: Duration = Duration::from_secs(30);
 mod appearance;
 pub use appearance::exchange as appearance_exchange;
+pub use appearance::{
+    MAX_SYNC_PAGES as MAX_APPEARANCE_SYNC_PAGES, SyncReport as AppearanceSyncReport,
+    synchronize as appearance_sync,
+};
 pub fn inspect_import(path: &Path) -> Result<Receipt> {
     crate::career_entry::inspect_import(path).map_err(anyhow::Error::msg)
 }
