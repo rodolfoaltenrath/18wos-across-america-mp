@@ -27,8 +27,19 @@ CLIs de captura/comparação/extração têm saídas iguais Linux/x86 Proton, do
 inputs próprios intactos. Uso interativo em jogo/Windows destinatário permanece
 para a rodada, não validado por esses testes. Oito arquivos no prefixo real
 iguais ao backup G13; init.cfg/game/p3/psm intactos. Sem jogo/instalação ou novo
-check amplo; total51/104 preservado. Kit novo de teste será preparado com a
-revisão commitada, sem substituir automaticamente o instalado.
+check amplo; total51/104 preservado.
+
+Kit NOVO de teste preparado em Downloads com sufixo dois-pcs-d10fcdd, fonte
+d10fcddf3bf27697fb78f3464b173771149c5b07, schema2/seis binários e notices com
+hash. Builder, `mp_lan --check-only` com a raiz real e `--check-runtime` no
+próprio kit sob Proton passaram, sem acesso ao processo do jogo. A DLL própria
+foi liberada e worker/game/LAN permanecem false; não é prova Windows destinatário
+ou gráfica. Inventário de45crates: zero violações/zero sem texto de licença,
+sem equivaler a aprovação de publicação. Kit anterior e instalação intocados;
+lan_testedfalse. Após complementar, hashes de configuração/módulos intactos,
+enumerações finais sem jogo/fixtures/controladores/assistente/servidor e runtime
+da bancada encerrado. Logs two-pc-prep-*20261102* privados. A documentação
+posterior registra o artefato, sem mudar o Rust que gerou esses binários.
 
 ## W3/M8 offline: evidências de aparência para a próxima LAN — 02/11
 

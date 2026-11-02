@@ -1,5 +1,19 @@
 # Orientações para continuar o projeto
 
+Kitpré2PC02/11: NOVO em Downloads/18wos-mp-20261102-dois-pcs-d10fcdd,
+fonte d10fcddf3bf27697fb78f3464b173771149c5b07 (Rust inalterado depois).
+Schema2/seisbinários/notices hashes; licença45crates/0violações/0semtexto,
+não aprovação de publicação. Builder+mp_lan --check-only com raiz real e
+--check-runtime no próprio kit x86Proton passaram; DLL142b9c75…c63c liberada,
+worker/game/LANfalse. Não Windows destinatário/DirectX/partida/LAN validados.
+Não substituiu kit antigo/instalação/saves, lan_testedfalse. Roteiro próximo
+2PC em GAME_VALIDATION: menu5 captura2/movimento1/Guardaraparência1, depois
+conexão/foco/reload/limpeza/export6+7 na mesma sessão; sem abrir jogo neste lote.
+Final8iguais backupG13, init.cfg dddbacf5…7774/game/p3/psm intactos; enumWin/nativa
+sem jogo/fixtures/controllers/assistant/doctor/probe/servers/test_host; bench
+exclusivo parado. Logs two-pc-prep-* e appearance-evidence-*20261102* privados.
+Sem novos checks M/W:51de104 intactos, mundo/appearanceaplicada pendentes.
+
 M9préLAN02/11: player-settings.appearance_diagnostics optativo/defaultfalse,
 serde omitefalse preservandoJSONantigo; argumentoslauncher inalterados. Menu5
 escolhe para PRÓXIMO start; run guarda escolha/preflight hashkit+DLL. Helper faz
@@ -13,8 +27,8 @@ ainda pendente; settingslegacy/IO/args e coletor/doctorProcess próprio passaram
 Verify integral359x86Proton/439nativos/releases/3Clippy/fmt, logs no registro
 abaixo; apósverify sódocs. Oito arquivos no prefixopartida iguais backupG13,
 init.cfg dddbacf5…7774/game/p3/psm intactos. Sem jogo/instalação,51de104 intactos.
-Novo kit será preparado apóscommit sem substituir instalado; consultar logs
-two-pc-prep-*20261102*. Servidor local lido192.168.18.103:39000, reconferir no teste.
+Kit novo preparado apóscommit sem substituir instalado, conforme registro acima;
+endereço fica na configuração privada do kit e deve ser reconferido no teste.
 
 W3evidence02/11: appearance_evidence captura names/resources separados e recusa
 tipada Missing/Overflow/Type/Changed/Invalid/GuardRefused/TargetUnavailable,
