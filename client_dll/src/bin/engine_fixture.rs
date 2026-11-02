@@ -198,6 +198,7 @@ fn main() -> anyhow::Result<()> {
         let mut header = header;
         if let Some(fixture) = &appearance {
             header["appearance_descriptors"] = serde_json::to_value(fixture.descriptors())?;
+            header["appearance_resource_ops"] = fixture.resource_ops().into();
         }
         header
     };

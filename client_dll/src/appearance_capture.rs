@@ -27,7 +27,7 @@ fn word(
     read(at, &mut bytes).map_err(|_| Unavailable::Missing)?;
     Ok(u32::from_le_bytes(bytes))
 }
-fn witness(
+pub(crate) fn witness(
     layout: Layout<'_>,
     read: &mut impl FnMut(u32, &mut [u8]) -> Result<(), ()>,
 ) -> Result<[u32; 18], Unavailable> {

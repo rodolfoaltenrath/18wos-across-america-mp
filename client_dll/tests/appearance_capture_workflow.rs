@@ -2,6 +2,7 @@
 #![cfg(all(windows, target_arch = "x86"))]
 use client_dll::{
     appearance_capture::{self, Layout},
+    appearance_resources,
     inspection::{appearance, process::Process},
     pose_capture::{self, Unavailable},
 };
@@ -47,13 +48,43 @@ fn external_read_candidates_follow_owned_changes_and_game_inspector_refuses_the_
         })
     };
     let first = capture().unwrap();
+    let resource_ops = header["appearance_resource_ops"].as_u64().unwrap() as u32;
+    let resources = || {
+        appearance_resources::capture(layout, resource_ops, |at, out| {
+            process.read(u64::from(at), out).map_err(|_| ())
+        })
+    };
+    let first_resources = resources().unwrap();
+    assert_eq!(first_resources.names, first);
+    assert!(first_resources.instances[0].is_none() && first_resources.instances[1].is_none());
+    assert_eq!(
+        first_resources.instances[2]
+            .as_ref()
+            .unwrap()
+            .material_keys
+            .len(),
+        1
+    );
     first.validate().unwrap();
     assert_eq!(first.slots.len(), 3);
     assert!(appearance::inspect(&process).is_err());
+    assert!(appearance::inspect_resources(&process).is_err());
     let temp = tempfile::tempdir().unwrap();
     let output = temp.path().join("must-not-exist.json");
     let command = Command::new(env!("CARGO_BIN_EXE_memory_tool"))
         .args(["appearance", "--pid", &host.0.id().to_string(), "--output"])
+        .arg(&output)
+        .output()
+        .unwrap();
+    assert!(!command.status.success() && !output.exists());
+    let command = Command::new(env!("CARGO_BIN_EXE_memory_tool"))
+        .args([
+            "appearance",
+            "--resources",
+            "--pid",
+            &host.0.id().to_string(),
+            "--output",
+        ])
         .arg(&output)
         .output()
         .unwrap();
@@ -68,10 +99,20 @@ fn external_read_candidates_follow_owned_changes_and_game_inspector_refuses_the_
     let switched = capture().unwrap();
     assert_ne!(switched.make_definition_key, first.make_definition_key);
     assert_ne!(switched.slots[2], first.slots[2]);
+    assert_ne!(
+        resources().unwrap().instances[2],
+        first_resources.instances[2]
+    );
     send("appearance-missing");
     assert_eq!(capture(), Err(Unavailable::Missing));
+    assert_eq!(resources(), Err(Unavailable::Missing));
     send("appearance-normal");
     assert_eq!(capture().unwrap(), first);
+    assert_eq!(resources().unwrap(), first_resources);
+    send("appearance-resource-invalid");
+    assert_eq!(resources(), Err(Unavailable::Type));
+    send("appearance-normal");
+    assert_eq!(resources().unwrap(), first_resources);
     send("appearance-count-invalid");
     assert_eq!(capture(), Err(Unavailable::Invalid));
     send("appearance-normal");

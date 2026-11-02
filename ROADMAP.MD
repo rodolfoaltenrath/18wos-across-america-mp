@@ -1,5 +1,36 @@
 # Roadmap — Across America multiplayer em Rust
 
+## W3 offline: candidatos de modelos e materiais em memória — 02/11
+
+`memory_tool appearance --resources` acrescenta uma leitura optativa de três
+campos PSM do ator (+0x30c/+0x310/+0x314). O JSON anterior sem a opção permanece
+preservado. O relatório novo inclui a observação de nomes anterior e as chaves
+de modelo/materiais na ordem das tabelas PSM; ponteiros, nomes e poses ficam
+fora da saída. Campos nulos permanecem ausentes, sem substituir por defaults.
+São três candidatos, não a montagem completa nem a pintura selecionada.
+
+Investigação estática conecta game+0x63fe0, psm+0x31c0..0x3365 e core+0x10d60:
+instância → info → item nomeado, com nome limitado a64bytes; tabelas de materiais
+e packets já usadas nos diagnósticos privados. Backend confere perfil/registro,
+hashes de quatro módulos e vida/módulos após leitura. Leitor limita três campos,
+64materiais por campo, 256KiB/8192leituras, storage16MiB, nomes ASCII/NUL,
+tipo/referências positivas e tabelas internas/owner/índice dos packets. Duas
+cópias e testemunhos repetidos detectam mudanças observadas; não dão tick
+atômico, prova de ABA, retenção de recursos ou ownership exclusivo.
+
+Seis testes próprios cobrem ordem/privacidade, limites, alterações, faltas,
+3.000mutações e os três campos com64materiais dentro do orçamento. A integração
+Windows/Proton lê memória própria de outro processo, acompanha troca de shader,
+recusa tabela inválida e recupera; backend/CLI recusam a fixture sem saída.
+Primeira expectativa de teste exigia detectar mudança após última leitura do
+ancestral: ajustada para alteração entre cópias, sem afrouxar produção nem
+prometer atomicidade. Logs iniciais preservados. Clippy nativo/x86 e fmt passaram;
+verificação integral será registrada no fechamento do lote.
+
+Sem jogo/instalação/kit, callbacks, chamadas, escrita, worker ou draw alterados.
+W3/M1 e51/104 permanecem parciais; confirmar campos/modelo/materiais/cor no motor
+em B/D agrupados. Não liberar modelos no guard de IA com base nessa leitura.
+
 ## W3 offline: relação entre candidatos observados e arquivos — 01/11
 
 Contrato de observação passa a vehicle_appearance::observation no crate comum,

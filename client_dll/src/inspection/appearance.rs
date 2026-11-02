@@ -1,6 +1,9 @@
 //! Profile-checked read-only appearance candidates. No DLL injection, calls,
 //! patches, network or automatic catalogue selection.
-use super::{entities, process::Process};
+use super::{
+    entities,
+    process::{Module, Process},
+};
 use crate::{
     appearance_capture::{self, Layout, Observation},
     pose_capture, profile,
@@ -8,7 +11,7 @@ use crate::{
 use anyhow::{Context, Result, ensure};
 use std::path::Path;
 
-pub fn inspect(process: &Process) -> Result<Observation> {
+fn verified(process: &Process) -> Result<(Vec<Module>, Layout<'static>)> {
     ensure!(
         process.identity.pointer_bytes == 4,
         "appearance candidates require x86"
@@ -53,7 +56,8 @@ pub fn inspect(process: &Process) -> Result<Observation> {
             && car.false_destructor == add(profile::CAR_DESTRUCTOR)?,
         "appearance actor type differs from profile"
     );
-    let observation = appearance_capture::capture(
+    Ok((
+        before,
         Layout {
             actor: pose_capture::Layout {
                 root: add(profile::COMMAND_CONTEXT)?,
@@ -62,22 +66,22 @@ pub fn inspect(process: &Process) -> Result<Observation> {
             },
             type_record: record,
         },
-        |at, out| process.read(u64::from(at), out).map_err(|_| ()),
-    )
-    .map_err(|reason| {
-        anyhow::anyhow!(match reason {
-            pose_capture::Unavailable::Missing => "appearance chain or names unavailable",
-            pose_capture::Unavailable::Overflow => "appearance address overflow",
-            pose_capture::Unavailable::Type => "appearance actor or item differs from profile",
-            pose_capture::Unavailable::Changed => "appearance changed during capture; retry",
-            pose_capture::Unavailable::Invalid =>
-                "appearance names or count invalid or unsupported",
-        })
-    })?;
-    observation.validate().map_err(anyhow::Error::msg)?;
+    ))
+}
+fn unavailable(reason: pose_capture::Unavailable) -> anyhow::Error {
+    anyhow::anyhow!(match reason {
+        pose_capture::Unavailable::Missing => "appearance chain or names unavailable",
+        pose_capture::Unavailable::Overflow => "appearance address overflow",
+        pose_capture::Unavailable::Type => "appearance actor or item differs from profile",
+        pose_capture::Unavailable::Changed => "appearance changed during capture; retry",
+        pose_capture::Unavailable::Invalid =>
+            "appearance names, resource links or counts invalid or unsupported",
+    })
+}
+fn finish(process: &Process, before: &[Module]) -> Result<()> {
     process.ensure_running()?;
     let after = process.modules()?;
-    for name in ["prism3d.exe", "game.dll", "p3shared.dll"] {
+    for name in ["prism3d.exe", "game.dll", "p3shared.dll", "psm.dll"] {
         let identity = |modules: &[super::process::Module]| {
             modules
                 .iter()
@@ -85,9 +89,38 @@ pub fn inspect(process: &Process) -> Result<Observation> {
                 .map(|m| (m.base, m.size, m.path.clone()))
         };
         ensure!(
-            identity(&before) == identity(&after),
+            identity(before) == identity(&after),
             "appearance modules changed during read"
         );
     }
+    Ok(())
+}
+pub fn inspect(process: &Process) -> Result<Observation> {
+    let (before, layout) = verified(process)?;
+    let observation = appearance_capture::capture(layout, |at, out| {
+        process.read(u64::from(at), out).map_err(|_| ())
+    })
+    .map_err(unavailable)?;
+    observation.validate().map_err(anyhow::Error::msg)?;
+    finish(process, &before)?;
+    Ok(observation)
+}
+pub fn inspect_resources(
+    process: &Process,
+) -> Result<crate::appearance_resources::ResourceObservation> {
+    let (before, layout) = verified(process)?;
+    let psm = before
+        .iter()
+        .find(|m| m.name.eq_ignore_ascii_case("psm.dll"))
+        .context("psm.dll not loaded")?;
+    profile::verify_psm(Path::new(&psm.path)).map_err(anyhow::Error::msg)?;
+    let ops = u32::try_from(psm.base)?
+        .checked_add(0xe568)
+        .context("PSM operations overflow")?;
+    let observation = crate::appearance_resources::capture(layout, ops, |at, out| {
+        process.read(u64::from(at), out).map_err(|_| ())
+    })
+    .map_err(unavailable)?;
+    finish(process, &before)?;
     Ok(observation)
 }

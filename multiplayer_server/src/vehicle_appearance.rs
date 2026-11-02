@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 pub mod assembly;
 pub mod observation;
+pub mod resources;
 
 pub const MAX_CATALOGUE_JSON: usize = 4 * 1024 * 1024;
 pub const MAX_DESCRIPTION_JSON: usize = 2048;

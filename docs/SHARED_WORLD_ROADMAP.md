@@ -525,6 +525,14 @@ conferidos pelo inventário, sem extrair, e separa slots de defaults/importaçõ
 Disponibilidade local não comprova conteúdo montado ou seleção/material/cor
 renderizados. Sem novo ABI/draw/descritor automático, W3 continua parcial.
 
+Consulta W3 de recursos (02/11) usa três campos PSM identificados estaticamente
+e produz chaves candidatas de modelo/material, com ordem de tabela preservada
+e ausência explícita. Leitura externa com perfil, limites, tipo/packet e cópias
+repetidas; testes com memória própria não validam esses campos na partida.
+Não abrange todos os acessórios nem prova pintura, formato, montagem ou cor.
+O próximo vínculo offline é com o inventário; aplicação por instância/ownership
+e confirmação visual continuam para B/D, sem afrouxar o guard do modelo de teste.
+
 Base W5 offline: `world_join` prepara um snapshot tipado do sidecar existente
 e aparências declaradas, com corte/fluxo exclusivo de aparência, sem duplicar
 o formato do ledger. Vincula carreira/conteúdo/catálogo/mundo/autoridade;

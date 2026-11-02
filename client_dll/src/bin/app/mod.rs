@@ -30,6 +30,9 @@ enum Command {
     Appearance {
         #[arg(long)]
         pid: u32,
+        /// Also inspect three candidate PSM links/material tables; still read-only.
+        #[arg(long)]
+        resources: bool,
         /// Optional NEW private observation file, without raw names or pointers.
         #[arg(long)]
         output: Option<PathBuf>,
@@ -253,7 +256,11 @@ fn cadence(next: &mut Instant, interval: Duration) {
 
 pub fn main() -> Result<()> {
     match Cli::parse().command {
-        Command::Appearance { pid, output } => {
+        Command::Appearance {
+            pid,
+            output,
+            resources,
+        } => {
             if let Some(path) = &output {
                 ensure!(
                     !path.try_exists()?,
@@ -261,12 +268,19 @@ pub fn main() -> Result<()> {
                 );
             }
             let process = Process::open(pid)?;
-            let observation = client_dll::inspection::appearance::inspect(&process)?;
-            let bytes = serde_json::to_vec_pretty(&observation)?;
-            ensure!(
-                bytes.len() <= client_dll::appearance_capture::MAX_JSON,
-                "appearance observation exceeds limit"
-            );
+            let bytes = if resources {
+                serde_json::to_vec_pretty(&client_dll::inspection::appearance::inspect_resources(
+                    &process,
+                )?)?
+            } else {
+                serde_json::to_vec_pretty(&client_dll::inspection::appearance::inspect(&process)?)?
+            };
+            let limit = if resources {
+                client_dll::appearance_resources::MAX_JSON
+            } else {
+                client_dll::appearance_capture::MAX_JSON
+            };
+            ensure!(bytes.len() <= limit, "appearance observation exceeds limit");
             if let Some(path) = output {
                 multiplayer_server::career_store::write_new(&path, &bytes)
                     .map_err(anyhow::Error::msg)?;

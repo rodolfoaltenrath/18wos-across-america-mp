@@ -18,6 +18,13 @@ pub struct Fixture {
     scene: Box<[u8; 16]>,
     vtable: Box<[u8; 4]>,
     record: Box<[u8; 32]>,
+    psm_item: Box<[u8; 0x68]>,
+    psm_data: Box<[u8; 0x400]>,
+    info: Box<[u8; 16]>,
+    model: Box<[u8; 0xa8]>,
+    shader: Box<[u8; 0xa8]>,
+    resource_data: Box<[u8; 16]>,
+    operations: Box<[u8; 40]>,
 }
 impl Fixture {
     pub fn new() -> Self {
@@ -33,6 +40,13 @@ impl Fixture {
             scene: Box::new([0; 16]),
             vtable: Box::new([0; 4]),
             record: Box::new([0; 32]),
+            psm_item: Box::new([0; 0x68]),
+            psm_data: Box::new([0; 0x400]),
+            info: Box::new([0; 16]),
+            model: Box::new([0; 0xa8]),
+            shader: Box::new([0; 0xa8]),
+            resource_data: Box::new([0; 16]),
+            operations: Box::new([0; 40]),
         };
         put(&mut f.root[..], 0, addr(&f.context));
         put(&mut f.context[..], 0x14c, addr(&f.world));
@@ -51,6 +65,48 @@ impl Fixture {
     }
     pub fn descriptors(&self) -> [u32; 3] {
         [addr(&self.root), addr(&self.vtable), addr(&self.record)]
+    }
+    pub fn resource_ops(&self) -> u32 {
+        addr(&self.operations)
+    }
+    fn resources(&mut self, alternate: bool) {
+        put(&mut self.car[..], 0x314, addr(&self.psm_item));
+        put(&mut self.psm_item[..], 0, 0x8a);
+        put(&mut self.psm_item[..], 4, 22);
+        put(&mut self.psm_item[..], 8, addr(&self.psm_data));
+        put(&mut self.psm_item[..], 0x30, addr(&self.operations));
+        put(&mut self.psm_item[..], 0x48, 0x400);
+        put(&mut self.psm_item[..], 0x4c, 1);
+        put(&mut self.psm_data[..], 4, 1);
+        put(&mut self.psm_data[..], 8, addr(&self.info));
+        let data = addr(&self.psm_data);
+        put(&mut self.psm_data[..], 0x20, data + 0x100);
+        put(&mut self.psm_data[..], 0x30, data + 0x110);
+        put(&mut self.psm_data[..], 0x100, addr(&self.shader));
+        put(&mut self.psm_data[..], 0x110, data + 0x200);
+        put(&mut self.psm_data[..], 0x200, 1);
+        put(&mut self.psm_data[..], 0x204, addr(&self.psm_item));
+        put(&mut self.info[..], 0, 1);
+        put(&mut self.info[..], 4, addr(&self.model));
+        for (item, name) in [
+            (&mut self.model, b"makes/truck/own/cabin.psm".as_slice()),
+            (
+                &mut self.shader,
+                if alternate {
+                    b"makes/truck/own/blue.shd".as_slice()
+                } else {
+                    b"makes/truck/own/red.shd".as_slice()
+                },
+            ),
+        ] {
+            put(&mut item[..], 0, 0x448);
+            put(&mut item[..], 4, 33);
+            put(&mut item[..], 8, addr(&self.resource_data));
+            put(&mut item[..], 0x30, addr(&self.operations));
+            put(&mut item[..], 0x4c, 1);
+            item[0x68..].fill(0);
+            item[0x68..0x68 + name.len()].copy_from_slice(name);
+        }
     }
     fn names(&mut self, alternate: bool) {
         let at = profile::APPEARANCE_MAKE as usize;
@@ -71,6 +127,7 @@ impl Fixture {
             self.car[at..at + name.len()].copy_from_slice(name.as_bytes());
         }
         self.car[profile::APPEARANCE_COUNT as usize] = 3;
+        self.resources(alternate);
     }
     pub fn command(&mut self, line: &str) -> bool {
         match line {
@@ -81,6 +138,7 @@ impl Fixture {
             }
             "appearance-missing" => put(&mut self.root[..], 0, 0),
             "appearance-count-invalid" => self.car[profile::APPEARANCE_COUNT as usize] = 65,
+            "appearance-resource-invalid" => put(&mut self.psm_data[..], 0x20, 0),
             _ => return false,
         }
         true

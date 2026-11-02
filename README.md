@@ -1242,6 +1242,22 @@ Para relacionar a observação ao inventário local, sem extrair recursos:
 asset_tools appearance-references --observation OBSERVACAO.json --content CONTEUDO.json --layer base=ARQUIVO --layer map=ARQUIVO --output RELATORIO-NOVO.json
 ```
 
+A consulta optativa de recursos PSM acrescenta candidatos de modelo/material:
+
+```text
+memory_tool appearance --resources --pid PID --output OBSERVACAO-PSM-NOVA.json
+```
+
+Esse formato novo (schema1, até64KiB) aninha a observação de nomes e preserva
+três posições fixas de campos do ator, com null quando ausente. Os materiais
+seguem a ordem da tabela PSM, sem inferir papéis de acessórios ou pintura.
+Não cobre todas as peças nem comprova cor/seleção renderizada. O backend
+verifica também o hash de psm.dll, recusa tipos/tabelas/packets inconsistentes
+e repete leituras/testemunhos com limites; isso não é captura atômica de frame.
+Não injeta DLL nem chama, retém ou modifica recursos. Os campos ainda exigem
+confirmação no motor numa rodada B/D agrupada. Sem --resources o JSON anterior
+continua igual; appearance-references recebe somente o formato de nomes.
+
 Informe todas as camadas na ordem do inventário. O arquivo de observação é
 schema1 até16KiB, compartilhado entre os helpers; a mudança de módulo não
 altera seu JSON. O relatório vincula fingerprints do inventário/observação,

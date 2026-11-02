@@ -1,5 +1,23 @@
 # Orientações para continuar o projeto
 
+W3PSM02/11 offline: memory_tool appearance --resources é optativo; saída nova
+schema1/64KiB com names anterior aninhado e três campos actor30c/310/314,
+modelo/materialkeys em ordem PSM, null explícito. NÃO todos acessórios/assembly,
+papel por índice de acessório, paint selecionada, cor/arquivo montado. Estático:
+game63fe0/psm31c0-3365/core10d60 liga instdata+8→info+4→item com nome+68,
+tables data20/30 e packet owner/index; hashes quatro módulos no backend.
+2cópias+names/testemunhos antes/depois; não tick/ABA/ownership exclusivo. Lê só
+viaProcessMemory, sem APIs/hook/rede/refs retidas/worker/draw/guardIA alterados.
+Limites3x64materiais/256KiB/8192reads/16MiBstorage, nomesNUL64ASCII estritos,
+refs positivas/tipo/tabelas internas/packetowner conferidos. Primeiro teste
+mudava ancestral após sua última leitura e exigia atomicidade inexistente;
+corrigido para mudança ENTRE cópias observadas, produção não afrouxada, log
+preservado. Seis testes próprios/3kmutações+149clientnativos finais
+e integração x86Process própria ampliada passaram; Clippy nativo/x86/fmt.
+Filtro x86 suplementar, integral no fechamento do próximo bloco de inventário.
+Campos não validados no motor: W3/M1/51de104 intactos, sem jogo/kit/instalação.
+Logs appearance-resources-*20261102*. Prova futura agrupada B/D, não G12/G13.
+
 W3links01/11: Observation vai a vehicle_appearance::observation comum/reexport
 client, JSON/schema1/16KiB/64slots preservados. Assetappearance-references
 liga hashobservation/inventory, Pinned.resource_name sóVFSemRAM, lê/conferedefs.

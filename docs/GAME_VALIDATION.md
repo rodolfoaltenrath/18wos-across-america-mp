@@ -40,6 +40,11 @@ de truck_build vazio e não repetir G12/G13 só para provar o leitor/serializaç
 slots separados de defaults/imports, sem escolher pintura/catálogo. Conferir
 no futuro se os candidatos coletados correspondem ao veículo/cor visíveis e
 aos recursos efetivamente usados; relatório de disco não encerra esse critério.
+Preparo adicional W3 (02/11): `memory_tool appearance --resources` lê candidatos
+de modelos/materiais em três campos PSM, somente leitura. Agrupar uma captura
+com a prova B/D, comparando modelo/pintura visíveis e troca em oficina quando
+disponível; três campos não cobrem todas as peças. Validar faltas/reload junto
+do adaptador futuro, sem repetir G12/G13 só para filtros ou estrutura do JSON.
 
 Preparo W5 offline: snapshot/fluxo de aparência e sidecar preparados sem motor
 por `mp_career join-check`. Não confundir fase prepared com entrada no jogo.
