@@ -1,5 +1,39 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Fechamento W5/W10 e kit atualizado — 02/11
+
+Os três blocos abaixo foram commitados em42eb696,4c79315,b57d556, sem coautor.
+Verificação integral: **373 testes x86 sob Proton e453 nativos**, releases,
+três escopos Clippy e fmt passaram sem exclusões; log privado
+verify-fedora-20261102-appearance-recovery.log. São14 testes novos e6.000 entradas
+mutadas no leitor, além das regressões anteriores. Sem novo check amplo:51/104.
+
+CLIs reais com arquivos próprios: host Linux na geração2, cliente nativo e
+Windows x86/Proton receberam snapshotcut10 e evento11; checkpoints finais são
+byte a byte iguais e os três inputs originais permaneceram intactos. Check
+offline e recusa de sobrescrita passaram. Geração1 foi recusada após reservar2.
+Primeira tentativa suplementar x86 encontrou o host já encerrado pelo timeout
+de240s; log preservado. Novo seed próprio/gen2 e ticket novo concluíram o fluxo,
+sem apagar o journal. Host2:5 conexões completas/zero falhas,4RPCs de aparência,
+uma publicação/um snapshot/duas páginas; Ctrl+C aguardou host/relay, zero ativos
+e zero datagramas. Não é prova de LAN, física, FPS ou motor.
+
+Kit novo em Downloads com sufixo atualizado-b57d556:12arquivos, seis programas
+x86 e notices45crates/zero violações/zero sem texto; não equivale a aprovação
+de publicação. Manifesto schema2/source b57d55621d258cf797d5ca7bb6a85a6840d0d2e1,
+lan_tested=false. Builder, check-only com raiz real e runtime-check em helper
+próprio passaram sob Proton; DLL liberada/worker não iniciado. ZIP29483535bytes,
+SHA256695ec3b9acba7f0cf8c79a9a02dfafbb244e3401d55c0ed1086fefacc072e9b7,
+CRC e extração dos12arquivos idênticos. O kit anterior e seu ZIP foram movidos
+de Downloads para backup privado em target/analysis; instalação intocada.
+
+Oito arquivos do backup G13 comparados por SHA256 nativamente nos caminhos do
+prefixo real, todos iguais; init.cfg também intacto. Enumerações finais sem
+jogo/fixtures/controladores/assistente/probe/servidor; runtime da bancada já
+encerrado. Logs appearance-recovery-* privados. Próxima prova humana continua
+o roteiro2PC agrupado existente; esse lote não acrescenta outro percurso só para
+testar cursor/journal/CLI. Aparência real e mundo compartilhado seguem pendentes.
+
 ## W5/W10 offline: reserva persistente de geração do host — 02/11
 
 O serviço optativo de aparências reserva geração/contexto em journal privado

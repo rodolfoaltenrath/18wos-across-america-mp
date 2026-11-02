@@ -1,5 +1,43 @@
 # Orientações para continuar o projeto
 
+RetomadaW5/W10 02/11: commits42eb696/4c79315/b57d556, semcoautor. Replica
+prepara páginas completas com Receiver, snapshot materializado/retired/head
+observado persistidos em checkpoint privado192KiB/hashcanônico. Falha não
+publica estado parcial; snapshot precisa cobrir head, pisos cut/checkpoint/
+clock e conflito no mesmo corte preservados. Não autentica checkpoint nem
+impede escolher backup antigo válido. appearance-sync TCP existente até5páginas
+(1..8), deadline TOTAL30s, sempre poll; limite permite lagging explícito.
+Temporário sync+hardlink novo semreplace/fallback; interrupção pode deixartmp.
+appearance-state-check offline semticket/rede. Sidecar SEED congelado, não
+motor/draw/readiness/world; flagsfalse, W5/W10/51de104 intactos.
+Hostoptativo reserva geração no Journal privado appearance-generations APÓS
+contexto/store e ANTES RPC; lock dura sessão, geração precisa crescer estrito,
+worldepoch não recua. Crash pósreserva consome geração. Semserviço não muda.
+Não persiste head/histórico/aparências; apagar/restaurar journal inteiro não
+detectado. Diretório finalalias/reparse recusado, não sandbox de ancestrais.
+14tests novos/6kmutações; integral373x86Proton/453nativos/releases/3Clippy/fmt
+passou semexclusões, verify-fedora-20261102-appearance-recovery.log. Clippy
+inicial só2ifcolapsáveis corrigidos, loginicial preservado. CLIs reais próprias
+Linux/x86Proton: gen2 com5conexões completas0falhas/4RPC/1pub/1snap/2pages,
+cut10→11; checkpoints Linux/Windows byteiguais,3inputs originais próprios
+hashiguais. Primeira tentativa suplementarx86 chegou após timeout240s do host;
+recusa preservada; reabertura gen2 comticketnovo passou, gen1 recusada depois.
+Ctrl+C aguardouhost+relay,0ativos/0datagramas; não LAN/jogo/FPS. Logs privados
+appearance-recovery-cli-20261102/ e appearance-recovery-*.
+Kit/ZIP atualizado em Downloads/18wos-mp-20261102-atualizado-b57d556(.zip),
+fonte b57d55621d258cf797d5ca7bb6a85a6840d0d2e1,12arquivos/schema2/6binários.
+ZIP695ec3b9…2e9b7, CRC/extração byteigual/check-only raizreal/runtime-check
+x86Proton passaram, DLL3756800c…677b liberada, worker/game/LANfalse.45crates/
+0violações/0semtexto, não aprovação de publicação. Kit anterior d10fcdd+ZIP
+saíram de Downloads para backup privado em target/analysis/previous-kit-*;
+instalação real não atualizada. Oito hashes escolhidos pelo backupG13 conferidos
+nativamente no prefixopartida514160, init.cfg dddbacf5…7774 intacto. EnumWin só
+enumerador/serviçosWine; nativa só shell de conferência, sem jogo/fixtures/
+controllers/assistentes/probe/servidores; runtimebench já encerrado (kill1).
+Não abrir jogo para provar persistência/CLI. Próxima rodada2PC já agrupada em
+GAME_VALIDATION, menus5/6/7+GamePose/foco/reload; aparência real/aplicação ainda
+exige B/D e ownership comprovado. Sem testes novos no motor por este lote.
+
 Kitpré2PC02/11: NOVO em Downloads/18wos-mp-20261102-dois-pcs-d10fcdd,
 fonte d10fcddf3bf27697fb78f3464b173771149c5b07 (Rust inalterado depois).
 Schema2/seisbinários/notices hashes; licença45crates/0violações/0semtexto,
