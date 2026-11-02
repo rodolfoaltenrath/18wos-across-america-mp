@@ -1,5 +1,27 @@
 # Orientações para continuar o projeto
 
+W3evidence02/11: appearance_evidence captura names/resources separados e recusa
+tipada Missing/Overflow/Type/Changed/Invalid/GuardRefused/TargetUnavailable,
+sem copiar erros/paths/poses. Divergência entre leituras fica explícita; não
+snapshot atômico/seleção/cor/assembly. Preflight opcional só hasheskit/DLL
+conferidos ANTES, não hash dos módulos vivos. Capture96KiB/64samples novos,
+limite/IO não sobrescrevem; ordem nominal local não relógio global/assinatura.
+Bundle próprio tipado, reencode/manifest/hash/resumo regenerado; recusa extras,
+.INCOMPLETE, link/reparsefinal, hash/resumo/claims adulterados. Não sandbox de
+ancestrais/troca concorrente nem atestado humano. mp_doctor --appearance-evidence
+offline, --appearance-capture e --compare-appearance par EXPLÍCITO; extração
+--extract-appearance names|resources para auditores antigos, saída nova apenas.
+6tests próprios/3kmutações e testeArgs doctor passaram; integraçãoProcess x86
+com bundle/doctor/compare/extração/saída nova passou no verify integral do lote:
+359x86Proton/439nativos/releases/3Clippy/fmt, semexclusões. Log
+verify-fedora-20261102-appearance-evidence-assistant.log; CLI nativa/x86 próprias
+canonical/compare/extract byteidênticas, dois inputs hashiguais; par sintético
+com fonte indisponível retorna campos não comparáveis, sem igualdade inventada.
+ReadFailure tipado preserva mensagens anteriores do inspetor;
+não categorizar erro GuardRefused com causa mais específica inventada.
+Logs appearance-evidence-* privados. Sem novos offsets/ABI/draw/worker/rede/
+jogo/instalação, W3/M1/51de104 intactos; não repetir G12/G13 por novos filtros.
+
 W3PSMfiles02/11: asset_tools appearance-resources recebe ResourceObservation
 64KiB e inventário/camadas declaradas. Pinned confere nomesVFS/sufixo/byteshash,
 mesmoshandles/finish; material4MiB/model64MiB/total256MiB únicos, report128KiB

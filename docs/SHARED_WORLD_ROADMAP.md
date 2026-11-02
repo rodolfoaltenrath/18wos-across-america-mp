@@ -536,6 +536,11 @@ O vínculo offline agora existe em `asset_tools appearance-resources`: confere
 bytes pelos hashes do inventário, mantém os três campos, faltas e repetições,
 sem default ou montagem automática. Formatos, conteúdo montado, composição
 completa, cor e aplicação por instância continuam não verificados.
+Preparo B/D de02/11: registros tipados de aparência podem ser coletados junto
+dos status habituais e exportados separadamente dos logs de conexão. Preservam
+recusas/divergências, hashes de preflight e ordem nominal local, sem afirmar
+simultaneidade ou sincronização. Comparação/extração offline reutiliza os
+auditores existentes, reduzindo repetição de teste somente por falta de coleta.
 
 Base W5 offline: `world_join` prepara um snapshot tipado do sidecar existente
 e aparências declaradas, com corte/fluxo exclusivo de aparência, sem duplicar

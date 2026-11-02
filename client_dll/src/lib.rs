@@ -18,6 +18,7 @@ use std::{
 pub mod addresses;
 pub mod api;
 pub mod appearance_capture;
+pub mod appearance_evidence;
 pub mod appearance_resources;
 pub mod assistant_career;
 pub mod assistant_paths;

@@ -68,15 +68,24 @@ fn verified(process: &Process) -> Result<(Vec<Module>, Layout<'static>)> {
         },
     ))
 }
+#[derive(Debug)]
+pub struct ReadFailure(pub pose_capture::Unavailable);
+impl std::fmt::Display for ReadFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self.0 {
+            pose_capture::Unavailable::Missing => "appearance chain or names unavailable",
+            pose_capture::Unavailable::Overflow => "appearance address overflow",
+            pose_capture::Unavailable::Type => "appearance actor or item differs from profile",
+            pose_capture::Unavailable::Changed => "appearance changed during capture; retry",
+            pose_capture::Unavailable::Invalid => {
+                "appearance names, resource links or counts invalid or unsupported"
+            }
+        })
+    }
+}
+impl std::error::Error for ReadFailure {}
 fn unavailable(reason: pose_capture::Unavailable) -> anyhow::Error {
-    anyhow::anyhow!(match reason {
-        pose_capture::Unavailable::Missing => "appearance chain or names unavailable",
-        pose_capture::Unavailable::Overflow => "appearance address overflow",
-        pose_capture::Unavailable::Type => "appearance actor or item differs from profile",
-        pose_capture::Unavailable::Changed => "appearance changed during capture; retry",
-        pose_capture::Unavailable::Invalid =>
-            "appearance names, resource links or counts invalid or unsupported",
-    })
+    anyhow::Error::new(ReadFailure(reason))
 }
 fn finish(process: &Process, before: &[Module]) -> Result<()> {
     process.ensure_running()?;

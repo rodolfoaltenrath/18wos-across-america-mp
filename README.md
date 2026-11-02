@@ -1272,6 +1272,30 @@ até128KiB. O relatório contém hashes/metadados e contagens, sem extração.
 Esse preflight de disco não prova formato, conteúdo montado, montagem completa
 ou cor. Não cria catálogo/publicação nem altera o desenho dos caminhões.
 
+Registros de aparência exportados pelo assistente têm um verificador separado:
+
+```text
+mp_doctor --appearance-evidence PASTA-DE-APARENCIA
+mp_doctor --appearance-capture CAPTURA-A.json --compare-appearance CAPTURA-B.json
+mp_doctor --appearance-capture CAPTURA-A.json --extract-appearance resources --output RECURSOS-NOVOS.json
+mp_doctor --appearance-capture CAPTURA-A.json --extract-appearance names --output NOMES-NOVOS.json
+```
+
+São operações offline, sem abrir processo, carregar DLL ou consultar rede.
+A comparação usa somente o par explicitamente escolhido; não assume mesmo
+jogador/instante nem prova paridade visual. Dados indisponíveis têm códigos de
+recusa limitados, sem erros privados. As extrações podem alimentar diretamente
+os auditores appearance-resources/appearance-references acima. Se a leitura não
+estiver disponível, não há extração nem criação de arquivo substituto.
+
+Cada registro de até96KiB preserva nomes e recursos como leituras independentes,
+com concordância explícita e metadados de preflight quando conhecidos. Hashes
+de preflight não são hash atômico do módulo carregado no jogo. Exportação nova
+até64registros inclui manifesto/hashes/resumo, sem nomes brutos, paths, poses,
+saves, backups, identidade ou credenciais; fingerprints de conteúdo continuam
+dados próprios do teste. Verificador recusa extras, `.INCOMPLETE`, adulteração
+e campos desconhecidos. Ordem de arquivos é nominal local, sem relógio global.
+
 Informe todas as camadas na ordem do inventário. O arquivo de observação é
 schema1 até16KiB, compartilhado entre os helpers; a mudança de módulo não
 altera seu JSON. O relatório vincula fingerprints do inventário/observação,

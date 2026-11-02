@@ -1,5 +1,40 @@
 # Roadmap — Across America multiplayer em Rust
 
+## W3/M8 offline: evidências de aparência para a próxima LAN — 02/11
+
+`appearance_evidence` guarda duas leituras candidatas independentes: nomes e
+recursos PSM. Falhas ficam como códigos tipados, sem copiar erros/paths/poses;
+um resultado indisponível não significa caminhão vazio. Divergência entre
+leituras permanece explícita. Preflight opcional traz somente fingerprints
+do kit e da DLL conferidos antes da sessão; não é prova dos módulos vivos.
+Leitura do inspetor conserva as mensagens anteriores, agora com erro tipado.
+
+Registro novo até96KiB, máximo64 por diretório; sem sobrescrever. Exportação
+dedicada revalida/reencoda cada registro e cria manifesto/resumo/hashes em pasta
+nova, deixando `.INCOMPLETE` até finalizar. Verificador recusa extras, links/
+reparse finais, conteúdo não canônico, hash/resumo ou claims alterados. Nomes
+de arquivo são ordem nominal de um PC, sem relógio global/ordem concorrente
+garantida, assinatura ou sandbox contra troca de ancestrais.
+
+`mp_doctor --appearance-evidence` verifica a pasta offline; `--appearance-capture`
+inspeciona um registro e `--compare-appearance` compara um par explicitamente
+escolhido, sem inferir mesmo jogador/tempo. Igualdade de candidatos não comprova
+aparência renderizada ou sincronização. `--extract-appearance names|resources`
+exporta somente a observação tipada disponível para os auditores existentes,
+com saída nova. Falta de leitura não é preenchida por defaults.
+
+Seis regressões próprias/3.000mutações e teste de exclusividade dos modos do
+doctor passaram. Integração de processo própria x86 foi ampliada com coleta,
+bundle, CLI doctor, comparação, extração/recusa de sobrescrita e recusas tipadas.
+Verificação completa conjunta com o assistente:359x86Proton/439nativos,
+releases/três escopos Clippy/fmt, sem exclusões. Canonicalização/comparação/
+extração nas CLIs Linux e x86 Proton ficaram byte a byte iguais para os mesmos
+dois inputs próprios, com hashes preservados. Fonte indisponível no par fica
+não comparável; igualdade de campos ausentes não é inventada. Não é nova LAN.
+Logs appearance-evidence-* privados e
+verify-fedora-20261102-appearance-evidence-assistant.log. Sem novos offsets/chamadas/ABI, motor,
+draw, rede ou kit instalado; W3/M1/51de104 permanecem parciais.
+
 ## W3 offline: conferência dos recursos PSM candidatos — 02/11
 
 `asset_tools appearance-resources` recebe a nova observação de recursos e
