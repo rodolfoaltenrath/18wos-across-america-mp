@@ -1,5 +1,49 @@
 # Roadmap — Across America multiplayer em Rust
 
+## W3 offline: conferência dos recursos PSM candidatos — 02/11
+
+`asset_tools appearance-resources` recebe a nova observação de recursos e
+confere os bytes correspondentes nas camadas declaradas do inventário, sem
+extrair arquivos. Vincula hashes da observação/inventário, verifica nomes VFS e
+sufixos de modelo/material, hashes/tamanhos e revalida arquivos ao terminar.
+Mantém os mesmos handles, sem prometer snapshot atômico ou sandbox contra
+escritores concorrentes. Modelo64MiB/material4MiB/total256MiB de recursos únicos;
+relatório novo até128KiB. Repetições são verificadas uma vez, mas continuam
+representadas na ordem de cada tabela. Campos ausentes e recursos faltantes
+são explícitos; nenhum default substitui um material observado.
+
+Relatório contém somente hashes/metadados, posições dos três campos e contagens
+de recursos/bytes conferidos. Não interpreta PSM/shader, prova montagem, escolhe
+pintura, cria catálogo/descritor ou publica. Flags de montagem/formato/motor/
+mundo e montagem completa permanecem false; candidato permanece true. Nem todos
+os acessórios ou dependências estão cobertos. W3/M1/51de104 intactos.
+
+Quatro testes próprios passaram: ordem/repetições/faltas/privacidade/saída nova;
+arquivo alterado/hash de recurso forjado/tipo/claims recusados; limites por
+arquivo e total; vencedor de camada declarado e ordem incorreta recusada.
+Falhas iniciais foram contagem manual dos bytes da fixture (52, não50) e braço
+CLI sem retorno Ok; corrigidas, logs preservados em appearance-resource-inventory-*
+e appearance-resources-*.
+
+Fechamento dos dois blocos: **351 testes x86 sob Proton e 431 nativos**, releases,
+três escopos Clippy e fmt passaram, sem exclusões. Inclui seis testes novos do
+leitor e a integração de processo ampliada; os quatro testes novos do auditor
+são nativos, sem declarar todos os assets validados no Windows. CLI Linux e
+Windows sob Proton produziram relatórios byte a byte iguais nos mesmos três
+recursos próprios (179bytes), preservando material repetido e dois campos nulos;
+três arquivos de entrada permaneceram com hashes iguais. Conteúdo é sintético,
+não uma coleta da partida nem prova de formato PSM/shader.
+
+Após o integral houve apenas documentação e build suplementar do CLI de assets
+x86/fmt, sem mudança de produção. Conferência no prefixo da partida encontrou
+oito arquivos iguais ao backup G13; init.cfg/game.dll/p3shared.dll/psm.dll intactos.
+Enumerações finais sem jogo/fixtures/controladores/servidor, runtime exclusivo
+da bancada encerrado. Sem instalação/kit/jogo ou check adicional: W3/M1 e51/104
+preservados. Log verify-fedora-20261102-appearance-resources.log e demais
+appearance-resources-* ficam privados. Ainda faltam todos os acessórios,
+posicionamento/ownership e aplicação por instância; confirmar campos no motor
+em B/D agrupado, sem novo percurso só para JSON, filtros ou hashes.
+
 ## W3 offline: candidatos de modelos e materiais em memória — 02/11
 
 `memory_tool appearance --resources` acrescenta uma leitura optativa de três

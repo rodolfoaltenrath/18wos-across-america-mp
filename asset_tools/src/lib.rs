@@ -1,4 +1,5 @@
 pub mod appearance_references;
+pub mod appearance_resources;
 pub mod bindings;
 pub mod licenses;
 pub mod localization;

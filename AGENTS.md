@@ -1,5 +1,29 @@
 # Orientações para continuar o projeto
 
+W3PSMfiles02/11: asset_tools appearance-resources recebe ResourceObservation
+64KiB e inventário/camadas declaradas. Pinned confere nomesVFS/sufixo/byteshash,
+mesmoshandles/finish; material4MiB/model64MiB/total256MiB únicos, report128KiB
+novo. Preserva3campos/ordem/repetidos/null/missing; lê duplicado uma vez mas não
+funde slots. Reporthashes/metadados/unique/bytes, sem nomes/originais/paths/poses.
+Arquivoexiste≠formato válido/montado/cor/seleção/assembly, flagsfalse; não converte
+em catálogo/descritor/publicação nem usa defaults. 4tests próprios de faltas/
+prioridade/aliasrepetido/bytesforjados/arquivoalterado/tipo/budgets/saídanova
+passaram. Inicialfixture contou50 mas bytespróprios somam52, corrigido pelo len;
+Clippy binário apontou braço semOk, corrigido. Logs iniciais preservados.
+Verify integral351x86Proton/431nativos/releases/3Clippy/fmt passou semexclusões,
+log verify-fedora-20261102-appearance-resources.log; inclui6leituras novas e
+integraçãoProcess ampliada. Não todos assetstestsWindows: quatro auditores novos
+rodam nativos; CLI x86Proton própria3recursos/179bytes/3vínculos(umrepetido)/
+doiscamposnull byteidêntica Linux, 3inputs hashiguais, flagsfalse. Não coletada
+no jogo nem arquivoPSM/shader real. Pósverify apenasdocs, buildassetCLIx86/fmt.
+Final prefixopartida8iguais backupG13; init.cfg dddbacf5…7774/game/p3/psm hashes
+intactos, enumWindows/nativa semjogo/fixtures/controllers/probe/servers/test_host.
+Runtimebench próprio parado; logs appearance-resources-originals/processes/
+builds-*20261102* privados. Sem jogo/kit/instalação, W3/M1/51de104 intactos.
+Próximo W3: ainda faltam todos acessórios/placements/ownership e aplicação por
+instância; confirmar novos campos somente com B/D agrupado quando adaptadores
+permitirem, sem pedir G12/G13/LANbásica para validar relatórios/limites.
+
 W3PSM02/11 offline: memory_tool appearance --resources é optativo; saída nova
 schema1/64KiB com names anterior aninhado e três campos actor30c/310/314,
 modelo/materialkeys em ordem PSM, null explícito. NÃO todos acessórios/assembly,

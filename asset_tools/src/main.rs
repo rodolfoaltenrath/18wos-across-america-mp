@@ -11,6 +11,17 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Verify pinned bytes behind candidate PSM model/material keys; no extraction.
+    AppearanceResources {
+        #[arg(long)]
+        observation: PathBuf,
+        #[arg(long)]
+        content: PathBuf,
+        #[arg(long = "layer", required = true)]
+        layers: Vec<asset_tools::world_content::Input>,
+        #[arg(long)]
+        output: PathBuf,
+    },
     /// Link hashed appearance candidates to local archives; never selects a catalogue.
     AppearanceReferences {
         #[arg(long)]
@@ -173,6 +184,32 @@ enum Command {
 
 fn main() -> Result<()> {
     match Cli::parse().command {
+        Command::AppearanceResources {
+            observation,
+            content,
+            layers,
+            output,
+        } => {
+            use multiplayer_server::{
+                career_store,
+                vehicle_appearance::resources::{MAX_JSON, ResourceObservation},
+            };
+            let observation = ResourceObservation::parse(
+                &career_store::read_bounded(&observation, MAX_JSON).map_err(anyhow::Error::msg)?,
+            )
+            .map_err(anyhow::Error::msg)?;
+            let content = asset_tools::world_content::load(&content)?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&asset_tools::appearance_resources::create(
+                    &content,
+                    &layers,
+                    &observation,
+                    &output
+                )?)?
+            );
+            Ok(())
+        }
         Command::AppearanceReferences {
             observation,
             content,

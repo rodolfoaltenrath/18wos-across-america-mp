@@ -532,6 +532,10 @@ repetidas; testes com memória própria não validam esses campos na partida.
 Não abrange todos os acessórios nem prova pintura, formato, montagem ou cor.
 O próximo vínculo offline é com o inventário; aplicação por instância/ownership
 e confirmação visual continuam para B/D, sem afrouxar o guard do modelo de teste.
+O vínculo offline agora existe em `asset_tools appearance-resources`: confere
+bytes pelos hashes do inventário, mantém os três campos, faltas e repetições,
+sem default ou montagem automática. Formatos, conteúdo montado, composição
+completa, cor e aplicação por instância continuam não verificados.
 
 Base W5 offline: `world_join` prepara um snapshot tipado do sidecar existente
 e aparências declaradas, com corte/fluxo exclusivo de aparência, sem duplicar

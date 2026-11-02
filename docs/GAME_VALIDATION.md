@@ -45,6 +45,9 @@ de modelos/materiais em três campos PSM, somente leitura. Agrupar uma captura
 com a prova B/D, comparando modelo/pintura visíveis e troca em oficina quando
 disponível; três campos não cobrem todas as peças. Validar faltas/reload junto
 do adaptador futuro, sem repetir G12/G13 só para filtros ou estrutura do JSON.
+O comando offline `asset_tools appearance-resources` confere os bytes locais
+referidos nessa coleta. Preservar a distinção entre hash conferido e formato/
+montagem/cor no motor; usar a coleta de B/D, sem outro percurso só para o auditor.
 
 Preparo W5 offline: snapshot/fluxo de aparência e sidecar preparados sem motor
 por `mp_career join-check`. Não confundir fase prepared com entrada no jogo.

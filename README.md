@@ -1258,6 +1258,20 @@ Não injeta DLL nem chama, retém ou modifica recursos. Os campos ainda exigem
 confirmação no motor numa rodada B/D agrupada. Sem --resources o JSON anterior
 continua igual; appearance-references recebe somente o formato de nomes.
 
+Para conferir os recursos indicados pelo novo formato, use:
+
+```text
+asset_tools appearance-resources --observation OBSERVACAO-PSM.json --content CONTEUDO.json --layer base=ARQUIVO --layer map=ARQUIVO --output RELATORIO-PSM-NOVO.json
+```
+
+Informe todas as camadas na ordem do inventário. O comando verifica os bytes
+dos modelos/materiais disponíveis contra seus hashes e informa faltas. Preserva
+os três campos e a ordem/repetição dos materiais, sem substituir por padrões.
+Limites: modelo64MiB, material4MiB, total256MiB de recursos únicos; saída nova
+até128KiB. O relatório contém hashes/metadados e contagens, sem extração.
+Esse preflight de disco não prova formato, conteúdo montado, montagem completa
+ou cor. Não cria catálogo/publicação nem altera o desenho dos caminhões.
+
 Informe todas as camadas na ordem do inventário. O arquivo de observação é
 schema1 até16KiB, compartilhado entre os helpers; a mudança de módulo não
 altera seu JSON. O relatório vincula fingerprints do inventário/observação,
