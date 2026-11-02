@@ -1,5 +1,24 @@
 # Roadmap — Across America multiplayer em Rust
 
+## W5 offline: retomada do leitor de aparência — 02/11
+
+`appearance_stream::replica` prepara páginas completas usando o Receiver
+existente e conserva snapshot materializado, aposentadorias e o maior head
+observado entre consultas. Página inválida não publica alterações parciais.
+Snapshot substituto precisa cobrir o head observado; corte/checkpoint/relógio
+antigos e conteúdo conflitante no mesmo corte/checkpoint continuam recusados.
+
+Checkpoint privado schema1/192KiB liga carreira/conteúdo/catálogo/epoch/autoridade,
+inclui hash do conteúdo canônico e preserva progresso parcial. Não autentica
+o arquivo nem impede restaurar deliberadamente um checkpoint antigo válido;
+os pisos conservados são os do arquivo escolhido, sem armazenamento seguro externo.
+`at_observed_head` significa apenas alcançar a última resposta recebida, não
+o estado futuro do servidor ou readiness do jogo. Sidecar continua congelado,
+escopo exclusivo de aparências; motor/mundo false. Seis regressões próprias
+passaram, incluindo retomada de três páginas, aposentadoria, histórico vencido,
+recusas sem avanço parcial e 6.000 entradas mutadas. Transporte/CLI persistente
+serão ligados no próximo bloco; W3/W5 e total51/104 permanecem parciais.
+
 ## M9: coleta optativa e preparo da rodada em dois PCs — 02/11
 
 Opção5 do mp_lan acrescenta Guardar aparência para a próxima conexão, desligado

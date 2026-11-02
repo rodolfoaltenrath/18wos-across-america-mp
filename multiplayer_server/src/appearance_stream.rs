@@ -12,6 +12,8 @@ pub const MAX_SEED_JSON: usize = 128 * 1024;
 pub const HISTORY: usize = 128;
 pub const BATCH: usize = 32;
 
+pub mod replica;
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Pin {
