@@ -55,6 +55,49 @@ Lotes C/D/E só exercitarão entrada tardia/recuperação real após transporte,
 admissão e aplicação comprovados; por enquanto fixtures cobrem corte, replay,
 lacuna, overflow e gerações removidas, sem exigir outro percurso humano.
 
+## Próxima sessão em dois PCs — preparo agrupado de 02/11
+
+Objetivos novos: captura game-pose na LAN (a prova anterior usava drawn),
+comportamento ao tirar foco e recarregar no par real, menus5/6/7 e coleta de
+aparência local. O caminhão remoto ainda usa modelo/pintura fixos de teste:
+essa sessão não pode validar aparência aplicada, mundo, economia ou save vivo
+sincronizados. Sem repetir G0/G12/G13 por filtros/relatórios novos.
+
+1. Com os jogos fechados, usar um kit completo da mesma revisão nos dois lados;
+   preservar a identidade própria de cada PC. No Windows, copiar todos os
+   arquivos do kit novo para a raiz do jogo. O Fedora pode usar o kit via Proton,
+   apontando para a instalação existente. Conferir manifesto/check-only e loader;
+   registrar fingerprints reais, sem inferir hash pela versão Cargo.
+2. No assistente, opção5 antes da conexão: captura2 (independente da câmera,
+   experimental), movimento1 (padrão100/200 arrival) e Guardar aparência1 (Sim).
+   Anotar modelo/cor locais de cada PC, sem exigir viagem à oficina. Carregar
+   saves de teste próximos na mesma cidade; não é necessário terem mesmo nome.
+3. Iniciar ambos pela opção1, mesma sala/endereço, servidor sem eco e offset0.
+   O responsável registra status/servidor e uma coleta finita no Fedora com os
+   comandos existentes; o usuário não precisa copiar números ou digitar markers.
+4. Uma rodada curta: movimento/curvas/parada de cada lado e comparação visual
+   entre PCs. Tirar o foco do Windows por20s, retornando depois; observar no
+   Fedora se o remoto foi mantido/retornou. Não confundir pausa da física com
+   perda medida, nem percepção com medição de FPS/latência ponta a ponta.
+5. Se a rodada estiver normal, carregar novamente o save de teste no Windows,
+   sem salvar por cima dele, e observar ocultação/retorno no Fedora. Essa prova
+   cobre o par real/estado exercitado, não todos os comandos de teardown.
+   Uma consulta2 no Windows após a rodada guarda o diagnóstico e a aparência
+   sem pedir outro percurso. Recusas de leitura também ficam registradas.
+6. Parar com3 em ambos, retornar ao jogo durante a limpeza e aguardar; depois
+   fechar normalmente e conferir com4. Opção6 exporta apenas os diagnósticos
+   de conexão anteriores; opção7 exporta separadamente os registros de aparência.
+   Enviar somente essas pastas, preservando backups/saves/identidade locais.
+
+A coleta de aparência é optativa e tem64registros de96KiB; usa as escolhas
+efetivas salvas no run, mesmo que o menu mude enquanto a sessão estiver ativa.
+Falha de leitura/escrita ou limite atingido não bloqueia parada. As duas leituras
+de nomes/recursos podem discordar: essa informação é preservada, sem fundir ou
+inventar uma captura atômica. Tipos/recusas e metadados ajudam a próxima
+implementação sem repetir a sessão apenas para obter o mesmo log.
+Exportação nova é limitada, tipada e verificável offline; não constitui
+atestado humano, prova de cor, conteúdo montado ou sincronização integral.
+
 Atualizado em 31/10/2026. O proprietário pediu blocos maiores e validação prática
 agrupada. A primeira rodada LAN entre Windows e Fedora/Proton foi realizada e
 está registrada abaixo. A matriz restante continua sendo roteiro de pendências;

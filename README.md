@@ -1274,6 +1274,13 @@ ou cor. Não cria catálogo/publicação nem altera o desenho dos caminhões.
 
 Registros de aparência exportados pelo assistente têm um verificador separado:
 
+No mp_lan, ative Guardar aparência na opção5 ANTES de iniciar a próxima sessão.
+O padrão é desligado. Ao iniciar, consultar e parar, os registros são guardados
+automaticamente depois da operação principal; uma falha na coleta não impede
+parar. Opção7 exporta somente esses registros, inclusive após fechar o jogo.
+Opção6 continua exportando somente os diagnósticos de conexão; envie ambas as
+pastas indicadas se a coleta foi ativada, sem copiar toda a pasta de dados.
+
 ```text
 mp_doctor --appearance-evidence PASTA-DE-APARENCIA
 mp_doctor --appearance-capture CAPTURA-A.json --compare-appearance CAPTURA-B.json

@@ -1,5 +1,35 @@
 # Roadmap — Across America multiplayer em Rust
 
+## M9: coleta optativa e preparo da rodada em dois PCs — 02/11
+
+Opção5 do mp_lan acrescenta Guardar aparência para a próxima conexão, desligado
+por padrão. Campo opcional omitido quando false mantém JSON legado; captura/
+interpolação e argumentos do launcher continuam iguais. As escolhas efetivas e
+hashes do preflight do kit/DLL ficam no run. Alterar preferências depois não
+muda a sessão ativa. Arquivo antigo/ausente/inválido não impede parar.
+
+Após start/status/stop bem-sucedidos, coleta independente confere PID/criação e
+guarda evidência candidata, sem DLL calls/hooks/rede ou alteração visual. Rodar
+APÓS o launcher garante que a tentativa de coleta não antecede cleanup. Falta,
+limite ou falha de escrita não mudam o resultado da operação nem bloqueiam
+parada. Código de recusa é preservado para analisar a captura depois.
+
+Opção7 exporta só appearance da sessão pendente/última em pasta nova, mesmo
+após fechar o jogo. Opção6 permanece exclusiva dos diagnósticos de conexão;
+não inclui esses dados novos ou a gravação session-record. LEIA-ME atualizado
+e roteiro agrupado em GAME_VALIDATION: captura GamePose na LAN, foco, recarga,
+menus5/6/7 e as novas leituras locais, sem prometer modelo/pintura aplicados.
+
+Teste de preferências comprova JSON legado e argumentos preservados; integração
+de processo própria cobre coletor/doctor/exportação. Verificação completa junto
+da base:359x86Proton/439nativos/releases/três escopos Clippy/fmt, sem exclusões.
+CLIs de captura/comparação/extração têm saídas iguais Linux/x86 Proton, dois
+inputs próprios intactos. Uso interativo em jogo/Windows destinatário permanece
+para a rodada, não validado por esses testes. Oito arquivos no prefixo real
+iguais ao backup G13; init.cfg/game/p3/psm intactos. Sem jogo/instalação ou novo
+check amplo; total51/104 preservado. Kit novo de teste será preparado com a
+revisão commitada, sem substituir automaticamente o instalado.
+
 ## W3/M8 offline: evidências de aparência para a próxima LAN — 02/11
 
 `appearance_evidence` guarda duas leituras candidatas independentes: nomes e

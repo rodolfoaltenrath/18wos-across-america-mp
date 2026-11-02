@@ -251,10 +251,17 @@ fn instructions(settings: &Settings) -> String {
    a parada pendente. Nao substitua a DLL com o jogo/mod ainda aberto.\r\n\
 8. Opcao 5: escolha captura e movimento para a PROXIMA conexao. O padrao\r\n\
    continua o anterior; mudar as escolhas nao altera uma sessao ativa.\r\n\
+   Para a rodada de aparencia, escolha Guardar aparencia = 1 (Sim).\r\n\
+   A coleta e optativa e nao altera o desenho ou a pintura do caminhao remoto.\r\n\
 9. Opcao 6: prepare o diagnostico para compartilhar, inclusive apos parar.\r\n\
    Envie SOMENTE a pasta nova indicada: ela tem relatorios filtrados, analise\r\n\
    e manifesto. Nao envie a pasta de dados inteira, saves ou backups.\r\n\
    Confira a pasta com mp_doctor.exe --diagnostics PASTA-INDICADA.\r\n\r\n\
+10. Se ativou Guardar aparencia antes de iniciar, a opcao 7 prepara OUTRA\r\n\
+    pasta para compartilhar, com identificadores candidatos e recusas de leitura.\r\n\
+    A coleta ocorre ao iniciar, consultar e parar; nao exige repetir movimentos.\r\n\
+    Confira com mp_doctor.exe --appearance-evidence PASTA-INDICADA.\r\n\
+    Envie as pastas indicadas por 6 e 7; nao a pasta de dados inteira.\r\n\r\n\
 Dados privados, backups e logs: %LOCALAPPDATA%\\18wos-mp\\<instalacao>\\\r\n\
 Saves padrao: %USERPROFILE%\\Documents\\18 WoS Across America\\saves\r\n\
 Se estiverem no OneDrive/outra pasta, informe o caminho real no assistente.\r\n\

@@ -1,5 +1,21 @@
 # Orientações para continuar o projeto
 
+M9préLAN02/11: player-settings.appearance_diagnostics optativo/defaultfalse,
+serde omitefalse preservandoJSONantigo; argumentoslauncher inalterados. Menu5
+escolhe para PRÓXIMO start; run guarda escolha/preflight hashkit+DLL. Helper faz
+coleta best-effort APÓS launcher bem-sucedido start/status/stop, PID/criação
+conferidos; não bloqueia cleanup por falta/limite/IO nem altera resultado.
+Opção7 exporta SOMENTE appearance da sessão pendente/última, inclusive jogo
+fechado; opção6 segue SOMENTE conexão, sem mudar bundle antigo/recorder.
+LEIA-ME e GAME_VALIDATION têm uma rodada2PC para GamePose/foco/reload e menus,
+sem fechar W3/aparência real nem repetir G0/G12/G13. Menuinterativo destinatário
+ainda pendente; settingslegacy/IO/args e coletor/doctorProcess próprio passaram.
+Verify integral359x86Proton/439nativos/releases/3Clippy/fmt, logs no registro
+abaixo; apósverify sódocs. Oito arquivos no prefixopartida iguais backupG13,
+init.cfg dddbacf5…7774/game/p3/psm intactos. Sem jogo/instalação,51de104 intactos.
+Novo kit será preparado apóscommit sem substituir instalado; consultar logs
+two-pc-prep-*20261102*. Servidor local lido192.168.18.103:39000, reconferir no teste.
+
 W3evidence02/11: appearance_evidence captura names/resources separados e recusa
 tipada Missing/Overflow/Type/Changed/Invalid/GuardRefused/TargetUnavailable,
 sem copiar erros/paths/poses. Divergência entre leituras fica explícita; não

@@ -19,6 +19,12 @@ pub struct Settings {
     pub schema: u8,
     pub capture: Selection,
     pub presentation: Config,
+    /// Opt-in candidate metadata only, saved separately from connection logs.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub appearance_diagnostics: bool,
+}
+fn is_false(value: &bool) -> bool {
+    !value
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -26,6 +32,7 @@ impl Default for Settings {
             schema: 1,
             capture: Selection::Drawn,
             presentation: Config::DEFAULT,
+            appearance_diagnostics: false,
         }
     }
 }
@@ -171,5 +178,22 @@ mod tests {
         assert!(load(&p).is_err());
         fs::write(&p, vec![b' '; CAP + 1]).unwrap();
         assert!(load(&p).is_err());
+    }
+    #[test]
+    fn legacy_settings_stay_byte_compatible_and_diagnostics_do_not_change_launcher_arguments() {
+        let legacy=br#"{"schema":1,"capture":"drawn","presentation":{"delay_ms":100,"extrapolation_ms":200,"timebase":"arrival"}}"#;
+        let original: Settings = serde_json::from_slice(legacy).unwrap();
+        assert!(!original.appearance_diagnostics);
+        assert_eq!(serde_json::to_vec(&original).unwrap(), legacy);
+        let t = tempfile::tempdir().unwrap();
+        let p = t.path().join("player.json");
+        let mut enabled = original;
+        enabled.appearance_diagnostics = true;
+        save(&p, enabled).unwrap();
+        assert!(load(&p).unwrap().appearance_diagnostics);
+        assert_eq!(
+            enabled.arguments(None).unwrap(),
+            original.arguments(None).unwrap()
+        );
     }
 }

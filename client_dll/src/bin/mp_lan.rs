@@ -223,6 +223,11 @@ mod windows {
             "focus_measured":false,
         }))?)?;
         receipt.sync_all()?;
+        // Best effort AFTER the launcher operation, particularly after cleanup.
+        // Failures here must never change stop/recovery or the command result.
+        if output.status.success() && matches!(role, "start" | "status" | "stop") {
+            capture_appearance(session, role);
+        }
         if let Ok(bytes) = session_evidence::sanitize(&output.stdout) {
             let exported = session.run.join("diagnosticos");
             let saved = (|| -> Result<()> {
@@ -303,6 +308,55 @@ mod windows {
         parts.iter().map(|v| v.to_os_string()).collect()
     }
     static HELPER_CLOCK: OnceLock<Instant> = OnceLock::new();
+    fn capture_appearance(session: &Session, role: &str) {
+        use client_dll::appearance_evidence::{self, Refusal, Role};
+        // Use THIS run's effective choices. Menu 5 changes only a future run.
+        let enabled = assistant_settings::load(&session.run.join("player-settings.json"))
+            .map(|s| s.appearance_diagnostics)
+            .unwrap_or(false);
+        if !enabled {
+            return;
+        }
+        let role = match role {
+            "start" => Role::Start,
+            "status" => Role::Status,
+            "stop" => Role::Stop,
+            _ => return,
+        };
+        let process = Process::open(session.identity.pid).and_then(|p| {
+            p.same_session(&session.identity)?;
+            Ok(p)
+        });
+        let mut capture = match process {
+            Ok(p) => appearance_evidence::collect_process(role, &p),
+            Err(_) => appearance_evidence::collect(
+                role,
+                || Err(Refusal::TargetUnavailable),
+                || Err(Refusal::TargetUnavailable),
+            ),
+        };
+        capture.preflight =
+            appearance_evidence::load_preflight(&session.run.join("appearance-preflight.json"))
+                .ok();
+        match appearance_evidence::save_next(&session.run.join("appearance"), &capture) {
+            Ok(_) => println!(
+                "Registro de aparencia guardado: nomes {} | modelos/materiais {}. Use 7 para compartilhar.",
+                if capture.names.is_some() {
+                    "disponiveis"
+                } else {
+                    "indisponiveis"
+                },
+                if capture.resources.is_some() {
+                    "disponiveis"
+                } else {
+                    "indisponiveis"
+                }
+            ),
+            Err(_) => eprintln!(
+                "Nao foi possivel guardar a aparencia. A conexao e a parada continuam disponiveis."
+            ),
+        }
+    }
     fn capture_status(kit: &Path, session: &Session) {
         if let Err(error) = command(
             kit,
@@ -351,6 +405,23 @@ mod windows {
             return Ok(None);
         }
         selected.preset(choice.parse()?)?;
+        println!("Guardar aparencia para o proximo teste: 1 Sim | 2 Nao | 0 Cancelar");
+        println!("Ajuda a investigar caminhao e pintura; nao altera o que aparece no jogo.");
+        selected.appearance_diagnostics = match prompt(
+            "Guardar aparencia",
+            if selected.appearance_diagnostics {
+                "1"
+            } else {
+                "2"
+            },
+        )?
+        .as_str()
+        {
+            "0" => return Ok(None),
+            "1" => true,
+            "2" => false,
+            _ => anyhow::bail!("Escolha 1, 2 ou 0."),
+        };
         assistant_settings::save(path, selected)?;
         println!("Configuracao salva para a proxima conexao. A sessao atual nao foi alterada.");
         Ok(Some(selected))
@@ -395,7 +466,7 @@ mod windows {
             }
         };
         println!(
-            "\nDados locais: {}\n1 Iniciar multiplayer | 2 Consultar conexao | 3 Parar multiplayer (antes de fechar jogo) | 4 Conferir arquivos apos saida | 5 Configurar proxima conexao | 6 Preparar diagnostico para compartilhar | 0 Fechar assistente",
+            "\nDados locais: {}\n1 Iniciar multiplayer | 2 Consultar conexao | 3 Parar multiplayer (antes de fechar jogo) | 4 Conferir arquivos apos saida | 5 Configurar proxima conexao | 6 Preparar diagnostico para compartilhar | 7 Preparar aparencia para compartilhar | 0 Fechar assistente",
             data.display()
         );
         println!(
@@ -494,7 +565,7 @@ mod windows {
                             ..player
                         };
                         start_arguments.extend(effective.arguments(None)?);
-                        lan_kit::verify(kit)?;
+                        let checked_kit = lan_kit::verify(kit)?;
                         let tick = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
                         let run = data.join(format!("run-{tick}"));
                         fs::create_dir(&run)?;
@@ -505,6 +576,16 @@ mod windows {
                         };
                         save_new(&session.run.join("player-settings.json"), &effective)?;
                         save_new(&session.run.join("runtime-check.json"), &runtime)?;
+                        if effective.appearance_diagnostics {
+                            let preflight = client_dll::appearance_evidence::Preflight {
+                                kit_sha256: multiplayer_server::career::hash(&serde_json::to_vec(
+                                    &checked_kit,
+                                )?),
+                                dll_sha256: runtime.dll_sha256.clone(),
+                            };
+                            preflight.validate()?;
+                            save_new(&session.run.join("appearance-preflight.json"), &preflight)?;
+                        }
                         save_new(&session.run.join("session.json"), &session)?;
                         command(
                             kit,
@@ -634,6 +715,23 @@ mod windows {
                             "Backups, saves, identidade e logs brutos ficaram fora da exportacao."
                         );
                     }
+                    "7" => {
+                        let session = match load(&pending)? {
+                            Some(s) => s,
+                            None => load(&last)?.context("nenhuma sessao registrada")?,
+                        };
+                        let tick = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+                        let out = data.join(format!("aparencia-{tick}"));
+                        let manifest=client_dll::appearance_evidence::bundle(&session.run.join("appearance"),&out).context("Nenhum registro de aparencia valido. Ative Guardar aparencia na opcao 5 antes da proxima conexao; nao precisa repetir percursos para exportar os registros ja feitos")?;
+                        println!(
+                            "Aparencia conferida: {} registros. Envie SOMENTE esta pasta: {}",
+                            manifest.files.len(),
+                            out.display()
+                        );
+                        println!(
+                            "Esta pasta nao inclui saves, backups, identidade ou logs brutos. A aparencia visual ainda precisa da confirmacao no jogo."
+                        );
+                    }
                     "0" => {
                         ensure!(
                             !pending.exists(),
@@ -641,7 +739,7 @@ mod windows {
                         );
                         return Ok(true);
                     }
-                    _ => println!("Escolha 1, 2, 3, 4, 5, 6 ou 0."),
+                    _ => println!("Escolha 1, 2, 3, 4, 5, 6, 7 ou 0."),
                 }
                 Ok(false)
             })();
