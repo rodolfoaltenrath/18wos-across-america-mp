@@ -78,7 +78,7 @@ fn word(
     }
     Ok(v)
 }
-fn witness(
+pub(crate) fn witness(
     layout: Layout<'_>,
     read: &mut impl FnMut(u32, &mut [u8]) -> Result<(), ()>,
 ) -> Result<[u32; 13], Unavailable> {

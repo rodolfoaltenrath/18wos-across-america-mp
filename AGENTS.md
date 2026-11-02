@@ -1,5 +1,24 @@
 # Orientações para continuar o projeto
 
+W3read01/11: estático gameccb327c2 storemake+1770/nomes+d9d stride20/countbyte300
+(rotinas61a77/63e65). truck_build12c8 jávazio real antigo, NÃO usado. Leitor
+conservador make32/64slots20/NULASCIIalnum_-; slots sem papel inferido/emptyNone.
+2cópias+testemunho pose/cena/física+item↔obj/record/size+count; não tick/ABA/
+teardowntotal. Primeiro teste detectoucountmudando entresegundacontagem/cópia,
+count agora testemunhadofinal; logfalha preservado. memory_tool appearance
+hash3módulos/registry/profile/pósvida+módulos, sóread seminjection/callback/
+write/hook/rede/DLLworker. Report16KiB sódefinitionkeys/slots/perfil/flagsfalse,
+candidate_onlytrue. 5tests/3kmutações budget4096bytes80calls e143clientnativos/
+Clippy/fmt passaram; chunks_exact→as_chunks porClippy. Fixture --appearance
+optativa memória própria; provaWindows e integral no fechamento deste lote.
+Não offsets validados no motor/captura modelo/cor; W3/M1/51de104 intactos.
+Logs appearance-capture/read-* privados. Próximo ligar observação ao inventário,
+sem catálogo automático/relaxar guardIA nem pedir sessão apenas por parser.
+Integração x86Proton própria passou: leituraProcessMemory/alteração/falta/
+retorno/countinvalid/recuperação, semDLL; inspetor+CLI jogo recusamfixture e
+não criam saída. Filtro suplementar somente, log appearance-capture-process-
+x86-20261101.log; não confundir com verify integral ou campos reais validados.
+
 W3TCP01/11: host opt-in3arquivos content/catalogue/seed todos ou nenhum,
 actionappearance no careerTCP256KiB/30s/8conn, secret vazio+proof MESMORegistry.
 Actions antigas omitcampo novo e usamsecretconvite. Principal só altera si,

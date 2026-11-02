@@ -1211,6 +1211,31 @@ não comprovam o transform atual da física. Não usar esses campos diretamente
 como coordenadas/orientação de rede. O relatório é observacional, específico
 do perfil; não define uma ABI de escrita nem uma captura atômica do processo.
 
+Consulta adicional W3, preparada por análise estática e ainda pendente de prova
+dos offsets de aparência numa partida:
+
+```text
+memory_tool appearance --pid PID --output OBSERVACAO-NOVA.json
+```
+
+Somente leitura: verifica os três módulos Steam e o registro de actors.car,
+usa a cadeia conhecida e confere cena/física/item/objeto/registro/tamanho.
+Lê duas vezes os nomes candidatos do fabricante e dos acessórios processados,
+incluindo o contador no testemunho repetido. Não usa truck_build vazio. Limites
+conservadores:32bytes para fabricante,64 nomes de20bytes, NUL e ASCII alnum/_/-;
+nomes longos/não suportados são recusados, sem truncar. Entradas vazias ficam
+ausentes, sem inventar peça. Igualdade das leituras não é tick atômico/ABA ou
+garantia contra toda transição. O comando não injeta DLL, chama motor, instala
+hooks, publica pela rede ou altera a configuração/captura padrão da DLL.
+
+O JSON até16KiB guarda somente hashes de definições e índices da tabela;
+`candidate_only=true` e flags engine/worldfalse. Índice não declara tipo de
+acessório/slot de material. Não comprova modelo/pintura/cor renderizados ou
+completude, nem seleciona catálogo automaticamente. `--output` é opcional,
+sempre novo; o mesmo JSON é impresso. A bancada Windows/Proton lê memória
+própria de engine_fixture --appearance; o comando do jogo recusa essa fixture
+antes de criar saída, sem adicionar bypass de perfil.
+
 A ferramenta nativa também permite ler uma definição sem extrair o SCS:
 
 ```sh

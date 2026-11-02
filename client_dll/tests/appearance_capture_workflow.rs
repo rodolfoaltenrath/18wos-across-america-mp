@@ -1,0 +1,81 @@
+//! External process reads of our own memory, no DLL load, hooks or game assets.
+#![cfg(all(windows, target_arch = "x86"))]
+use client_dll::{
+    appearance_capture::{self, Layout},
+    inspection::{appearance, process::Process},
+    pose_capture::{self, Unavailable},
+};
+use std::{
+    io::{BufRead, BufReader, Write},
+    process::{Child, Command, Stdio},
+};
+struct Host(Child);
+impl Drop for Host {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+#[test]
+fn external_read_candidates_follow_owned_changes_and_game_inspector_refuses_the_fixture() {
+    let mut host = Host(
+        Command::new(env!("CARGO_BIN_EXE_engine_fixture"))
+            .args(["--ansi", "--appearance"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap(),
+    );
+    let mut stdout = BufReader::new(host.0.stdout.take().unwrap());
+    let mut line = String::new();
+    stdout.read_line(&mut line).unwrap();
+    let header: serde_json::Value = serde_json::from_str(&line).unwrap();
+    let values: [u32; 3] =
+        serde_json::from_value(header["appearance_descriptors"].clone()).unwrap();
+    let process = Process::open(host.0.id()).unwrap();
+    let layout = Layout {
+        actor: pose_capture::Layout {
+            root: values[0],
+            steps: &[0x14c, 0x4610, 8, 8],
+            vtable: values[1],
+        },
+        type_record: values[2],
+    };
+    let capture = || {
+        appearance_capture::capture(layout, |at, out| {
+            process.read(u64::from(at), out).map_err(|_| ())
+        })
+    };
+    let first = capture().unwrap();
+    first.validate().unwrap();
+    assert_eq!(first.slots.len(), 3);
+    assert!(appearance::inspect(&process).is_err());
+    let temp = tempfile::tempdir().unwrap();
+    let output = temp.path().join("must-not-exist.json");
+    let command = Command::new(env!("CARGO_BIN_EXE_memory_tool"))
+        .args(["appearance", "--pid", &host.0.id().to_string(), "--output"])
+        .arg(&output)
+        .output()
+        .unwrap();
+    assert!(!command.status.success() && !output.exists());
+    let mut send = |text: &str| {
+        writeln!(host.0.stdin.as_mut().unwrap(), "{text}").unwrap();
+        line.clear();
+        stdout.read_line(&mut line).unwrap();
+        assert_eq!(line.trim(), "armed");
+    };
+    send("appearance-switch");
+    let switched = capture().unwrap();
+    assert_ne!(switched.make_definition_key, first.make_definition_key);
+    assert_ne!(switched.slots[2], first.slots[2]);
+    send("appearance-missing");
+    assert_eq!(capture(), Err(Unavailable::Missing));
+    send("appearance-normal");
+    assert_eq!(capture().unwrap(), first);
+    send("appearance-count-invalid");
+    assert_eq!(capture(), Err(Unavailable::Invalid));
+    send("appearance-normal");
+    assert_eq!(capture().unwrap(), first);
+    writeln!(host.0.stdin.as_mut().unwrap(), "quit").unwrap();
+    assert!(host.0.wait().unwrap().success());
+}

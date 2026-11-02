@@ -2,6 +2,8 @@
 #[cfg(all(windows, target_arch = "x86"))]
 mod fixture_actor;
 #[cfg(all(windows, target_arch = "x86"))]
+mod fixture_appearance;
+#[cfg(all(windows, target_arch = "x86"))]
 mod fixture_draw;
 #[cfg(all(windows, target_arch = "x86"))]
 mod fixture_render;
@@ -34,6 +36,10 @@ fn main() -> anyhow::Result<()> {
     let instance = unsafe { GetModuleHandleW(ptr::null()) };
     let ansi = std::env::args().any(|a| a == "--ansi");
     let peek = std::env::args().any(|a| a == "--peek");
+    #[cfg(target_arch = "x86")]
+    let mut appearance = std::env::args()
+        .any(|a| a == "--appearance")
+        .then(fixture_appearance::Fixture::new);
     #[cfg(target_arch = "x86")]
     let render_enabled = std::env::args().any(|a| a == "--render");
     #[cfg(target_arch = "x86")]
@@ -186,10 +192,16 @@ fn main() -> anyhow::Result<()> {
         }
     };
     ensure!(!window.is_null(), "cannot create fixture window");
-    println!(
-        "{}",
-        serde_json::json!({"pid":unsafe{GetCurrentProcessId()},"window":window as usize,"thread":unsafe{GetCurrentThreadId()}, "peek_slot": peek_slot, "factory": bindings, "item_descriptors": item_descriptors, "model_definitions": model_definitions, "model_setter": model_setter,"info_descriptors":info_descriptors,"instance_descriptors":instance_descriptors,"render_descriptors":render_descriptors,"draw_descriptors":draw_descriptors,"draw_car":draw_car,"capture_descriptors":capture_descriptors,"visual_descriptors":visual_descriptors,"transition_descriptors":transition_descriptors,"block_descriptors":block_descriptors,"command_descriptors":command_descriptors,"map_descriptors":map_descriptors})
-    );
+    let header = serde_json::json!({"pid":unsafe{GetCurrentProcessId()},"window":window as usize,"thread":unsafe{GetCurrentThreadId()}, "peek_slot": peek_slot, "factory": bindings, "item_descriptors": item_descriptors, "model_definitions": model_definitions, "model_setter": model_setter,"info_descriptors":info_descriptors,"instance_descriptors":instance_descriptors,"render_descriptors":render_descriptors,"draw_descriptors":draw_descriptors,"draw_car":draw_car,"capture_descriptors":capture_descriptors,"visual_descriptors":visual_descriptors,"transition_descriptors":transition_descriptors,"block_descriptors":block_descriptors,"command_descriptors":command_descriptors,"map_descriptors":map_descriptors});
+    #[cfg(target_arch = "x86")]
+    let header = {
+        let mut header = header;
+        if let Some(fixture) = &appearance {
+            header["appearance_descriptors"] = serde_json::to_value(fixture.descriptors())?;
+        }
+        header
+    };
+    println!("{header}");
     std::io::stdout().flush()?;
     let address = window as usize;
     std::thread::spawn(move || {
@@ -197,6 +209,15 @@ fn main() -> anyhow::Result<()> {
             let Ok(line) = line else {
                 break;
             };
+            #[cfg(target_arch = "x86")]
+            if appearance
+                .as_mut()
+                .is_some_and(|fixture| fixture.command(&line))
+            {
+                println!("armed");
+                let _ = std::io::stdout().flush();
+                continue;
+            }
             #[cfg(target_arch = "x86")]
             if draw_enabled && fixture_draw::command(&line) {
                 let _ = std::io::stdout().flush();

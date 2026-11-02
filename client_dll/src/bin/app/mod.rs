@@ -26,6 +26,14 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Read hashed candidate make/accessory names; no engine calls or injection.
+    Appearance {
+        #[arg(long)]
+        pid: u32,
+        /// Optional NEW private observation file, without raw names or pointers.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
     /// Audit command registry/map descriptor, without arguments, injection or calls.
     Commands {
         #[arg(long)]
@@ -245,6 +253,26 @@ fn cadence(next: &mut Instant, interval: Duration) {
 
 pub fn main() -> Result<()> {
     match Cli::parse().command {
+        Command::Appearance { pid, output } => {
+            if let Some(path) = &output {
+                ensure!(
+                    !path.try_exists()?,
+                    "observation destination already exists"
+                );
+            }
+            let process = Process::open(pid)?;
+            let observation = client_dll::inspection::appearance::inspect(&process)?;
+            let bytes = serde_json::to_vec_pretty(&observation)?;
+            ensure!(
+                bytes.len() <= client_dll::appearance_capture::MAX_JSON,
+                "appearance observation exceeds limit"
+            );
+            if let Some(path) = output {
+                multiplayer_server::career_store::write_new(&path, &bytes)
+                    .map_err(anyhow::Error::msg)?;
+            }
+            println!("{}", std::str::from_utf8(&bytes)?);
+        }
         Command::Commands { pid } => {
             let process = Process::open(pid)?;
             let report = client_dll::inspection::commands::inspect(&process)?;

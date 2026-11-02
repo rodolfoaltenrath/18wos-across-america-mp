@@ -41,6 +41,13 @@ pub const CAR_DESTRUCTOR: u32 = 0xd1820;
 pub const CAR_SIZE: u32 = 0x2118;
 pub const CAR_VTABLE: u32 = 0x1257a0;
 pub const CAR_VALUES: u32 = 0x15fdb8;
+// Static write/consumer evidence only; not yet a validated in-game appearance source.
+pub const APPEARANCE_MAKE: u32 = 0x1770;
+pub const APPEARANCE_COUNT: u32 = 0x300;
+pub const APPEARANCE_NAMES: u32 = 0xd9d;
+pub const APPEARANCE_STRIDE: usize = 20;
+pub const APPEARANCE_MAKE_BYTES: usize = 32;
+pub const APPEARANCE_MAX_SLOTS: usize = 64;
 #[derive(Clone, Copy)]
 pub struct EntityType {
     pub name: &'static str,

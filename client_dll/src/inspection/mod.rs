@@ -1,4 +1,5 @@
 //! Read-only Windows process inspection and bounded local scan files.
+pub mod appearance;
 pub mod commands;
 pub mod differences;
 pub mod entities;

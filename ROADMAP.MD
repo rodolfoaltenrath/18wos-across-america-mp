@@ -1,5 +1,34 @@
 # Roadmap — Across America multiplayer em Rust
 
+## W3: consulta somente leitura de candidatos do caminhão — 01/11
+
+Investigação estática do game.dll perfil ccb327c2 confirmou o store do nome do
+fabricante em actor+0x1770 (rotina+0x61a77), nomes de acessórios em+0xd9d com
+stride20 (+0x63e65) e contador byte+0x300. São candidatos, sem prova nova da
+seleção renderizada. O truck_build de+0x12c8 já estava vazio no jogador real
+anterior: não foi promovido a fonte nem confundido com esses campos processados.
+Leituras locais conservadoras limitam make32bytes/64slots de20bytes; nomes
+precisam NUL e ASCII alnum/_/-. Nomes longos/não suportados são recusados, sem
+truncar/consertar. Slots não têm tipo/papel inferido; vazios ficam ausentes.
+
+`appearance_capture` usa duas cópias iguais e testemunho repetido da cadeia de
+pose/cena/física, mais item↔objeto/registro/tamanho do perfil e contador.
+Primeiro teste encontrou contador mudando após a segunda leitura dele e antes
+da cópia: passou a integrar testemunho final, mantendo a regressão e log inicial.
+Não é tick atômico/ABA nem cobertura de todo teardown. `memory_tool appearance`
+verifica os três módulos Steam, registro actors.car e módulo/vida ao terminar;
+nenhuma injeção/chamada/write/hook/rede ou captura periódica da DLL. Saída nova
+opcional até16KiB, somente hashes de definições/slots/perfil e flagsfalse,
+candidate_onlytrue. Não identifica modelo/pintura por nome bruto nem altera draw.
+
+Cinco testes próprios e143 unitários nativos do cliente passaram, inclui3k
+mutações de memória/orçamento≤4096bytes/80calls, mudança de nome/contador/cena/
+owner, tipos/limites/textos recusados e privacidade. Clippy/fmt nativos passaram;
+Clippy inicial pediu as_chunks, corrigido sem alterar a leitura. Fixture Windows
+adiciona somente modo optativo --appearance e memória própria, sem assets.
+Prova real desses offsets no jogo continua pendente e será agrupada B/D;
+W3/M1 e total51/104 preservados. Logs appearance-capture/read-* privados.
+
 ## W3/W5: transporte optativo de aparência pelo TCP de carreira — 01/11
 
 `mp_career host` recebe opcionalmente os três arquivos appearance-content,

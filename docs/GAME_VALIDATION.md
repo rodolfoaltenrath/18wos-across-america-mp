@@ -31,6 +31,11 @@ aparência nem a aplica no jogo; o sidecar do seed fica congelado. A futura
 rodada B/D deve ligar captura→transporte→aplicação e confirmar diferenças
 visuais/reload/reconexão nos dois PCs. Não repetir LAN básica/G12/G13 apenas
 para validar codec, orçamento ou os novos comandos de desenvolvimento.
+Consulta W3 `memory_tool appearance` preparada por análise estática: lê hashes
+de nomes candidatos com duas cópias/testemunhos e perfil, sem injeção ou publish.
+Não há prova de make/acessórios ativos nesses offsets em partida nova. Agrupar
+uma coleta com B/D quando o motor for exercitado; preservar a evidência antiga
+de truck_build vazio e não repetir G12/G13 só para provar o leitor/serialização.
 
 Preparo W5 offline: snapshot/fluxo de aparência e sidecar preparados sem motor
 por `mp_career join-check`. Não confundir fase prepared com entrada no jogo.
