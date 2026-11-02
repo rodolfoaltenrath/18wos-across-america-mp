@@ -1,5 +1,18 @@
 # Roadmap — Across America multiplayer em Rust
 
+## M9: assistente portátil de instalação com retomada — 02/11
+
+`mp_setup` oferece tradução/fonte e menu separados, consulta e restauração.
+Reconstrói nos arquivos do destinatário; nenhum pacote derivado é transferido.
+Dados locais separados do multiplayer, lock por diretório e referência tipada
+antes da montagem permitem encontrar o preparo/backup após interrupção. Recusa
+referência inválida, componente trocado e arquivos alterados; não adivinha backup.
+Restauração preserva backups e só remove referência depois de confirmar limpeza.
+Quatro testes de sessão e um CLI novos passaram; incluem montagem/restauração
+real na fixture própria e interrupção antes de gravar no jogo. Assets all-targets
+nativos passaram; Clippy/fmt registrados no fechamento. Não instalou no jogo,
+não distribuiu fontes/game assets no Git nem fechou M7/M9/G11;51/104 intactos.
+
 ## M7/M9: preparo local de tradução e menu — 02/11
 
 `asset_tools::player_setup` embute somente os catálogos autorais, reúne T1/T2/

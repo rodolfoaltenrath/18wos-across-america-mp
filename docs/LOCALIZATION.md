@@ -15,6 +15,26 @@ Seis regressões próprias e115testes nativos da biblioteca de assets passaram,
 Clippy lib/fmt; primeiro compile do teste corrigiu iterador de mapa para values.
 Integração interativa e kit serão ligados no próximo bloco, sem nova prova G11.
 
+O executável `mp_setup` agora oferece instalação/status/restauração sem Rust no
+destinatário. Por padrão encontra o jogo nos ancestrais do executável e usa
+Carlito-Bold.ttf ao lado dele. Catálogos T1/T2 estão embutidos; a fonte é entrada
+local, não incorporada ao código. O modo `prepare` somente gera pasta nova;
+`check`/`status` não criam backups. Instalar/restaurar exigem jogo fechado.
+
+Dados por instalação ficam em LOCALAPPDATA/18wos-mp-setup no Windows (state local
+no Linux). Um lock impede dois instaladores nesse diretório. Referência tipada
+do preparo é publicada antes da montagem: reabrir encontra o backup ou retoma
+um preparo concluído antes de qualquer escrita no jogo. Interrupção/alteração
+desconhecida não é sobrescrita; restauração mantém backups e limpa apenas a
+referência ativa depois de confirmar estado restaurado. Não copiar dados entre
+PCs nem apagar backups. Falta/corrupção da referência requer inspeção local,
+sem varrer diretórios e adivinhar qual backup usar.
+
+Quatro testes de sessão incluem montagem/restauração reais sobre arquivos
+próprios, interrupção após registrar preparo, reabertura, lock, referências
+corrompidas e alteração manual preservada. Teste CLI mantém mutações explícitas.
+São provas de bancada, não instalação no jogo nem confirmação de fonte/G11.
+
 Decisão do proprietário em 30/10/2026: traduzir o jogo inteiro, **textos e
 dublagem em etapas separadas**. A primeira versão traduzida deve poder ser
 testada sem esperar pela produção das vozes. Moeda R$ continua requisito

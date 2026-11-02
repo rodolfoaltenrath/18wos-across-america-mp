@@ -382,6 +382,22 @@ pub fn install_overlay(
 ) -> Result<Status> {
     install_guarded(root, package, backup, GAME_SHA, ensure_game_closed, overlay)
 }
+#[cfg(test)]
+pub(crate) fn install_owned_fixture(
+    root: &Path,
+    package: &Path,
+    backup: &Path,
+    expected: &str,
+) -> Result<Status> {
+    install_guarded(
+        root,
+        package,
+        backup,
+        expected,
+        || Ok(()),
+        Overlay::UiPreview,
+    )
+}
 fn ui_preview(m: &crate::mod_package::Manifest) -> Result<()> {
     ensure!(
         m.id == "mp-ui-foundation" && m.version == super::PACKAGE_VERSION && m.files.len() == 10,

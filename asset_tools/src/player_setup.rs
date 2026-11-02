@@ -12,6 +12,7 @@ use std::{
     io::Read,
     path::{Path, PathBuf},
 };
+pub mod session;
 
 const TABLE: &[u8] = include_bytes!("../../translations/pt-BR/local_def.json");
 const LITERALS: &[u8] = include_bytes!("../../translations/pt-BR/literal_def.json");
@@ -22,7 +23,7 @@ const INPUTS: [&str; 5] = [
     "aa/base.scs",
     "aa/patch_1_10.scs",
 ];
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum)]
 #[serde(rename_all = "snake_case")]
 pub enum Component {
     Translation,
@@ -45,6 +46,12 @@ impl Component {
         match self {
             Self::Translation => "ptbr-text",
             Self::Menu => "mp-ui-foundation",
+        }
+    }
+    fn kind(self) -> &'static str {
+        match self {
+            Self::Translation => "own-ptbr-text",
+            Self::Menu => "own-ui-preview",
         }
     }
 }
@@ -232,7 +239,8 @@ fn load(game: &Path, work: &Path) -> Result<(PathBuf, Plan)> {
             && plan
                 .typeface_sha256
                 .as_ref()
-                .is_none_or(|h| multiplayer_server::career::hash_valid(h)),
+                .is_none_or(|h| multiplayer_server::career::hash_valid(h))
+            && (plan.component == Component::Translation || plan.typeface_sha256.is_none()),
         "invalid prepared context"
     );
     Ok((work, plan))
@@ -261,13 +269,22 @@ pub fn install(game: &Path, work: &Path) -> Result<mount::Status> {
     )
 }
 pub fn restore(game: &Path, work: &Path) -> Result<mount::Status> {
-    let (work, _) = load(game, work)?;
+    let (work, plan) = load(game, work)?;
+    ensure!(
+        mount::status(game, &work.join("backup"))?.kind == plan.component.kind(),
+        "backup component differs from preparation"
+    );
     mount::restore(game, &work.join("backup"))
 }
 pub fn status(game: &Path, work: &Path) -> Result<Option<mount::Status>> {
-    let (work, _) = load(game, work)?;
+    let (work, plan) = load(game, work)?;
     if work.join("backup").try_exists()? {
-        Ok(Some(mount::status(game, &work.join("backup"))?))
+        let status = mount::status(game, &work.join("backup"))?;
+        ensure!(
+            status.kind == plan.component.kind(),
+            "backup component differs from preparation"
+        );
+        Ok(Some(status))
     } else {
         check_prepared(game, &work).context("prepared input/package check failed")?;
         Ok(None)
