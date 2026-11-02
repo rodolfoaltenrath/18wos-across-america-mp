@@ -6,6 +6,48 @@ use crate::{
 };
 
 #[tokio::test]
+async fn live_service_reserves_generation_before_serving_and_refuses_reuse_on_restart() {
+    let dir = Temp::new();
+    let (m, c, a, seed) = join::tests::fixture();
+    let ctx = context(&m, &c, &a);
+    store::write_new(&dir.0.join("bootstrap.sav"), b"own save fixture").unwrap();
+    store::write_new(&dir.0.join("manifest.json"), &store::json(&m).unwrap()).unwrap();
+    let invite = Invite::new(&m).unwrap();
+    store::write_new(&dir.0.join("invite.json"), &store::json(&invite).unwrap()).unwrap();
+    for (generation, succeeds) in [(1, true), (1, false), (2, true), (1, false)] {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let registry =
+            Registry::new(m.clone(), "own".into(), "127.0.0.1:1".parse().unwrap()).unwrap();
+        let mut snapshot = seed.clone();
+        snapshot.authority_generation = generation;
+        let authority = stream::Authority::new(ctx, snapshot).unwrap();
+        let report = serve_with_services(
+            listener,
+            &dir.0,
+            Some(registry),
+            Some(authority),
+            std::future::ready(()),
+        )
+        .await;
+        assert_eq!(report.is_ok(), succeeds);
+        if succeeds {
+            let summary = report.unwrap().appearance.unwrap();
+            assert_eq!(summary.requests, 0);
+            assert!(!summary.engine_verified && !summary.world_synchronized);
+        } else {
+            assert!(
+                report
+                    .err()
+                    .unwrap()
+                    .to_string()
+                    .contains("generation must exceed")
+            );
+        }
+    }
+    assert_eq!(store::load(&dir.0).unwrap().1, b"own save fixture");
+}
+
+#[tokio::test]
 async fn sync_resumes_multiple_real_ticketed_pages_and_publishes_only_new_checkpoints() {
     let dir = Temp::new();
     let (m, c, a, seed) = join::tests::fixture();

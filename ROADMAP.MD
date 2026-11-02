@@ -1,5 +1,24 @@
 # Roadmap — Across America multiplayer em Rust
 
+## W5/W10 offline: reserva persistente de geração do host — 02/11
+
+O serviço optativo de aparências reserva geração/contexto em journal privado
+da carreira, após validar contexto e adquirir o store do sidecar, antes de
+aceitar RPCs. Exige authority_generation estritamente maior que a última
+reservada e world_epoch não menor. Lock dura toda a sessão; falha após reserva
+consome geração. Sala sem aparência mantém fluxo anterior e não cria journal.
+
+Reutiliza Journal/lock/hashchain/publicação existente, sem persistir eventos,
+head, aparências ou seed vivo. Protege contra reuso acidental enquanto journal
+é preservado, não contra apagar/restaurar um backup antigo válido, sabotagem de
+paths ou durabilidade universal. Recusa inclui pisos exigidos, sem identidades.
+Três testes próprios cobrem restart/lock/epoch, corrupção/carreira estranha/
+temporário interrompido e alias de diretório. Integração do serviço real cobre
+aberturas1→1recusada→2→1recusada, zero requests e save-base intacto. Suíte servidor
+nativa120tests passou. Clippy inicial pediu colapsar dois ifs, corrigidos sem
+relaxar testes; log inicial preservado. Integral final do lote registrado abaixo.
+Sem jogo/adaptador/instalação, flagsfalse e W5/W10/51de104 intactos.
+
 ## W5/W10 offline: busca incremental e checkpoint novo — 02/11
 
 `mp_career appearance-sync` liga a réplica ao TCP autenticado existente. Até5

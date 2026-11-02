@@ -169,6 +169,12 @@ Obtenha a importação e o ticket com `join`/`prepare-launch` da mesma instânci
 do host. O seed precisa conter as empresas/identidades participantes. Seu
 sidecar fica **congelado**, sem acompanhar o ledger/relógio correntes do host;
 novas empresas requerem seed novo e reinício, que invalida os tickets antigos.
+Cada abertura do host com esse canal reserva a geração em journal privado
+`appearance-generations` na carreira, antes de atender solicitações. No seed
+seguinte, `authority_generation` precisa ser maior que a última reservada e
+`world_epoch` não pode diminuir; erro informa os pisos exigidos. Reinício ou
+falha após a reserva consomem a geração, mesmo sem publicações. Não remova o
+journal para contornar a recusa. Salas sem o canal optativo não usam esse guard.
 
 `appearance-publish` usa os mesmos parâmetros de contexto e `--appearance
 DESCRICAO.json`; `appearance-remove` usa `--vehicle ID --generation N`.
@@ -190,7 +196,11 @@ evento até3KiB. Orçamento de64 solicitações/s compartilhadas e8/s por identi
 por janela monotônica de1s, após conferir ticket válido. Não é renovação de
 lease/conta: continuam as regras de confiança e validade da carreira. Divergência
 de hashes recusa este canal; não transforma a entrada UDP legada em comprovação
-de assets montados. Serviço e histórico são voláteis; não persistem o save vivo.
+de assets montados. Serviço e histórico são voláteis; o journal conserva só a
+reserva da geração/contexto, não head, aparências ou save vivo. A proteção vale
+enquanto essa pasta da carreira for preservada; não detecta apagar/restaurar
+deliberadamente todo o journal ou voltar a um backup antigo válido. Reutiliza
+lock e publicação do journal existente, sem promessa de durabilidade universal.
 
 Para retomar o leitor de aparências declaradas entre consultas, há também:
 

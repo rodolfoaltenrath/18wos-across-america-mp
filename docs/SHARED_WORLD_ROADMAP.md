@@ -514,8 +514,13 @@ Complemento02/11: `appearance-pull` conserva esse comportamento; o novo
 `appearance-sync` usa réplica com checkpoint privado e páginas automáticas,
 preservando pisos e aposentadorias entre consultas. Limites de páginas/prazo
 permitem progresso explicitamente incompleto; falha não substitui o arquivo
-anterior. Isso não resolve geração persistente do host, sidecar vivo ou aplicação
-no motor. `appearance-state-check` verifica esse arquivo offline, sem ticket.
+anterior. `appearance-state-check` verifica esse arquivo offline, sem ticket.
+Outro complemento02/11 reserva gerações do host no journal privado da carreira:
+reiniciar o canal optativo exige geração estritamente maior e epoch não menor.
+Lock/persistência impedem reuso acidental enquanto o journal for preservado;
+não protegem contra remoção ou restauração deliberada de backup antigo. Falha
+após reserva consome geração; histórico/head/estado de aparência continuam
+voláteis, sem sidecar vivo ou aplicação no motor.
 Scope continua sidecar_appearance_only/flagsfalse. Critérios amplos de W3/W5
 seguem abertos: falta captura, render por instância e readiness integrado.
 Bench TCP próprio/codec/CLI não substitui o aceite B/D entre dois PCs.

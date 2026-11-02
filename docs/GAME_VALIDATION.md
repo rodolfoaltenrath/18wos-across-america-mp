@@ -61,6 +61,10 @@ vencido e falha após página válida, com arquivo anterior preservado. Isso nã
 acrescenta passos à rodada abaixo: só testar recuperação visual quando o leitor
 estiver ligado ao adaptador do motor. Não pedir jogo para validar persistência
 do cursor/limites/CLI, nem confundir head observado com mundo pronto.
+Host com o canal optativo agora reserva geração em journal; reinício exige
+geração maior no seed e não aceita epoch menor. Prova de reabertura/recusa/
+corrupção é automatizada sem jogo. Não aplica nem restaura aparências por si;
+preservar o journal privado e agrupar prova do ciclo completo ao futuro motor.
 
 ## Próxima sessão em dois PCs — preparo agrupado de 02/11
 

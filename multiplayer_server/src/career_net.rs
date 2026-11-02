@@ -310,6 +310,13 @@ async fn serve_with_services(
         );
     }
     let mut authority = WorldStore::open(data).map_err(anyhow::Error::msg)?;
+    // Reserve after context/parent-store validation, before accepting RPCs.
+    // The optional service alone consumes generations; legacy rooms are intact.
+    let _appearance_generation = appearance
+        .as_ref()
+        .map(|a| crate::appearance_stream::generation::Guard::reserve(data, a.pin()))
+        .transpose()
+        .map_err(anyhow::Error::msg)?;
     let appearance = appearance.map(|a| Arc::new(appearance::Service::new(a)));
     let manifest = Arc::new(manifest);
     let save = Arc::new(save);
