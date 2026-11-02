@@ -147,15 +147,32 @@ fn paths(folder: &str, shared: &str, token: &str, shader: bool) -> Option<Vec<St
 }
 pub fn audit(content: &Manifest, inputs: &[Input], vehicle: &str) -> Result<Audit> {
     ensure!(identifier(vehicle), "invalid vehicle identifier");
+    traverse(content, Pinned::open(content, inputs)?, vehicle, vec![])
+}
+pub(crate) fn traverse(
+    content: &Manifest,
+    mut sources: Pinned,
+    vehicle: &str,
+    additional: Vec<String>,
+) -> Result<Audit> {
+    ensure!(identifier(vehicle), "invalid vehicle identifier");
     let root = format!(
         "makes/truck/{}/description.def",
         vehicle.to_ascii_lowercase()
     );
     let root_key = resource_key(&root)?;
     let shared = format!("makes/truck/{}/acc/shared", vehicle.to_ascii_lowercase());
-    let mut sources = Pinned::open(content, inputs)?;
     let mut queued = BTreeSet::from([root_key.clone()]);
     let mut queue = VecDeque::from([root]);
+    for path in additional {
+        if queued.insert(resource_key(&path)?) {
+            ensure!(
+                queued.len() <= MAX_DEFINITIONS,
+                "too many candidate definitions"
+            );
+            queue.push_back(path);
+        }
+    }
     let mut definitions = Vec::new();
     let mut deduplicated_targets = 0;
     while let Some(path) = queue.pop_front() {

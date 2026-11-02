@@ -1236,6 +1236,29 @@ sempre novo; o mesmo JSON é impresso. A bancada Windows/Proton lê memória
 própria de engine_fixture --appearance; o comando do jogo recusa essa fixture
 antes de criar saída, sem adicionar bypass de perfil.
 
+Para relacionar a observação ao inventário local, sem extrair recursos:
+
+```text
+asset_tools appearance-references --observation OBSERVACAO.json --content CONTEUDO.json --layer base=ARQUIVO --layer map=ARQUIVO --output RELATORIO-NOVO.json
+```
+
+Informe todas as camadas na ordem do inventário. O arquivo de observação é
+schema1 até16KiB, compartilhado entre os helpers; a mudança de módulo não
+altera seu JSON. O relatório vincula fingerprints do inventário/observação,
+confere arquivos/recursos e identifica nomes ausentes, recursos faltantes e
+candidatos disponíveis. Nomes internos são usados somente em memória para
+encontrar as definições; saída até8MiB continua só de hashes/metadados.
+Combinação de fabricante e acessório de outro fabricante é recusada.
+
+A lista de slots observados permanece separada do grafo, que também inclui
+padrões da description.def e importações. Uma pintura padrão não substitui
+silenciosamente a candidata; não se aplica herança nem se declara esse grafo
+uma montagem selecionada pelo jogo. Se falta a definição do fabricante, não
+há grafo, mas recursos de slots disponíveis ainda têm seu hash conferido.
+Observação e inventário não são coleta conjunta: esses hashes não comprovam
+que o motor montou/utilizou esses arquivos naquele instante. Sem catálogo
+automático, descritor de rede, publish, cor comprovada ou mudança visual.
+
 A ferramenta nativa também permite ler uma definição sem extrair o SCS:
 
 ```sh

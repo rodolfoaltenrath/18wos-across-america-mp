@@ -328,6 +328,18 @@ impl Pinned {
     pub fn winner(&self, key: &str) -> Option<&contract::Winner> {
         self.resolved.get(key)
     }
+    /// Private VFS name of the declared winner, never a filesystem extraction path.
+    pub fn resource_name(&mut self, key: &str) -> Result<String> {
+        let winner = self
+            .resolved
+            .get(key)
+            .context("resource absent from pinned content")?;
+        let layer = &mut self.layers[winner.layer];
+        let entry = layer.archive.by_index(layer.indices[key])?;
+        let name = entry.name()?;
+        ensure!(resource_key(&name)? == key, "pinned resource name differs");
+        Ok(name.into_owned())
+    }
     pub fn read(&mut self, key: &str, limit: usize) -> Result<Vec<u8>> {
         ensure!(
             limit > 0 && limit <= contract::MAX_RESOURCE as usize,

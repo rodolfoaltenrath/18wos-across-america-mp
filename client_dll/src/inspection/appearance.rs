@@ -64,7 +64,16 @@ pub fn inspect(process: &Process) -> Result<Observation> {
         },
         |at, out| process.read(u64::from(at), out).map_err(|_| ()),
     )
-    .map_err(anyhow::Error::msg)?;
+    .map_err(|reason| {
+        anyhow::anyhow!(match reason {
+            pose_capture::Unavailable::Missing => "appearance chain or names unavailable",
+            pose_capture::Unavailable::Overflow => "appearance address overflow",
+            pose_capture::Unavailable::Type => "appearance actor or item differs from profile",
+            pose_capture::Unavailable::Changed => "appearance changed during capture; retry",
+            pose_capture::Unavailable::Invalid =>
+                "appearance names or count invalid or unsupported",
+        })
+    })?;
     observation.validate().map_err(anyhow::Error::msg)?;
     process.ensure_running()?;
     let after = process.modules()?;

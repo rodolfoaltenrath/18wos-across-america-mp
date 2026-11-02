@@ -47,7 +47,8 @@ pub const APPEARANCE_COUNT: u32 = 0x300;
 pub const APPEARANCE_NAMES: u32 = 0xd9d;
 pub const APPEARANCE_STRIDE: usize = 20;
 pub const APPEARANCE_MAKE_BYTES: usize = 32;
-pub const APPEARANCE_MAX_SLOTS: usize = 64;
+pub const APPEARANCE_MAX_SLOTS: usize =
+    multiplayer_server::vehicle_appearance::observation::MAX_SLOTS;
 #[derive(Clone, Copy)]
 pub struct EntityType {
     pub name: &'static str,

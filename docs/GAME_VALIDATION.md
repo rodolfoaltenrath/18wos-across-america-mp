@@ -36,6 +36,10 @@ de nomes candidatos com duas cópias/testemunhos e perfil, sem injeção ou publ
 Não há prova de make/acessórios ativos nesses offsets em partida nova. Agrupar
 uma coleta com B/D quando o motor for exercitado; preservar a evidência antiga
 de truck_build vazio e não repetir G12/G13 só para provar o leitor/serialização.
+`appearance-references` relaciona a observação ao inventário offline; mantém
+slots separados de defaults/imports, sem escolher pintura/catálogo. Conferir
+no futuro se os candidatos coletados correspondem ao veículo/cor visíveis e
+aos recursos efetivamente usados; relatório de disco não encerra esse critério.
 
 Preparo W5 offline: snapshot/fluxo de aparência e sidecar preparados sem motor
 por `mp_career join-check`. Não confundir fase prepared com entrada no jogo.

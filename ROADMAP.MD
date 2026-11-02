@@ -1,5 +1,48 @@
 # Roadmap — Across America multiplayer em Rust
 
+## W3 offline: relação entre candidatos observados e arquivos — 01/11
+
+Contrato de observação passa a vehicle_appearance::observation no crate comum,
+com reexport do leitor anterior, preservando JSON/schema1/16KiB/64slots e
+flags de candidato. Nenhuma dependência/crate novo. `asset_tools
+appearance-references` abre os arquivos ligados ao inventário por hashes,
+recupera nomes VFS só em memória e confere as definições candidatas; fabricante
+e acessórios precisam pertencer ao mesmo domínio. Recursos ausentes/slots
+vazios permanecem explícitos. Mesmo sem raiz do fabricante, recursos que se
+declaram disponíveis são lidos/conferidos, sem apenas confiar no hash declarado.
+
+Relatório novo até8MiB contém fingerprint do inventário/observação e metadados
+hasheados; separa slots observados do grafo que inclui TAMBÉM padrões/imports da
+description.def. Sem mesclar herança, inferir papéis por índice, substituir
+pintura pelo padrão, gerar catálogo/descritor ou publicar na rede. Mesmo achar
+todos os arquivos não comprova montagem/uso pelo motor nem coleta conjunta.
+Flags candidate_onlytrue/engine/worldfalse; W3/M1/51de104 intactos.
+
+Três regressões próprias passaram: variante adicional ao padrão sem fusão,
+faltas explícitas, fabricante cruzado/claims falsas/arquivo alterado recusados,
+e hash forjado em caso sem raiz recusado. Quatro testes do auditor anterior
+e cinco do leitor compartilhado continuaram passando; Clippy/fmt passaram.
+Primeiro compile exigiu converter Cow do ZIP em String próprio, corrigido;
+logs appearance-links-* privados.
+
+Verificação completa: 345 testes x86 sob Proton, 421 nativos, releases, três
+escopos Clippy e fmt passaram sem exclusões. A integração de leitura em memória
+própria do bloco anterior também passou nessa rodada. CLI Linux e Windows sob
+Proton produziram relatórios byte a byte iguais para os mesmos nove recursos
+próprios; três entradas permaneceram com hashes iguais. Cinco definições no
+grafo incluem a pintura padrão e a candidata, sem fundi-las. A auditoria local
+anterior de mch613 permaneceu byte a byte igual (20 definições/96 referências,
+uma não analisada/três não suportadas/zero faltantes ou ambíguas).
+
+Após o integral, somente as mensagens de erro da consulta de aparência foram
+separadas das mensagens de pose; build x86 do memory_tool, Clippy x86 e fmt
+rechecados. Oito arquivos no prefixo da partida iguais ao backup G13, init.cfg
+e módulos originais intactos; enumerações finais sem jogo/fixtures/controladores/
+servidor, runtime exclusivo da bancada encerrado. Sem instalação ou kit novo.
+Logs privados verify-fedora-20261101-appearance-candidates-inventory.log e
+appearance-links-*. Campos reais e seleção/material/cor/ownership continuam
+para B/D agrupados; nenhuma validação visual ou LAN nova foi declarada.
+
 ## W3: consulta somente leitura de candidatos do caminhão — 01/11
 
 Investigação estática do game.dll perfil ccb327c2 confirmou o store do nome do

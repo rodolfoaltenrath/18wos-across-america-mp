@@ -1,3 +1,4 @@
+pub mod appearance_references;
 pub mod bindings;
 pub mod licenses;
 pub mod localization;

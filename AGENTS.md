@@ -1,5 +1,29 @@
 # Orientações para continuar o projeto
 
+W3links01/11: Observation vai a vehicle_appearance::observation comum/reexport
+client, JSON/schema1/16KiB/64slots preservados. Assetappearance-references
+liga hashobservation/inventory, Pinned.resource_name sóVFSemRAM, lê/conferedefs.
+Domínio make/access devecoincidir; empty/missing explícitos. SemmakeRoot não
+fazgrafo, mas verifica hashdos slotsdisponíveis (não sómanifestodeclarado).
+Reportnovo8MiB hash/metadados separaslotsobservados do grafoINCLUIdefaults/
+imports, semmerge/herança/role poríndice/fallbackpaint/catálogo/publish.
+Não coletasconjuntas nem prova arquivosmontados/emuso, candidate_onlytrue,
+engine/worldfalse. 3tests próprios+4legacy+5capture/Clippy/fmt passaram; Cow→
+String noZip corrigido, loginicialpreservado. Sem depsnovas/kit/jogo/instalação,
+W3/M1/51de104 intactos. Verify integral345x86Proton/421nativos/releases/3Clippy/
+fmt passou semexclusões, verify-fedora-20261101-appearance-candidates-inventory.
+CLI própria9recursos/5defs Linux/x86Proton byteidêntica/3inputs hashiguais;
+inclui paintdefault E candidatored, não arquivo observado no jogo. Auditor
+legado mch613local20defs/96refs/1unparsed/3unsupported/0missing/0ambiguous ficou
+byteidêntico ao relatório anterior. Apósverify só mensagens de erro appearance
+foram separadas das de pose; buildmemory_tool x86/Clippyx86/fmt rechecados.
+Final prefixopartida8iguais backupG13/init.cfg dddbacf5…7774 intacto; game/p3
+hashesperfil intactos. EnumWindows semjogo e nativaconfirmada semjogo/fixtures/
+controllers/probe/servers/test_host; enumprimeira sócapturou shell de conferência
+concorrente, log preservado. Runtimebench próprio parado, sem novo kit/instalação.
+Logs appearance-links-* privados. Próxima prova B/D agrupada para candidatos
+reais, materiais/cor/ownership motor; não abrir jogo só para filtros/relatórios.
+
 W3read01/11: estático gameccb327c2 storemake+1770/nomes+d9d stride20/countbyte300
 (rotinas61a77/63e65). truck_build12c8 jávazio real antigo, NÃO usado. Leitor
 conservador make32/64slots20/NULASCIIalnum_-; slots sem papel inferido/emptyNone.

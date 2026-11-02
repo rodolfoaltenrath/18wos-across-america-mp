@@ -514,6 +514,17 @@ Scope continua sidecar_appearance_only/flagsfalse. Critérios amplos de W3/W5
 seguem abertos: falta captura, render por instância e readiness integrado.
 Bench TCP próprio/codec/CLI não substitui o aceite B/D entre dois PCs.
 
+Leitor W3 de candidatos de01/11: análise estática identificou make+0x1770 e
+nomes com stride20/+0xd9d/countbyte+0x300; truck_build vazio antigo continua
+descartado como fonte suficiente. `memory_tool appearance` faz somente leitura
+com perfil/registro/vida/módulos e duas cópias/testemunhos de cadeia/owner/count.
+Campos ainda não foram conferidos numa partida real; não é tick/ABA/teardown
+universal. Saída de hashes candidate_only, sem poses/ponteiros/textos e sem
+publish automático. `appearance-references` liga esses hashes a arquivos
+conferidos pelo inventário, sem extrair, e separa slots de defaults/importações.
+Disponibilidade local não comprova conteúdo montado ou seleção/material/cor
+renderizados. Sem novo ABI/draw/descritor automático, W3 continua parcial.
+
 Base W5 offline: `world_join` prepara um snapshot tipado do sidecar existente
 e aparências declaradas, com corte/fluxo exclusivo de aparência, sem duplicar
 o formato do ledger. Vincula carreira/conteúdo/catálogo/mundo/autoridade;
