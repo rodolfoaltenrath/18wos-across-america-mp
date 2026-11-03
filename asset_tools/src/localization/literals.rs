@@ -121,6 +121,8 @@ pub fn writable_path(path: &str) -> bool {
             && matches!(p[1], "truck" | "trailer")
             && p[3] == "description.def")
         || (p.len() == 3 && p[0] == "defs" && p[1] == "scenarios" && p[2].ends_with(".def"))
+        // CB radio subtitles: only `text`; the voiceN paths stay protected.
+        || (p.len() == 3 && p[0] == "defs" && p[1] == "voices" && p[2].ends_with(".def"))
 }
 fn policy(path: &str, attribute: &str, value: &[u8]) -> Policy {
     if path.ends_with(".esc") {
@@ -158,7 +160,8 @@ fn policy(path: &str, attribute: &str, value: &[u8]) -> Policy {
             Policy::UnsupportedResource
         };
     }
-    if path.starts_with("defs/scenarios/") && !matches!(attribute, "name" | "instructions")
+    if path.starts_with("defs/voices/") && attribute != "text"
+        || path.starts_with("defs/scenarios/") && !matches!(attribute, "name" | "instructions")
         || path.starts_with("makes/") && !matches!(attribute, "name" | "text" | "description")
     {
         return Policy::UnsupportedResource;

@@ -103,6 +103,14 @@ enum Task {
         /// Coverage contrast (0..100), default 40; never thresholds the edges.
         #[arg(long,requires="typeface",value_parser=clap::value_parser!(u8).range(0..=100))]
         font_strength: Option<u8>,
+        /// Font kept in its legacy pixel glyphs with synthesized accents
+        /// (repeatable, e.g. fonts/small_0.font); others use the typeface.
+        #[arg(long, requires = "typeface")]
+        pixel_font: Vec<String>,
+        /// Use the typeface's proportional spacing instead of the legacy
+        /// advances (changes text widths in layouts; needed for condensed faces).
+        #[arg(long, requires = "typeface")]
+        typeface_own_advances: bool,
         /// Authored plain DEF translations outside local.def, checked before writes.
         #[arg(long)]
         literals: Option<PathBuf>,
@@ -247,6 +255,8 @@ fn main() -> Result<()> {
             archive,
             typeface,
             font_strength,
+            pixel_font,
+            typeface_own_advances,
             literals,
         } => {
             let face = typeface
@@ -254,7 +264,10 @@ fn main() -> Result<()> {
                 .map(l10n::typeface::Typeface::load)
                 .transpose()?
                 .map(|f| f.with_strength(font_strength.unwrap_or(40)))
-                .transpose()?;
+                .transpose()?
+                .map(|f| f.with_pixel_fonts(pixel_font))
+                .transpose()?
+                .map(|f| f.with_own_advances(typeface_own_advances));
             let extra = literals
                 .as_deref()
                 .map(|p| literals::load(&l10n::read_catalog_file(p)?))

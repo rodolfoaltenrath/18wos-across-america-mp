@@ -97,7 +97,7 @@ impl Overlay {
                 Ok(m)
             }
             Self::CareerRules => {
-                use crate::career_rules::{CAREER, DIR, PACKAGE_ID};
+                use crate::career_rules::{CAREER, DIR, PACKAGE_ID, SLOT};
                 let m = crate::mod_package::verify(package, false)?;
                 ensure!(
                     m.id == PACKAGE_ID
@@ -105,6 +105,7 @@ impl Overlay {
                             .iter()
                             .all(|f| f.input.origin == crate::mod_package::Origin::DerivedLocal)
                         && m.files.iter().any(|f| f.input.path == CAREER)
+                        && m.files.iter().any(|f| f.input.path == SLOT)
                         && m.files.iter().all(|f| {
                             let p = &f.input.path;
                             p.starts_with(DIR)
@@ -573,7 +574,9 @@ fn verify_career(
         );
         crate::career_rules::verify_entry(
             path,
-            originals.get(path).map(Vec::as_slice),
+            originals
+                .get(crate::career_rules::CAREER)
+                .map(Vec::as_slice),
             &codec::decode(&bytes)?,
         )
         .with_context(|| format!("career rules rejected: {path}"))?;
@@ -901,7 +904,7 @@ mod tests {
     }
     #[test]
     fn career_rules_are_checked_against_local_scenarios_before_any_writes() {
-        use crate::career_rules::{self as rules, CAREER};
+        use crate::career_rules::{self as rules, CAREER, SLOT};
         use std::io::Write;
         let t = tempfile::tempdir().unwrap();
         let (root, _) = fixture(t.path());
@@ -912,6 +915,7 @@ mod tests {
                 "aa/base.scs",
                 vec![
                     (CAREER, career.as_slice()),
+                    (SLOT, b"def scenario:/own_base {\n}\n"),
                     (
                         "defs/scenarios/own_free.def",
                         b"def scenario:/own_base {\n}\n",
@@ -946,7 +950,7 @@ mod tests {
         let good = t.path().join("rules-package");
         crate::mod_package::build(&project.join("project.json"), &good, false).unwrap();
         // Same shape, but the starting money was changed: refused before backup.
-        let file = project.join("inputs/local").join(CAREER);
+        let file = project.join("inputs/local").join(SLOT);
         let changed = String::from_utf8_lossy(&fs::read(&file).unwrap()).replace("3000", "900000");
         fs::write(&file, changed).unwrap();
         let bad = t.path().join("rules-bad");

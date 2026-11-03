@@ -1,5 +1,53 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Testes locais de 03/11: carreira, fontes e crashes
+
+O proprietário testou neste PC Windows, com o jogo aberto. Resultados:
+
+- **Vitória:** com meta $ 2.000 e saldo inicial $ 3.000, a vitória disparou ao
+  começar. `money:N` compara o saldo da conta, não o saldo menos o empréstimo.
+- **Crash ao criar jogo:** o primeiro pacote de regras ocultava
+  `free_mode.def`. O diálogo Novo Jogo pré-seleciona esse nome fixo
+  (`game.dll+0xbc31b`, texto `+0x152608`), o motor procurava um
+  `def scenario` inexistente e quebrava ao liberar memória
+  (`prism3d+0x1128b`). Corrigido: a carreira vai DENTRO de `free_mode.def`
+  e os outros quatro, inclusive `become_millionaire.def`, ficam ocultos. A
+  partida nova foi criada sem crash.
+- **ESC na partida com o menu experimental (p4):** crash. O ESC reabre
+  `ui/mmain.esc`, e o original tem os elementos `showroom` (id 60) e os ids
+  100/110, que o painel próprio não tinha. Menu removido. Redesenho pendente
+  preservando todos os elementos originais (G10).
+- **Fontes:** o proprietário rejeitou Tahoma e Barlow por mudarem tamanho,
+  largura e estilo do jogo. A "fonte quadrada" era a `data.scs`
+  `default.font`, monoespaçada 8x9 e só ASCII, usada pelo Caderno; por isso
+  os acentos sumiam ali. A Barlow nela com glifos fora da caixa de 9 linhas
+  coincidiu com crash no Caderno (`p3shared`), e encaixada na caixa ficava
+  ilegível.
+  - Entregue: `glyphs::cell_mark` desenha acentos DENTRO de cada célula
+    (linhas livres 0–1, cedilha na 8, traço de 2 px, "í" sem o pingo do
+    "i"), mantendo retângulo, offsets e avanço. A `default.font` passa a ter
+    os 27 acentos sem mudar métricas.
+  - Opções `--pixel-font` e `--typeface-own-advances` continuam disponíveis,
+    mas o pacote recomendado é só pixel (sem `--typeface`).
+  - Shaders com `refsize` e `bind` (sem `UI()`) passaram a ser suportados.
+- **Ver o caminhão do oponente:** crash no `render_pool`/`citem_gen_destroy`
+  com o pacote que incluía Barlow e os textos T2 de peças/pinturas
+  (`makes/`); o `prism3d.crash` registra a pilha. O pacote atual exclui
+  `makes/` até isolar a causa (suspeito, não confirmado).
+- **Pacote de terceiros (2005/2006) instalado pelo proprietário:** texto
+  quase sem acentos e com erros; trocado pelo nosso com consentimento. O
+  `init.cfg` dele foi preservado em
+  `target/analysis/user-pack-init-20261103.cfg`; não foi versionado (autoria
+  e licença de terceiros desconhecidas).
+- **Rádio PX:** as 56 legendas de `defs/voices` (só o campo `text`) entraram
+  no catálogo T2 próprio, com acentos.
+
+`dev_env verify` passou: 373 x86/464 nativos, Clippy e rustfmt
+(`target/analysis/verify-windows-20261103-pixel-accents.log`). Pacote
+instalado agora: `target/analysis/l10n-ptbr-20261103-pixel/` (p5) e carreira
+sem limite (p6). Pendentes no jogo: acentos no Caderno, caminhão do
+oponente sem `makes/` e ESC com o menu original.
+
 ## Regras de carreira por dados: cenário único, meta e sem limite — 03/11
 
 Análise estática de `game.dll` (perfil ccb327c2): o menu Novo Jogo lista

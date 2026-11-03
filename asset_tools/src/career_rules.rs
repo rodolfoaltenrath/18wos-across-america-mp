@@ -7,13 +7,23 @@
 //! mode uses). Overriding the other scenario files with a differently named
 //! def therefore hides them without touching originals. Both behaviours are
 //! static evidence only until confirmed in the game (G14).
+//!
+//! After filling the list the dialog presets its selection to the hard-coded
+//! `free_mode.def` (`+0xbc31b`, string `+0x152608`), used by New Game unless an
+//! item is clicked. Hiding that file crashed the first real test (03/11) with
+//! an invalid heap free. The career is therefore written INTO `free_mode.def`
+//! (`SLOT`), from the visible `become_millionaire.def` (`CAREER`), and every
+//! other file, including `become_millionaire.def` itself, is hidden.
 use crate::localization::{Mounts, def};
 use anyhow::{Context, Result, bail, ensure};
 use serde::Serialize;
 use std::{collections::BTreeMap, fs, path::Path};
 
 pub const DIR: &str = "defs/scenarios/";
+/// Source of the career fields in the original mounts.
 pub const CAREER: &str = "defs/scenarios/become_millionaire.def";
+/// File the New Game dialog selects by default; carries the career.
+pub const SLOT: &str = "defs/scenarios/free_mode.def";
 pub const PACKAGE_ID: &str = "career-rules";
 /// Kept well inside a signed 32-bit amount; the engine's integer width is unproven.
 pub const MAX_DOLLARS: u64 = 2_000_000_000;
@@ -186,23 +196,23 @@ pub fn disabled(path: &str) -> Result<Vec<u8>> {
         "unsupported scenario file name"
     );
     Ok(format!(
-        "# across-america-mp: the multiplayer career offers only become_millionaire.\n\
+        "# across-america-mp: the multiplayer career is offered through free_mode.def only.\n\
          def mp_disabled_{stem} {{\n\tnote:\"disabled\"\n}}\n"
     )
     .into_bytes())
 }
 
-/// Install-time guard: the career file differs from the visible original only
+/// Install-time guard: `SLOT` differs from the visible original `CAREER` only
 /// in the three rewritten fields; every other file is exactly `disabled()`.
-pub fn verify_entry(path: &str, original: Option<&[u8]>, bytes: &[u8]) -> Result<()> {
-    if path != CAREER {
+pub fn verify_entry(path: &str, career: Option<&[u8]>, bytes: &[u8]) -> Result<()> {
+    if path != SLOT {
         ensure!(
             bytes == disabled(path)?,
             "{path}: not our disabled definition"
         );
         return Ok(());
     }
-    let original = original.context("career scenario missing in original mounts")?;
+    let original = career.context("career scenario missing in original mounts")?;
     let strip = |b: &[u8]| -> Result<Vec<String>> {
         let text = def::decode(b);
         let lines: Vec<&str> = text.split_inclusive('\n').collect();
@@ -266,20 +276,21 @@ pub fn build(mounts: &Mounts, goal: Goal, language: Language, output: &Path) -> 
     ensure!(!output.exists(), "output must be a NEW directory");
     let names = mounts.names(DIR, ".def");
     ensure!(
-        names.iter().any(|n| n == CAREER),
-        "career scenario not found"
+        names.iter().any(|n| n == CAREER) && names.iter().any(|n| n == SLOT),
+        "career or default scenario not found"
     );
     ensure!(names.len() <= 64, "too many scenario definitions");
+    let career = mounts.read(CAREER)?;
     let mut outputs = BTreeMap::new();
     let mut disabled_list = vec![];
     for name in &names {
-        let bytes = if name == CAREER {
-            rewrite(&mounts.read(name)?, goal, language)?
+        let bytes = if name == SLOT {
+            rewrite(&career, goal, language)?
         } else {
             disabled_list.push(name.clone());
             disabled(name)?
         };
-        verify_entry(name, Some(&mounts.read(name)?), &bytes)?;
+        verify_entry(name, Some(&career), &bytes)?;
         outputs.insert(name.clone(), bytes);
     }
     fs::create_dir(output).context("creating output directory")?;
@@ -337,7 +348,7 @@ mod tests {
         assert!(text.contains("\twin:\"money:5000\"\r\n"));
         assert!(text.contains("reach $ 5,000."));
         assert!(text.contains("\tmoney:\"3000\"\r\n") && text.contains("truck:\"own1\""));
-        verify_entry(CAREER, Some(OWN), &out).unwrap();
+        verify_entry(SLOT, Some(OWN), &out).unwrap();
 
         let pt = rewrite(OWN, Goal::Unlimited, Language::PtBr).unwrap();
         let text = def::decode(&pt);
@@ -346,7 +357,7 @@ mod tests {
             pt.contains(&0xe7) && !pt.contains(&0xc3),
             "single-byte text"
         );
-        verify_entry(CAREER, Some(OWN), &pt).unwrap();
+        verify_entry(SLOT, Some(OWN), &pt).unwrap();
 
         // A missing win line is inserted before the closing brace.
         let no_win = def::decode(OWN).replace("\twin:\"money:1000000\"\r\n", "");
@@ -357,9 +368,9 @@ mod tests {
     fn guards_refuse_other_changes_and_unexpected_shapes() {
         let out = rewrite(OWN, Goal::dollars(5000).unwrap(), Language::En).unwrap();
         let tampered = def::decode(&out).replace("money:\"3000\"", "money:\"900000\"");
-        assert!(verify_entry(CAREER, Some(OWN), tampered.as_bytes()).is_err());
+        assert!(verify_entry(SLOT, Some(OWN), tampered.as_bytes()).is_err());
         let bad_win = def::decode(&out).replace("money:5000", "delivered:own_city");
-        assert!(verify_entry(CAREER, Some(OWN), bad_win.as_bytes()).is_err());
+        assert!(verify_entry(SLOT, Some(OWN), bad_win.as_bytes()).is_err());
         assert!(rewrite(b"def other {\n}\n", Goal::Unlimited, Language::En).is_err());
         let twice = [OWN, OWN].concat();
         assert!(rewrite(&twice, Goal::Unlimited, Language::En).is_err());
@@ -394,10 +405,7 @@ mod tests {
         let mut z = zip::ZipWriter::new(fs::File::create(&base).unwrap());
         for (name, data) in [
             (CAREER, OWN),
-            (
-                "defs/scenarios/own_free.def",
-                b"def scenario:/own_base {\n}\n".as_slice(),
-            ),
+            (SLOT, b"def scenario:/own_base {\n}\n".as_slice()),
             ("defs/own_base.def", b"def own_base {\n}\n"),
         ] {
             z.start_file(name, zip::write::SimpleFileOptions::default())
@@ -416,9 +424,13 @@ mod tests {
         let mounts = Mounts::open(&[base, patch]).unwrap();
         let out = t.path().join("project");
         let r = build(&mounts, Goal::dollars(5000).unwrap(), Language::PtBr, &out).unwrap();
+        // The default selection carries the career; the original career file hides.
+        assert_eq!(r.disabled, [CAREER, "defs/scenarios/own_fast.def"]);
+        let slot = fs::read(out.join("inputs/local").join(SLOT)).unwrap();
+        assert!(def::decode(&slot).contains("win:\"money:5000\""));
         assert_eq!(
-            r.disabled,
-            ["defs/scenarios/own_fast.def", "defs/scenarios/own_free.def"]
+            fs::read(out.join("inputs/local").join(CAREER)).unwrap(),
+            disabled(CAREER).unwrap()
         );
         assert!(!r.engine_validated);
         let pkg = t.path().join("package");

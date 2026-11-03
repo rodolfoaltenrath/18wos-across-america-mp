@@ -241,12 +241,27 @@ fn font_texture(
     for image in &font.images {
         let shd = image.trim_start_matches('/').to_string();
         let shd_text = String::from_utf8(mounts.read(&shd)?).context("font shader text")?;
-        let tobj = shd_text
-            .split("UI(")
-            .nth(1)
-            .and_then(|s| s.split(',').next())
-            .context("font shader without UI()")?
-            .trim();
+        let tobj = match shd_text.split("UI(").nth(1) {
+            Some(call) => call.split(',').next().context("empty UI()")?.trim(),
+            // Hand-written shaders (data.scs default.font) bind the atlas in
+            // every method; all binds must name the same texture object.
+            None => {
+                let binds: Vec<&str> = shd_text
+                    .lines()
+                    .filter_map(|l| l.trim().strip_prefix("bind"))
+                    .map(str::trim)
+                    .collect();
+                ensure!(
+                    !binds.is_empty() && binds.iter().all(|b| *b == binds[0]),
+                    "{font_path}: shader without one bound texture"
+                );
+                binds[0]
+            }
+        };
+        ensure!(
+            tobj.ends_with(".tobj"),
+            "font shader texture is not a .tobj"
+        );
         let dir = shd.rsplit_once('/').map_or("", |(d, _)| d);
         let tobj = format!("{dir}/{tobj}");
         ensure!(
@@ -328,6 +343,7 @@ pub fn build_with_literals(
             let original_font = font::parse(&bytes)?;
             let (shaders, tga) = font_texture(mounts, &path, &original_font)?;
             let atlas = glyphs::read_tga(&mounts.read(&tga)?)?;
+            let face = face.filter(|f| f.applies_to(&path));
             let (font_out, new_atlas, added, typography) = if let Some(face) = face {
                 let result = typeface::replace(&bytes, &atlas, face)?;
                 let added = result
