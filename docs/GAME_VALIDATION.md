@@ -1081,3 +1081,27 @@ no motor. `game_tested=false`/`lan_tested=false` permanecem no relatório da
 ferramenta; conclusão humana pertence aos itens observados. Não abrir duas
 instâncias do jogo/conta Steam, não instalar assets e não reinstalar pump no
 mesmo processo. Falha preserva a pasta inteira e interrompe as manobras.
+
+### G14 — Regras de carreira: só "Become a Millionaire", meta e sem limite (offline, 03/11)
+
+Um PC basta. O pacote `career-rules` (p6) é gerado da instalação local por
+`ui_tools career-rules`. Evidência só estática (`game.dll+0xbc180..+0xbc2fc`):
+o menu lista `/defs/scenarios/*.def` e pula arquivos sem `def scenario`; a
+vitória é o campo `win:` do cenário. Nada disso foi visto no jogo ainda.
+Pacotes privados em `target/analysis/career-rules-20261103-01/` (`goal5000-*`
+e `unlimited-*`). Instalar com o jogo fechado, depois da tradução (p5), e
+restaurar na ordem inversa.
+
+- [ ] Instalar `goal5000-package` (`ui_tools install --kind career-rules`).
+  Novo Jogo deve listar **só** a carreira, com nome e instrução PT-BR e
+  "$ 5.000". Os outros quatro cenários não aparecem e não há erro no menu.
+- [ ] Criar um save novo e fazer entregas até passar de $ 5.000 na conta.
+  Registrar se a vitória dispara pelo saldo ou só depois de pagar o
+  empréstimo ($ 100.000). Isso define o significado de `money:N`.
+- [ ] Restaurar, instalar `unlimited-package`, criar outro save e passar do
+  saldo anterior: não deve haver tela de vitória. Economia e concorrência
+  continuam normais.
+- [ ] Carregar um save antigo de outro cenário com o pacote montado e anotar
+  se aparece erro (`Cannot read scenario.def`). É esperado; nesse caso,
+  restaurar antes de usar esses saves.
+- [ ] Restaurar e confirmar o `init.cfg` original e o menu com os cinco cenários.

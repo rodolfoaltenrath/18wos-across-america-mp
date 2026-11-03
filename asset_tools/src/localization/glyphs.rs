@@ -273,6 +273,62 @@ fn mark_ink(mark: Mark, acute: &Accent, base: &Ink) -> Ink {
     ink
 }
 
+/// Monospace cell fonts (data.scs `default.font`: every glyph an 8x9 cell
+/// with blank rows above capitals and below the baseline) have no accented
+/// sample. The mark is drawn INSIDE the base cell in the font's 2 px stroke,
+/// so the glyph keeps its exact rectangle, offsets and advance: nothing leaves
+/// the line box (an overflowing system font crashed the Notebook, 03/11).
+fn cell_mark(mark: Mark, base: &Ink, alpha: u8) -> Result<Ink> {
+    let lit_rows: Vec<i32> = (0..base.h)
+        .filter(|&y| (0..base.w).any(|x| base.at(x, y) > 0))
+        .collect();
+    let lit_cols: Vec<i32> = (0..base.w)
+        .filter(|&x| (0..base.h).any(|y| base.at(x, y) > 0))
+        .collect();
+    let (Some(&top), Some(&bottom), Some(&c0), Some(&c1)) = (
+        lit_rows.first(),
+        lit_rows.last(),
+        lit_cols.first(),
+        lit_cols.last(),
+    ) else {
+        bail!("empty base cell")
+    };
+    let rows: &[&str] = match mark {
+        Mark::Acute => &["..##", ".##."],
+        Mark::Grave => &["##..", ".##."],
+        Mark::Circumflex => &[".##.", "#..#"],
+        Mark::Tilde => &[".##.#", "#.##."],
+        Mark::Diaeresis => &["##.##"],
+        Mark::Cedilla => &[".##."],
+    };
+    let mut ink = Ink::pattern(rows, 1, alpha);
+    let first_row = if mark == Mark::Cedilla {
+        bottom + 1
+    } else {
+        // One blank row between mark and lowercase; capitals have no room.
+        let last = if top >= 3 { top - 2 } else { top - 1 };
+        last - ink.h + 1
+    };
+    ink.left = base.left + (c0 + c1 + 1 - ink.w) / 2;
+    ink.top = base.top + first_row;
+    ensure!(
+        first_row >= 0
+            && first_row + ink.h <= base.h
+            && ink.left >= base.left
+            && ink.left + ink.w <= base.left + base.w,
+        "no room for the mark inside the cell"
+    );
+    for y in 0..ink.h {
+        for x in 0..ink.w {
+            ensure!(
+                ink.at(x, y) == 0 || base.at(ink.left - base.left + x, first_row + y) == 0,
+                "mark would overwrite the base letter"
+            );
+        }
+    }
+    Ok(ink)
+}
+
 pub struct Synthesis {
     pub added: BTreeMap<u8, Glyph>,
     pub atlas: Atlas,
@@ -291,6 +347,36 @@ pub fn synthesize(font_bytes: &[u8], atlas: &Atlas) -> Result<Synthesis> {
         if f.glyphs.contains_key(&slot) {
             continue;
         }
+        let cell_mode = lower.is_none() && upper.is_none();
+        if c == 'í' && cell_mode {
+            // Cell fonts lack a dotless i: drop the dot rows of `i`, then add the acute.
+            if let Some(bg) = f.glyphs.get(&b'i') {
+                let mut base = Ink::crop(atlas, bg)?;
+                let rows: Vec<i32> = (0..base.h)
+                    .filter(|&y| (0..base.w).any(|x| base.at(x, y) > 0))
+                    .collect();
+                // The stem is the last run of consecutive ink rows.
+                let stem = rows
+                    .iter()
+                    .rev()
+                    .zip(rows.iter().rev().skip(1))
+                    .find(|(a, b)| **a != **b + 1)
+                    .map(|(a, _)| *a);
+                if let Some(stem) = stem {
+                    for y in 0..stem {
+                        for x in 0..base.w {
+                            base.a[(y * base.w + x) as usize] = 0;
+                        }
+                    }
+                    if let Ok(mark) = cell_mark(Mark::Acute, &base, base.peak()) {
+                        inks.insert(slot, (Ink::union(&[base, mark]), bg.advance));
+                        continue;
+                    }
+                }
+            }
+            missing_after.push(c);
+            continue;
+        }
         let Some((base_char, mark)) = decompose(c) else {
             missing_after.push(c);
             continue;
@@ -300,12 +386,28 @@ pub fn synthesize(font_bytes: &[u8], atlas: &Atlas) -> Result<Synthesis> {
         } else {
             lower.as_ref()
         };
-        let (Some(accent), Some(bg)) = (accent, f.glyphs.get(&(base_char as u8))) else {
+        let Some(bg) = f.glyphs.get(&(base_char as u8)) else {
             missing_after.push(c);
             continue;
         };
         let base = Ink::crop(atlas, bg)?;
-        let mark = mark_ink(mark, accent, &base);
+        let mark = match accent {
+            Some(accent) => mark_ink(mark, accent, &base),
+            // No accented sample at all: only a padded cell font can host one.
+            None if lower.is_none() && upper.is_none() => {
+                match cell_mark(mark, &base, base.peak()) {
+                    Ok(ink) => ink,
+                    Err(_) => {
+                        missing_after.push(c);
+                        continue;
+                    }
+                }
+            }
+            None => {
+                missing_after.push(c);
+                continue;
+            }
+        };
         inks.insert(slot, (Ink::union(&[base, mark]), bg.advance));
     }
     // Pack below the original pixels, doubling the height until everything fits.
@@ -378,6 +480,9 @@ fn pack(
 /// Replaces the reference height in `UI(name.tobj,W,H,prio)`.
 pub fn resize_shader(shd: &[u8], w: usize, h: usize) -> Result<Vec<u8>> {
     let text = std::str::from_utf8(shd).context("font shader is not text")?;
+    if !text.contains("UI(") {
+        return resize_refsize(text, w, h);
+    }
     let start = text.find("UI(").context("font shader without UI()")?;
     let end = start + text[start..].find(')').context("unclosed UI()")?;
     let args: Vec<&str> = text[start + 3..end].split(',').map(str::trim).collect();
@@ -392,6 +497,34 @@ pub fn resize_shader(shd: &[u8], w: usize, h: usize) -> Result<Vec<u8>> {
     );
     let call = format!("UI({},{},{},{})", args[0], w, h, args[3]);
     Ok(format!("{}{}{}", &text[..start], call, &text[end + 1..]).into_bytes())
+}
+
+/// Hand-written shaders declare `refsize W H` once in their `common` block.
+fn resize_refsize(text: &str, w: usize, h: usize) -> Result<Vec<u8>> {
+    let lines: Vec<&str> = text.split_inclusive('\n').collect();
+    let found: Vec<usize> = (0..lines.len())
+        .filter(|&i| lines[i].trim_start().starts_with("refsize"))
+        .collect();
+    ensure!(found.len() == 1, "font shader without exactly one refsize");
+    let line = lines[found[0]];
+    let args: Vec<&str> = line.split_whitespace().collect();
+    ensure!(args.len() == 3, "unexpected refsize arguments");
+    let (ow, oh): (usize, usize) = (args[1].parse()?, args[2].parse()?);
+    ensure!(
+        ow == w && oh * 2 <= h,
+        "shader reference size does not match atlas"
+    );
+    let indent = &line[..line.len() - line.trim_start().len()];
+    let ending = if line.ends_with("\r\n") { "\r\n" } else { "\n" };
+    let mut out = String::with_capacity(text.len() + 4);
+    for (i, l) in lines.iter().enumerate() {
+        if i == found[0] {
+            out.push_str(&format!("{indent}refsize\t\t{w} {h}{ending}"));
+        } else {
+            out.push_str(l);
+        }
+    }
+    Ok(out.into_bytes())
 }
 
 /// Renders `text` (single-byte slots) for inspection, enlarged `scale` times.
@@ -543,6 +676,68 @@ mod tests {
         assert!(preview(&font_bytes, &atlas, &encoded, 1).is_err());
     }
     #[test]
+    fn cell_font_marks_stay_inside_unchanged_cells() {
+        // Own 8x9 cells: capitals on rows 2..7, lowercase 3..7, an i with a dot.
+        let cap = [
+            "........", "........", ".##...##", ".##...##", ".#######", ".##...##", ".##...##",
+            ".##...##", "........",
+        ];
+        let low = [
+            "........", "........", "........", "..#####.", ".##...##", ".##...##", ".##...##",
+            "..######", "........",
+        ];
+        let dot_i = [
+            "........", "........", "...##...", "........", "..###...", "...##...", "...##...",
+            "..####..", "........",
+        ];
+        let wanted = b"ACEIOUaceiou ";
+        let mut font = String::from("vert_span:9\nline_spacing:0\nimage:/fonts/own.shd\n");
+        for slot in b' '..=b'~' {
+            let cell = wanted.iter().position(|w| *w == slot).unwrap_or(12);
+            font += &format!("${slot:03},{},0,8,9,0,0,8\n", cell * 8);
+        }
+        let mut atlas = Atlas {
+            w: 128,
+            h: 16,
+            rgba: vec![[255, 255, 255, 0]; 128 * 16],
+        };
+        for (cell, slot) in wanted.iter().enumerate() {
+            let rows: &[&str] = match slot {
+                b'A' | b'C' | b'E' | b'I' | b'O' | b'U' => &cap,
+                b'i' => &dot_i,
+                b' ' => &[],
+                _ => &low,
+            };
+            for (y, r) in rows.iter().enumerate() {
+                for (dx, ch) in r.bytes().enumerate() {
+                    if ch == b'#' {
+                        atlas.rgba[y * 128 + cell * 8 + dx][3] = 255;
+                    }
+                }
+            }
+        }
+        let s = synthesize(font.as_bytes(), &atlas).unwrap();
+        assert!(s.missing_after.is_empty(), "{:?}", s.missing_after);
+        assert_eq!(s.added.len(), super::super::def::PT_LETTERS.chars().count());
+        assert_eq!(&s.atlas.rgba[..128 * 16], &atlas.rgba[..]);
+        for (slot, g) in &s.added {
+            assert_eq!(
+                (g.w, g.h, g.left, g.top, g.advance),
+                (8, 9, 0, 0, 8),
+                "slot {slot}"
+            );
+        }
+        let row = |slot: u8, y: i32| -> bool {
+            let g = &s.added[&slot];
+            (0..8).any(|x| s.atlas.rgba[(g.y + y) as usize * 128 + (g.x + x) as usize][3] > 0)
+        };
+        // í: dot removed (row 3 blank again), acute on rows 1..2 above the stem.
+        assert!(!row(0xed, 0) && row(0xed, 1) && row(0xed, 2) && !row(0xed, 3));
+        // ã keeps a blank row between the tilde and the letter; Ç uses the last row.
+        assert!(row(0xe3, 0) && row(0xe3, 1) && !row(0xe3, 2) && row(0xe3, 3));
+        assert!(row(0xc7, 8) && row(0xc7, 7));
+    }
+    #[test]
     fn shader_reference_height_follows_the_atlas() {
         let shd = b"#define COLORGEN\n#include /templates/ui.tpl\n\nUI(small_0.tobj,64,128,999)\n";
         let out = resize_shader(shd, 64, 256).unwrap();
@@ -553,6 +748,11 @@ mod tests {
         );
         assert!(resize_shader(shd, 128, 256).is_err());
         assert!(resize_shader(b"UI(x.tga,1,2,3)", 1, 4).is_err());
+        let own = b"common {\r\n\torthogonal\r\n\trefsize\t\t128 64\r\n}\r\nbind own.tobj\r\n";
+        let out = String::from_utf8(resize_shader(own, 128, 128).unwrap()).unwrap();
+        assert!(out.contains("\trefsize\t\t128 128\r\n") && out.ends_with("bind own.tobj\r\n"));
+        assert!(resize_shader(own, 64, 128).is_err());
+        assert!(resize_shader(b"refsize 1 2\nrefsize 1 2\n", 1, 4).is_err());
     }
     #[test]
     fn preview_uses_actual_advances_and_kerning_and_bounds_allocation() {

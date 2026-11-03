@@ -15,6 +15,8 @@ pub struct Typeface {
     pub sha256: String,
     pub name: String,
     strength: u8,
+    pixel_fonts: Vec<String>,
+    own_advances: bool,
 }
 impl Typeface {
     pub fn load(path: &Path) -> Result<Self> {
@@ -59,12 +61,37 @@ impl Typeface {
             sha256,
             name,
             strength: 40,
+            pixel_fonts: vec![],
+            own_advances: false,
         })
     }
     pub fn with_strength(mut self, strength: u8) -> Result<Self> {
         ensure!(strength <= 100, "font strength outside 0..100");
         self.strength = strength;
         Ok(self)
+    }
+    /// Listed fonts keep their legacy pixel glyphs (with synthesized accents):
+    /// the 10 px HUD fonts rasterize too small to read (Windows preview, 03/11).
+    pub fn with_pixel_fonts(mut self, paths: Vec<String>) -> Result<Self> {
+        ensure!(paths.len() <= 64, "too many pixel fonts");
+        for p in &paths {
+            ensure!(
+                p.starts_with("fonts/") && p.ends_with(".font"),
+                "pixel font must be fonts/NAME.font: {p}"
+            );
+        }
+        self.pixel_fonts = paths;
+        Ok(self)
+    }
+    /// Uses the typeface's proportional advances instead of the legacy cells.
+    /// Layout widths change (text wraps/aligns differently); kerning pairs stay.
+    /// Needed for condensed faces over the monospace 8 px system font.
+    pub fn with_own_advances(mut self, own: bool) -> Self {
+        self.own_advances = own;
+        self
+    }
+    pub fn applies_to(&self, path: &str) -> bool {
+        !self.pixel_fonts.iter().any(|p| p == path)
     }
 }
 #[derive(Clone, Debug, Serialize)]
@@ -157,16 +184,33 @@ pub fn replace(original: &[u8], atlas: &Atlas, face: &Typeface) -> Result<Replac
         reference.h >= 3 && reference.h <= old.vert_span,
         "invalid capital reference"
     );
-    let baseline = reference.top + reference.h;
+    // Monospace system fonts (data.scs default.font) declare whole 8x9 cells;
+    // measure the capital's ink inside its rectangle instead of the cell.
+    let rows: Vec<i32> = (0..reference.h)
+        .filter(|&y| {
+            (0..reference.w).any(|x| {
+                atlas.rgba[(reference.y + y) as usize * atlas.w + (reference.x + x) as usize][3] > 0
+            })
+        })
+        .collect();
+    let (ink_top, ink_h) = match (rows.first(), rows.last()) {
+        (Some(&a), Some(&b)) if b - a + 1 >= 3 => (a, b - a + 1),
+        _ => (0, reference.h),
+    };
+    let baseline = reference.top + ink_top + ink_h;
     let at = face.font.metrics('H', old.vert_span as f32);
     ensure!(at.height > 0, "empty capital outline");
-    let mut px = old.vert_span as f32 * reference.h as f32 / at.height as f32;
+    let mut px = old.vert_span as f32 * ink_h as f32 / at.height as f32;
     let chars: Vec<_> = (b' '..=b'~')
         .map(char::from)
         .chain(def::PT_LETTERS.chars())
         .collect();
     // Fit all printable Latin and accents into the existing line box together.
     // This preserves one common vertical scale instead of flattening accents.
+    // Every glyph must stay inside the original line box, padded cell fonts
+    // included: letting accents/descenders overflow the 9-row system font
+    // crashed the in-game Notebook (03/11), which renders text into a buffer
+    // sized from that box. Smaller letters are the price of staying inside.
     for attempt in 0..80 {
         let fits = chars.iter().all(|c| {
             let m = face.font.metrics(*c, px);
@@ -197,6 +241,23 @@ pub fn replace(original: &[u8], atlas: &Atlas, face: &Typeface) -> Result<Replac
             "raster bounds"
         );
         let mut width = m.width;
+        if face.own_advances {
+            for a in &mut alpha {
+                *a = strengthen(*a, face.strength);
+            }
+            inks.insert(
+                slot,
+                Ink {
+                    width,
+                    height: m.height,
+                    left: m.xmin,
+                    top: baseline - m.ymin - m.height as i32,
+                    advance: (m.advance_width.round() as i32).max(1),
+                    alpha,
+                },
+            );
+            continue;
+        }
         if width > 0 {
             let cell = metric.w.max(metric.advance - metric.left).max(1) as usize;
             if width > cell {
@@ -238,7 +299,7 @@ pub fn replace(original: &[u8], atlas: &Atlas, face: &Typeface) -> Result<Replac
             added_slots: 0,
             horizontally_fitted: fitted,
             antialiased_pixels: 0,
-            layout_metrics_preserved: true,
+            layout_metrics_preserved: !face.own_advances,
         },
     )
 }

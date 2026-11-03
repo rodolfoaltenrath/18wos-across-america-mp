@@ -16,6 +16,510 @@
         }
       }
     },
+    "defs/voices/crazy_reply_0.def": {
+      "src": "9bfc6bd38b638cbf10018b3b76ca605ad62660c50740cd0b2ecdbc75f4334bb7",
+      "entries": {
+        "text#0": {
+          "src": "0ac0161824337c7b479665223468a0ae2af4818af91c0fbff36196f6805e9842",
+          "text": "É... positivo, QSL nessa."
+        }
+      }
+    },
+    "defs/voices/crazy_reply_1.def": {
+      "src": "c314eccc930a18877423bff0a99e665781aa6d4ede989e83f07a8ca2da7cc446",
+      "entries": {
+        "text#0": {
+          "src": "f4bf3c0651070eea7bfe17caad8da35a6819fdfa793648c452a7afc52e82b3f2",
+          "text": "Hã... QSL, mas sugiro sair do ar e tirar um cochilo."
+        }
+      }
+    },
+    "defs/voices/crazy_reply_2.def": {
+      "src": "4507e8e7abc6ecc331c6fdf5038a2a4a7d123404a815a5a96a590cc2c0059dd4",
+      "entries": {
+        "text#0": {
+          "src": "6f5aaf23e17b7f530196c938b7f24b1ddb3843128fe055119c8e5b59f59b45f9",
+          "text": "Não sei o que você está vendo aí, parceiro."
+        }
+      }
+    },
+    "defs/voices/crazy_reply_3.def": {
+      "src": "b06e64413515ae3a4e17f05d64d22366d603b362e5ba2dc6758e3de148e530a7",
+      "entries": {
+        "text#0": {
+          "src": "3c35b364176e60c8403d14b68ecc56624aef55f3bc9a2586f97b5c4523850df9",
+          "text": "Hum... acho que está na hora de você dormir um pouco, parceiro."
+        }
+      }
+    },
+    "defs/voices/gen_comment_0.def": {
+      "src": "32ab228f1518fcbc08ab1488cb90d868118c815d6b3b9e3b4dc265d74b501dc6",
+      "entries": {
+        "text#0": {
+          "src": "4e646dcf157f78b7f1d47f2ca70ee9a3c7e76f282813766bd67a19e6b1c398e4",
+          "text": "Bom, pessoal, estou saindo do ar. Mantenham as rodas girando."
+        }
+      }
+    },
+    "defs/voices/gen_comment_1.def": {
+      "src": "65789249b9c05e31a4947d04f3abcd22759ce4b605f7ff7eebac54fdda03e377",
+      "entries": {
+        "text#0": {
+          "src": "97fb41b9e913fd8ec66fa330e03783222303ee3bc97be0aa351f8f596cf11ec1",
+          "text": "E aí, companheiros, estou na escuta e pronto pra entrar na conversa."
+        }
+      }
+    },
+    "defs/voices/gen_comment_2.def": {
+      "src": "eed08d9f459cd25114a9003e2667fe6a2f98f384a8bf66c97539b1fa810226ad",
+      "entries": {
+        "text#0": {
+          "src": "8e48066411b759903217d13b8739af9ed54e0cf2e096cd8cf2803a2cc9a74ffe",
+          "text": "Vou dar uma parada, a gente se fala na volta."
+        }
+      }
+    },
+    "defs/voices/gen_comment_3.def": {
+      "src": "fb5076326f814a9d5b29724c8090332c2ef30c60f7bd1ed945063ab2e99cc82e",
+      "entries": {
+        "text#0": {
+          "src": "180212286f9a6531cc6c63d3680c3c1b4e90ba4b52f6e0438d1da8f437d51a72",
+          "text": "Recepção ruim na última transmissão..."
+        }
+      }
+    },
+    "defs/voices/gen_comment_4.def": {
+      "src": "4b208b2b3f31a538dc8a734e59fdc49bd5d238ebe113855ba13a67286860afc2",
+      "entries": {
+        "text#0": {
+          "src": "7f4c8c3b25202ce83faaa8b69a9155fc2f53f096353c95e0533c33b14ee4078e",
+          "text": "Missão cumprida, voltando pra casa. Um abraço pra todos os companheiros na estrada."
+        }
+      }
+    },
+    "defs/voices/gen_comment_5.def": {
+      "src": "6e90b7fef02a2af1eb017dc87e84863eef7c2ec26801c3b6a57d8ef9f6658e7f",
+      "entries": {
+        "text#0": {
+          "src": "3dc53a51f6ba2ee3e8f64fc84bbf408815a33fb2306ec4ba4dca59b90f314d51",
+          "text": "Boa viagem, pessoal, estou saindo do ar."
+        }
+      }
+    },
+    "defs/voices/gen_comment_6.def": {
+      "src": "7b8e7ac65eb104786a40d8a65670149a9b6de3c496cb0ec60a00740cfe496f46",
+      "entries": {
+        "text#0": {
+          "src": "8e23d6c02f74cf6193b8f14a70fe91fefdb052687e474d77bfa950b4018f430f",
+          "text": "Copiado, Grandão, estou logo atrás de você."
+        }
+      }
+    },
+    "defs/voices/gen_comment_7.def": {
+      "src": "5df20d8dd2f37a9ae8a3b2a46f1ec9b881636b7e6477480a17f1e78289f439bd",
+      "entries": {
+        "text#0": {
+          "src": "4e0400b1a73b5c2344345e76395b24afb2427d07a354e9d4a72bafaa0da26edf",
+          "text": "Tem bicho atravessando a pista mais à frente, atenção."
+        }
+      }
+    },
+    "defs/voices/gen_comment_8.def": {
+      "src": "c7d053582b96f51807f883d1cbc93513f087dfeb8e23ac9dabaf402027ac4d19",
+      "entries": {
+        "text#0": {
+          "src": "e142a5a1d6313942888c7f9b14efaf135d0d4d2f1301ba03fdeb4caaf880b849",
+          "text": "Parece que tem bicho na pista, fiquem de olho."
+        }
+      }
+    },
+    "defs/voices/gen_comment_9.def": {
+      "src": "3b43583500c59342c339251c0bd1e91bf518ebcb3f5756cd06174f451f2a4c18",
+      "entries": {
+        "text#0": {
+          "src": "26d45099e595bf6b9b2ef64a177796a6525f50a013b294551a7fb4f2422d9218",
+          "text": "Preciso parar no próximo posto, já volto."
+        }
+      }
+    },
+    "defs/voices/gen_reply_0.def": {
+      "src": "ba91b94afa3092e80d415a47d993e18a5f5064f1e73857d0de700b1ccfb7f425",
+      "entries": {
+        "text#0": {
+          "src": "25b536d845fd75e45dee4048ea6ba73c87429d8d7fcad494dae8d3b1cfd95093",
+          "text": "QSL, parceiro, obrigado pelo retorno."
+        }
+      }
+    },
+    "defs/voices/gen_reply_1.def": {
+      "src": "360b2120651352f0bdab952aadbe99df97b3299c5486f50243d95ff244b0d2ea",
+      "entries": {
+        "text#0": {
+          "src": "e349d0d5cf00f528a3c6dff1400fd02a6fb52bbbc57ca1b0fe9eaf9ec1a5285c",
+          "text": "Te escuto alto e claro."
+        }
+      }
+    },
+    "defs/voices/gen_reply_2.def": {
+      "src": "0151ec113981cce363cb39074a5e17fe98f8464b5117366cf6eef0ff5ad3c37a",
+      "entries": {
+        "text#0": {
+          "src": "ab1f3760601bd432f9b075026047294554ff31619be3b15b5f77fe035c7e1656",
+          "text": "QSL."
+        }
+      }
+    },
+    "defs/voices/gen_reply_3.def": {
+      "src": "40ac6959c3f6114a42b3da427337eb122e516e39e56c42013472448786b3ac83",
+      "entries": {
+        "text#0": {
+          "src": "726c9f44bc0e2a4f5fdbfd40446e98874be48526dd405f9b3e576ae21c02b1b1",
+          "text": "Copiado, obrigado."
+        }
+      }
+    },
+    "defs/voices/gen_reply_4.def": {
+      "src": "471381c274c59259da59bd6d5839f3e41b883c1c669ff68f375cf0531eb2da16",
+      "entries": {
+        "text#0": {
+          "src": "1630501359a01145eec3c4e22755bbbd0cc8b74d57534079c1db183a1bdc1f49",
+          "text": "QSL, valeu mesmo."
+        }
+      }
+    },
+    "defs/voices/gen_reply_5.def": {
+      "src": "cfc47b4cbb222e1f3489143ebfadf20fdf8cc3f12033be94bad92537a02d9ff8",
+      "entries": {
+        "text#0": {
+          "src": "4cc519ed47fa89abf17f9d84bd3d9da80f524164a447833d4a70eadf15da0e96",
+          "text": "Positivo e operante nessa, parceiro."
+        }
+      }
+    },
+    "defs/voices/traffic_answ_cop_0.def": {
+      "src": "9c21180153bbee6c6d1b9482ee1313964132ded3b56f78f07632a6fe7054205d",
+      "entries": {
+        "text#0": {
+          "src": "8821a6433786640cc589e399168bf5a0392956eda0712f2a5a7c1e752ccb0002",
+          "text": "Tem polícia escondida no mato mais à frente, pode tirar o pé."
+        }
+      }
+    },
+    "defs/voices/traffic_answ_cop_1.def": {
+      "src": "ab0f93e2e8fb49075ebfb46bc1cd5b0d0603cca59e4c425a89a6ab04fd54a4a0",
+      "entries": {
+        "text#0": {
+          "src": "034ee7e0a12827700ba03bcce0ffdc6beee3b292940f5edda4f4c0e57b4af20f",
+          "text": "Parece que tem um guarda tirando foto lá na frente."
+        }
+      }
+    },
+    "defs/voices/traffic_answ_cop_2.def": {
+      "src": "da9ac959dcf14f284a032cfedd041a91203d4f25eb14b0357593c220c15503ff",
+      "entries": {
+        "text#0": {
+          "src": "593f1c201946eba8da3ca15e01faf1df506579a666e37e139afb45a2a0eb2e34",
+          "text": "Tem uma viatura de radar logo ali na frente... tira o pé, parceiro."
+        }
+      }
+    },
+    "defs/voices/traffic_answ_good_0.def": {
+      "src": "82ef7a549bf758b68ef0ed31d6de0e1e6703d8bace71a96ee7ad1ca7db37d27d",
+      "entries": {
+        "text#0": {
+          "src": "388b246afca0fe547f33c9062f9556e8f8377bca32d11f35f9357fe1f8f279bc",
+          "text": "Estamos com o pé embaixo e seguindo firme."
+        }
+      }
+    },
+    "defs/voices/traffic_answ_good_1.def": {
+      "src": "ed1a806142db36906a0e625df0131c9488b053f57c6ab8a91542089bda2ded4f",
+      "entries": {
+        "text#0": {
+          "src": "4c4a63a4c9eca7d0ce784c1d9f9d2c11dddf14d56ab34d33e599c371967979d5",
+          "text": "Pista livre, parceiro, tudo certo."
+        }
+      }
+    },
+    "defs/voices/traffic_answ_good_2.def": {
+      "src": "87c5737328b1c862ca76a3ea399ac69aed141846d169fec1ed559b49d4f1d76b",
+      "entries": {
+        "text#0": {
+          "src": "b67d542a6da5e24455444942d329dbad8f94d2cdc8c69711a575687c89e76aa0",
+          "text": "Nada à vista, é só manter na faixa."
+        }
+      }
+    },
+    "defs/voices/traffic_answ_good_3.def": {
+      "src": "84efc58dd29f403d239d21e26eb06bbb459eb20c371a97a8149c6fb91d188d53",
+      "entries": {
+        "text#0": {
+          "src": "7cded8fd7258cca076d6969897aa5ae93f89bf50d6c73dcd497a2762f43ba1fc",
+          "text": "Caminho limpo, companheiro, pode pisar fundo."
+        }
+      }
+    },
+    "defs/voices/traffic_answ_good_4.def": {
+      "src": "36fbbb41a2f2ae96076b7d120b190699224df71a78a7d993382e537793757b4d",
+      "entries": {
+        "text#0": {
+          "src": "6ed5e9ea65ff541e5f836c9f570808bc889ffc54713afce41e6aad0162ee9815",
+          "text": "Estrada livre, parceiro, pode acelerar."
+        }
+      }
+    },
+    "defs/voices/traffic_answ_good_5.def": {
+      "src": "85697f8fa8bc2994d2330a93294d4e25b6552d176a60d43589d58932e21f3b6c",
+      "entries": {
+        "text#0": {
+          "src": "00eab86cc76b43d2e9c26f9cc0c8e4dcdad464048662c772923acabf5f3f591a",
+          "text": "Pista limpa à frente, vamos nessa."
+        }
+      }
+    },
+    "defs/voices/traffic_answ_heavy_0.def": {
+      "src": "74e755bdb304e5cbe99ae7ad2b3087e51659a7bd29ca75ed1c94552cc572d1f3",
+      "entries": {
+        "text#0": {
+          "src": "5a49291881c4afffc0502676af37bdf764dc1c37b093f967d157e1ce012d65d5",
+          "text": "Tem uma ambulância socorrendo um carrinho capotado no mato... o trânsito está andando feito lesma."
+        }
+      }
+    },
+    "defs/voices/traffic_answ_heavy_1.def": {
+      "src": "c6abb3dc56cc4ab4ef7a2ae257496fcd2091504e456b19ddd599b848cedb9cb1",
+      "entries": {
+        "text#0": {
+          "src": "548cfb9487bcf3a428938770680a668d00cfbad2cff1d05ad5f5e779b32ca813",
+          "text": "Tomara que os freios estejam bons, parceiro, tira o pé e se prepara pra parar."
+        }
+      }
+    },
+    "defs/voices/traffic_answ_heavy_2.def": {
+      "src": "16f8c08955392c21b56fef024dde18fd6c9ea5de2df4c34aff150b926d20633a",
+      "entries": {
+        "text#0": {
+          "src": "513e22b8ce948e29432916b62a99b0c31e755969ab681113a9a88d1d82021960",
+          "text": "Tem um acidente logo à sua frente, pode ir reduzindo."
+        }
+      }
+    },
+    "defs/voices/traffic_answ_heavy_3.def": {
+      "src": "d60d2bf1cb509663cb2e988ee86ff8735975e45bdfa5ac7429c50cec14154625",
+      "entries": {
+        "text#0": {
+          "src": "c28784e95e5be25fac33f28e3ac6c07e45f66d30c8ecc48a2c6f4afc481df374",
+          "text": "Tem um acidente com feridos mais à frente..."
+        }
+      }
+    },
+    "defs/voices/traffic_answ_light_0.def": {
+      "src": "85c42f9c11f699e3b4191caaa56226589af9f3b1eb3039933f8d417fb1c9eb72",
+      "entries": {
+        "text#0": {
+          "src": "fd76223418039492d58cf0c47d7dabd8bd02f351e6371611e25aa03b6a6f03d2",
+          "text": "Tem uma freada rápida mais à frente."
+        }
+      }
+    },
+    "defs/voices/traffic_answ_light_1.def": {
+      "src": "5d4f3ceeb4d72337d78db6225441f83c11e00d44b356036862a442574609ebec",
+      "entries": {
+        "text#0": {
+          "src": "0184bc9cc3f139efb9f09c5bdfdb75b597c387ae4cc9c650cfdf39e5ed86be94",
+          "text": "É só cuidar daquele motoqueiro apressado que vai dar tudo certo."
+        }
+      }
+    },
+    "defs/voices/traffic_answ_light_2.def": {
+      "src": "60d9c6699f75a789d433f0916e6e31c42673fa16aefcf0c37c9173a8df6e5c13",
+      "entries": {
+        "text#0": {
+          "src": "92601066e17a785e36cbb229cacc57a78bab8f0a469a420a94f3a1dcec38dfd1",
+          "text": "Tem uma caminhonete segurando a faixa da direita agora."
+        }
+      }
+    },
+    "defs/voices/traffic_answ_light_3.def": {
+      "src": "536e96691214f0dd2e75c8c6ec0cac8e25f0ebccd126608a9ac708a6ebe526e7",
+      "entries": {
+        "text#0": {
+          "src": "48829c064d2a5bcd7d56758d3e3297965aafe39b14fb259193f0fd1e32ce91c9",
+          "text": "Tem pedaço de pneu na faixa da direita atrapalhando o trânsito."
+        }
+      }
+    },
+    "defs/voices/traffic_ask_0.def": {
+      "src": "64cebf0c61712bf72a7c93760b16659a2ff820201c1708586f73ed1ead94f5d2",
+      "entries": {
+        "text#0": {
+          "src": "5cb3f43504a49ec5f463b2be90af726ecde917b26be8d073365ba8262a13ec53",
+          "text": "Alguém tem notícia do trânsito mais à frente?"
+        }
+      }
+    },
+    "defs/voices/traffic_ask_1.def": {
+      "src": "8cc6eed6338172e0a5ad0d39c7512f949dece0fedb4eb93be7fb4b783160997f",
+      "entries": {
+        "text#0": {
+          "src": "4804012aa6e4db0f5055edc690101612bfd10118ada725b750e76c61327942fc",
+          "text": "Como está o fluxo lá na frente pra gente?"
+        }
+      }
+    },
+    "defs/voices/weather_answ_hrain_0.def": {
+      "src": "6b943244ead9c56728bf2bcfe559f7417325896009444ca73140dde8f2f283b1",
+      "entries": {
+        "text#0": {
+          "src": "477fa0058b56749b006d93afe64c8a8d24e3ae5cdae9722bb5052de4644e2abe",
+          "text": "Neblina fechada aqui, pessoal, melhor tirar o pé."
+        }
+      }
+    },
+    "defs/voices/weather_answ_hrain_1.def": {
+      "src": "3030b5af4eeb23b395c378a3f6ecd9751e3b6d84f86e81396206fbb8a9d01468",
+      "entries": {
+        "text#0": {
+          "src": "dea31a01db6f79abb958012a71cef2e8d1f660814008e58f9f382208f5abd0c5",
+          "text": "Está caindo um baita temporal."
+        }
+      }
+    },
+    "defs/voices/weather_answ_hrain_2.def": {
+      "src": "300c94aaaaa2f9c285e64fa08dbae26452d45df4c668948289efc9aebdd8ed8a",
+      "entries": {
+        "text#0": {
+          "src": "648bccbfd33d79b63d21146c987deac46263d405de4fc11da97fffcb7fe33ba7",
+          "text": "Vem uma tempestade aí e não vai ser só uma chuvinha."
+        }
+      }
+    },
+    "defs/voices/weather_answ_lrain_0.def": {
+      "src": "65d82a5f226ca90724bbdc6b582c1e2348aaee29fad5dacd0c514299b00dafc7",
+      "entries": {
+        "text#0": {
+          "src": "9028c8ca1080da3801496e40788cd3a4bb6217810f85014428a488ad8c26b718",
+          "text": "Estão prevendo chuva por aqui daqui a pouco."
+        }
+      }
+    },
+    "defs/voices/weather_answ_lrain_1.def": {
+      "src": "7af40fc3bd47cf5fb57931f1241b0643e3785c0d29de9cb022c8a98ccd20836f",
+      "entries": {
+        "text#0": {
+          "src": "f38b608f7e7e5a9fc54c28bbdcce66c1697c5a6e46f8d8fac238a84b610d9464",
+          "text": "Parece chuva, mas nada forte."
+        }
+      }
+    },
+    "defs/voices/weather_answ_lrain_2.def": {
+      "src": "681482edef52325c4285e06fc0675cad96076ef189c90d7e7abdac495187f96d",
+      "entries": {
+        "text#0": {
+          "src": "3d742d8e480ac7572f857b76386709afe642699f5d5b7fe809f33bc2f4366553",
+          "text": "Está meio fechado por aqui, mas é só uma garoa."
+        }
+      }
+    },
+    "defs/voices/weather_answ_nice_0.def": {
+      "src": "0fa8a3fee5facdbd320ea5a89ceead3bd49c3513d771c450a0a8651fbd53688b",
+      "entries": {
+        "text#0": {
+          "src": "4714d34a25473584ea7cde974a37684cc0f057aac8e9c945394cfba0e3e0bc74",
+          "text": "Céu azul e pista seca, tudo certo."
+        }
+      }
+    },
+    "defs/voices/weather_answ_nice_1.def": {
+      "src": "03b39993a11f4358cc86680bd4d4ee6dd476170ba2ee8e8ff605f4de08a99ac7",
+      "entries": {
+        "text#0": {
+          "src": "9b38af0926b02e3332dfff3221cfdd5fb80f39ea89219ef1cda547e773ae778b",
+          "text": "Só céu azul por quilômetros."
+        }
+      }
+    },
+    "defs/voices/weather_answ_nice_2.def": {
+      "src": "1d9a678bd80a164b13495391b0ee85ed97c3afc1ac4263a024c46f02369913f8",
+      "entries": {
+        "text#0": {
+          "src": "bb370c61059e626f43c83bb3a020b65fd90778259853bb9203f5ec4150296e73",
+          "text": "Tempo bom pra você, parceiro."
+        }
+      }
+    },
+    "defs/voices/weather_answ_snow_0.def": {
+      "src": "68e4e92a9bacdda1623e30fdfef14294966c6f2b08a3079d582d1cbf611bf2cb",
+      "entries": {
+        "text#0": {
+          "src": "10a15e9e2b7f687797edfbbcc6d2d78be0083cbbff7f370f6d71bd076a24ce9d",
+          "text": "Tem muita neve mais à frente, melhor tirar o pé."
+        }
+      }
+    },
+    "defs/voices/weather_answ_snow_1.def": {
+      "src": "c08ec9161e158b9cf58f0fb47917e338eae2512603a45b1bb94e1cd31e63640d",
+      "entries": {
+        "text#0": {
+          "src": "59be0578dda1e00fbc8f0568bbd9f7e3314779067a8432cb2991c765d0f40006",
+          "text": "Parece que vem neve por aí, parceiro."
+        }
+      }
+    },
+    "defs/voices/weather_answ_snow_2.def": {
+      "src": "4c8e56f328fa7bbcc599232830c4071cdcdafb6349a05e3fc62dbcbfb42158a9",
+      "entries": {
+        "text#0": {
+          "src": "13522b8b0b112d5330238288a95fb8fd1aadfc66d9f2c2d6c9c33162fe6a0a99",
+          "text": "Pista mais lisa que lençol de hotel cinco estrelas, com uma boa camada de neve em volta."
+        }
+      }
+    },
+    "defs/voices/weather_ask_0.def": {
+      "src": "ae2ff8915506e2a3d03849203d43512d8757a85f3b50275e8672edef040b15f0",
+      "entries": {
+        "text#0": {
+          "src": "188b2226c6bf07b41ecac3eacc0435c3469193684a6a60a5361d309d207d3398",
+          "text": "Como está o tempo lá na frente?"
+        }
+      }
+    },
+    "defs/voices/weather_ask_1.def": {
+      "src": "0fe8a87b79061245d1698e21d8bf905ecfd55b001a193a52ba5847201c277c86",
+      "entries": {
+        "text#0": {
+          "src": "a832fdbc00a5a24153847a883189b554af55bb1490ffb809c9be832473c876c4",
+          "text": "Alguém aí com a previsão do tempo?"
+        }
+      }
+    },
+    "defs/voices/weather_ask_2.def": {
+      "src": "45a633c096a56f38aedd5bac2f25b66c81203c383ec28104d601086f4d73e899",
+      "entries": {
+        "text#0": {
+          "src": "92916185c0869b9c9e2840bd62c1c693ce80057ca314eae72ceca162ca346b31",
+          "text": "Alguém tem a condição do tempo?"
+        }
+      }
+    },
+    "defs/voices/weather_ask_3.def": {
+      "src": "a1a6f31a48fc4708b6da54ad15d55c3a390e0ae9bbfe329ed8694115e4505b91",
+      "entries": {
+        "text#0": {
+          "src": "a75c7a0c820863983600a2546f71fdd8c2a09bc10c483a49259a7ec0e96d9319",
+          "text": "Como está o tempo lá na frente?"
+        }
+      }
+    },
+    "defs/voices/weather_ask_4.def": {
+      "src": "7066df7912e15d8478738b3b2f4f51bac52c62bb1526cbb59f9e6769f7f4f27a",
+      "entries": {
+        "text#0": {
+          "src": "3f20148edcf9728af12cb9b6407eb1b5eaceb6ac76b2ecd66dc98c1753821623",
+          "text": "Algum parceiro aí sabe como está o tempo?"
+        }
+      }
+    },
     "makes/trailer/trailer1/acc/base/!desc.def": {
       "src": "b0dc1dc5923db759092a0f15898f1a60c14ed994ba053a94af0578987793821e",
       "entries": {

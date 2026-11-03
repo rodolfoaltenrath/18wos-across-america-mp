@@ -24,9 +24,9 @@ fn embedded_catalogues_preserve_authored_translation_coverage() {
             .values()
             .map(|f| f.entries.len())
             .sum::<usize>(),
-        208
+        264
     );
-    assert_eq!(literals.files.len(), 207);
+    assert_eq!(literals.files.len(), 263);
 }
 #[test]
 fn preparation_uses_local_fingerprints_and_never_modifies_the_game() {

@@ -13,6 +13,18 @@ enum Kind {
     UiPreview,
     /// Translated table and extended fonts built by l10n_tools (priority p5).
     PtbrText,
+    /// Career goal/no-limit and single scenario built by career-rules (priority p6).
+    CareerRules,
+}
+impl Kind {
+    fn overlay(self) -> asset_tools::ui_tools::mount::Overlay {
+        use asset_tools::ui_tools::mount::Overlay;
+        match self {
+            Self::UiPreview => Overlay::UiPreview,
+            Self::PtbrText => Overlay::PtBrText,
+            Self::CareerRules => Overlay::CareerRules,
+        }
+    }
 }
 #[derive(Parser)]
 struct Args {
@@ -37,6 +49,24 @@ enum Task {
         main_menu_preview: bool,
         #[arg(long, value_enum, default_value = "pt-br")]
         language: Lang,
+    },
+    /// NEW derived_local project: only the millionaire career, with the chosen
+    /// goal or no limit. Not validated in game; install with --kind career-rules.
+    CareerRules {
+        #[arg(long, conflicts_with_all = ["unlimited", "career_manifest"])]
+        goal_dollars: Option<u64>,
+        #[arg(long, conflicts_with = "career_manifest")]
+        unlimited: bool,
+        /// Take the goal from an existing `mp_career` manifest.
+        #[arg(long)]
+        career_manifest: Option<PathBuf>,
+        #[arg(long, value_enum, default_value = "pt-br")]
+        language: Lang,
+        #[arg(long)]
+        output: PathBuf,
+        /// Archives in ascending mount priority (default: the three of aa/init.cfg).
+        #[arg(long)]
+        archive: Vec<PathBuf>,
     },
     /// Read-only bounded localization/font inventory; NEW private output file.
     Inventory {
@@ -73,20 +103,20 @@ enum Task {
     },
 }
 fn main() -> Result<()> {
-    use asset_tools::ui_tools as ui;
+    use asset_tools::{career_rules as rules, ui_tools as ui};
     match Args::parse().command {
         Task::Preflight {
             game,
             package,
             kind,
         } => {
-            let overlay = match kind {
-                Kind::UiPreview => ui::mount::Overlay::UiPreview,
-                Kind::PtbrText => ui::mount::Overlay::PtBrText,
-            };
             println!(
                 "{}",
-                serde_json::to_string_pretty(&ui::mount::preflight(&game, &package, overlay)?)?
+                serde_json::to_string_pretty(&ui::mount::preflight(
+                    &game,
+                    &package,
+                    kind.overlay()
+                )?)?
             );
         }
         Task::Project {
@@ -101,6 +131,45 @@ fn main() -> Result<()> {
                 Lang::En => mod_ui::locale::Language::En,
             },
         )?,
+        Task::CareerRules {
+            goal_dollars,
+            unlimited,
+            career_manifest,
+            language,
+            output,
+            archive,
+        } => {
+            let goal = match (goal_dollars, unlimited, career_manifest) {
+                (Some(n), false, None) => rules::Goal::dollars(n)?,
+                (None, true, None) => rules::Goal::Unlimited,
+                (None, false, Some(path)) => {
+                    anyhow::ensure!(
+                        std::fs::metadata(&path)?.len() <= 64 * 1024,
+                        "career manifest limit"
+                    );
+                    rules::goal_from_manifest(&std::fs::read(&path)?)?
+                }
+                _ => anyhow::bail!("choose --goal-dollars, --unlimited or --career-manifest"),
+            };
+            let archives = if archive.is_empty() {
+                ["data.scs", "aa/base.scs", "aa/patch_1_10.scs"]
+                    .map(PathBuf::from)
+                    .to_vec()
+            } else {
+                archive
+            };
+            let mounts = asset_tools::localization::Mounts::open(&archives)?;
+            let language = match language {
+                Lang::PtBr => rules::Language::PtBr,
+                Lang::En => rules::Language::En,
+            };
+            let r = rules::build(&mounts, goal, language, &output)?;
+            println!(
+                "{} cenarios ocultados, {} arquivos; nao validado no jogo.",
+                r.disabled.len(),
+                r.files
+            );
+        }
         Task::Inventory { archive, output } => {
             let r = ui::inventory::scan(&archive)?;
             let mut f = std::fs::File::create_new(output)?;
@@ -117,18 +186,15 @@ fn main() -> Result<()> {
             package,
             backup,
             kind,
-        } => {
-            let overlay = match kind {
-                Kind::UiPreview => ui::mount::Overlay::UiPreview,
-                Kind::PtbrText => ui::mount::Overlay::PtBrText,
-            };
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&ui::mount::install_overlay(
-                    &game, &package, &backup, overlay
-                )?)?
-            )
-        }
+        } => println!(
+            "{}",
+            serde_json::to_string_pretty(&ui::mount::install_overlay(
+                &game,
+                &package,
+                &backup,
+                kind.overlay()
+            )?)?
+        ),
         Task::Restore { game, backup } => println!(
             "{}",
             serde_json::to_string_pretty(&ui::mount::restore(&game, &backup)?)?

@@ -1,5 +1,96 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Testes locais de 03/11: carreira, fontes e crashes
+
+O proprietário testou neste PC Windows, com o jogo aberto. Resultados:
+
+- **Vitória:** com meta $ 2.000 e saldo inicial $ 3.000, a vitória disparou ao
+  começar. `money:N` compara o saldo da conta, não o saldo menos o empréstimo.
+- **Crash ao criar jogo:** o primeiro pacote de regras ocultava
+  `free_mode.def`. O diálogo Novo Jogo pré-seleciona esse nome fixo
+  (`game.dll+0xbc31b`, texto `+0x152608`), o motor procurava um
+  `def scenario` inexistente e quebrava ao liberar memória
+  (`prism3d+0x1128b`). Corrigido: a carreira vai DENTRO de `free_mode.def`
+  e os outros quatro, inclusive `become_millionaire.def`, ficam ocultos. A
+  partida nova foi criada sem crash.
+- **ESC na partida com o menu experimental (p4):** crash. O ESC reabre
+  `ui/mmain.esc`, e o original tem os elementos `showroom` (id 60) e os ids
+  100/110, que o painel próprio não tinha. Menu removido. Redesenho pendente
+  preservando todos os elementos originais (G10).
+- **Fontes:** o proprietário rejeitou Tahoma e Barlow por mudarem tamanho,
+  largura e estilo do jogo. A "fonte quadrada" era a `data.scs`
+  `default.font`, monoespaçada 8x9 e só ASCII, usada pelo Caderno; por isso
+  os acentos sumiam ali. A Barlow nela com glifos fora da caixa de 9 linhas
+  coincidiu com crash no Caderno (`p3shared`), e encaixada na caixa ficava
+  ilegível.
+  - Entregue: `glyphs::cell_mark` desenha acentos DENTRO de cada célula
+    (linhas livres 0–1, cedilha na 8, traço de 2 px, "í" sem o pingo do
+    "i"), mantendo retângulo, offsets e avanço. A `default.font` passa a ter
+    os 27 acentos sem mudar métricas.
+  - Opções `--pixel-font` e `--typeface-own-advances` continuam disponíveis,
+    mas o pacote recomendado é só pixel (sem `--typeface`).
+  - Shaders com `refsize` e `bind` (sem `UI()`) passaram a ser suportados.
+- **Ver o caminhão do oponente:** crash no `render_pool`/`citem_gen_destroy`
+  com o pacote que incluía Barlow e os textos T2 de peças/pinturas
+  (`makes/`); o `prism3d.crash` registra a pilha. O pacote atual exclui
+  `makes/` até isolar a causa (suspeito, não confirmado).
+- **Pacote de terceiros (2005/2006) instalado pelo proprietário:** texto
+  quase sem acentos e com erros; trocado pelo nosso com consentimento. O
+  `init.cfg` dele foi preservado em
+  `target/analysis/user-pack-init-20261103.cfg`; não foi versionado (autoria
+  e licença de terceiros desconhecidas).
+- **Rádio PX:** as 56 legendas de `defs/voices` (só o campo `text`) entraram
+  no catálogo T2 próprio, com acentos.
+
+`dev_env verify` passou: 373 x86/464 nativos, Clippy e rustfmt
+(`target/analysis/verify-windows-20261103-pixel-accents.log`). Pacote
+instalado agora: `target/analysis/l10n-ptbr-20261103-pixel/` (p5) e carreira
+sem limite (p6). Pendentes no jogo: acentos no Caderno, caminhão do
+oponente sem `makes/` e ESC com o menu original.
+
+## Regras de carreira por dados: cenário único, meta e sem limite — 03/11
+
+Análise estática de `game.dll` (perfil ccb327c2): o menu Novo Jogo lista
+`/defs/scenarios/` (`+0xbc180..+0xbc2fc`), carrega cada arquivo e procura um
+`def scenario`; sem ele, o arquivo é pulado sem erro. A vitória vem do campo
+`win:` do cenário (`money:N`; `none:0` é o do *Free mode*). O carregamento do
+cenário de um save usa o nome gravado (`+0xc5764`) e falha com mensagem se o
+arquivo não tiver `scenario`.
+
+Entregue `asset_tools::career_rules` e `ui_tools career-rules`:
+- Gera um projeto `derived_local` novo a partir dos arquivos visíveis. Em
+  `become_millionaire.def` só reescreve `win`/`name`/`instructions`, em PT-BR
+  ou inglês e com a quebra de linha original; o restante fica byte a byte.
+- Os outros quatro cenários são sobrepostos por um `def mp_disabled_<nome>`.
+- A meta vem de `--goal-dollars N`, `--unlimited` ou do manifesto de
+  `mp_career`, exigindo dólares inteiros e no máximo 2.000.000.000 (largura
+  do inteiro no motor não comprovada).
+- `ui_tools install --kind career-rules` monta em p6, depois de comparar o
+  pacote com os cenários originais. Qualquer outra alteração (dinheiro
+  inicial, empréstimo, outro arquivo) é recusada antes do backup.
+- A guarda da tradução T2 passou a aceitar essa montagem p6 própria.
+
+Cinco testes próprios (reescrita, guardas, manifesto, build e montagem com
+recusa sem escrita/restauração) passaram. Pacotes reais `goal5000` e
+`unlimited` foram gerados (5 arquivos, 4 cenários ocultos) e passaram no
+`preflight`; não foram instalados. Artefatos privados em
+`target/analysis/career-rules-20261103-01/`.
+
+`dev_env verify` Windows passou: **373 x86 e 463 nativos**, releases, Clippy
+e rustfmt (`target/analysis/verify-windows-20261103-career-rules-final.log`).
+As tentativas anteriores pararam no helper desatualizado (allowlist), num
+teste antigo intermitente do `udp_proxy` e no Clippy. O teste do `udp_proxy`
+foi corrigido: a porta liberada podia voltar ao próprio listener do proxy,
+e agora ele escolhe outra.
+
+Limites:
+- Nada disso foi visto no jogo; o roteiro é a G14.
+- Ainda não se sabe se `money:N` compara saldo bruto ou saldo menos
+  empréstimo.
+- Saves de outros cenários podem falhar com o pacote montado.
+- A meta não é imposta a cada participante pela rede: cada PC instala o
+  pacote gerado do mesmo manifesto.
+
 ## M9: assistente portátil de instalação com retomada — 02/11
 
 `mp_setup` oferece tradução/fonte e menu separados, consulta e restauração.
@@ -6150,10 +6241,15 @@ suave, e perda temporária de pacotes não produz movimentos indefinidos.
 
 - [ ] Restringir o fluxo do mod à carreira `Become a Millionaire`, sem apagar
   cenários/arquivos originais. Confirmar a origem da lista nos menus e das regras.
+  Progresso 03/11: origem da lista identificada estaticamente; pacote p6
+  `career-rules` oculta os demais por dados, sem tocar originais. Prova G14.
 - [ ] Implementar meta configurável antes de criar o save e checkbox `Sem limite`;
   validar limites de entrada, salvar/restaurar a regra e impedir divergência
   entre participantes. Identificar a grandeza econômica e substituir o gatilho
   original de vitória, inclusive para metas menores/maiores e sem limite.
+  Progresso 03/11: gatilho é `win:` do cenário; o pacote gera `money:N` ou
+  `none:0` a partir do manifesto da carreira. Grandeza comparada e efeito
+  no motor pendentes (G14).
 - [ ] Negociar mapa, versão, mods e ponto de entrada compatíveis antes de criar
   remotos; impedir entrada em mundos incompatíveis com mensagem útil.
   O controle TCP de carreira já compara perfil/mapa/mods e fixa o manifesto
