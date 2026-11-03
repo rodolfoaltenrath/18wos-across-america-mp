@@ -1,5 +1,48 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Regras de carreira por dados: cenário único, meta e sem limite — 03/11
+
+Análise estática de `game.dll` (perfil ccb327c2): o menu Novo Jogo lista
+`/defs/scenarios/` (`+0xbc180..+0xbc2fc`), carrega cada arquivo e procura um
+`def scenario`; sem ele, o arquivo é pulado sem erro. A vitória vem do campo
+`win:` do cenário (`money:N`; `none:0` é o do *Free mode*). O carregamento do
+cenário de um save usa o nome gravado (`+0xc5764`) e falha com mensagem se o
+arquivo não tiver `scenario`.
+
+Entregue `asset_tools::career_rules` e `ui_tools career-rules`:
+- Gera um projeto `derived_local` novo a partir dos arquivos visíveis. Em
+  `become_millionaire.def` só reescreve `win`/`name`/`instructions`, em PT-BR
+  ou inglês e com a quebra de linha original; o restante fica byte a byte.
+- Os outros quatro cenários são sobrepostos por um `def mp_disabled_<nome>`.
+- A meta vem de `--goal-dollars N`, `--unlimited` ou do manifesto de
+  `mp_career`, exigindo dólares inteiros e no máximo 2.000.000.000 (largura
+  do inteiro no motor não comprovada).
+- `ui_tools install --kind career-rules` monta em p6, depois de comparar o
+  pacote com os cenários originais. Qualquer outra alteração (dinheiro
+  inicial, empréstimo, outro arquivo) é recusada antes do backup.
+- A guarda da tradução T2 passou a aceitar essa montagem p6 própria.
+
+Cinco testes próprios (reescrita, guardas, manifesto, build e montagem com
+recusa sem escrita/restauração) passaram. Pacotes reais `goal5000` e
+`unlimited` foram gerados (5 arquivos, 4 cenários ocultos) e passaram no
+`preflight`; não foram instalados. Artefatos privados em
+`target/analysis/career-rules-20261103-01/`.
+
+`dev_env verify` Windows passou: **373 x86 e 463 nativos**, releases, Clippy
+e rustfmt (`target/analysis/verify-windows-20261103-career-rules-final.log`).
+As tentativas anteriores pararam no helper desatualizado (allowlist), num
+teste antigo intermitente do `udp_proxy` e no Clippy. O teste do `udp_proxy`
+foi corrigido: a porta liberada podia voltar ao próprio listener do proxy,
+e agora ele escolhe outra.
+
+Limites:
+- Nada disso foi visto no jogo; o roteiro é a G14.
+- Ainda não se sabe se `money:N` compara saldo bruto ou saldo menos
+  empréstimo.
+- Saves de outros cenários podem falhar com o pacote montado.
+- A meta não é imposta a cada participante pela rede: cada PC instala o
+  pacote gerado do mesmo manifesto.
+
 ## Fechamento W5/W10 e kit atualizado — 02/11
 
 Os três blocos abaixo foram commitados em42eb696,4c79315,b57d556, sem coautor.
@@ -6124,10 +6167,15 @@ suave, e perda temporária de pacotes não produz movimentos indefinidos.
 
 - [ ] Restringir o fluxo do mod à carreira `Become a Millionaire`, sem apagar
   cenários/arquivos originais. Confirmar a origem da lista nos menus e das regras.
+  Progresso 03/11: origem da lista identificada estaticamente; pacote p6
+  `career-rules` oculta os demais por dados, sem tocar originais. Prova G14.
 - [ ] Implementar meta configurável antes de criar o save e checkbox `Sem limite`;
   validar limites de entrada, salvar/restaurar a regra e impedir divergência
   entre participantes. Identificar a grandeza econômica e substituir o gatilho
   original de vitória, inclusive para metas menores/maiores e sem limite.
+  Progresso 03/11: gatilho é `win:` do cenário; o pacote gera `money:N` ou
+  `none:0` a partir do manifesto da carreira. Grandeza comparada e efeito
+  no motor pendentes (G14).
 - [ ] Negociar mapa, versão, mods e ponto de entrada compatíveis antes de criar
   remotos; impedir entrada em mundos incompatíveis com mensagem útil.
   O controle TCP de carreira já compara perfil/mapa/mods e fixa o manifesto

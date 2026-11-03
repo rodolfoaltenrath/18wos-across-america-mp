@@ -368,10 +368,18 @@ mod tests {
 
     #[test]
     fn temporarily_missing_upstream_does_not_terminate_the_proxy() {
-        let reservation = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let server_address = reservation.local_addr().unwrap();
-        drop(reservation);
-        let proxy = Proxy::bind(options(server_address)).unwrap();
+        // The released port can be handed straight back to the proxy's own
+        // listener, which bind() correctly refuses; pick another port then.
+        let (proxy, server_address) = (0..16)
+            .find_map(|_| {
+                let reservation = UdpSocket::bind("127.0.0.1:0").unwrap();
+                let server_address = reservation.local_addr().unwrap();
+                drop(reservation);
+                Proxy::bind(options(server_address))
+                    .ok()
+                    .map(|p| (p, server_address))
+            })
+            .expect("a free upstream port distinct from the proxy");
         let destination = proxy.local_addr().unwrap();
         let controls = Arc::new(Controls::default());
         let run = controls.clone();

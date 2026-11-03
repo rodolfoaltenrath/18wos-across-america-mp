@@ -1,5 +1,12 @@
 # Orientações para continuar o projeto
 
+M6 03/11 (proprietário testa só neste PC; dois PCs indisponíveis): menu de
+cenários e vitória são dados (`defs/scenarios`, campo `win:`), por leitura
+estática. `ui_tools career-rules` + `install --kind career-rules` (p6) ocultam
+os outros quatro cenários e fixam meta/sem limite; instalador recusa qualquer
+outra mudança antes do backup. Instalar depois da tradução p5. Sem prova no
+jogo: roteiro G14. Não marcar M6 por isso.
+
 RetomadaW5/W10 02/11: commits42eb696/4c79315/b57d556, semcoautor. Replica
 prepara páginas completas com Receiver, snapshot materializado/retired/head
 observado persistidos em checkpoint privado192KiB/hashcanônico. Falha não

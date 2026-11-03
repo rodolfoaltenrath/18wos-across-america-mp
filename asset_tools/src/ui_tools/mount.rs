@@ -15,16 +15,19 @@ pub enum Overlay {
     UiPreview,
     /// Translated table, fonts and guarded display definitions, above the menu.
     PtBrText,
+    /// Career scenario goal/no-limit and hidden other scenarios, above the text.
+    CareerRules,
 }
 impl Overlay {
     fn kind(self) -> &'static str {
         match self {
             Self::UiPreview => "own-ui-preview",
             Self::PtBrText => "own-ptbr-text",
+            Self::CareerRules => "own-career-rules",
         }
     }
     fn from_kind(kind: &str) -> Option<Self> {
-        [Self::UiPreview, Self::PtBrText]
+        [Self::UiPreview, Self::PtBrText, Self::CareerRules]
             .into_iter()
             .find(|o| o.kind() == kind)
     }
@@ -32,24 +35,28 @@ impl Overlay {
         match self {
             Self::UiPreview => "aa/rust_mp_ui.scs",
             Self::PtBrText => "aa/rust_mp_ptbr.scs",
+            Self::CareerRules => "aa/rust_mp_career.scs",
         }
     }
     fn temp(self) -> &'static str {
         match self {
             Self::UiPreview => "aa/rust_mp_ui_init.tmp",
             Self::PtBrText => "aa/rust_mp_ptbr_init.tmp",
+            Self::CareerRules => "aa/rust_mp_career_init.tmp",
         }
     }
     fn marker(self) -> &'static str {
         match self {
             Self::UiPreview => "across-america-mp UI preview",
             Self::PtBrText => "across-america-mp PT-BR text",
+            Self::CareerRules => "across-america-mp career rules",
         }
     }
     fn priority(self) -> &'static str {
         match self {
             Self::UiPreview => "p4",
             Self::PtBrText => "p5",
+            Self::CareerRules => "p6",
         }
     }
     fn line(self) -> String {
@@ -86,6 +93,25 @@ impl Overlay {
                                     && [".font", ".tga", ".shd"].iter().any(|e| p.ends_with(e)))
                         }),
                     "not the PT-BR text project"
+                );
+                Ok(m)
+            }
+            Self::CareerRules => {
+                use crate::career_rules::{CAREER, DIR, PACKAGE_ID};
+                let m = crate::mod_package::verify(package, false)?;
+                ensure!(
+                    m.id == PACKAGE_ID
+                        && m.files
+                            .iter()
+                            .all(|f| f.input.origin == crate::mod_package::Origin::DerivedLocal)
+                        && m.files.iter().any(|f| f.input.path == CAREER)
+                        && m.files.iter().all(|f| {
+                            let p = &f.input.path;
+                            p.starts_with(DIR)
+                                && !p[DIR.len()..].contains('/')
+                                && p.ends_with(".def")
+                        }),
+                    "not the career rules project"
                 );
                 Ok(m)
             }
@@ -424,8 +450,10 @@ fn prepare(root: &Path, package: &Path, expected_game: &str, overlay: Overlay) -
         hash(&payload) == m.payload_sha256,
         "package changed during preparation"
     );
-    if overlay == Overlay::PtBrText {
-        verify_literals(&root, cfg, &payload, &m)?;
+    match overlay {
+        Overlay::PtBrText => verify_literals(&root, cfg, &payload, &m)?,
+        Overlay::CareerRules => verify_career(&root, &payload, &m)?,
+        Overlay::UiPreview => {}
     }
     let mut after = original.clone();
     after.extend_from_slice(overlay.line().as_bytes());
@@ -480,8 +508,10 @@ fn verify_literals(
         {
             ensure!(seen.insert(index), "duplicate original mount");
         } else {
+            // Our own menu (p4) and career rules (p6) are the only known extras.
             ensure!(
-                parts[2] == "ro,p4" && parts[3] == "\"aa/rust_mp_ui.scs\"",
+                (parts[2] == "ro,p4" && parts[3] == "\"aa/rust_mp_ui.scs\"")
+                    || (parts[2] == "ro,p6" && parts[3] == "\"aa/rust_mp_career.scs\""),
                 "T2 cannot guard definitions overridden by unknown mounts"
             );
         }
@@ -508,6 +538,45 @@ fn verify_literals(
         ensure!(bytes.len() <= 1024 * 1024, "T2 entry exceeds limit");
         literals::verify_translation(path, original, &codec::decode(&bytes)?)
             .with_context(|| format!("T2 rejected: {path}"))?;
+    }
+    Ok(())
+}
+/// Career rules may only rewrite the goal/texts of the visible career scenario
+/// and replace the others with our disabled definition; checked before backup.
+fn verify_career(
+    root: &Path,
+    payload: &[u8],
+    manifest: &crate::mod_package::Manifest,
+) -> Result<()> {
+    use crate::localization::{Mounts, codec};
+    use std::io::{Cursor, Read};
+    let archives = [
+        root.join("data.scs"),
+        root.join("aa/base.scs"),
+        root.join("aa/patch_1_10.scs"),
+    ];
+    let paths: std::collections::BTreeSet<_> = manifest
+        .files
+        .iter()
+        .map(|e| e.input.path.as_str())
+        .collect();
+    let originals = Mounts::open(&archives)?.read_matching(|p| paths.contains(p))?;
+    let mut zip = zip::ZipArchive::new(Cursor::new(payload))?;
+    for path in paths {
+        let mut entry = zip.by_name(path)?;
+        ensure!(entry.size() <= 64 * 1024, "career entry exceeds limit");
+        let mut bytes = vec![];
+        entry.by_ref().take(64 * 1024 + 1).read_to_end(&mut bytes)?;
+        ensure!(
+            originals.contains_key(path),
+            "{path} is not an existing scenario definition"
+        );
+        crate::career_rules::verify_entry(
+            path,
+            originals.get(path).map(Vec::as_slice),
+            &codec::decode(&bytes)?,
+        )
+        .with_context(|| format!("career rules rejected: {path}"))?;
     }
     Ok(())
 }
@@ -829,6 +898,77 @@ mod tests {
         );
         assert_eq!(fs::read(root.join(CFG)).unwrap(), cfg);
         assert!(!root.join(Overlay::PtBrText.file()).exists());
+    }
+    #[test]
+    fn career_rules_are_checked_against_local_scenarios_before_any_writes() {
+        use crate::career_rules::{self as rules, CAREER};
+        use std::io::Write;
+        let t = tempfile::tempdir().unwrap();
+        let (root, _) = fixture(t.path());
+        let career = b"def scenario:/own_base {\n\tname:\"Own\"\n\tmoney:\"3000\"\n\twin:\"money:1000000\"\n}\n";
+        for (archive, files) in [
+            ("data.scs", vec![]),
+            (
+                "aa/base.scs",
+                vec![
+                    (CAREER, career.as_slice()),
+                    (
+                        "defs/scenarios/own_free.def",
+                        b"def scenario:/own_base {\n}\n",
+                    ),
+                ],
+            ),
+            ("aa/patch_1_10.scs", vec![]),
+        ] {
+            let mut zip = zip::ZipWriter::new(fs::File::create(root.join(archive)).unwrap());
+            for (name, bytes) in files {
+                zip.start_file(name, zip::write::SimpleFileOptions::default())
+                    .unwrap();
+                zip.write_all(bytes).unwrap();
+            }
+            zip.finish().unwrap();
+        }
+        let cfg = fs::read(root.join(CFG)).unwrap();
+        let mounts = crate::localization::Mounts::open(&[
+            root.join("data.scs"),
+            root.join("aa/base.scs"),
+            root.join("aa/patch_1_10.scs"),
+        ])
+        .unwrap();
+        let project = t.path().join("rules");
+        rules::build(
+            &mounts,
+            rules::Goal::dollars(5000).unwrap(),
+            rules::Language::En,
+            &project,
+        )
+        .unwrap();
+        let good = t.path().join("rules-package");
+        crate::mod_package::build(&project.join("project.json"), &good, false).unwrap();
+        // Same shape, but the starting money was changed: refused before backup.
+        let file = project.join("inputs/local").join(CAREER);
+        let changed = String::from_utf8_lossy(&fs::read(&file).unwrap()).replace("3000", "900000");
+        fs::write(&file, changed).unwrap();
+        let bad = t.path().join("rules-bad");
+        crate::mod_package::build(&project.join("project.json"), &bad, false).unwrap();
+        let game = hash(b"own module fixture");
+        let backup = t.path().join("career-backup");
+        let ok = || Ok(());
+        assert!(install_guarded(&root, &bad, &backup, &game, ok, Overlay::CareerRules).is_err());
+        assert!(!backup.exists() && !root.join(Overlay::CareerRules.file()).exists());
+        assert_eq!(fs::read(root.join(CFG)).unwrap(), cfg);
+        let s = install_guarded(&root, &good, &backup, &game, ok, Overlay::CareerRules).unwrap();
+        assert_eq!((s.kind, s.state), ("own-career-rules", "installed"));
+        assert!(
+            String::from_utf8(fs::read(root.join(CFG)).unwrap())
+                .unwrap()
+                .contains("mount -o ro,p6 \"aa/rust_mp_career.scs\" /")
+        );
+        assert_eq!(
+            restore_guarded(&root, &backup, ok).unwrap().state,
+            "restored"
+        );
+        assert_eq!(fs::read(root.join(CFG)).unwrap(), cfg);
     }
     #[test]
     fn fixture_mount_restores_exact_config_and_rejects_open_game_before_writes() {
