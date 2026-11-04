@@ -1123,6 +1123,10 @@ Menu e tradução (`ui_tools install --kind ui-preview`, jogo fechado):
 - [ ] Caderno (N): acentos da fonte de sistema e ver o caminhão do oponente, sem
   os textos de peças (`makes/`).
 
+Assistente de um Enter (kit schema 3, servidor já rodando, jogo fechado):
+- [ ] Abrir `mp_lan.exe` e apertar Enter: prepara, abre pela Steam, pede um Enter
+  dirigindo e conecta. Depois usar 3 antes de fechar e `mp_traducao restore`.
+
 Gravador (`memory_tool field-record --pid PID --output NOVO.fprb`, jogo em primeiro
 plano, numa estrada livre, cerca de 3 min; `--trailer` exige um reboque por perto):
 - [ ] Seguir as fases do console, uma ação por fase. Só leitura: não injeta nada.

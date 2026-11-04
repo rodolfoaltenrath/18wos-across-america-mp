@@ -21,6 +21,7 @@ pub mod appearance_capture;
 pub mod appearance_evidence;
 pub mod appearance_resources;
 pub mod assistant_career;
+pub mod assistant_launch;
 pub mod assistant_paths;
 pub mod assistant_settings;
 pub mod capture_diagnostics;

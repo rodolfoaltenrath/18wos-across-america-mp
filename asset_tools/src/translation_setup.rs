@@ -2,6 +2,7 @@
 //! the executable, the package is derived from that player's own game files and
 //! stays on that machine. Original fonts keep their metrics; only accents are added.
 use crate::{
+    career_rules::{Goal, Language},
     localization::{self as l10n, Mounts, catalog, literals},
     mod_package,
     ui_tools::mount::{self, Overlay, Status},
@@ -104,7 +105,70 @@ pub fn status(game: &Path, state: &Path) -> Result<Option<Status>> {
         .map(|backup| mount::status(game, &backup))
         .transpose()
 }
+fn installed(game: &Path, state: &Path) -> bool {
+    status(game, state).is_ok_and(|s| s.is_some_and(|s| s.state == "installed"))
+}
+fn career_state(state: &Path) -> PathBuf {
+    state.join("carreira")
+}
+pub fn career_installed(game: &Path, state: &Path) -> bool {
+    installed(game, &career_state(state))
+}
+fn install_career(game: &Path, state: &Path, goal: Goal) -> Result<()> {
+    let state = career_state(state);
+    fs::create_dir_all(&state)?;
+    let next = install_dirs(&state)?
+        .into_keys()
+        .last()
+        .map_or(1, |n| n + 1);
+    let work = state.join(next.to_string());
+    fs::create_dir(&work)?;
+    let mounts = Mounts::open(&ARCHIVES.map(|a| game.join(a)))?;
+    let project = work.join("project");
+    crate::career_rules::build(&mounts, goal, Language::PtBr, &project)?;
+    let package = work.join("package");
+    mod_package::build(&project.join("project.json"), &package, false)?;
+    mount::install_overlay(game, &package, &work.join("backup"), Overlay::CareerRules)?;
+    Ok(())
+}
+#[derive(Debug, serde::Serialize)]
+pub struct Prepared {
+    pub translation_installed_now: bool,
+    pub career_installed_now: bool,
+}
+/// Installs only what is missing, translation first (p5) and career rules above
+/// it (p6). `goal` is needed only when the career rules are not installed yet.
+pub fn prepare(game: &Path, state: &Path, goal: Option<Goal>) -> Result<Prepared> {
+    let (translation, career) = missing(installed(game, state), career_installed(game, state));
+    if translation {
+        install(game, state)?;
+    }
+    if career {
+        install_career(game, state, goal.context("meta da carreira nao informada")?)?;
+    }
+    Ok(Prepared {
+        translation_installed_now: translation,
+        career_installed_now: career,
+    })
+}
+/// What is left to install. A mounted career means the translation is below it,
+/// even though its own record then no longer matches `init.cfg` (real cycle, 04/11).
+fn missing(translation_recorded: bool, career: bool) -> (bool, bool) {
+    (!translation_recorded && !career, !career)
+}
+/// Human state of both layers, for the same reason as `missing`.
+pub fn summary(game: &Path, state: &Path) -> (bool, bool) {
+    let career = career_installed(game, state);
+    (career || installed(game, state), career)
+}
+/// Removes in reverse installation order: career rules, then translation.
 pub fn restore(game: &Path, state: &Path) -> Result<Status> {
+    let career = career_state(state);
+    if let Some(backup) = latest_backup(&career)?
+        && mount::status(game, &backup)?.state != "restored"
+    {
+        mount::restore(game, &backup)?;
+    }
     let backup = latest_backup(state)?.context("nenhuma instalacao encontrada nesta pasta")?;
     mount::restore(game, &backup)
 }
@@ -182,6 +246,13 @@ mod tests {
         assert_eq!(fs::read(root.join("aa/init.cfg")).unwrap(), original);
         assert!(status(&root, &state).unwrap().is_none());
         assert!(restore(&root, &state).is_err());
+    }
+    #[test]
+    fn a_mounted_career_counts_as_translation_present() {
+        assert_eq!(missing(false, false), (true, true));
+        assert_eq!(missing(true, false), (false, true));
+        assert_eq!(missing(false, true), (false, false));
+        assert_eq!(missing(true, true), (false, false));
     }
     #[test]
     fn embedded_catalogues_load_without_the_suspect_part_texts() {

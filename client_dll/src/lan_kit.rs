@@ -240,6 +240,9 @@ pub fn create(
 fn instructions(settings: &Settings) -> String {
     format!(
         "18 WOS ACROSS AMERICA - KIT LOCAL DE TESTE LAN\r\n\r\n\
+PARA JOGAR: copie esta pasta para a raiz do jogo, abra mp_lan.exe e aperte Enter.\r\n\
+Ele instala a traducao e as regras, abre o jogo e conecta quando voce avisar.\r\n\
+Antes de fechar o jogo, digite 3 no assistente. O resto abaixo e detalhe tecnico.\r\n\r\n\
 1. Copie TODO o conteudo desta pasta para a raiz do jogo no Windows, ao lado\r\n\
    de prism3d.exe. Nao precisa copiar o repositorio nem instalar Rust/Proton.\r\n\
    Este kit contem somente arquivos proprios do mod; nao substitui originais.\r\n\

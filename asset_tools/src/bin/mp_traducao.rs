@@ -1,8 +1,8 @@
 //! Player-facing PT-BR installer: no Rust, no repository, no game files shipped.
 use anyhow::{Context, Result};
-use asset_tools::translation_setup as setup;
+use asset_tools::{career_rules::Goal, translation_setup as setup};
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
+use std::{io::Write, path::PathBuf};
 
 #[derive(Parser)]
 #[command(about = "Instala a traducao PT-BR usando os arquivos do seu proprio jogo")]
@@ -20,10 +20,29 @@ struct Args {
 enum Task {
     /// Gera o pacote e instala, com backup. Padrao. Jogo fechado.
     Install,
+    /// Instala o que faltar: traducao e regras da carreira. Jogo fechado.
+    Preparar {
+        /// Meta em dolares inteiros; sem esta opcao ou --sem-limite, pergunta.
+        #[arg(long, conflicts_with = "sem_limite")]
+        meta: Option<u64>,
+        #[arg(long)]
+        sem_limite: bool,
+    },
     /// Mostra se a traducao esta instalada.
     Status,
-    /// Remove a traducao e devolve o init.cfg anterior. Jogo fechado.
+    /// Remove regras e traducao e devolve o init.cfg anterior. Jogo fechado.
     Restore,
+}
+fn ask_goal() -> Result<Goal> {
+    print!("Meta da carreira em dolares (Enter = sem limite): ");
+    std::io::stdout().flush()?;
+    let mut text = String::new();
+    std::io::stdin().read_line(&mut text)?;
+    let text = text.trim().replace(['.', ','], "");
+    if text.is_empty() {
+        return Ok(Goal::Unlimited);
+    }
+    Goal::dollars(text.parse().context("informe somente numeros")?)
 }
 fn main() -> Result<()> {
     let args = Args::parse();
@@ -47,10 +66,38 @@ fn main() -> Result<()> {
             }
             println!("Para remover: mp_traducao restore (com o jogo fechado).");
         }
-        Task::Status => match setup::status(&args.game, &state)? {
-            Some(status) => println!("{}", serde_json::to_string_pretty(&status)?),
-            None => println!("Nenhuma instalacao registrada nesta pasta de dados."),
-        },
+        Task::Preparar { meta, sem_limite } => {
+            let goal = match (meta, sem_limite) {
+                (Some(amount), _) => Some(Goal::dollars(amount)?),
+                (None, true) => Some(Goal::Unlimited),
+                // Asks only when there is something to install with it.
+                (None, false) if setup::career_installed(&args.game, &state) => None,
+                (None, false) => Some(ask_goal()?),
+            };
+            let done = setup::prepare(&args.game, &state, goal)?;
+            println!(
+                "Traducao: {}. Regras da carreira: {}.",
+                if done.translation_installed_now {
+                    "instalada agora"
+                } else {
+                    "ja estava instalada"
+                },
+                if done.career_installed_now {
+                    "instaladas agora"
+                } else {
+                    "ja estavam instaladas"
+                }
+            );
+        }
+        Task::Status => {
+            let word = |on: bool| if on { "instalada" } else { "nao instalada" };
+            let (translation, career) = setup::summary(&args.game, &state);
+            println!(
+                "Traducao: {}. Regras da carreira: {}.",
+                word(translation),
+                word(career)
+            );
+        }
         Task::Restore => {
             let status = setup::restore(&args.game, &state)?;
             println!("Estado apos restaurar: {}", status.state);

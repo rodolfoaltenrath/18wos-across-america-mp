@@ -1,5 +1,27 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Assistente de um Enter — M9, bloco offline, 04/11
+
+Pedido do proprietário: um orquestrador em vez de manual. Ao abrir sem sessão
+pendente, `mp_lan` oferece "Enter = JOGAR": chama `mp_traducao preparar` (instala o
+que faltar, pergunta a meta só na primeira vez), abre o jogo por
+`steam://rungameid/ID`, com o ID lido do `appmanifest` cujo `installdir` é a pasta
+do jogo (`assistant_launch`), espera um Enter com o jogador dirigindo e conecta
+usando servidor, sala e saves padrão ou lembrados. `A` mantém o menu completo.
+
+Decisão: o "dirigindo" é um Enter humano, não detecção por memória. A cadeia do
+ator ainda não foi confirmada como ausente no menu, que mostra um caminhão de fundo.
+
+`mp_traducao preparar`/`status`/`restore` tratam as duas camadas; `restore` remove
+regras e depois tradução. Ciclo real de arquivos com jogo fechado, sem abri-lo:
+instalar, repetir sem efeito, restaurar com `init.cfg` `dddbacf5…` e reinstalar;
+pacote igual ao testado (`e9847399…`). Esse ciclo achou um bug que as fixtures não
+pegavam: com regras montadas a tradução constava como conflito e repetir falhava.
+
+Pendente no jogo: o fluxo interativo do `mp_lan` nunca rodou (Steam, Enter, conexão).
+Limites: o kit não inclui o servidor, que precisa já estar rodando no endereço
+configurado; parar antes de fechar o jogo continua manual (opção 3).
+
 ## Tradução em um comando no kit — M9/M7, bloco offline, 04/11
 
 `mp_traducao.exe` (`asset_tools::translation_setup`) leva os catálogos próprios

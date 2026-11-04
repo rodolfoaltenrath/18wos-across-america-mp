@@ -427,6 +427,50 @@ mod windows {
         Ok(Some(selected))
     }
 
+    /// Everything before the connection, with no decisions left to the player:
+    /// missing packages (game closed), then the game itself through Steam.
+    fn quick_start(kit: &Path, root: &Path) -> Result<()> {
+        let open = processes(false)?
+            .iter()
+            .any(|(_, name)| name.eq_ignore_ascii_case("prism3d.exe"));
+        if open {
+            println!("Jogo ja aberto: traducao e regras so podem mudar com ele fechado.");
+        } else {
+            let tool = kit.join("mp_traducao.exe");
+            if tool.is_file() {
+                let done = Command::new(&tool)
+                    .arg("--game")
+                    .arg(root)
+                    .arg("preparar")
+                    .status()
+                    .context("mp_traducao")?;
+                if !done.success() {
+                    eprintln!("Seguindo sem alterar a traducao; o multiplayer nao depende dela.");
+                }
+            }
+            match client_dll::assistant_launch::find_app_id(root) {
+                Some(id) => {
+                    println!("Abrindo o jogo pela Steam...");
+                    Command::new("cmd")
+                        .args(["/C", "start", "", &format!("steam://rungameid/{id}")])
+                        .status()
+                        .context("abrindo a Steam")?;
+                }
+                None => println!("Abra o jogo pela Steam."),
+            }
+        }
+        loop {
+            prompt(
+                "Carregue ou crie sua partida. DIRIGINDO, volte aqui e pressione Enter",
+                "conectar",
+            )?;
+            match game(root) {
+                Ok(_) => return Ok(()),
+                Err(e) => eprintln!("{e:#}"),
+            }
+        }
+    }
+
     pub fn interactive(
         kit: &Path,
         root: &Path,
@@ -465,6 +509,18 @@ mod windows {
                 None
             }
         };
+        // One decision for the common case; the full menu stays one letter away.
+        let mut queued = None;
+        if !pending.exists() && career_plan.is_none() {
+            let answer = prompt(
+                "\nEnter = JOGAR (prepara tudo e conecta) | A = opcoes avancadas",
+                "jogar",
+            )?;
+            if !answer.eq_ignore_ascii_case("a") {
+                quick_start(kit, root)?;
+                queued = Some("1".to_string());
+            }
+        }
         println!(
             "\nDados locais: {}\n1 Iniciar multiplayer | 2 Consultar conexao | 3 Parar multiplayer (antes de fechar jogo) | 4 Conferir arquivos apos saida | 5 Configurar proxima conexao | 6 Preparar diagnostico para compartilhar | 7 Preparar aparencia para compartilhar | 0 Fechar assistente",
             data.display()
@@ -476,7 +532,17 @@ mod windows {
             "Use 3 ANTES de fechar o jogo. Se o assistente fechar, reabra-o para retomar a limpeza."
         );
         loop {
-            let choice = prompt("Opcao", "2")?;
+            let (choice, auto) = match queued.take() {
+                Some(choice) => (choice, true),
+                None => (prompt("Opcao", "2")?, false),
+            };
+            let ask = |label: &str, default: &str| -> Result<String> {
+                if auto {
+                    Ok(default.to_string())
+                } else {
+                    prompt(label, default)
+                }
+            };
             let result = (|| -> Result<bool> {
                 match choice.as_str() {
                     "1" => {
@@ -502,7 +568,7 @@ mod windows {
                             c.settings()
                         } else {
                             Settings {
-                                server: prompt(
+                                server: ask(
                                     "Servidor IP:porta",
                                     &preferences
                                         .as_ref()
@@ -511,7 +577,7 @@ mod windows {
                                         .to_string(),
                                 )?
                                 .parse()?,
-                                room: prompt(
+                                room: ask(
                                     "Sala",
                                     preferences
                                         .as_ref()
@@ -538,7 +604,15 @@ mod windows {
                         println!(
                             "Informe a PASTA que contem os .sav (pode colar o endereco do Explorador). Digite 0 para cancelar."
                         );
+                        let automatic_saves = auto
+                            .then(|| {
+                                assistant_paths::directory(&default_saves.to_string_lossy()).ok()
+                            })
+                            .flatten();
                         let saves = loop {
+                            if let Some(path) = &automatic_saves {
+                                break path.clone();
+                            }
                             let input = prompt("Pasta de saves", &default_saves.to_string_lossy())?;
                             ensure!(input != "0", "inicio cancelado");
                             match assistant_paths::directory(&input) {
@@ -546,11 +620,18 @@ mod windows {
                                 Err(e) => eprintln!("{e:#}"),
                             }
                         };
-                        ensure!(
-                            prompt("Save de teste carregado? Digite sim para iniciar", "nao")?
-                                .eq_ignore_ascii_case("sim"),
-                            "inicio cancelado"
-                        );
+                        if auto {
+                            println!(
+                                "Servidor {}, sala {}. Conectando...",
+                                settings.server, settings.room
+                            );
+                        } else {
+                            ensure!(
+                                prompt("Save de teste carregado? Digite sim para iniciar", "nao")?
+                                    .eq_ignore_ascii_case("sim"),
+                                "inicio cancelado"
+                            );
+                        }
                         // Both paths are prepared before creating run/backup/pending files.
                         let mut start_arguments = if let Some(c) = &career {
                             c.start_arguments(&settings)?
