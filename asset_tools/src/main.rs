@@ -72,6 +72,13 @@ enum Command {
     },
     /// Check a source bundle's allowlist/limits/hashes without extraction.
     VerifySourceBundle { input: PathBuf },
+    /// Fail if a kit/package folder holds byte-identical game files (exact copies only).
+    AuditArtifact {
+        root: PathBuf,
+        /// Original file or archive to index; repeatable.
+        #[arg(long = "original", required = true)]
+        originals: Vec<PathBuf>,
+    },
     /// Create a NEW project with our own PNG/text fixtures (no game inputs).
     ModExample { output: PathBuf },
     /// Create a NEW hash-pinned reconstruction recipe with only our fixtures.
@@ -287,6 +294,13 @@ fn main() -> Result<()> {
                 manifest.commit,
                 output.display()
             );
+            Ok(())
+        }
+        Command::AuditArtifact { root, originals } => {
+            let index = asset_tools::artifact_audit::Index::build(&originals)?;
+            let report = asset_tools::artifact_audit::audit(&root, &index)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            anyhow::ensure!(report.clean, "artifact holds game files or unaudited links");
             Ok(())
         }
         Command::VerifySourceBundle { input } => {

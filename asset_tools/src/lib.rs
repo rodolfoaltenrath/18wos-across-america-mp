@@ -1,5 +1,6 @@
 pub mod appearance_references;
 pub mod appearance_resources;
+pub mod artifact_audit;
 pub mod bindings;
 pub mod career_rules;
 pub mod licenses;

@@ -27,6 +27,10 @@ fixtures), portanto ainda não foi exercitada. Roteiro em G15. Os candidatos
 alimentam M1, M3 (velocidade), M5/W4 (sinais, reboque) e W6 (relógio), sem marcar
 nenhum desses itens.
 
+**Pendente de avaliação no jogo (decisão do proprietário, 04/11):** menu 0.3.0,
+acentos no Caderno, ESC, caminhão do oponente e gravador ficam para a sessão G15;
+nada foi instalado. O trabalho segue offline nas demais partes do roadmap.
+
 ## Testes locais de 03/11: carreira, fontes e crashes
 
 O proprietário testou neste PC Windows, com o jogo aberto. Resultados:
@@ -6333,6 +6337,12 @@ Colisão e economia compartilhadas podem ser marcos posteriores ao MVP visual.
   binários disfarçados recusados. Overlays data-only têm origem obrigatória,
   filtro de extensões/assinaturas e modo distribuível que recusa derivados locais;
   autoria não é inferida. Binários do mod e auditoria completa ainda pendentes.
+  Progresso 04/11: `asset_tools audit-artifact PASTA --original ARQ` indexa por
+  SHA-256 os membros dos originais (crus e sem envelope 3nK) e falha se a pasta
+  contiver cópia exata, renomeada ou dentro de ZIP/SCS. Três pacotes próprios reais
+  limpos; controle positivo acusou cópia renomeada e um membro do pacote de
+  terceiros. Só cópias exatas e arquivos ≥64 bytes: original editado não é detectado;
+  ainda não é etapa obrigatória do `mp_kit`.
 
 **Concluído quando:** uma alteração própria pode ser construída, instalada,
 verificada e removida em outra instalação original sem distribuir o jogo.
