@@ -291,6 +291,70 @@ fn checked_root(root: &Path) -> Result<PathBuf> {
     ensure!(current.is_dir(), "game root must be a directory");
     current.canonicalize().map_err(Into::into)
 }
+
+/// Conservative sources for the portable setup flow. Unknown mounts are not
+/// silently omitted while rebuilding translations from the recipient's files.
+pub fn setup_sources(root: &Path, overlay: Overlay) -> Result<(PathBuf, Vec<PathBuf>)> {
+    setup_sources_with_hash(root, overlay, GAME_SHA)
+}
+pub(crate) fn setup_sources_with_hash(
+    root: &Path,
+    overlay: Overlay,
+    expected: &str,
+) -> Result<(PathBuf, Vec<PathBuf>)> {
+    let root = checked_root(root)?;
+    ensure!(
+        hash(&read(&root.join("aa/lib/game.dll"), 16 * 1024 * 1024)?) == expected,
+        "unsupported game profile"
+    );
+    let cfg = read(&root.join(CFG), 1024 * 1024)?;
+    supported_mounts(std::str::from_utf8(&cfg)?, overlay == Overlay::PtBrText)?;
+    ensure!(
+        !root.join(overlay.file()).try_exists()? && !root.join(overlay.temp()).try_exists()?,
+        "component already present; restore its existing backup first"
+    );
+    let sources = ["data.scs", "aa/base.scs", "aa/patch_1_10.scs"]
+        .map(|p| root.join(p))
+        .to_vec();
+    Ok((root, sources))
+}
+fn supported_mounts(cfg: &str, allow_menu: bool) -> Result<()> {
+    let expected = [
+        ("ro,p1", "\"data.scs\""),
+        ("ro,p2", "\"aa/base.scs\""),
+        ("ro,p3", "\"aa/patch_1_10.scs\""),
+    ];
+    let mut seen = std::collections::BTreeSet::new();
+    for line in cfg.lines() {
+        let line = line.split('#').next().unwrap_or("").trim();
+        if line.is_empty() {
+            continue;
+        }
+        let parts: Vec<_> = line.split_whitespace().collect();
+        ensure!(
+            parts.len() == 5 && parts[0] == "mount" && parts[1] == "-o" && parts[4] == "/",
+            "requires the supported original mount configuration"
+        );
+        let index = if let Some(index) = expected
+            .iter()
+            .position(|(p, f)| parts[2] == *p && parts[3] == *f)
+        {
+            index
+        } else {
+            // Our own menu (p4) and career rules (p6) are the only known extras.
+            ensure!(
+                allow_menu
+                    && ((parts[2] == "ro,p4" && parts[3] == "\"aa/rust_mp_ui.scs\"")
+                        || (parts[2] == "ro,p6" && parts[3] == "\"aa/rust_mp_career.scs\"")),
+                "unknown mount or unsupported installation order; restore existing overlays first"
+            );
+            if parts[2] == "ro,p4" { 3 } else { 4 }
+        };
+        ensure!(seen.insert(index), "duplicate original/menu mount");
+    }
+    ensure!((0..3).all(|n| seen.contains(&n)), "original mounts missing");
+    Ok(())
+}
 /// The backup's plan names which overlay it belongs to.
 fn load(root: &Path, backup: &Path) -> Result<(PathBuf, Plan, Vec<u8>, Overlay)> {
     let root = checked_root(root)?;
@@ -347,6 +411,22 @@ pub fn install_overlay(
     overlay: Overlay,
 ) -> Result<Status> {
     install_guarded(root, package, backup, GAME_SHA, ensure_game_closed, overlay)
+}
+#[cfg(test)]
+pub(crate) fn install_owned_fixture(
+    root: &Path,
+    package: &Path,
+    backup: &Path,
+    expected: &str,
+) -> Result<Status> {
+    install_guarded(
+        root,
+        package,
+        backup,
+        expected,
+        || Ok(()),
+        Overlay::UiPreview,
+    )
 }
 fn ui_preview(m: &crate::mod_package::Manifest) -> Result<()> {
     ensure!(
@@ -487,37 +567,7 @@ fn verify_literals(
     }
     // Unknown higher-priority mounts could change the structure being guarded.
     // Do not guess which resource version is actually visible to the game.
-    let expected = [
-        ("ro,p1", "\"data.scs\""),
-        ("ro,p2", "\"aa/base.scs\""),
-        ("ro,p3", "\"aa/patch_1_10.scs\""),
-    ];
-    let mut seen = std::collections::BTreeSet::new();
-    for line in cfg.lines() {
-        let line = line.split('#').next().unwrap_or("").trim();
-        if line.is_empty() {
-            continue;
-        }
-        let parts: Vec<_> = line.split_whitespace().collect();
-        ensure!(
-            parts.len() == 5 && parts[0] == "mount" && parts[1] == "-o" && parts[4] == "/",
-            "T2 requires the supported original mount configuration"
-        );
-        if let Some(index) = expected
-            .iter()
-            .position(|(p, f)| parts[2] == *p && parts[3] == *f)
-        {
-            ensure!(seen.insert(index), "duplicate original mount");
-        } else {
-            // Our own menu (p4) and career rules (p6) are the only known extras.
-            ensure!(
-                (parts[2] == "ro,p4" && parts[3] == "\"aa/rust_mp_ui.scs\"")
-                    || (parts[2] == "ro,p6" && parts[3] == "\"aa/rust_mp_career.scs\""),
-                "T2 cannot guard definitions overridden by unknown mounts"
-            );
-        }
-    }
-    ensure!(seen.len() == 3, "T2 original mounts missing");
+    supported_mounts(cfg, true)?;
     let archives = [
         root.join("data.scs"),
         root.join("aa/base.scs"),

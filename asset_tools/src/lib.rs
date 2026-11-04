@@ -6,6 +6,7 @@ pub mod career_rules;
 pub mod licenses;
 pub mod localization;
 pub mod mod_package;
+pub mod player_setup;
 pub mod source_audit;
 pub mod translation_setup;
 pub mod ui_tools;

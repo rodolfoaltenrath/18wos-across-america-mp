@@ -166,6 +166,32 @@ Limites:
 - A meta não é imposta a cada participante pela rede: cada PC instala o
   pacote gerado do mesmo manifesto.
 
+## M9: assistente portátil de instalação com retomada — 02/11
+
+`mp_setup` oferece tradução/fonte e menu separados, consulta e restauração.
+Reconstrói nos arquivos do destinatário; nenhum pacote derivado é transferido.
+Dados locais separados do multiplayer, lock por diretório e referência tipada
+antes da montagem permitem encontrar o preparo/backup após interrupção. Recusa
+referência inválida, componente trocado e arquivos alterados; não adivinha backup.
+Restauração preserva backups e só remove referência depois de confirmar limpeza.
+Quatro testes de sessão e um CLI novos passaram; incluem montagem/restauração
+real na fixture própria e interrupção antes de gravar no jogo. Assets all-targets
+nativos passaram; Clippy/fmt registrados no fechamento. Não instalou no jogo,
+não distribuiu fontes/game assets no Git nem fechou M7/M9/G11;51/104 intactos.
+
+## M7/M9: preparo local de tradução e menu — 02/11
+
+`asset_tools::player_setup` embute somente os catálogos autorais, reúne T1/T2/
+tipografia e a montagem existente, com preparo novo/.INCOMPLETE/fingerprints
+das cinco entradas locais e revalidação antes de instalar. Status/restauração
+reutilizam backup do instalador; fontes originais/pacotes não acompanham código.
+Aceita somente perfil fixo/configuração original e menu p4 conhecido para T2;
+montagem desconhecida ou duplicada recusa. Menu deve anteceder tradução p5.
+Seis regressões novas/115 testes assets nativos, Clippy lib/fmt passaram. Primeiro
+compile só fixture usava iterador de mapa incorreto; corrigido para values.
+Sem instalação, jogo, kit novo ou check amplo;51/104 preservados. Próximo liga
+assistente portátil e inclusão dos componentes no kit, ainda sem motor validado.
+
 ## Fechamento W5/W10 e kit atualizado — 02/11
 
 Os três blocos abaixo foram commitados em42eb696,4c79315,b57d556, sem coautor.
