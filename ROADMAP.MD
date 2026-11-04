@@ -1,5 +1,25 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Tradução em um comando no kit — M9/M7, bloco offline, 04/11
+
+`mp_traducao.exe` (`asset_tools::translation_setup`) leva os catálogos próprios
+embutidos, gera o pacote a partir dos arquivos do jogo daquele PC e o monta com o
+instalador existente (p5, backup antes); `status` e `restore` acham a última
+instalação em `%LOCALAPPDATA%\18wos-mp\traducao`. Fontes originais com acentos,
+sem `--typeface`. Exclui `makes/` até isolar o crash do caminhão do oponente.
+Outra versão do jogo ou outro pacote montado recusam sem alterar o `init.cfg`.
+
+Kit schema 3 inclui o binário e `TRADUCAO.txt`; schemas 1 e 2 seguem verificáveis.
+Para montar o kit: `dev_env windows --package asset_tools --bin mp_traducao` antes
+do `mp_kit`, junto dos builds de cliente e `--server-tools`.
+
+Validado sem instalar nada: três testes próprios (instalar/recusar repetição/
+restaurar, versão diferente, catálogos embutidos). Nativo e x86 contra o jogo real
+com pasta temporária: recusaram por já haver tradução em p5, `init.cfg` intacto e
+pacote gerado com o mesmo hash do testado manualmente (`e9847399…`, 116 arquivos).
+Kit real montado em pasta temporária passou em `audit-artifact`. Falta a instalação
+efetiva pelo comando e uma máquina limpa (M9); o kit em Downloads não foi trocado.
+
 ## Menu nativo 0.3.0 e gravador de campos — bloco offline, 04/11
 
 **Menu:** `mod_ui::native::main_preview` deixou os blocos de cor sobre
@@ -6406,6 +6426,7 @@ relevantes podem ser repetidos a partir de instruções e dados próprios.
   destinatário ainda pendentes.
   Em 01/11: opções de captura/movimento persistidas, exportação filtrada em
   pasta compartilhável e checagem do loader; uso interativo agrupado em M9.
+  Em 04/11: `mp_traducao.exe` no kit instala/remove a tradução; sem prova efetiva.
 - [ ] Verificar dependências do ambiente sem exigir o toolchain Rust do jogador.
   Progresso 01/11: o assistente executa launcher/DLL em helper isolado, consulta
   metadados e confirma liberação antes de iniciar a conexão; diagnóstico optativo

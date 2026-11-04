@@ -11,13 +11,22 @@ const LEGACY_PAYLOAD: [&str; 5] = [
     "mp_doctor.exe",
     "memory_tool.exe",
 ];
-pub const PAYLOAD: [&str; 6] = [
+const CAREER_PAYLOAD: [&str; 6] = [
     "client_dll.dll",
     "mp_launcher.exe",
     "mp_lan.exe",
     "mp_doctor.exe",
     "memory_tool.exe",
     "mp_career.exe",
+];
+pub const PAYLOAD: [&str; 7] = [
+    "client_dll.dll",
+    "mp_launcher.exe",
+    "mp_lan.exe",
+    "mp_doctor.exe",
+    "memory_tool.exe",
+    "mp_career.exe",
+    "mp_traducao.exe",
 ];
 pub const CONFIG: &str = "mp-lan.json";
 pub const MANIFEST: &str = "mp-kit-manifest.json";
@@ -105,16 +114,16 @@ pub fn verify(root: &Path) -> Result<Manifest> {
         MAX_MANIFEST,
     )?)?;
     ensure!(
-        matches!(manifest.schema, 1 | 2)
+        matches!(manifest.schema, 1..=3)
             && manifest.target == "i686-pc-windows-gnu"
             && manifest.game_profile == crate::profile::ID,
         "unsupported kit manifest"
     );
     revision(&manifest.source_revision)?;
-    let payload: &[&str] = if manifest.schema == 1 {
-        &LEGACY_PAYLOAD
-    } else {
-        &PAYLOAD
+    let payload: &[&str] = match manifest.schema {
+        1 => &LEGACY_PAYLOAD,
+        2 => &CAREER_PAYLOAD,
+        _ => &PAYLOAD,
     };
     ensure!(
         manifest.files.len() == payload.len(),
@@ -201,7 +210,7 @@ pub fn create(
         })
         .transpose()?;
     let manifest = Manifest {
-        schema: 2,
+        schema: 3,
         source_revision: revision.into(),
         target: "i686-pc-windows-gnu".into(),
         game_profile: crate::profile::ID.into(),
@@ -221,6 +230,7 @@ pub fn create(
     fs::write(output.join("LICENSE.txt"), include_str!("../../LICENSE"))?;
     fs::write(output.join("LEIA-ME.txt"), instructions(settings))?;
     fs::write(output.join("CARREIRA.txt"), career_instructions())?;
+    fs::write(output.join("TRADUCAO.txt"), translation_instructions())?;
     if let Some(bytes) = &notice {
         fs::write(output.join(NOTICES), bytes)?;
     }
@@ -279,7 +289,8 @@ num processo proprio novo. Nao abre jogo, conecta rede ou acessa saves.\r\n\
 Nao exige Rust e nao testa DirectX, graficos, firewall ou a partida.\r\n\
 A opcao 1 tambem faz essa checagem antes de iniciar uma sessao nova.\r\n\
 --check-only e mp_doctor continuam somente estaticos, sem carregar a DLL.\r\n\
-O manifesto schema 2 identifica seis binarios por SHA-256, inclusive mp_career.\r\n\
+O manifesto schema 3 identifica sete binarios por SHA-256, inclusive mp_career\r\n\
+e mp_traducao. Para o jogo em portugues, leia TRADUCAO.txt.\r\n\
 Ele verifica integridade local, nao e assinatura de publicacao.\r\n\
 Para o modo de carreira por arquivo, leia CARREIRA.txt.\r\n\
 \r\nColeta opcional para a rodada agrupada (sessao ja iniciada):\r\n\
@@ -298,6 +309,21 @@ terminal, antes da opcao 1; ainda exige a rodada pratica de cameras/foco/load.\r
         settings.room,
         settings.server.port()
     )
+}
+fn translation_instructions() -> &'static str {
+    "TRADUCAO PT-BR - OPCIONAL\r\n\r\n\
+Com o jogo FECHADO, abra um terminal na raiz do jogo e rode:\r\n\
+  .\\mp_traducao.exe\r\n\
+O pacote e gerado aqui, a partir dos SEUS arquivos do jogo, e nenhum original\r\n\
+e substituido: so aa/init.cfg recebe uma linha, com backup antes.\r\n\
+Fontes do jogo mantidas; so ganham os acentos. Sem textos de pecas e pinturas\r\n\
+nesta versao. Nem todas as telas foram conferidas no jogo.\r\n\
+Conferir: .\\mp_traducao.exe status\r\n\
+Remover, jogo fechado: .\\mp_traducao.exe restore\r\n\
+Se outro pacote de traducao estiver montado em aa/init.cfg, a instalacao e\r\n\
+recusada sem alterar nada: remova o outro primeiro.\r\n\
+Dados e backups: %LOCALAPPDATA%\\18wos-mp\\traducao\\ (nao compartilhe: os\r\n\
+pacotes gerados derivam dos arquivos do jogo).\r\n"
 }
 fn career_instructions() -> &'static str {
     "CARREIRA LAN POR ARQUIVO - OPCIONAL\r\n\r\n\
@@ -365,13 +391,28 @@ mod tests {
         fixtures(t.path());
         let out = t.path().join("kit");
         let mut m = create(t.path(), &out, "own revision", &settings(), None).unwrap();
-        assert_eq!(m.schema, 2);
+        assert_eq!(m.schema, 3);
         assert!(m.files.iter().any(|e| e.name == "mp_career.exe"));
+        assert!(m.files.iter().any(|e| e.name == "mp_traducao.exe"));
+        assert!(
+            fs::read_to_string(out.join("TRADUCAO.txt"))
+                .unwrap()
+                .contains("restore")
+        );
         assert!(
             fs::read_to_string(out.join("CARREIRA.txt"))
                 .unwrap()
                 .contains("--career-plan")
         );
+        // A schema 2 kit has no translation tool and stays verifiable.
+        m.schema = 2;
+        m.files.retain(|e| e.name != "mp_traducao.exe");
+        fs::remove_file(out.join("mp_traducao.exe")).unwrap();
+        fs::write(out.join(MANIFEST), serde_json::to_vec(&m).unwrap()).unwrap();
+        assert!(verify(&out).is_ok());
+        m.schema = 3;
+        fs::write(out.join(MANIFEST), serde_json::to_vec(&m).unwrap()).unwrap();
+        assert!(verify(&out).is_err());
         m.schema = 1;
         m.files.retain(|e| e.name != "mp_career.exe");
         fs::remove_file(out.join("mp_career.exe")).unwrap();

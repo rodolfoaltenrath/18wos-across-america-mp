@@ -440,6 +440,10 @@ Plano, limites das fontes/codepage e próxima integração em
 
 ### Tradução PT-BR (textos; dublagem é etapa separada)
 
+Para jogar: com o jogo fechado, rode `mp_traducao.exe` na raiz do jogo (vem no
+kit). Ele gera o pacote a partir da sua instalação e monta com backup;
+`mp_traducao.exe restore` remove. Os comandos abaixo são o fluxo de desenvolvimento.
+
 A tabela de textos do jogo (`scripts/local.def`) já tem tradução completa em
 `translations/pt-BR/local_def.json`. Somente o texto PT-BR é versionado. O
 pacote é reconstruído a partir da sua instalação, junto com as fontes

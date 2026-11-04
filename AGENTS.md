@@ -8,6 +8,9 @@ ESC abre `mgame.esc`, não `mmain.esc`: causa daquele crash segue não isolada.
 Menu 0.3.0 usa componentes nativos. `memory_tool field-record/field-analyze`
 (`field_probe`) gera candidatos de velocidade/sinais/reboque/relógio, não contratos.
 Roteiros G14/G15 pendentes; pacote de terceiros não versionado.
+`asset_tools audit-artifact` recusa cópias exatas de originais em kits/pacotes.
+`mp_traducao.exe` (kit schema 3, sete binários) gera/instala a tradução em cada PC;
+buildar com `dev_env windows --package asset_tools --bin mp_traducao` antes de mp_kit.
 
 M6 03/11 (proprietário testa só neste PC; dois PCs indisponíveis): menu de
 cenários e vitória são dados (`defs/scenarios`, campo `win:`), por leitura

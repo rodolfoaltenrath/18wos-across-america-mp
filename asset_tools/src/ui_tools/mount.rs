@@ -596,6 +596,27 @@ fn replace_cfg(root: &Path, bytes: &[u8], expected: &str, overlay: Overlay) -> R
     fs::rename(temp, cfg).context("replacing init.cfg; backup retained")?;
     Ok(())
 }
+/// Own-fixture entry points for other modules' tests: no process guard or real profile.
+#[cfg(test)]
+pub(crate) fn install_for_test(
+    root: &Path,
+    package: &Path,
+    backup: &Path,
+    module: &[u8],
+) -> Result<Status> {
+    install_guarded(
+        root,
+        package,
+        backup,
+        &hash(module),
+        || Ok(()),
+        Overlay::PtBrText,
+    )
+}
+#[cfg(test)]
+pub(crate) fn restore_for_test(root: &Path, backup: &Path) -> Result<Status> {
+    restore_guarded(root, backup, || Ok(()))
+}
 pub fn restore(root: &Path, backup: &Path) -> Result<Status> {
     restore_guarded(root, backup, ensure_game_closed)
 }
