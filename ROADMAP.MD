@@ -1,5 +1,32 @@
 # Roadmap — Across America multiplayer em Rust
 
+## Menu nativo 0.3.0 e gravador de campos — bloco offline, 04/11
+
+**Menu:** `mod_ui::native::main_preview` deixou os blocos de cor sobre
+`desktop.shd` e agora gera a estrutura do menu original: janela `27 30 347 490`,
+moldura `look 6`, botões `look 1`, logotipos 100/110, ids 10–60 e textos pelas
+chaves da tabela (`@@ui_new_game@@`…), que recebem acentos da tradução. O único
+acréscimo é o rótulo Multiplayer inativo, sem id novo no manipulador antigo.
+Pacote `ui_tools` 0.3.0. A prévia GDI (`mp_ui`) não mudou e não representa esse
+visual. Sem teste no jogo.
+
+**Gravador:** `client_dll::field_probe` + `memory_tool field-record/field-analyze`.
+Grava janelas do ator, física, corpo e cena (só `ReadProcessMemory`, com as mesmas
+checagens de perfil do leitor de aparência) enquanto um roteiro cronometrado pede
+uma ação por fase: faróis, setas, alerta, limpador, freio de mão, buzina, dirigir,
+curvas, ré e, com `--trailer`, engatar/desengatar. Offline, aponta:
+- palavras estáveis que mudam em cada ação e voltam ao desligar;
+- campos escalares ou vetoriais compatíveis com a velocidade derivada da posição;
+- contadores crescentes, candidatos a relógio.
+
+Formato por diferenças, até 64 MiB, salvo a cada fase para sobreviver a crash;
+contém memória crua e é privado. Saída `candidate_only=true`,
+`engine_validated=false`. Quatro testes próprios com memória simulada cobrem o
+analisador; a gravação no processo real só roda contra o jogo (o perfil recusa
+fixtures), portanto ainda não foi exercitada. Roteiro em G15. Os candidatos
+alimentam M1, M3 (velocidade), M5/W4 (sinais, reboque) e W6 (relógio), sem marcar
+nenhum desses itens.
+
 ## Testes locais de 03/11: carreira, fontes e crashes
 
 O proprietário testou neste PC Windows, com o jogo aberto. Resultados:
@@ -13,10 +40,12 @@ O proprietário testou neste PC Windows, com o jogo aberto. Resultados:
   (`prism3d+0x1128b`). Corrigido: a carreira vai DENTRO de `free_mode.def`
   e os outros quatro, inclusive `become_millionaire.def`, ficam ocultos. A
   partida nova foi criada sem crash.
-- **ESC na partida com o menu experimental (p4):** crash. O ESC reabre
-  `ui/mmain.esc`, e o original tem os elementos `showroom` (id 60) e os ids
-  100/110, que o painel próprio não tinha. Menu removido. Redesenho pendente
-  preservando todos os elementos originais (G10).
+- **ESC na partida com o menu experimental (p4) e a Barlow:** crash, causa não
+  isolada. Correção de 04/11: o ESC abre `/ui/mgame.esc`, não o `mmain.esc`
+  substituído, e `showroom` em `game.dll` é a tela aberta pelo clique, não uma
+  busca de elemento. Logo, a hipótese inicial (botões ausentes) não está
+  comprovada; as fontes com glifos fora da caixa, instaladas juntas, também são
+  suspeitas. O menu 0.3.0 reproduz os elementos nativos mesmo assim (ver abaixo).
 - **Fontes:** o proprietário rejeitou Tahoma e Barlow por mudarem tamanho,
   largura e estilo do jogo. A "fonte quadrada" era a `data.scs`
   `default.font`, monoespaçada 8x9 e só ASCII, usada pelo Caderno; por isso

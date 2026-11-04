@@ -1,5 +1,14 @@
 # Orientações para continuar o projeto
 
+Fontes 03-04/11: proprietário REJEITOU Tahoma/Barlow; manter fontes originais com
+acentos em pixel (`l10n_tools build` sem `--typeface`). `default.font` recebe
+acentos dentro da célula 8x9. Pacote instalado exclui `makes/` até isolar o crash
+do caminhão do oponente; glifo fora da caixa de linha é suspeito de crash.
+ESC abre `mgame.esc`, não `mmain.esc`: causa daquele crash segue não isolada.
+Menu 0.3.0 usa componentes nativos. `memory_tool field-record/field-analyze`
+(`field_probe`) gera candidatos de velocidade/sinais/reboque/relógio, não contratos.
+Roteiros G14/G15 pendentes; pacote de terceiros não versionado.
+
 M6 03/11 (proprietário testa só neste PC; dois PCs indisponíveis): menu de
 cenários e vitória são dados (`defs/scenarios`, campo `win:`), por leitura
 estática. `ui_tools career-rules` + `install --kind career-rules` (p6) ocultam

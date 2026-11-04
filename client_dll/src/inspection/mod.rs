@@ -3,6 +3,7 @@ pub mod appearance;
 pub mod commands;
 pub mod differences;
 pub mod entities;
+pub mod field_recorder;
 pub mod process;
 pub mod resources;
 pub mod scanner;

@@ -11,7 +11,7 @@ use crate::{
 use anyhow::{Context, Result, ensure};
 use std::path::Path;
 
-fn verified(process: &Process) -> Result<(Vec<Module>, Layout<'static>)> {
+pub(super) fn verified(process: &Process) -> Result<(Vec<Module>, Layout<'static>)> {
     ensure!(
         process.identity.pointer_bytes == 4,
         "appearance candidates require x86"

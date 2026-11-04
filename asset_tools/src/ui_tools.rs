@@ -2,7 +2,7 @@
 //! No original assets are extracted into versioned sources. No game is launched.
 pub mod inventory;
 pub mod mount;
-pub const PACKAGE_VERSION: &str = "0.2.0";
+pub const PACKAGE_VERSION: &str = "0.3.0";
 use crate::mod_package::{Input, Origin, Project};
 use anyhow::{Result, ensure};
 use mod_ui::{

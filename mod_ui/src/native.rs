@@ -3,7 +3,7 @@
 use crate::{
     flow::{App, Screen},
     locale::{self, Language},
-    view::{Kind, MAIN_PANEL, Rect, View, main_button_rect},
+    view::{Kind, MAIN_PANEL, Rect, View},
 };
 fn quoted(text: &str) -> String {
     let text = locale::native_ascii(text);
@@ -108,72 +108,83 @@ pub fn screen(app: &App) -> String {
         wrap(&out, None)
     }
 }
-fn block(r: Rect, color: &str) -> String {
+fn logo(id: u32, shader: &str, area: &str) -> String {
+    let image = format!("<img src=/shaders/ui/logo/{shader}.shd xscale=stretch yscale=stretch>");
     component(
-        "ui.comp.text",
+        "ui.comp.button",
         &[
-            ("layer", "-1".into()),
-            (
-                "text",
-                format!(
-                    "<img src=/shaders/ui/desktop.shd xscale=stretch yscale=stretch color={color}>"
-                ),
-            ),
-            ("coords", coords(r)),
+            ("p_pml", format!("<offset hshift=2 vshift=2>{image}")),
+            ("s_pml", image.clone()),
+            ("n_pml", image),
+            ("layer", "1".into()),
+            ("id", id.to_string()),
+            ("coords", area.into()),
         ],
     )
 }
-/// Only the proven legacy IDs are interactive. MP is an explicitly inactive label,
-/// not an unknown ID sent to the original compiled handler.
+/// Same native components, IDs and table keys the game's own main menu uses
+/// (frame look 6, button look 1, logos 100/110), so accents and fonts follow the
+/// translated table. The only addition is Multiplayer: an inactive label, not an
+/// unknown ID sent to the original compiled handler. Button text is `@@key@@`.
 pub fn main_preview(language: Language) -> String {
-    let mut out = block(MAIN_PANEL, "CC101923");
-    out.push_str(&text(
-        locale::text("menu.title", language),
-        47,
-        444,
-        280,
-        28,
-    ));
-    for (i, (id, key, name)) in [
-        (Some(10), "career", "new game"),
-        (Some(20), "load", "load game"),
+    const X: (i32, i32, i32) = (76, 286, 306);
+    const TOP: i32 = 411;
+    const STEP: i32 = 46;
+    const H: i32 = 32;
+    let mut buttons = String::new();
+    for (slot, (id, key, name)) in [
+        (Some(10), "@@ui_new_game@@", "new game"),
+        (Some(20), "@@ui_load_game@@", "load game"),
         (None, "native.pending", ""),
-        (Some(30), "settings", "options"),
-        (Some(40), "credits", "credits"),
-        (Some(50), "exit", "quit"),
+        (Some(30), "@@ui_options@@", "options"),
+        (Some(40), "@@ui_credits@@", "credits"),
+        (Some(60), "@@ui_show_room@@", "showroom"),
+        (Some(50), "@@ui_quit@@", "quit"),
     ]
     .into_iter()
     .enumerate()
     {
-        let r = main_button_rect(i);
-        out.push_str(&block(
-            r,
-            if id.is_none() { "CC895D25" } else { "CC223344" },
-        ));
+        let y = TOP - STEP * slot as i32;
         let Some(id) = id else {
-            out.push_str(&text(
-                locale::text(key, language),
-                r.x,
-                768 - r.y - r.h,
-                r.w,
-                r.h,
-            ));
+            buttons.push_str(&text(locale::text(key, language), X.0, y, X.2 - X.0, H));
             continue;
         };
-        out.push_str(&component(
+        buttons.push_str(&component(
             "ui.comp.common.button",
             &[
-                ("look", "5".into()),
-                ("value", locale::text(key, language).into()),
-                ("layer", "2".into()),
+                ("look", "1".into()),
+                ("value", key.into()),
+                ("layer", "1".into()),
                 ("id", id.to_string()),
+                ("area", format!("{} {y} {} {}", X.0, X.1, y + H)),
+                ("coords", format!("{} {y} {} {}", X.0, X.2, y + H)),
                 ("name", name.into()),
-                ("area", coords(r)),
-                ("coords", coords(r)),
             ],
         ));
     }
-    wrap_at(&out, Some("ui.handler.menu.main"), MAIN_PANEL)
+    let bottom = TOP - STEP * 6;
+    let mut out = logo(100, "scs", "114 30 157 73");
+    out.push_str(&logo(110, "valusoft_small", "167 30 247 73"));
+    out.push_str(&format!(
+        "entity \"ui.comp.group\" {{\n evalues {{\n  \"fitting\" : \"true\"\n  \"coords\" : \"{} {bottom} {} {}\"\n }}\n entities {{\n{buttons} }}\n}}\n",
+        X.0,
+        X.2,
+        TOP + H
+    ));
+    out.push_str(&component(
+        "ui.comp.common.frame",
+        &[("look", "6".into()), ("coords", "27 80 347 490".into())],
+    ));
+    wrap_at(
+        &out,
+        Some("ui.handler.menu.main"),
+        Rect {
+            x: 27,
+            y: 768 - 490,
+            w: 320,
+            h: 460,
+        },
+    )
 }
 pub fn name(screen: Screen) -> &'static str {
     match screen {
@@ -198,7 +209,23 @@ mod tests {
         assert!(!text.contains("6000"));
         assert!(text.is_ascii());
         assert!(text.contains("\"coords\" : \"27 80 347 490\""));
+        assert!(text.contains("\"coords\" : \"27 30 347 490\""));
         assert!(!text.contains("0 0 1024 768"));
+        // Every native element of the original menu stays, in its native look.
+        for id in [10, 20, 30, 40, 50, 60, 100, 110] {
+            assert!(text.contains(&format!("\"id\" : \"{id}\"")), "id {id}");
+        }
+        for key in [
+            "new_game",
+            "load_game",
+            "options",
+            "credits",
+            "show_room",
+            "quit",
+        ] {
+            assert!(text.contains(&format!("@@ui_{key}@@")), "{key}");
+        }
+        assert!(!text.contains("desktop.shd"));
         for &s in crate::flow::SCREENS {
             let text = screen(&App::preview(s, Language::PtBr));
             assert!(!text.contains("ui.handler"));

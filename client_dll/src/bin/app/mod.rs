@@ -26,6 +26,25 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Guided read-only recording: one action per timed phase. NEW private file.
+    FieldRecord {
+        #[arg(long)]
+        pid: u32,
+        #[arg(long)]
+        output: PathBuf,
+        #[arg(long, default_value_t = 10)]
+        hz: u32,
+        /// Also script attaching and detaching a trailer.
+        #[arg(long)]
+        trailer: bool,
+    },
+    /// Offline: words each action changed, speed matches and steady counters.
+    FieldAnalyze {
+        input: PathBuf,
+        /// NEW private candidate report; printed when omitted.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
     /// Read hashed candidate make/accessory names; no engine calls or injection.
     Appearance {
         #[arg(long)]
@@ -256,6 +275,59 @@ fn cadence(next: &mut Instant, interval: Duration) {
 
 pub fn main() -> Result<()> {
     match Cli::parse().command {
+        Command::FieldRecord {
+            pid,
+            output,
+            hz,
+            trailer,
+        } => {
+            use client_dll::field_probe::{SCRIPT, TRAILER};
+            let process = Process::open(pid)?;
+            let mut phases = SCRIPT.to_vec();
+            if trailer {
+                phases.extend_from_slice(TRAILER);
+            }
+            let total: u32 = phases.iter().map(|p| p.seconds).sum();
+            println!(
+                "Roteiro de {total} s. Mantenha o jogo em primeiro plano; este console ao lado."
+            );
+            let summary = client_dll::inspection::field_recorder::record(
+                &process,
+                &phases,
+                hz,
+                &output,
+                |index, phase| {
+                    println!(
+                        "\x07[{}/{}] {} ({} s)",
+                        index + 1,
+                        phases.len(),
+                        phase.prompt,
+                        phase.seconds
+                    );
+                },
+            )?;
+            println!("{}", serde_json::to_string_pretty(&summary)?);
+        }
+        Command::FieldAnalyze { input, output } => {
+            ensure!(
+                std::fs::metadata(&input)?.len() <= client_dll::field_probe::MAX_BYTES,
+                "recording size limit"
+            );
+            let report = client_dll::field_probe::analyze(&std::fs::read(&input)?)?;
+            let bytes = serde_json::to_vec_pretty(&report)?;
+            if let Some(path) = output {
+                multiplayer_server::career_store::write_new(&path, &bytes)
+                    .map_err(anyhow::Error::msg)?;
+                println!(
+                    "{} quadros, {} acoes com campos, {} candidatos de velocidade; nao validado.",
+                    report.frames,
+                    report.actions.len(),
+                    report.speed.len()
+                );
+            } else {
+                println!("{}", std::str::from_utf8(&bytes)?);
+            }
+        }
         Command::Appearance {
             pid,
             output,

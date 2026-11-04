@@ -1105,3 +1105,27 @@ restaurar na ordem inversa.
   se aparece erro (`Cannot read scenario.def`). É esperado; nesse caso,
   restaurar antes de usar esses saves.
 - [ ] Restaurar e confirmar o `init.cfg` original e o menu com os cinco cenários.
+
+Observado em 03/11: criação de jogo sem crash após mover a carreira para
+`free_mode.def`; com meta $ 2.000 e saldo inicial $ 3.000 a vitória disparou ao
+começar, logo `money:N` compara o saldo da conta. Listagem e metas maiores não
+foram conferidas item a item; os itens acima seguem abertos.
+
+### G15 — Menu nativo 0.3.0, acentos e gravador de campos (offline, 04/11)
+
+Um PC basta, numa única abertura do jogo.
+
+Menu e tradução (`ui_tools install --kind ui-preview`, jogo fechado):
+- [ ] Menu principal com a moldura e os botões originais, logotipos, textos
+  acentuados e o rótulo Multiplayer inativo. Abrir Novo Jogo, Carregar, Opções,
+  Créditos e Showroom e voltar.
+- [ ] ESC dentro da partida abre e fecha sem crash (causa antiga não isolada).
+- [ ] Caderno (N): acentos da fonte de sistema e ver o caminhão do oponente, sem
+  os textos de peças (`makes/`).
+
+Gravador (`memory_tool field-record --pid PID --output NOVO.fprb`, jogo em primeiro
+plano, numa estrada livre, cerca de 3 min; `--trailer` exige um reboque por perto):
+- [ ] Seguir as fases do console, uma ação por fase. Só leitura: não injeta nada.
+- [ ] `memory_tool field-analyze NOVO.fprb --output NOVO.json`; conferir `summary`
+  (`complete`, `skipped`, `partial`) e levar os candidatos ao código. Um candidato
+  só vira contrato depois de confirmado em outra sessão ou outro caminhão.
